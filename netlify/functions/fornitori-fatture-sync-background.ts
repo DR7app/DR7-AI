@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { searchIncomingInvoices } from './aruba-utils'
 import { syncOneFornitore } from './sync-fornitore-invoices'
+import { normalizeVat, normalizeName, namesMatch } from './utils/fornitoreMatch'
 
 /**
  * Background function (15 min timeout): chiamata dal bottone
@@ -24,25 +25,31 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const DISCOVER_MONTHS_BACK = 12
 const SYNC_MONTHS = 12
 
-function normalizeVat(s: string | null | undefined): string {
-    if (!s) return ''
-    return s.replace(/\D/g, '')
-}
-
 interface AutoDiscoverResult {
     scanned: number
     created: number
     duplicateSkipped: number
+    /** Anagrafiche esistenti a cui abbiamo completato la P.IVA invece di duplicarle. */
+    pivaCompletate: number
 }
 
 async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
-    const result: AutoDiscoverResult = { scanned: 0, created: 0, duplicateSkipped: 0 }
+    const result: AutoDiscoverResult = { scanned: 0, created: 0, duplicateSkipped: 0, pivaCompletate: 0 }
 
-    const { data: existing } = await supabase.from('fornitori').select('id, piva')
+    const { data: existing } = await supabase.from('fornitori').select('id, nome, piva, attivo')
     const knownPivas = new Set<string>()
-    for (const f of existing || []) {
+    // 01/09/2026: si guardava solo la P.IVA. Un fornitore inserito a mano senza
+    // P.IVA veniva quindi ricreato come stub e le stesse fatture finivano su
+    // due schede (es. Hydrochem). Ora confrontiamo anche la ragione sociale.
+    const perNome: { id: string; nomeNorm: string; piva: string }[] = []
+    for (const f of (existing || []) as { id: string; nome: string; piva: string | null; attivo: boolean }[]) {
         const v = normalizeVat(f.piva)
         if (v) knownPivas.add(v)
+        // Solo le schede attive: una disattivata da una fusione non deve
+        // riprendersi la P.IVA e tornare a vivere.
+        if (!f.attivo) continue
+        const n = normalizeName(f.nome)
+        if (n) perNome.push({ id: f.id, nomeNorm: n, piva: v })
     }
 
     // 31/08/2026: l'offset era scritto a mano ("+02:00" = ora legale), quindi
@@ -104,6 +111,23 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
     }
 
     for (const stub of byPiva.values()) {
+        // Prima di creare uno stub: esiste gia' un fornitore con lo stesso
+        // nome e senza P.IVA? Allora completiamo quello, non ne creiamo un altro.
+        const stubNome = normalizeName(stub.nome)
+        const esistente = perNome.find(f => !f.piva && namesMatch(f.nomeNorm, stubNome))
+        if (esistente) {
+            const { error: updErr } = await supabase
+                .from('fornitori')
+                .update({ piva: stub.piva })
+                .eq('id', esistente.id)
+            if (!updErr) {
+                esistente.piva = stub.piva
+                knownPivas.add(stub.piva)
+                result.pivaCompletate++
+                continue
+            }
+            console.warn(`[fornitori-bg] backfill piva failed for ${esistente.id}:`, updErr.message)
+        }
         const { error: insErr } = await supabase
             .from('fornitori')
             .insert({
@@ -120,6 +144,8 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
             }
         } else {
             result.created++
+            perNome.push({ id: '', nomeNorm: stubNome, piva: stub.piva })
+            knownPivas.add(stub.piva)
         }
     }
 
@@ -129,7 +155,7 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
 const handler: Handler = async () => {
     const startedAt = Date.now()
 
-    let discover: AutoDiscoverResult = { scanned: 0, created: 0, duplicateSkipped: 0 }
+    let discover: AutoDiscoverResult = { scanned: 0, created: 0, duplicateSkipped: 0, pivaCompletate: 0 }
     try {
         discover = await autoDiscoverFornitoriFromAruba()
         console.log('[fornitori-bg] auto-discover:', discover)

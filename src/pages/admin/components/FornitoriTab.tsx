@@ -5,7 +5,10 @@ import Input from './Input'
 import FornitoreSimpleView from './fornitori/FornitoreSimpleView'
 import FornitoriRegistroMensile from './fornitori/FornitoriRegistroMensile'
 import FornitoreForm from './fornitori/FornitoreForm'
-import type { Fornitore } from './fornitori/types'
+import { separaDuplicati } from './fornitori/fattureDuplicate'
+import { normalizzaNome, normalizzaPiva, nomiCoincidono } from './fornitori/fornitoreNome'
+import { fmtEUR } from './fornitori/types'
+import type { Fornitore, FornitoreDocument } from './fornitori/types'
 
 type View = 'lista' | 'registro'
 
@@ -15,6 +18,10 @@ interface FornitoreRow extends Fornitore {
     daApprovareCount: number
     daPagareCount: number
     lastDocAt: string | null
+    /** Somma delle fatture non ancora pagate ne' archiviate. */
+    daPagareTotale: number
+    /** Fatture aperte con la scadenza gia' passata. */
+    scaduteCount: number
 }
 
 /**
@@ -59,26 +66,62 @@ export default function FornitoriTab() {
             const ids = rows.map(r => r.id)
             const counts: Record<string, FornitoreRow> = {}
             for (const r of rows) {
-                counts[r.id] = { ...r, bolleCount: 0, fattureCount: 0, daApprovareCount: 0, daPagareCount: 0, lastDocAt: null }
+                counts[r.id] = {
+                    ...r, bolleCount: 0, fattureCount: 0, daApprovareCount: 0,
+                    daPagareCount: 0, lastDocAt: null, daPagareTotale: 0, scaduteCount: 0,
+                }
             }
             if (ids.length > 0) {
                 // Conto solo i documenti dal 2026 in avanti — i clienti DR7
                 // partono 01/26. La sync da Aruba scansiona 12 mesi indietro
                 // quindi puo' trascinarsi roba di fine 2025 che non vogliamo
                 // contare ne' mostrare nella tab fornitori.
-                const { data: docs } = await supabase
-                    .from('fornitore_documents')
-                    .select('fornitore_id, tipo, stato, data_documento')
-                    .in('fornitore_id', ids)
-                    .gte('periodo_anno', 2026)
-                for (const d of (docs || []) as { fornitore_id: string; tipo: string; stato: string; data_documento: string | null }[]) {
+                // 01/09/2026: PostgREST tronca a 1000 righe, quindi con molti
+                // fornitori i conteggi si fermavano a meta'. Ora si pagina.
+                const docs: FornitoreDocument[] = []
+                const PAGINA = 1000
+                for (let da = 0; ; da += PAGINA) {
+                    const { data: blocco, error: errDocs } = await supabase
+                        .from('fornitore_documents')
+                        .select('id, fornitore_id, tipo, stato, numero_documento, data_documento, data_scadenza, data_pagamento, importo_totale, file_url, aruba_filename, created_at')
+                        .in('fornitore_id', ids)
+                        .gte('periodo_anno', 2026)
+                        .order('id', { ascending: true })
+                        .range(da, da + PAGINA - 1)
+                    if (errDocs) throw errDocs
+                    const parte = (blocco || []) as unknown as FornitoreDocument[]
+                    docs.push(...parte)
+                    if (parte.length < PAGINA) break
+                }
+
+                // Le righe doppie non devono gonfiare ne' i conteggi ne' il
+                // totale da pagare: si contano una volta sola, per fornitore.
+                const perFornitore = new Map<string, FornitoreDocument[]>()
+                for (const d of docs) {
+                    if (d.tipo !== 'fattura') continue
+                    const lista = perFornitore.get(d.fornitore_id) || []
+                    lista.push(d)
+                    perFornitore.set(d.fornitore_id, lista)
+                }
+                const idDoppi = new Set<string>()
+                perFornitore.forEach(lista => {
+                    for (const d of separaDuplicati(lista).duplicati) idDoppi.add(d.id)
+                })
+
+                const oggi = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+                for (const d of docs) {
                     const row = counts[d.fornitore_id]
                     if (!row) continue
+                    if (idDoppi.has(d.id)) continue
                     if (d.tipo === 'ddt' || d.tipo === 'bolla') row.bolleCount++
                     else if (d.tipo === 'fattura') {
                         row.fattureCount++
                         if (d.stato === 'verificato') row.daApprovareCount++
                         else if (d.stato === 'approvato' || d.stato === 'pagabile') row.daPagareCount++
+                        if (d.stato !== 'pagato' && d.stato !== 'archiviato') {
+                            row.daPagareTotale += Number(d.importo_totale || 0)
+                            if (d.data_scadenza && d.data_scadenza < oggi) row.scaduteCount++
+                        }
                     }
                     if (d.data_documento && (!row.lastDocAt || d.data_documento > row.lastDocAt)) {
                         row.lastDocAt = d.data_documento
@@ -182,6 +225,116 @@ export default function FornitoriTab() {
         return sorted
     }, [fornitori, search, categoryFilter, sortKey])
 
+    // Quanto c'e' da pagare in tutto, sui fornitori attualmente in elenco.
+    const totaleGenerale = useMemo(
+        () => filtered.reduce((s, f) => s + f.daPagareTotale, 0),
+        [filtered]
+    )
+
+    // Anagrafiche che descrivono lo stesso fornitore: stessa P.IVA, oppure
+    // stessa ragione sociale. Finche' l'auto-discovery guardava solo la P.IVA,
+    // un fornitore inserito a mano senza P.IVA veniva ricreato come stub e le
+    // stesse fatture finivano su due schede.
+    const gruppiDoppi = useMemo(() => {
+        const gruppi: FornitoreRow[][] = []
+        for (const f of fornitori) {
+            const nome = normalizzaNome(f.nome)
+            const piva = normalizzaPiva(f.piva)
+            const g = gruppi.find(gr => gr.some(x => {
+                const xp = normalizzaPiva(x.piva)
+                if (piva && xp && piva === xp) return true
+                return nomiCoincidono(normalizzaNome(x.nome), nome)
+            }))
+            if (g) g.push(f)
+            else gruppi.push([f])
+        }
+        // La scheda da tenere e' quella con piu' documenti; a pari merito
+        // quella con la P.IVA, poi la piu' vecchia.
+        for (const g of gruppi) {
+            g.sort((a, b) =>
+                (b.fattureCount + b.bolleCount) - (a.fattureCount + a.bolleCount)
+                || Number(!!b.piva) - Number(!!a.piva)
+                || (a.created_at || '').localeCompare(b.created_at || '')
+            )
+        }
+        return gruppi.filter(g => g.length > 1)
+    }, [fornitori])
+
+    const [unendo, setUnendo] = useState<string | null>(null)
+
+    /**
+     * Sposta tutto sulla scheda principale e disattiva le altre. I documenti
+     * gia' presenti su entrambe non vengono duplicati: la copia in piu' viene
+     * eliminata (l'indice unico a database la rifiuterebbe comunque).
+     */
+    async function unisciGruppo(gruppo: FornitoreRow[]) {
+        const [principale, ...altre] = gruppo
+        const nomi = altre.map(f => f.nome).join(', ')
+        if (!confirm(
+            `Unisco ${altre.length === 1 ? 'la scheda' : 'le schede'} "${nomi}" dentro "${principale.nome}"?\n\n` +
+            'Fatture e bolle passano alla scheda principale. Le copie doppie vengono eliminate. ' +
+            `${altre.length === 1 ? 'La scheda unita viene disattivata' : 'Le schede unite vengono disattivate'}, non cancellata.`
+        )) return
+        setUnendo(principale.id)
+        try {
+            const { data: docPrincipale } = await supabase
+                .from('fornitore_documents')
+                .select('*')
+                .eq('fornitore_id', principale.id)
+            let spostati = 0
+            let eliminati = 0
+            for (const altra of altre) {
+                const { data: docAltra } = await supabase
+                    .from('fornitore_documents')
+                    .select('*')
+                    .eq('fornitore_id', altra.id)
+                const suoi = (docAltra || []) as FornitoreDocument[]
+                // Confronto le fatture delle due schede: quelle gia' presenti
+                // sulla principale sono doppioni da eliminare.
+                const insieme = [
+                    ...((docPrincipale || []) as FornitoreDocument[]).filter(d => d.tipo === 'fattura'),
+                    ...suoi.filter(d => d.tipo === 'fattura'),
+                ]
+                const daEliminare = new Set(separaDuplicati(insieme).duplicati.map(d => d.id))
+                for (const d of suoi) {
+                    if (daEliminare.has(d.id)) {
+                        await supabase.from('fornitore_documents').delete().eq('id', d.id)
+                        eliminati++
+                        continue
+                    }
+                    const { error } = await supabase
+                        .from('fornitore_documents')
+                        .update({ fornitore_id: principale.id })
+                        .eq('id', d.id)
+                    if (error) {
+                        // 23505: la principale ha gia' quel numero+data.
+                        if ((error as { code?: string }).code === '23505') {
+                            await supabase.from('fornitore_documents').delete().eq('id', d.id)
+                            eliminati++
+                        } else throw error
+                    } else spostati++
+                }
+                // La P.IVA passa alla principale se le manca, e viene tolta
+                // alla scheda unita cosi' il sync non la riconosce piu'.
+                if (!principale.piva && altra.piva) {
+                    await supabase.from('fornitori').update({ piva: altra.piva }).eq('id', principale.id)
+                    principale.piva = altra.piva
+                }
+                await supabase.from('fornitori').update({
+                    attivo: false,
+                    piva: null,
+                    note: `[unito in ${principale.nome} il ${new Date().toLocaleDateString('it-IT')}]`,
+                }).eq('id', altra.id)
+            }
+            toast.success(`Unito in ${principale.nome}: ${spostati} documenti spostati · ${eliminati} doppioni eliminati`)
+            await load()
+        } catch (err) {
+            toast.error('Unione fallita: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setUnendo(null)
+        }
+    }
+
     async function importFromAruba(opts: { silent?: boolean } = {}) {
         setImporting(true)
         try {
@@ -260,6 +413,12 @@ export default function FornitoriTab() {
                             ? 'Sincronizzazione automatica da Aruba in corso…'
                             : `Sincronizzato automaticamente da Aruba ${fmtRelative(lastSync)}`}
                     </p>
+                    {totaleGenerale > 0 && (
+                        <p className="text-sm text-theme-text-secondary mt-1">
+                            Da pagare in totale: <strong className="text-theme-text-primary">{fmtEUR(totaleGenerale)}</strong>
+                            {filtered.length !== fornitori.length && <span className="text-xs text-theme-text-muted"> (su {filtered.length} fornitori filtrati)</span>}
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <button
@@ -355,6 +514,32 @@ export default function FornitoriTab() {
                 </select>
             </div>
 
+            {gruppiDoppi.length > 0 && (
+                <div className="rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/25 p-3 space-y-2">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                        {gruppiDoppi.length === 1 ? 'Un fornitore risulta inserito due volte' : `${gruppiDoppi.length} fornitori risultano inseriti due volte`}
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-200/80">
+                        Le stesse fatture possono comparire su entrambe le schede. Unisci per tenere una sola anagrafica.
+                    </p>
+                    {gruppiDoppi.map(g => (
+                        <div key={g[0].id} className="flex flex-wrap items-center gap-2 text-sm text-amber-900 dark:text-amber-100">
+                            <span className="font-semibold">{g[0].nome}</span>
+                            <span className="text-xs opacity-80">
+                                + {g.slice(1).map(f => `${f.nome}${f.fattureCount ? ` (${f.fattureCount} fatture)` : ''}`).join(', ')}
+                            </span>
+                            <button
+                                onClick={() => unisciGruppo(g)}
+                                disabled={unendo !== null}
+                                className="ml-auto text-xs px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold disabled:opacity-40"
+                            >
+                                {unendo === g[0].id ? 'Unisco…' : `Unisci in ${g[0].nome}`}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-hidden">
                 {loading && (
                     <div className="px-4 py-6 text-center text-theme-text-muted text-sm">Caricamento…</div>
@@ -407,6 +592,14 @@ export default function FornitoriTab() {
                                         className="text-xs text-theme-text-secondary text-right space-y-0.5 hidden sm:block cursor-pointer"
                                     >
                                         <div>{f.bolleCount} bolle · {f.fattureCount} fatture</div>
+                                        {f.daPagareTotale > 0 && (
+                                            <div className="text-theme-text-primary font-semibold">
+                                                da pagare {fmtEUR(f.daPagareTotale)}
+                                                {f.scaduteCount > 0 && (
+                                                    <span className="text-red-600 dark:text-red-400"> · {f.scaduteCount} scadut{f.scaduteCount === 1 ? 'a' : 'e'}</span>
+                                                )}
+                                            </div>
+                                        )}
                                         {todoCount > 0 && (
                                             <div className="text-amber-400 font-semibold">
                                                 {f.daApprovareCount > 0 && <>{f.daApprovareCount} da approvare</>}

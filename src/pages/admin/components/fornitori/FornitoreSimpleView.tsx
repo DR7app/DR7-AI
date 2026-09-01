@@ -15,7 +15,9 @@ import {
     fmtDateIT,
 } from './types'
 import type { Fornitore, FornitoreDocument, CrosscheckRow } from './types'
+import { separaDuplicati } from './fattureDuplicate'
 import EuropeanDateInput from '../../../../components/EuropeanDateInput'
+import JSZip from 'jszip'
 
 interface Props {
     fornitore: Fornitore
@@ -47,6 +49,14 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     // tramite il selettore mese quando vuole.
     const [mese, setMese] = useState<number | 'tutti'>('tutti')
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
+    // Righe doppie riconosciute al caricamento: nascoste dalle liste e dai
+    // totali, ma tenute qui per poterle eliminare dal pulsante dedicato.
+    const [duplicati, setDuplicati] = useState<FornitoreDocument[]>([])
+    // Tutte le fatture ancora aperte del fornitore, senza filtro anno/mese:
+    // "quanto devo a questo fornitore" non deve dipendere dal periodo scelto.
+    const [aperte, setAperte] = useState<FornitoreDocument[]>([])
+    const [scaricando, setScaricando] = useState(false)
+    const [pulendo, setPulendo] = useState(false)
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [, setLoading] = useState(false)
     const [showUpload, setShowUpload] = useState(false)        // simple bolla upload (PDF only)
@@ -79,7 +89,22 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 .eq('periodo_anno', anno)
                 .order('data_documento', { ascending: false })
             const rows = (data || []) as FornitoreDocument[]
-            setDocs(rows)
+            // La stessa fattura Aruba puo' essere entrata due volte con il
+            // numero scritto in modo diverso: mostriamone una sola, altrimenti
+            // i totali del fornitore raddoppiano.
+            const fatt = separaDuplicati(rows.filter(r => r.tipo === 'fattura'))
+            const idDoppi = new Set(fatt.duplicati.map(d => d.id))
+            setDocs(rows.filter(r => !idDoppi.has(r.id)))
+            setDuplicati(fatt.duplicati)
+
+            const { data: dataAperte } = await supabase
+                .from('fornitore_documents')
+                .select('*')
+                .eq('fornitore_id', fornitore.id)
+                .eq('tipo', 'fattura')
+                .not('stato', 'in', '("pagato","archiviato")')
+                .order('data_documento', { ascending: true })
+            setAperte(separaDuplicati((dataAperte || []) as FornitoreDocument[]).unici)
 
             const map = new Map<number, CrosscheckRow[]>()
             for (let m = 1; m <= 12; m++) {
@@ -146,6 +171,32 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         () => fatture.filter(f => f.stato === 'approvato' || f.stato === 'pagabile'),
         [fatture]
     )
+
+    // Oggi in Europe/Rome, formato ISO, per confrontarlo con data_scadenza
+    // (che e' una DATE, senza fuso).
+    const oggiIso = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+
+    // Quanto dobbiamo a questo fornitore, su tutti gli anni: fatture non
+    // ancora pagate ne' archiviate. Le note di credito vanno in detrazione.
+    const totaleDaPagare = useMemo(
+        () => aperte.reduce((s, f) => s + (f.tipo === 'nota_credito' ? -1 : 1) * Number(f.importo_totale || 0), 0),
+        [aperte]
+    )
+    const fattureScadute = useMemo(
+        () => aperte.filter(f => f.data_scadenza && f.data_scadenza < oggiIso),
+        [aperte, oggiIso]
+    )
+    const totaleScaduto = useMemo(
+        () => fattureScadute.reduce((s, f) => s + Number(f.importo_totale || 0), 0),
+        [fattureScadute]
+    )
+    const prossimaScadenza = useMemo(() => {
+        const future = aperte
+            .filter(f => f.data_scadenza && f.data_scadenza >= oggiIso)
+            .map(f => f.data_scadenza as string)
+            .sort()
+        return future[0] || null
+    }, [aperte, oggiIso])
 
     const tutteAnomalie = useMemo(() => {
         const all: Array<CrosscheckRow & { mese: number }> = []
@@ -339,6 +390,106 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         alert('Nessun file disponibile per questa fattura.')
     }
 
+    /** Bytes del PDF di una fattura: prima l'archivio, poi Aruba. */
+    async function scaricaPdf(doc: FornitoreDocument): Promise<Blob | null> {
+        if (doc.file_url) {
+            const { data, error } = await supabase.storage
+                .from('fornitori-documents')
+                .download(doc.file_url)
+            if (!error && data) return data
+        }
+        if (doc.aruba_filename) {
+            const res = await authFetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
+            const json = await res.json()
+            if (!res.ok || !json.success) return null
+            const base64 = json.invoice?.pdf || json.invoice?.pdfFile
+            if (!base64) return null
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+            return new Blob([bytes], { type: 'application/pdf' })
+        }
+        return null
+    }
+
+    /** Scarica in un unico zip le fatture passate. */
+    async function scaricaTutte(lista: FornitoreDocument[], etichetta: string) {
+        if (lista.length === 0) return
+        setScaricando(true)
+        const t = toast.loading(`Preparo ${lista.length} fattur${lista.length === 1 ? 'a' : 'e'}…`)
+        try {
+            const zip = new JSZip()
+            let presi = 0
+            let mancanti = 0
+            for (let i = 0; i < lista.length; i++) {
+                const f = lista[i]
+                toast.loading(`Scarico ${i + 1} di ${lista.length}…`, { id: t })
+                let blob: Blob | null = null
+                try { blob = await scaricaPdf(f) } catch { blob = null }
+                if (!blob) { mancanti++; continue }
+                const numero = (f.numero_documento || 'fattura').replace(/[^\w-]/g, '_')
+                zip.file(`${f.data_documento}_${numero}.pdf`, blob)
+                presi++
+            }
+            if (presi === 0) {
+                toast.error('Nessun PDF disponibile per queste fatture.', { id: t })
+                return
+            }
+            const out = await zip.generateAsync({ type: 'blob' })
+            const url = URL.createObjectURL(out)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${currentFornitore.nome.replace(/[^\w-]/g, '_')}_${etichetta}.zip`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            setTimeout(() => URL.revokeObjectURL(url), 60000)
+            toast.success(
+                mancanti > 0
+                    ? `${presi} fatture scaricate · ${mancanti} senza PDF disponibile`
+                    : `${presi} fattur${presi === 1 ? 'a' : 'e'} nello zip`,
+                { id: t }
+            )
+        } catch (err) {
+            toast.error('Download fallito: ' + (err instanceof Error ? err.message : String(err)), { id: t })
+        } finally {
+            setScaricando(false)
+        }
+    }
+
+    /** Elimina le righe doppie riconosciute, tenendo quella buona. */
+    async function eliminaDuplicati() {
+        if (duplicati.length === 0) return
+        const elenco = duplicati.slice(0, 10).map(d => `· ${d.numero_documento} del ${fmtDateIT(d.data_documento)} — ${fmtEUR(d.importo_totale)}`).join('\n')
+        const extra = duplicati.length > 10 ? `\n… e altre ${duplicati.length - 10}` : ''
+        if (!confirm(`Elimino ${duplicati.length} rig${duplicati.length === 1 ? 'a doppia' : 'he doppie'} di ${currentFornitore.nome}?\n\n${elenco}${extra}\n\nResta la copia con il pagamento e i documenti collegati.`)) return
+        setPulendo(true)
+        try {
+            const ids = duplicati.map(d => d.id)
+            // Le bolle agganciate a una riga doppia passano alla copia buona,
+            // altrimenti il controllo incrociato le perderebbe.
+            const tenute = new Map<string, string>()
+            for (const d of duplicati) {
+                const buona = docs.find(x => x.tipo === 'fattura'
+                    && x.data_documento === d.data_documento
+                    && x.numero_documento.replace(/[^a-zA-Z0-9]/g, '') === d.numero_documento.replace(/[^a-zA-Z0-9]/g, ''))
+                    || docs.find(x => x.tipo === 'fattura' && x.aruba_filename && x.aruba_filename === d.aruba_filename)
+                if (buona) tenute.set(d.id, buona.id)
+            }
+            for (const [vecchio, nuovo] of tenute) {
+                await supabase.from('fornitore_documents')
+                    .update({ fattura_collegata_id: nuovo })
+                    .eq('fattura_collegata_id', vecchio)
+            }
+            const { error } = await supabase.from('fornitore_documents').delete().in('id', ids)
+            if (error) throw error
+            toast.success(`${ids.length} rig${ids.length === 1 ? 'a eliminata' : 'he eliminate'}`)
+            await load()
+        } catch (err) {
+            toast.error('Pulizia fallita: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setPulendo(false)
+        }
+    }
+
     function canViewDoc(d: FornitoreDocument | undefined): boolean {
         return !!(d && (d.file_url || d.aruba_filename))
     }
@@ -400,6 +551,65 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                         {annoOptions.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
+            </div>
+
+            {/* Quanto devo a questo fornitore — non dipende dal mese/anno scelto
+                sopra: e' il saldo aperto di tutte le fatture non pagate. */}
+            <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                        <p className="text-xs uppercase tracking-wide text-theme-text-muted">Totale da pagare</p>
+                        <p className="text-3xl font-semibold text-theme-text-primary mt-1">{fmtEUR(totaleDaPagare)}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                            <span className="px-2 py-0.5 rounded bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border">
+                                {aperte.length} fattur{aperte.length === 1 ? 'a aperta' : 'e aperte'}
+                            </span>
+                            {fattureScadute.length > 0 && (
+                                <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-200 border border-red-300 dark:border-red-700">
+                                    {fattureScadute.length} scadut{fattureScadute.length === 1 ? 'a' : 'e'} · {fmtEUR(totaleScaduto)}
+                                </span>
+                            )}
+                            {prossimaScadenza && (
+                                <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                                    prossima scadenza {fmtDateIT(prossimaScadenza)}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            onClick={() => scaricaTutte(aperte, 'da-pagare')}
+                            disabled={scaricando || aperte.length === 0}
+                            className="text-xs px-3 py-1.5 rounded bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-40"
+                            title="Scarica in un unico zip le fatture ancora da pagare"
+                        >
+                            {scaricando ? 'Preparo lo zip…' : `Scarica le ${aperte.length} da pagare`}
+                        </button>
+                        <button
+                            onClick={() => scaricaTutte(fatture, `fatture-${anno}`)}
+                            disabled={scaricando || fatture.length === 0}
+                            className="text-xs px-3 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary border border-theme-border disabled:opacity-40"
+                            title="Scarica in un unico zip tutte le fatture del periodo selezionato"
+                        >
+                            Scarica tutte del periodo ({fatture.length})
+                        </button>
+                    </div>
+                </div>
+
+                {duplicati.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 text-sm">
+                        <span>
+                            {duplicati.length} rig{duplicati.length === 1 ? 'a doppia' : 'he doppie'} nascost{duplicati.length === 1 ? 'a' : 'e'}: la stessa fattura era entrata piu' volte. I totali qui sopra la contano una sola volta.
+                        </span>
+                        <button
+                            onClick={eliminaDuplicati}
+                            disabled={pulendo}
+                            className="ml-auto text-xs px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold disabled:opacity-40"
+                        >
+                            {pulendo ? 'Elimino…' : 'Elimina i doppioni'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Fatture del periodo — ogni riga ha il suo "+ Carica documento"

@@ -2,47 +2,11 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { searchIncomingInvoices, getIncomingInvoice } from './aruba-utils'
+import { normalizeVat, normalizeName, namesMatch } from './utils/fornitoreMatch'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-function normalizeVat(s: string | null | undefined): string {
-  if (!s) return ''
-  return s.replace(/\D/g, '')
-}
-
-// Normalizza un nome per matching tollerante: lowercase, rimuove forme
-// societarie comuni (s.r.l., s.p.a., snc, sas, srl, spa, soc., societa', ecc.),
-// punteggiatura, accenti, e collassa spazi multipli. Cosi' "AGENZIA GOFFI SRL"
-// e "Agenzia Goffi S.r.l." vengono trattati come uguali.
-function normalizeName(s: string | null | undefined): string {
-  if (!s) return ''
-  return s
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')        // rimuovi accenti
-    .replace(/\b(s\.?r\.?l\.?|s\.?p\.?a\.?|s\.?n\.?c\.?|s\.?a\.?s\.?|soc(?:ieta')?|srls|s\.r\.l\.s\.?)\b/gi, '')
-    .replace(/\b(a socio unico|succursale italiana|italia|italy|italiana|italiano)\b/gi, '')
-    .replace(/['".,&\-_/\\()]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-// Restituisce true se due nomi normalizzati combaciano abbastanza:
-// - uguali, oppure
-// - uno contiene l'altro (per ragioni sociali abbreviate)
-// - condividono >= 2 token significativi
-function namesMatch(a: string, b: string): boolean {
-  if (!a || !b) return false
-  if (a === b) return true
-  if (a.length >= 4 && b.includes(a)) return true
-  if (b.length >= 4 && a.includes(b)) return true
-  const at = a.split(' ').filter(t => t.length >= 3)
-  const bt = b.split(' ').filter(t => t.length >= 3)
-  if (at.length === 0 || bt.length === 0) return false
-  const shared = at.filter(t => bt.includes(t)).length
-  return shared >= Math.min(2, Math.min(at.length, bt.length))
-}
 
 function isoMonthRange(year: number, monthIdxOneBased: number) {
   const daysInMonth = new Date(year, monthIdxOneBased, 0).getDate()
@@ -125,8 +89,25 @@ export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Pr
   const piva = normalizeVat(fornitore.piva)
     const nameNorm = normalizeName(fornitore.nome)
 
+    // Chi possiede quale P.IVA. Serve per non lasciare che due anagrafiche si
+    // prendano la stessa fattura: se la P.IVA del mittente appartiene a un
+    // altro fornitore, il match per nome non deve nemmeno essere tentato.
+    const { data: tuttiFornitori } = await supabase
+      .from('fornitori')
+      .select('id, piva')
+      .eq('attivo', true)
+    const proprietarioPiva = new Map<string, string>()
+    for (const f of (tuttiFornitori || []) as { id: string; piva: string | null }[]) {
+      const v = normalizeVat(f.piva)
+      if (!v) continue
+      // Se due anagrafiche hanno la stessa P.IVA vince quella che stiamo
+      // sincronizzando: cosi' il sync non si blocca in attesa della fusione.
+      if (!proprietarioPiva.has(v) || f.id === fornitoreId) proprietarioPiva.set(v, f.id)
+    }
+
     // Aggregate Aruba invoices for last N months that match this fornitore
     const matched: { filename: string; sender: string; senderVat: string }[] = []
+    const filenameVisti = new Set<string>()
     const now = new Date()
     for (let i = 0; i < monthsBack; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -144,16 +125,23 @@ export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Pr
           let isMatch = false
           // 1) match per P.IVA (entrambi normalizzati a sole cifre)
           if (piva && v === piva) isMatch = true
-          // 2) fallback: match per nome — sempre tentato anche se la P.IVA esiste,
-          //    perche' a volte Aruba scrive la P.IVA in modo non comparabile
-          //    (es. country code mancante o esteso). namesMatch tollera maiusc/
-          //    minusc, suffissi societari, punteggiatura e accenti.
-          if (!isMatch && nameNorm && namesMatch(nameNorm, normalizeName(sender))) {
+          // 2) fallback: match per nome — tentato solo se la P.IVA del mittente
+          //    non e' gia' di un altro fornitore. Senza questo controllo la
+          //    stessa fattura finiva su piu' anagrafiche simili (es. una
+          //    "Hydrochem" inserita a mano e lo stub creato dal sync).
+          const pivaDiAltri = v ? proprietarioPiva.get(v) : undefined
+          if (!isMatch && !(pivaDiAltri && pivaDiAltri !== fornitoreId)
+              && nameNorm && namesMatch(nameNorm, normalizeName(sender))) {
             isMatch = true
           }
           if (isMatch) {
             const filename = inv.filename || inv.uploadFileName
-            if (filename) matched.push({ filename, sender, senderVat: v })
+            // Una stessa fattura puo' tornare da piu' pagine Aruba: il
+            // filename e' la sua identita', quindi la contiamo una volta sola.
+            if (filename && !filenameVisti.has(filename)) {
+              filenameVisti.add(filename)
+              matched.push({ filename, sender, senderVat: v })
+            }
           }
         }
         if (list.length < PAGE_SIZE) break
@@ -170,8 +158,27 @@ export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Pr
       .eq('fornitore_id', fornitoreId)
       .eq('tipo', 'fattura')
     const existingKey = new Map<string, { id: string; aruba_filename: string | null; data_scadenza: string | null }>()
+    const perFilename = new Map<string, { id: string; aruba_filename: string | null; data_scadenza: string | null }>()
     for (const d of existingDocs || []) {
-      existingKey.set(`${d.numero_documento}|${d.data_documento}`, { id: d.id, aruba_filename: d.aruba_filename, data_scadenza: d.data_scadenza })
+      const riga = { id: d.id, aruba_filename: d.aruba_filename, data_scadenza: d.data_scadenza }
+      existingKey.set(`${d.numero_documento}|${d.data_documento}`, riga)
+      if (d.aruba_filename) perFilename.set(d.aruba_filename, riga)
+    }
+
+    // Fatture gia' assegnate a un ALTRO fornitore: non vanno duplicate qui.
+    // L'indice unico copre solo (fornitore, tipo, numero, data), quindi senza
+    // questo controllo la stessa fattura Aruba poteva vivere su due schede.
+    const diAltroFornitore = new Set<string>()
+    const daControllare = matched.map(m => m.filename)
+    for (let i = 0; i < daControllare.length; i += 100) {
+      const blocco = daControllare.slice(i, i + 100)
+      const { data: altrove } = await supabase
+        .from('fornitore_documents')
+        .select('fornitore_id, aruba_filename')
+        .in('aruba_filename', blocco)
+      for (const d of (altrove || []) as { fornitore_id: string; aruba_filename: string }[]) {
+        if (d.fornitore_id !== fornitoreId) diAltroFornitore.add(d.aruba_filename)
+      }
     }
 
     let inserted = 0
@@ -180,6 +187,20 @@ export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Pr
 
     for (const m of matched) {
       try {
+        if (diAltroFornitore.has(m.filename)) {
+          skipped++
+          continue
+        }
+        // Gia' presente su questo fornitore: nessun download, solo backfill.
+        const giaPresente = perFilename.get(m.filename)
+        if (giaPresente) {
+          if (!giaPresente.aruba_filename) {
+            await supabase.from('fornitore_documents')
+              .update({ aruba_filename: m.filename }).eq('id', giaPresente.id)
+          }
+          skipped++
+          continue
+        }
         const detail = await getIncomingInvoice(m.filename, false)
         const fileBase64: string | undefined = detail?.file || detail?.xml || detail?.fileBytes || detail?.invoiceFile
         let amount: number | null = null
@@ -269,7 +290,9 @@ export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Pr
           }
         } else {
           inserted++
-          existingKey.set(dedupeKey, { id: '', aruba_filename: m.filename, data_scadenza: dueDate || null })
+          const riga = { id: '', aruba_filename: m.filename, data_scadenza: dueDate || null }
+          existingKey.set(dedupeKey, riga)
+          perFilename.set(m.filename, riga)
         }
       } catch (e: any) {
         failed++
