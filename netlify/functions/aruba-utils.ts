@@ -311,6 +311,65 @@ export async function searchIncomingInvoices(params: {
 }
 
 /**
+ * Scorre TUTTE le pagine delle fatture ricevute e restituisce righe uniche.
+ *
+ * Perche' esiste (verificato in produzione il 01/09/2026 su 01/01-01/09):
+ * findByUsername numera le pagine a partire da 1, non da 0. Chiedendo page=0
+ * e poi page=1 Aruba risponde due volte lo stesso primo blocco: su 600 righe
+ * scaricate, 100 — una pagina intera — arrivavano in doppio, sempre x2.
+ * Con un solo mese sotto le 100 righe il difetto non si vede: parte una sola
+ * pagina. E' la stessa radice dei doppioni gia' visti nelle schede fornitore.
+ *
+ * L'identita' di una fattura Aruba e' il suo filename, quindi la deduplica si
+ * fa li'. Le condizioni di stop restano sul numero GREZZO di righe della
+ * pagina: fermarsi quando una pagina non aggiunge nulla di nuovo taglierebbe
+ * tutto al primo blocco, che e' esattamente il caso da attraversare.
+ */
+export async function fetchAllIncomingInvoices(params: {
+    startDate?: string
+    endDate?: string
+    pageSize?: number
+    maxPages?: number
+}): Promise<any[]> {
+    const pageSize = params.pageSize ?? 100
+    const maxPages = params.maxPages ?? 50
+
+    const uniche: any[] = []
+    const viste = new Set<string>()
+    let scartate = 0
+    let page = 0
+
+    while (page < maxPages) {
+        const result = await searchIncomingInvoices({
+            startDate: params.startDate,
+            endDate: params.endDate,
+            page,
+            pageSize,
+        })
+
+        const righe: any[] = result.invoices || result.content || result.data || []
+
+        for (const r of righe) {
+            const chiave = r.filename || r.uploadFileName || r.id
+            if (!chiave) { uniche.push(r); continue }
+            if (viste.has(chiave)) { scartate++; continue }
+            viste.add(chiave)
+            uniche.push(r)
+        }
+
+        if (righe.length === 0) break
+        if (righe.length < pageSize) break
+        if (result.last === true) break
+        if (typeof result.totalPages === 'number' && page + 1 >= result.totalPages) break
+
+        page++
+    }
+
+    console.log(`[Aruba] fetchAllIncomingInvoices: ${uniche.length} righe uniche su ${uniche.length + scartate} scaricate (${scartate} doppioni scartati, ${page + 1} pagine)`)
+    return uniche
+}
+
+/**
  * Get a single incoming invoice with full details (XML/PDF)
  * Based on official docs: GET /services/invoice/in/getByFilename
  * Retries once with backoff on 429 (rate limit).

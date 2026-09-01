@@ -150,11 +150,15 @@ export default function IncomingInvoicesView() {
   const [downloading, setDownloading] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [pageSize, setPageSize] = useState(15)
+  // Finche' l'arricchimento non ha finito le date sono vuote: ordinare adesso
+  // farebbe ballare le righe a ogni blocco. Si ordina quando i dati ci sono.
+  const [enrichDone, setEnrichDone] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setEnrichDone(false)
     try {
       const res = await authFetch(`/.netlify/functions/get-incoming-invoices?from=${dateFrom}&to=${dateTo}&mode=${mode}`)
       const text = await res.text()
@@ -177,59 +181,96 @@ export default function IncomingInvoicesView() {
 
   useEffect(() => { load() }, [load])
 
-  // Progressive per-row enrichment — call detail endpoint for each row that's
-  // missing amount/date/number. Sequential w/ small delay to respect Aruba rate
-  // limits. Runs after invoices are loaded; cancels if month/mode changes.
+  // Arricchimento riga per riga: la lista Aruba non porta MAI numero, data e
+  // importo (verificato 01/09/2026: 78 righe su 78 arrivano vuote), quindi ogni
+  // riga va chiesta al dettaglio. Prima si faceva in sequenza con 300ms di
+  // pausa: 78 righe = oltre 100 secondi in cui la tabella mostra righe tutte
+  // uguali — stesso fornitore, numero e importo vuoti — che sembrano doppioni
+  // ma non lo sono. Ora si tirano CONCURRENCY per volta, le visibili per
+  // prime (la coda segue l'ordine della tabella), e si scrive lo stato a
+  // blocchi invece che una riga alla volta.
   useEffect(() => {
     if (invoices.length === 0) return
     let cancelled = false
 
+    // 16 misurato contro la produzione il 01/09/2026: 40 righe in 11,9s,
+    // zero 429. Sotto (6) ci volevano 56s, in sequenza oltre 300s.
+    const CONCURRENCY = 16
+    const FLUSH_MS = 400
+
     async function enrichOne(filename: string): Promise<{ amount: number | null; invoiceDate: string; invoiceNumber: string } | null> {
-      const res = await fetch(`/.netlify/functions/get-incoming-invoice-detail?filename=${encodeURIComponent(filename)}`)
-      if (res.status === 429) {
-        await new Promise(r => setTimeout(r, 1500))
-        return null
+      // Aruba risponde 429 sotto carico: si aspetta e si riprova, la riga non
+      // va persa (prima un 429 la lasciava vuota per sempre).
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled) return null
+        const res = await fetch(`/.netlify/functions/get-incoming-invoice-detail?filename=${encodeURIComponent(filename)}`)
+        if (res.status === 429) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
+          continue
+        }
+        if (!res.ok) return null
+        try {
+          const json = await res.json()
+          if (!json.success) return null
+          return { amount: json.amount, invoiceDate: json.invoiceDate, invoiceNumber: json.invoiceNumber }
+        } catch {
+          return null
+        }
       }
-      if (!res.ok) return null
-      try {
-        const json = await res.json()
-        if (!json.success) return null
-        return { amount: json.amount, invoiceDate: json.invoiceDate, invoiceNumber: json.invoiceNumber }
-      } catch {
-        return null
-      }
+      return null
     }
 
     ;(async () => {
-      const eligible = invoices.filter(i => i.filename && (!i.amount || !i.invoiceDate || !i.invoiceNumber))
-      console.log(`[IncomingInvoices] starting enrichment: ${eligible.length} of ${invoices.length} need details`)
-      let done = 0
-      for (const inv of invoices) {
-        if (cancelled) return
-        const needs = inv.filename && (!inv.amount || !inv.invoiceDate || !inv.invoiceNumber)
-        if (!needs) continue
-        const detail = await enrichOne(inv.filename)
-        if (cancelled) return
-        if (detail) {
-          setInvoices(prev => prev.map(x => x.id === inv.id ? {
+      const needs = (i: IncomingInvoice) => !!i.filename && (!i.amount || !i.invoiceDate || !i.invoiceNumber)
+      const queue = invoices.filter(needs)
+      if (queue.length === 0) { setEnrichDone(true); return }
+      setEnrichDone(false)
+      console.log(`[IncomingInvoices] enrichment: ${queue.length} of ${invoices.length} need details`)
+
+      // Scritture raggruppate: un setState ogni FLUSH_MS invece di uno per riga.
+      const pending = new Map<string, { amount: number | null; invoiceDate: string; invoiceNumber: string }>()
+      const flush = () => {
+        if (pending.size === 0) return
+        const batch = new Map(pending)
+        pending.clear()
+        setInvoices(prev => prev.map(x => {
+          const d = batch.get(x.id)
+          if (!d) return x
+          return {
             ...x,
-            amount: (detail.amount != null && (!x.amount || x.amount === 0)) ? detail.amount : x.amount,
-            invoiceDate: x.invoiceDate || detail.invoiceDate || '',
-            invoiceNumber: x.invoiceNumber || detail.invoiceNumber || '',
-          } : x))
-          done++
-          if (done % 5 === 0) console.log(`[IncomingInvoices] enriched ${done}/${eligible.length}`)
-        }
-        await new Promise(r => setTimeout(r, 300))
+            amount: (d.amount != null && (!x.amount || x.amount === 0)) ? d.amount : x.amount,
+            invoiceDate: x.invoiceDate || d.invoiceDate || '',
+            invoiceNumber: x.invoiceNumber || d.invoiceNumber || '',
+          }
+        }))
       }
-      console.log(`[IncomingInvoices] enrichment complete: ${done}/${eligible.length} populated`)
+      const timer = setInterval(flush, FLUSH_MS)
+
+      let next = 0
+      let done = 0
+      const worker = async () => {
+        while (!cancelled) {
+          const idx = next++
+          if (idx >= queue.length) return
+          const inv = queue[idx]
+          const detail = await enrichOne(inv.filename)
+          if (cancelled) return
+          if (detail) { pending.set(inv.id, detail); done++ }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker))
+
+      clearInterval(timer)
+      flush()
+      if (!cancelled) setEnrichDone(true)
+      console.log(`[IncomingInvoices] enrichment complete: ${done}/${queue.length} populated`)
     })()
 
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, mode, invoices.length])
+  }, [invoices.length, dateFrom, dateTo, mode])
 
-  const filtered = useMemo(() => {
+  const filteredRaw = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return invoices
     return invoices.filter(i =>
@@ -238,6 +279,19 @@ export default function IncomingInvoicesView() {
       (i.invoiceNumber || '').toLowerCase().includes(q),
     )
   }, [invoices, search])
+
+  // Il server ordina per data, ma la lista Aruba arriva senza date: l'ordine
+  // iniziale non vuole dire niente. Si riordina una volta sola, a
+  // arricchimento finito, con le righe senza data in fondo.
+  const filtered = useMemo(() => {
+    if (!enrichDone) return filteredRaw
+    return [...filteredRaw].sort((a, b) => {
+      if (!a.invoiceDate && !b.invoiceDate) return 0
+      if (!a.invoiceDate) return 1
+      if (!b.invoiceDate) return -1
+      return b.invoiceDate.localeCompare(a.invoiceDate)
+    })
+  }, [filteredRaw, enrichDone])
 
   // ─── Aggregations for KPIs / sidebar / charts ────────────────────────
   const aggregates = useMemo(() => {
