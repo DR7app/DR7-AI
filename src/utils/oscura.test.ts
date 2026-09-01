@@ -69,4 +69,32 @@ describe('Oscurare — mascheratura dei dati clienti', () => {
     expect(String(r.partita_iva)).toMatch(/^\d{11}$/)
     expect(r.iban).not.toBe('IT60X0542811101000000123456')
   })
+
+  // Regressione 01/09/2026: nei report restavano nomi di clienti in chiaro.
+  it('maschera il nome nella riga report con chiave `cliente`', () => {
+    const [r] = mascheraDati([{
+      id: 'p1', cliente: 'Fabrizio Atzeni', veicolo: 'BMW M8', targa: 'GA123AB',
+      importo: 390, metodo: 'Carta', stato: 'pagato',
+    }]) as Riga[]
+    expect(r.cliente).not.toBe('Fabrizio Atzeni')
+    expect(String(r.cliente)).toMatch(/^[A-Z][a-z]+ /)
+  })
+
+  it('`cliente` che contiene un email resta un email', () => {
+    const [r] = mascheraDati([{ cliente: 'mario.furcas@gmail.com', importo: 10 }]) as Riga[]
+    expect(String(r.cliente)).toContain('@example.it')
+  })
+
+  it('maschera `nome` anche in una riga aggregata senza email ne telefono', () => {
+    const [r] = mascheraDati([{ nome: 'Riccardo Pilia', totale: 1500, prenotazioni: 3 }]) as Riga[]
+    expect(r.nome).not.toBe('Riccardo Pilia')
+  })
+
+  it('NON maschera il nome di un veicolo o di un servizio', () => {
+    const [v] = mascheraDati([{ id: 'v1', display_name: 'Lamborghini Urus', name: 'Lamborghini Urus', plate: 'GA1AB', category: 'supercars' }]) as Riga[]
+    expect(v.name).toBe('Lamborghini Urus')
+    expect(v.display_name).toBe('Lamborghini Urus')
+    const [s2] = mascheraDati([{ nome: 'Lavaggio Completo', price_per_day: 5000, is_active: true }]) as Riga[]
+    expect(s2.nome).toBe('Lavaggio Completo')
+  })
 })

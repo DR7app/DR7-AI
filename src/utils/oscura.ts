@@ -257,11 +257,35 @@ const NOMI_COMPLETI = new Set([
 /** Campi ambigui: personali solo dentro una scheda che parla di una persona. */
 const SE_PERSONA = new Set(['nome', 'name', 'cognome_nome'])
 
-function genereDelCampo(chiave: string, valore: string, persona: boolean): Genere {
+/**
+ * Indizi che la riga parla di una COSA (veicolo, servizio, catalogo) e non di
+ * una persona: li' `nome`/`name` sono "Lamborghini Urus", non un cliente.
+ *
+ * Serve perche' i report aggregano: una riga puo' avere il solo `nome` senza
+ * email ne' telefono, e senza questo elenco l'unico modo per non scoprire i
+ * clienti sarebbe sfocare anche i nomi dei mezzi.
+ */
+const COSE = new Set([
+  'targa', 'plate', 'vehicle_id', 'veicolo', 'vehicle', 'vehicle_name',
+  'categoria', 'category', 'service_type', 'servizio', 'price_per_day',
+  'daily_rate', 'prezzo', 'price', 'marca', 'modello', 'model', 'brand',
+  'is_active', 'nome_servizio', 'nome_categoria', 'nome_veicolo',
+])
+
+function sembraCosa(oggetto: Record<string, unknown>): boolean {
+  for (const k of Object.keys(oggetto)) if (COSE.has(k.toLowerCase())) return true
+  return false
+}
+
+function genereDelCampo(chiave: string, valore: string, persona: boolean, cosa = false): Genere {
   const k = chiave.toLowerCase()
   if (MAI.has(k)) return null
 
   if (NOMI_COMPLETI.has(k)) return 'nome'
+  // `cliente` porta il nome del cliente nei report (monthly-report, cauzioni,
+  // riconciliazioni). A volte pero' ci finisce l'email: si maschera per quello
+  // che e', altrimenti un indirizzo diventerebbe un nome finto.
+  if (k === 'cliente' || k === 'customer') return valore.includes('@') ? 'email' : 'nome'
   if (/(^|_)(ragione_sociale|denominazione|azienda|company_name)$/.test(k)) return 'azienda'
   if (/(^|_)(cognome|last_name|surname)$/.test(k)) return 'solo-cognome'
   if (/(^|_)(first_name|given_name)$/.test(k)) return 'solo-nome'
@@ -286,7 +310,11 @@ function genereDelCampo(chiave: string, valore: string, persona: boolean): Gener
     return /^\d{4}-\d{2}-\d{2}/.test(valore) ? null : 'documento'
   }
   if (/^(note|notes|messaggio|message|descrizione|description|oggetto|subject|body|testo|contenuto|commento|commenti|dettagli|osservazioni)$/.test(k)) return 'testo'
-  if (persona && SE_PERSONA.has(k)) return 'nome'
+  // `nome`/`name`: nei report la riga e' spesso aggregata (nome + totale) e non
+  // porta ne' email ne' telefono, quindi `sembraPersona` da solo non bastava e i
+  // clienti restavano in chiaro. Qui si copre per difetto e si lascia in chiaro
+  // solo quando la riga parla di una cosa (veicolo, servizio, catalogo).
+  if (SE_PERSONA.has(k)) return (persona || !cosa) ? 'nome' : null
   return null
 }
 
@@ -300,6 +328,9 @@ function sembraPersona(oggetto: Record<string, unknown>): boolean {
       return true
     }
     if ((kk === 'email' || kk === 'telefono' || kk === 'phone') && typeof oggetto[k] === 'string') return true
+    // Indizi di scheda cliente usati dai report (report-clienti, dashboard).
+    if (kk === 'tipo_cliente' || kk === 'status_cliente' || kk === 'dr7_club'
+        || kk === 'customerid' || kk === 'cliente' || kk === 'wallet_balance_eur') return true
   }
   return false
 }
@@ -367,13 +398,14 @@ function maschera(dato: unknown, profondita: number, persona = false): unknown {
 
   const oggetto = dato as Record<string, unknown>
   const eScheda = persona || sembraPersona(oggetto)
+  const eCosa = !eScheda && sembraCosa(oggetto)
   const fuori: Record<string, unknown> = {}
 
   for (const chiave of Object.keys(oggetto)) {
     const valore = oggetto[chiave]
 
     if (typeof valore === 'string' && valore) {
-      const genere = genereDelCampo(chiave, valore, eScheda)
+      const genere = genereDelCampo(chiave, valore, eScheda, eCosa)
       if (genere === 'testo') {
         fuori[chiave] = ripuliscTesto(valore)
       } else if (genere) {
