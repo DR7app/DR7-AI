@@ -15,6 +15,7 @@ import {
   normalizeClientStatus,
   type ClientStatusDef,
 } from '../../../utils/clientStatusConfig'
+import { computeAnnualSpend } from '../../../utils/dr7ClubTierSpend'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -57,7 +58,7 @@ interface BookingRecord { id: string; vehicle_name: string; vehicle_plate?: stri
 
 interface WalletTx { id: string; amount: number; type?: string; transaction_type?: string; description: string; created_at: string; balance_after?: number }
 
-interface WalletRecharge { id: string; recharge_amount: number | string; payment_status: string; created_at: string }
+interface WalletRecharge { id: string; recharge_amount: number | string; payment_status: string; created_at: string; excluded_from_tier?: boolean | null }
 
 interface DocRecord { id: string; document_type: string; status: string; uploaded_at: string }
 
@@ -215,12 +216,27 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         // the tier.
         // Column is recharge_amount (euros, numeric), NOT amount — that was
         // the bug making the admin tier display show €0 recharges.
-        const { data: purchases } = await supabase
+        // `excluded_from_tier` (migrazione 20260808000000) marca le ricariche
+        // registrate in doppio: senza questa colonna la spesa mostrata qui
+        // sarebbe piu' alta di quella che il cliente vede nel suo account. Se
+        // la colonna non c'e' ancora si rilegge senza, e i doppioni noti
+        // restano esclusi dalla lista statica in dr7ClubTierSpend.ts.
+        const conFlag = await supabase
           .from('credit_wallet_purchases')
-          .select('id, recharge_amount, payment_status, created_at')
+          .select('id, recharge_amount, payment_status, created_at, excluded_from_tier')
           .eq('user_id', walletUserId)
           .order('created_at', { ascending: false })
           .limit(200)
+        let purchases: WalletRecharge[] | null = conFlag.data
+        if (conFlag.error) {
+          const senzaFlag = await supabase
+            .from('credit_wallet_purchases')
+            .select('id, recharge_amount, payment_status, created_at')
+            .eq('user_id', walletUserId)
+            .order('created_at', { ascending: false })
+            .limit(200)
+          purchases = senzaFlag.data
+        }
         setWalletRecharges(purchases || [])
       }
 
@@ -339,71 +355,20 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     }
   }, [bookings])
 
-  // DR7 Club tier — same thresholds used by website (utils/dr7club.ts).
-  // Counts real CARD money entering DR7 in the rolling last 12 months.
-  // Bookings paid from the wallet must NOT be counted, otherwise the
-  // recharge that funded them would compound the tier.
+  // DR7 Club tier — stesse soglie del sito (Sito/utils/dr7club.ts).
+  // Conta il denaro NUOVO incassato negli ultimi 12 mesi: prenotazioni pagate
+  // con qualsiasi metodo che non sia wallet/gift + ricariche wallet pagate
+  // (doppioni esclusi). Le prenotazioni pagate DAL wallet non contano, senno'
+  // la ricarica che le ha finanziate conterebbe due volte.
   const clubTier = useMemo(() => {
-    const cutoff = new Date()
-    cutoff.setFullYear(cutoff.getFullYear() - 1)
-    const validStatuses = new Set(['succeeded', 'paid', 'completed'])
-
-    // Recharges (credit_wallet_purchases.recharge_amount = euros paid on card)
-    const recentRecharges = walletRecharges.filter(r => {
-      if (!validStatuses.has(r.payment_status)) return false
-      const when = r.created_at
-      return when ? new Date(when) >= cutoff : false
-    })
-    const rechargeEur = recentRecharges.reduce((s, r) => {
-      // recharge_amount is NUMERIC — arrives as string or number
-      const raw = (r as { recharge_amount?: number | string }).recharge_amount
-        ?? (r as { amount?: number | string }).amount // legacy fallback
-      const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? 0))
-      return s + (Number.isFinite(n) ? n : 0)
-    }, 0)
-    const rechargeCount = recentRecharges.length
-
-    // Card-paid bookings only (exclude wallet / cash / bonifico / gift).
-    const isCardPayment = (pm?: string) => {
-      const m = (pm || '').toLowerCase().trim()
-      if (!m) return false
-      // Exclude wallet / gift / credit variants. Note: DB uses "credit" (bare)
-      // for Credit Wallet in some rows — must be excluded even though the
-      // admin UI label is "Credit Wallet".
-      if (m === 'credit' || m === 'credito') return false
-      if (m.includes('wallet') || m.includes('credit_wallet')) return false
-      if (m.includes('contanti') || m.includes('cash')) return false
-      if (m.includes('bonifico') || m.includes('wire') || m.includes('bank')) return false
-      if (m.includes('gift')) return false
-      return m.includes('card') || m.includes('carta') || m.includes('nexi')
-        || m.includes('stripe') || m.includes('pos') || m.includes('pay by link')
-        || m.includes('bancomat') || m.includes('debit')
-    }
-    const cardBookingCents = bookings
-      .filter(b => {
-        if (!validStatuses.has(b.payment_status)) return false
-        if (!isCardPayment(b.payment_method)) return false
-        // Exclude cancelled bookings
-        if (b.status === 'cancelled' || b.status === 'annullata') return false
-        const when = b.booked_at || b.created_at
-        return when ? new Date(when) >= cutoff : false
-      })
-      .reduce((s, b) => s + (b.price_total || 0), 0)
-
-    const cardBookingSpend = cardBookingCents / 100
-    const rechargeSpend = rechargeEur
-    const computed = cardBookingSpend + rechargeSpend
-
-    // Per-user grandfathered override — absolute value, replaces the
-    // computed figure entirely. Customers in this map display a specific
-    // locked spend regardless of real activity.
-    //   Massimo Runchina — locked to €3155.20 (pre-fix €2155.20 + €1000 card recharge)
-    const TIER_SPEND_OVERRIDES: Record<string, number> = {
-      '3b896d05-3d65-4819-a46a-ea9894343935': 3155.20,
-    }
-    const authUserId = customer?.user_id
-    const override = authUserId ? TIER_SPEND_OVERRIDES[authUserId] : undefined
-    const annualSpend = (typeof override === 'number') ? override : computed
+    // 01/09/2026 — La spesa mostrata qui restava CONGELATA mentre il cliente,
+    // nel suo account sul sito, vedeva la cifra vera salire: l'override
+    // grandfathered era una sostituzione secca, si contavano solo i pagamenti
+    // a carta (fuori bonifici e contanti) e si sommavano anche le ricariche
+    // doppie. Adesso il calcolo e' quello canonico, condiviso con il motore
+    // del cashback e con il sito: dr7ClubTierSpend.ts.
+    const { annualSpend, bookingSpend: cardBookingSpend, rechargeSpend, rechargeCount } =
+      computeAnnualSpend(bookings, walletRecharges, customer?.user_id)
 
     if (annualSpend >= 10000) {
       return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
