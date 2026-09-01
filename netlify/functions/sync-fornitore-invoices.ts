@@ -1,7 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { searchIncomingInvoices, getIncomingInvoice } from './aruba-utils'
+import { fetchAllIncomingInvoices, getIncomingInvoice } from './aruba-utils'
 import { normalizeVat, normalizeName, namesMatch } from './utils/fornitoreMatch'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -112,42 +112,40 @@ export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Pr
     for (let i = 0; i < monthsBack; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const range = isoMonthRange(d.getFullYear(), d.getMonth() + 1)
-      let page = 0
-      const PAGE_SIZE = 100
-      const MAX_PAGES = 20
-      while (page < MAX_PAGES) {
-        const result = await searchIncomingInvoices({ startDate: range.startDate, endDate: range.endDate, page, pageSize: PAGE_SIZE })
-        const list: any[] = result.invoices || result.content || result.data || []
-        for (const inv of list) {
-          const sender = inv.senderDescription || inv.sender?.description || ''
-          const senderVatRaw = inv.senderCountryCode && inv.senderId ? `${inv.senderCountryCode}${inv.senderId}` : (inv.sender?.vatCode || '')
-          const v = normalizeVat(senderVatRaw)
-          let isMatch = false
-          // 1) match per P.IVA (entrambi normalizzati a sole cifre)
-          if (piva && v === piva) isMatch = true
-          // 2) fallback: match per nome — tentato solo se la P.IVA del mittente
-          //    non e' gia' di un altro fornitore. Senza questo controllo la
-          //    stessa fattura finiva su piu' anagrafiche simili (es. una
-          //    "Hydrochem" inserita a mano e lo stub creato dal sync).
-          const pivaDiAltri = v ? proprietarioPiva.get(v) : undefined
-          if (!isMatch && !(pivaDiAltri && pivaDiAltri !== fornitoreId)
-              && nameNorm && namesMatch(nameNorm, normalizeName(sender))) {
-            isMatch = true
-          }
-          if (isMatch) {
-            const filename = inv.filename || inv.uploadFileName
-            // Una stessa fattura puo' tornare da piu' pagine Aruba: il
-            // filename e' la sua identita', quindi la contiamo una volta sola.
-            if (filename && !filenameVisti.has(filename)) {
-              filenameVisti.add(filename)
-              matched.push({ filename, sender, senderVat: v })
-            }
+      // Le pagine di Aruba partono da 1: con page=0 il primo blocco tornava
+      // due volte. Qui i doppioni erano gia' fermati da filenameVisti, ma
+      // erano comunque una pagina di chiamate sprecate a ogni mese.
+      const list = await fetchAllIncomingInvoices({
+        startDate: range.startDate,
+        endDate: range.endDate,
+        pageSize: 100,
+        maxPages: 20,
+      })
+      for (const inv of list) {
+        const sender = inv.senderDescription || inv.sender?.description || ''
+        const senderVatRaw = inv.senderCountryCode && inv.senderId ? `${inv.senderCountryCode}${inv.senderId}` : (inv.sender?.vatCode || '')
+        const v = normalizeVat(senderVatRaw)
+        let isMatch = false
+        // 1) match per P.IVA (entrambi normalizzati a sole cifre)
+        if (piva && v === piva) isMatch = true
+        // 2) fallback: match per nome — tentato solo se la P.IVA del mittente
+        //    non e' gia' di un altro fornitore. Senza questo controllo la
+        //    stessa fattura finiva su piu' anagrafiche simili (es. una
+        //    "Hydrochem" inserita a mano e lo stub creato dal sync).
+        const pivaDiAltri = v ? proprietarioPiva.get(v) : undefined
+        if (!isMatch && !(pivaDiAltri && pivaDiAltri !== fornitoreId)
+            && nameNorm && namesMatch(nameNorm, normalizeName(sender))) {
+          isMatch = true
+        }
+        if (isMatch) {
+          const filename = inv.filename || inv.uploadFileName
+          // Una stessa fattura puo' tornare da piu' pagine Aruba: il
+          // filename e' la sua identita', quindi la contiamo una volta sola.
+          if (filename && !filenameVisti.has(filename)) {
+            filenameVisti.add(filename)
+            matched.push({ filename, sender, senderVat: v })
           }
         }
-        if (list.length < PAGE_SIZE) break
-        if (result.last === true) break
-        if (typeof result.totalPages === 'number' && page + 1 >= result.totalPages) break
-        page++
       }
     }
 

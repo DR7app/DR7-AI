@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { searchIncomingInvoices } from './aruba-utils'
+import { fetchAllIncomingInvoices } from './aruba-utils'
 import { syncOneFornitore } from './sync-fornitore-invoices'
 import { normalizeVat, normalizeName, namesMatch } from './utils/fornitoreMatch'
 
@@ -71,25 +71,19 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
     const startISO = `${giornoInizio}T00:00:00.000${offsetRoma(giornoInizio)}`
     const endISO = `${giornoFine}T23:59:59.999${offsetRoma(giornoFine)}`
 
+    // Le pagine di Aruba partono da 1: partendo da 0 il primo blocco tornava
+    // due volte e `scanned` contava 100 righe che non esistevano.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allInvoices: any[] = []
-    for (let page = 0; page < 10; page++) {
-        try {
-            const r = await searchIncomingInvoices({
-                startDate: startISO,
-                endDate: endISO,
-                page,
-                pageSize: 100,
-            })
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const items: any[] = r.invoices || r.items || []
-            if (items.length === 0) break
-            allInvoices.push(...items)
-            if (items.length < 100) break
-        } catch (e) {
-            console.warn('[fornitori-bg] aruba search err:', (e as Error).message)
-            break
-        }
+    let allInvoices: any[] = []
+    try {
+        allInvoices = await fetchAllIncomingInvoices({
+            startDate: startISO,
+            endDate: endISO,
+            pageSize: 100,
+            maxPages: 10,
+        })
+    } catch (e) {
+        console.warn('[fornitori-bg] aruba search err:', (e as Error).message)
     }
     result.scanned = allInvoices.length
 

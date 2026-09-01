@@ -1,7 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { searchIncomingInvoices } from './aruba-utils'
+import { fetchAllIncomingInvoices } from './aruba-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -61,36 +61,29 @@ export const handler: Handler = async (event) => {
     const monthCounts: Record<string, number> = {}
 
     for (const m of months) {
-      let page = 0
-      const PAGE_SIZE = 100
-      const MAX_PAGES = 20
+      // Le pagine di Aruba partono da 1: con page=0 il primo blocco tornava
+      // due volte. Qui i fornitori erano gia' unici (mappa `seen`), ma era
+      // una pagina di chiamate sprecate per ogni mese.
       let monthSuppliers = 0
-      while (page < MAX_PAGES) {
-        const result = await searchIncomingInvoices({
-          startDate: m.startDate,
-          endDate: m.endDate,
-          page,
-          pageSize: PAGE_SIZE,
-        })
-        const list: any[] = result.invoices || result.content || result.data || []
-        for (const inv of list) {
-          const sender = inv.senderDescription || inv.sender?.description || inv.cedentePrestatore?.denominazione || ''
-          const senderVatRaw = inv.senderCountryCode && inv.senderId
-            ? `${inv.senderCountryCode}${inv.senderId}`
-            : inv.sender?.vatCode || inv.cedentePrestatore?.idFiscaleIVA || ''
-          const piva = normalizeVat(senderVatRaw)
-          const name = (sender || '').trim()
-          if (!name && !piva) continue
-          const key = piva || `name:${name.toLowerCase()}`
-          if (!seen.has(key)) {
-            seen.set(key, { nome: name || '(senza nome)', piva: piva || null })
-            monthSuppliers++
-          }
+      const list = await fetchAllIncomingInvoices({
+        startDate: m.startDate,
+        endDate: m.endDate,
+        pageSize: 100,
+        maxPages: 20,
+      })
+      for (const inv of list) {
+        const sender = inv.senderDescription || inv.sender?.description || inv.cedentePrestatore?.denominazione || ''
+        const senderVatRaw = inv.senderCountryCode && inv.senderId
+          ? `${inv.senderCountryCode}${inv.senderId}`
+          : inv.sender?.vatCode || inv.cedentePrestatore?.idFiscaleIVA || ''
+        const piva = normalizeVat(senderVatRaw)
+        const name = (sender || '').trim()
+        if (!name && !piva) continue
+        const key = piva || `name:${name.toLowerCase()}`
+        if (!seen.has(key)) {
+          seen.set(key, { nome: name || '(senza nome)', piva: piva || null })
+          monthSuppliers++
         }
-        if (list.length < PAGE_SIZE) break
-        if (result.last === true) break
-        if (typeof result.totalPages === 'number' && page + 1 >= result.totalPages) break
-        page++
       }
       monthCounts[m.label] = monthSuppliers
     }

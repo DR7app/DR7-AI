@@ -347,7 +347,7 @@ export async function fetchAllIncomingInvoices(params: {
             pageSize,
         })
 
-        const righe: any[] = result.invoices || result.content || result.data || []
+        const righe: any[] = result.invoices || result.content || result.data || result.items || []
 
         for (const r of righe) {
             const chiave = r.filename || r.uploadFileName || r.id
