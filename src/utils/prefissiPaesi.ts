@@ -322,11 +322,28 @@ export function paeseDaNumero(valore: string | null | undefined): Paese | null {
     // nessuna bandiera che una bandiera falsa.
     const esplicito = grezzo.startsWith('+') || cifre.startsWith('00')
     if (!esplicito) {
-        // Senza prefisso internazionale vale solo il formato nazionale
-        // italiano: cellulare 3XXXXXXXXX (10 cifre) o fisso 0... (9-11).
+        // Formato nazionale italiano: cellulare 3XXXXXXXXX (10 cifre) o
+        // fisso 0... (9-11). Si prova PER PRIMO, se no "3368469763" (un
+        // cellulare italiano) verrebbe letto come +33 Francia.
         const formatoItaliano = /^3\d{9}$/.test(cifre) || /^0\d{8,10}$/.test(cifre)
-        if (!formatoItaliano) return null
-        return PAESI.find(p => p.iso === 'IT') || null
+        if (formatoItaliano) return PAESI.find(p => p.iso === 'IT') || null
+
+        // 01/09/2026: tantissimi numeri sono salvati col prefisso ma SENZA il
+        // "+" ("393401234567"), e restavano senza bandiera. Se le prime cifre
+        // sono un prefisso conosciuto e quello che resta ha una lunghezza da
+        // numero nazionale, il paese si sa: "393401234567" -> IT,
+        // "33684697632" -> FR. Il dubbio resta senza bandiera, come prima.
+        const dials = [...new Set(PAESI.map(p => p.dial))].sort((a, b) => b.length - a.length)
+        for (const d of dials) {
+            const senza = d.slice(1)
+            if (!cifre.startsWith(senza)) continue
+            const resto = cifre.slice(senza.length)
+            if (resto.length < 6 || resto.length > 12) continue
+            const candidati = PAESI.filter(p => p.dial === d)
+            const frequente = PAESI_FREQUENTI.map(iso => candidati.find(p => p.iso === iso)).find(Boolean)
+            return frequente || candidati[0] || null
+        }
+        return null
     }
 
     const { dial } = separaPrefisso(grezzo)
