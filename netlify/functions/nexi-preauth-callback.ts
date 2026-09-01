@@ -2,6 +2,8 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { applyTokenizedCardUpdate } from './utils/nexiCards';
+import { fetchNexiCardInfo } from './utils/nexiCardInfo';
+import { lookupBin } from './utils/binLookup';
 import { triggerSystemMessageEvent } from './utils/triggerSystemMessageEvent';
 import { fetchNexiOrderOutcome } from './utils/nexiOrderStatus';
 
@@ -85,13 +87,24 @@ const handler: Handler = async (event) => {
         // 2026-08-27: si caricano anche cliente/importo/veicolo perche' su
         // pre-autorizzazione riuscita parte il messaggio Pro al cliente
         // (evento `cauzione_preauth_completed`).
-        const { data: cauzione, error: findError } = await supabase
+        const { data: cauzione } = await supabase
             .from('cauzioni')
             .select('id, cliente_id, veicolo_id, importo, nexi_transaction_id, riferimento_contratto_id')
             .eq('nexi_order_id', orderId)
-            .single();
+            .maybeSingle();
 
-        if (findError || !cauzione) {
+        const { data: txn } = await supabase
+            .from('nexi_transactions')
+            .select('id, metadata, customer_email')
+            .eq('order_id', orderId)
+            .maybeSingle();
+
+        // 01/09/2026: la pre-autorizzazione puo' NON avere una cauzione dietro
+        // (link creato dal tab Nexi o dal menu Gestisci del tab Clienti): in
+        // quel caso esiste solo la riga in nexi_transactions. Prima si usciva
+        // 404 e quella pre-auth restava "in attesa" per sempre, con la carta
+        // mai registrata sulla scheda cliente.
+        if (!cauzione && !txn) {
             console.error('Cauzione not found for order:', orderId);
             return {
                 statusCode: 404,
@@ -99,24 +112,23 @@ const handler: Handler = async (event) => {
                 body: JSON.stringify({ error: 'Cauzione not found' })
             };
         }
+        if (!cauzione) {
+            console.log('[nexi-preauth-callback] Pre-autorizzazione senza cauzione (standalone) per order:', orderId);
+        }
 
         // Check if the payment link has expired (server-side enforcement)
-        const { data: txn } = await supabase
-            .from('nexi_transactions')
-            .select('metadata')
-            .eq('order_id', orderId)
-            .maybeSingle();
-
         const expiresAt = txn?.metadata?.expires_at;
         if (expiresAt && new Date() > new Date(expiresAt)) {
             console.log(`[nexi-preauth-callback] REJECTED — link expired at ${expiresAt}, payment arrived at ${new Date().toISOString()}`);
             // NON azzerare qui nexi_transaction_id: una notifica tardiva o
             // duplicata su un ordine gia' autorizzato cancellerebbe una
             // pre-auth valida. La pulizia avviene solo su esito verificato.
-            await supabase.from('cauzioni').update({
-                note: `Pagamento rifiutato — link scaduto (scadenza: ${expiresAt})`,
-                updated_at: new Date().toISOString()
-            }).eq('id', cauzione.id);
+            if (cauzione) {
+                await supabase.from('cauzioni').update({
+                    note: `Pagamento rifiutato — link scaduto (scadenza: ${expiresAt})`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', cauzione.id);
+            }
             // Update transaction as expired too
             await supabase.from('nexi_transactions').update({
                 status: 'expired',
@@ -228,21 +240,23 @@ const handler: Handler = async (event) => {
             console.log('[nexi-preauth-callback] FAILED — result:', effectiveResult, 'resultCode:', resultCode, 'unknownResult:', isUnknown);
         }
 
-        const { error: updateError } = await supabase
-            .from('cauzioni')
-            .update(updateData)
-            .eq('id', cauzione.id);
+        if (cauzione) {
+            const { error: updateError } = await supabase
+                .from('cauzioni')
+                .update(updateData)
+                .eq('id', cauzione.id);
 
-        if (updateError) {
-            console.error('Error updating cauzione:', updateError);
-            return {
-                statusCode: 500,
-                headers,
-                body: JSON.stringify({ error: 'Failed to update cauzione' })
-            };
+            if (updateError) {
+                console.error('Error updating cauzione:', updateError);
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: JSON.stringify({ error: 'Failed to update cauzione' })
+                };
+            }
+
+            console.log('Cauzione updated successfully:', cauzione.id, '- txStatus:', txStatus);
         }
-
-        console.log('Cauzione updated successfully:', cauzione.id, '- txStatus:', txStatus);
 
         // ── Pre-autorizzazione EFFETTUATA: messaggio Pro al cliente ────────
         // Evento `cauzione_preauth_completed` (gruppo Cauzioni in Messaggi di
@@ -250,9 +264,9 @@ const handler: Handler = async (event) => {
         // l'invio: niente testo hardcoded.
         // Idempotenza: Nexi puo' ripetere la notifica; se la cauzione portava
         // gia' questo operationId il messaggio e' partito al primo giro.
-        const alreadyProcessed = !!cauzione.nexi_transaction_id
+        const alreadyProcessed = !!cauzione?.nexi_transaction_id
             && String(cauzione.nexi_transaction_id) === String(effectiveOperationId || '');
-        if (isPreauthorized && !alreadyProcessed) {
+        if (cauzione && isPreauthorized && !alreadyProcessed) {
             try {
                 const { data: cust } = await supabase
                     .from('customers_extended')
@@ -374,7 +388,7 @@ const handler: Handler = async (event) => {
         }
 
         // Save contractId to customer for future MIT charges
-        if ((isPreauthorized || wasCharged) && effectiveContractId) {
+        if (cauzione && (isPreauthorized || wasCharged) && effectiveContractId) {
             try {
                 // Get booking from cauzione to find customer
                 const { data: cauzioneFull } = await supabase
@@ -420,6 +434,85 @@ const handler: Handler = async (event) => {
                 }
             } catch (custErr) {
                 console.error('[nexi-preauth-callback] Error saving contractId to customer:', custErr);
+            }
+        }
+
+        // ── PRE-AUTORIZZAZIONE SU CLIENTE, SENZA CAUZIONE ─────────────────
+        // 01/09/2026: link creato dal menu Gestisci del tab Clienti (o dal tab
+        // Nexi scegliendo il cliente). Non c'e' nessuna cauzione da aggiornare,
+        // ma la carta deve finire sulla scheda del cliente: e' l'unico motivo
+        // per cui il link e' stato mandato. Stessa logica del ramo "link
+        // cliente" di nexi-payment-callback.
+        if (!cauzione && (isPreauthorized || wasCharged)) {
+            try {
+                // Rilettura: poco sopra abbiamo scritto esito/operation_id in
+                // metadata. Partendo dalla copia vecchia li cancelleremmo.
+                const { data: txFresh } = await supabase
+                    .from('nexi_transactions')
+                    .select('metadata, customer_email')
+                    .eq('order_id', orderId)
+                    .maybeSingle();
+                const meta = txFresh?.metadata || txn?.metadata || {};
+                const custIdLink = meta.customer_id || null;
+                const custEmailLink = (txFresh?.customer_email || txn?.customer_email || meta.customer_email || '').toLowerCase().trim();
+
+                let cardInfoLink: Record<string, any> = {};
+                const cardLink = await fetchNexiCardInfo(NEXI_API_KEY, {
+                    operationId: effectiveOperationId,
+                    orderId,
+                });
+                if (cardLink) {
+                    let binType = '';
+                    let binBrand = '';
+                    const binForLookup = cardLink.bin
+                        || (cardLink.maskedPan && /^\d{6}/.test(cardLink.maskedPan.trim()) ? cardLink.maskedPan.trim().substring(0, 6) : '');
+                    if (binForLookup && binForLookup.length >= 4) {
+                        const binResult = await lookupBin(binForLookup);
+                        if (binResult) { binType = binResult.type; binBrand = binResult.brand; }
+                    }
+                    cardInfoLink = {
+                        nexi_card_masked_pan: cardLink.maskedPan,
+                        nexi_card_circuit: cardLink.circuit || '',
+                        nexi_card_type: cardLink.cardType || binType,
+                        nexi_card_brand: binBrand || cardLink.circuit || '',
+                        nexi_card_bin: binForLookup || '',
+                        nexi_card_updated: new Date().toISOString(),
+                    };
+                    // La carta resta anche sulla riga della transazione: il tab
+                    // Nexi la mostra pure se il cliente non si aggancia.
+                    await supabase.from('nexi_transactions').update({
+                        metadata: { ...meta, ...cardInfoLink },
+                        updated_at: new Date().toISOString(),
+                    }).eq('order_id', orderId);
+                }
+
+                const aggiornamento = {
+                    ...(effectiveContractId ? { nexi_contract_id: effectiveContractId } : {}),
+                    nexi_contract_updated: new Date().toISOString(),
+                    ...cardInfoLink,
+                };
+
+                let cliente: any = null;
+                if (custIdLink) {
+                    const { data } = await supabase.from('customers_extended').select('id, metadata').eq('id', custIdLink).maybeSingle();
+                    cliente = data;
+                }
+                if (!cliente && custEmailLink) {
+                    const { data } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmailLink).maybeSingle();
+                    cliente = data;
+                }
+
+                if (cliente) {
+                    await supabase.from('customers_extended').update({
+                        metadata: applyTokenizedCardUpdate(cliente.metadata, aggiornamento),
+                        updated_at: new Date().toISOString()
+                    }).eq('id', cliente.id);
+                    console.log(`[nexi-preauth-callback] Pre-auth cliente: carta registrata sulla scheda ${cliente.id}`);
+                } else {
+                    console.warn(`[nexi-preauth-callback] Pre-auth cliente: nessuna scheda trovata (id=${custIdLink || '-'}, email=${custEmailLink || '-'}) — carta salvata solo sulla transazione`);
+                }
+            } catch (linkErr) {
+                console.error('[nexi-preauth-callback] Pre-auth cliente: registrazione carta fallita (non bloccante):', linkErr);
             }
         }
 

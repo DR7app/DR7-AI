@@ -33,7 +33,7 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, amount, customerEmail, customerName, description, expirationHours } = JSON.parse(event.body || '{}');
+        const { cauzioneId, customerId, amount, customerEmail, customerName, description, expirationHours } = JSON.parse(event.body || '{}');
 
         if (!amount) {
             return {
@@ -79,8 +79,10 @@ const handler: Handler = async (event) => {
                 orderId: orderId,
                 amount: amountCents.toString(),
                 currency: 'EUR',
-                description: description || `Cauzione deposito ${cauzioneId}`,
-                customField: `cauzione_${cauzioneId}`,
+                description: description || (cauzioneId ? `Cauzione deposito ${cauzioneId}` : 'Pre-autorizzazione DR7'),
+                customField: cauzioneId
+                    ? `cauzione_${cauzioneId}`
+                    : (customerId ? `cliente_${customerId}` : 'preauth'),
                 customerInfo: {
                     cardHolderEmail: customerEmail || '',
                     cardHolderName: customerName || ''
@@ -165,18 +167,23 @@ const handler: Handler = async (event) => {
         const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
         console.log('[nexi-create-preauth] Payment URL:', paymentUrl);
 
-        // Update cauzione with order ID and expiration timestamp
-        const { error: updateError } = await supabase
-            .from('cauzioni')
-            .update({
-                nexi_order_id: orderId,
-                note: `Preautorizzazione in attesa - Order: ${orderId} - Scade: ${expirationDate.toISOString()}`,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', cauzioneId);
+        // Update cauzione with order ID and expiration timestamp.
+        // Senza cauzioneId (pre-auth dal tab Nexi o dal tab Clienti) non c'e'
+        // nessuna riga da aggiornare: prima si finiva su `.eq('id', undefined)`,
+        // cioe' una query fallita a ogni link standalone.
+        if (cauzioneId) {
+            const { error: updateError } = await supabase
+                .from('cauzioni')
+                .update({
+                    nexi_order_id: orderId,
+                    note: `Preautorizzazione in attesa - Order: ${orderId} - Scade: ${expirationDate.toISOString()}`,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', cauzioneId);
 
-        if (updateError) {
-            console.error('[nexi-create-preauth] Error updating cauzione:', updateError);
+            if (updateError) {
+                console.error('[nexi-create-preauth] Error updating cauzione:', updateError);
+            }
         }
 
         // Also store in nexi_transactions for tracking
@@ -189,7 +196,12 @@ const handler: Handler = async (event) => {
             customer_email: customerEmail || null,
             metadata: {
                 type: 'preauth',
-                cauzione_id: cauzioneId,
+                cauzione_id: cauzioneId || null,
+                // Cliente scelto dall'anagrafica nel tab Nexi o dal menu
+                // Gestisci del tab Clienti: serve per riagganciare la
+                // pre-autorizzazione (e la carta) alla scheda cliente.
+                customer_id: customerId || null,
+                payment_purpose: cauzioneId ? 'cauzione' : 'cliente',
                 customer_name: customerName,
                 action_type: 'PREAUTH',
                 capture_type: 'EXPLICIT',

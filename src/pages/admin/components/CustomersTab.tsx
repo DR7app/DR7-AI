@@ -183,6 +183,12 @@ export default function CustomersTab() {
   // Menu "Gestisci" della riga cliente: raggruppa scheda / dettagli /
   // documenti / modifica / link di pagamento (28/08/2026).
   const [linkPagamentoCliente, setLinkPagamentoCliente] = useState<Customer | null>(null)
+  // 01/09/2026: la stessa modale serve DUE link diversi sullo stesso cliente.
+  // 'pagamento' = incasso subito (nexi-pay-by-link). 'preauth' = fondi
+  // BLOCCATI sulla carta senza addebito (nexi-create-preauth), con la carta
+  // che resta registrata sulla scheda per gli addebiti successivi.
+  const [linkTipo, setLinkTipo] = useState<'pagamento' | 'preauth'>('pagamento')
+  const [linkOre, setLinkOre] = useState('24')
   const [linkImporto, setLinkImporto] = useState('')
   const [linkDescrizione, setLinkDescrizione] = useState('')
   const [creandoLink, setCreandoLink] = useState(false)
@@ -1057,7 +1063,7 @@ export default function CustomersTab() {
 
 
   /**
-   * Link di pagamento su un CLIENTE, senza prenotazione.
+   * Link di pagamento o di PRE-AUTORIZZAZIONE su un CLIENTE, senza prenotazione.
    * 28/08/2026: serve per incassare al volo (e tokenizzare la carta) prima
    * ancora che esista una prenotazione. Usa lo stesso nexi-pay-by-link dei
    * pagamenti prenotazione, che accetta gia' un link senza bookingId e
@@ -1075,19 +1081,30 @@ export default function CustomersTab() {
       toast.error('Il cliente non ha un numero di telefono')
       return
     }
+    const ore = Math.max(1, Math.min(8760, parseInt(linkOre, 10) || 24))
+    const preauth = linkTipo === 'preauth'
     setCreandoLink(true)
     try {
-      const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+      // Due backend diversi per due gesti diversi: pay-by-link INCASSA,
+      // create-preauth BLOCCA i fondi (captureType EXPLICIT) e registra la
+      // carta. Entrambi accettano customerId, cosi' la carta finisce sulla
+      // scheda del cliente anche senza prenotazione.
+      const endpoint = preauth
+        ? '/.netlify/functions/nexi-create-preauth'
+        : '/.netlify/functions/nexi-pay-by-link'
+      const res = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: importo,
           customerEmail: cliente.email || '',
           customerName: cliente.full_name || '',
-          description: linkDescrizione.trim() || `Pagamento DR7 - ${cliente.full_name || 'Cliente'}`,
+          description: linkDescrizione.trim() || (preauth
+            ? `Pre-autorizzazione DR7 - ${cliente.full_name || 'Cliente'}`
+            : `Pagamento DR7 - ${cliente.full_name || 'Cliente'}`),
           paymentPurpose: 'cliente',
           customerId: cliente.id,
-          expirationHours: 24,
+          expirationHours: ore,
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -1103,6 +1120,7 @@ export default function CustomersTab() {
         setLinkPagamentoCliente(null)
         setLinkImporto('')
         setLinkDescrizione('')
+        setLinkOre('24')
       } else {
         // Invio fallito: il link esiste gia' su Nexi, non deve andare perso.
         try {
@@ -1119,7 +1137,11 @@ export default function CustomersTab() {
     }
   }
 
-  /** Manda il link al cliente col template Pro "Richiesta Pagamento". */
+  /**
+   * Manda il link al cliente col template Pro giusto: "Richiesta Pagamento"
+   * per l'incasso, "Richiesta Cauzione" per la pre-autorizzazione (e' gia'
+   * il template che il tab Cauzioni usa per lo stesso identico link).
+   */
   async function inviaLinkPagamentoWhatsapp(url: string): Promise<boolean> {
     const cliente = linkPagamentoCliente
     if (!cliente || !url) return false
@@ -1136,7 +1158,7 @@ export default function CustomersTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: telefono,
-          templateKey: 'payment_link_customer',
+          templateKey: linkTipo === 'preauth' ? 'deposit_request_customer' : 'payment_link_customer',
           booking: { service_type: 'rental' },
           templateVars: {
             '{nome}': nome,
@@ -1150,6 +1172,15 @@ export default function CustomersTab() {
             '{importo}': importoStr,
             '{amount}': importoStr,
             '{total}': importoStr,
+            // Il template "Richiesta Cauzione" nasce dal tab Cauzioni, dove
+            // esiste un contratto. Qui non c'e': meglio un trattino che il
+            // placeholder letterale nel WhatsApp del cliente.
+            ...(linkTipo === 'preauth' ? {
+              '{contract_ref}': '-',
+              '{contratto}': '-',
+              '{booking_ref}': '-',
+              '{booking_id}': '-',
+            } : {}),
           },
         }),
       })
@@ -1159,7 +1190,9 @@ export default function CustomersTab() {
         return false
       }
       if (json.skipped) {
-        toast.error('Nessun template Pro collegato a "Richiesta Pagamento": il messaggio non e\' partito')
+        toast.error(linkTipo === 'preauth'
+          ? 'Nessun template Pro collegato a "Richiesta Cauzione": il messaggio non e\' partito'
+          : 'Nessun template Pro collegato a "Richiesta Pagamento": il messaggio non e\' partito')
         return false
       }
       toast.success('Link inviato su WhatsApp')
@@ -3154,9 +3187,25 @@ export default function CustomersTab() {
                           {
                             label: 'Link pagamento',
                             onClick: () => {
+                              setLinkTipo('pagamento')
                               setLinkPagamentoCliente(customer)
                               setLinkImporto('')
                               setLinkDescrizione('')
+                              setLinkOre('24')
+                            },
+                          },
+                          {
+                            // 01/09/2026: ogni cliente ha anche il link di
+                            // PRE-AUTORIZZAZIONE, non solo quello di incasso:
+                            // blocca i fondi (cauzione, garanzia) senza
+                            // addebitare e registra la carta sulla scheda.
+                            label: 'Link pre-autorizzazione',
+                            onClick: () => {
+                              setLinkTipo('preauth')
+                              setLinkPagamentoCliente(customer)
+                              setLinkImporto('')
+                              setLinkDescrizione('')
+                              setLinkOre('24')
                             },
                           },
                         ],
@@ -3250,12 +3299,16 @@ export default function CustomersTab() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={() => setLinkPagamentoCliente(null)}>
           <div className="bg-theme-bg-primary border border-theme-border rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div>
-              <h3 className="text-lg font-bold text-theme-text-primary">Link di pagamento</h3>
+              <h3 className="text-lg font-bold text-theme-text-primary">
+                {linkTipo === 'preauth' ? 'Link di pre-autorizzazione' : 'Link di pagamento'}
+              </h3>
               <p className="text-xs text-theme-text-muted mt-1">
                 {linkPagamentoCliente.full_name}{linkPagamentoCliente.email ? ` - ${linkPagamentoCliente.email}` : ''}
               </p>
               <p className="text-[11px] text-theme-text-muted mt-2">
-                Pagamento non legato a una prenotazione. Il link viene creato e inviato subito al cliente su WhatsApp. A pagamento riuscito la carta resta registrata sul cliente per gli addebiti successivi. Link valido 24 ore.
+                {linkTipo === 'preauth'
+                  ? 'Pre-autorizzazione non legata a una prenotazione: i fondi vengono BLOCCATI sulla carta, non incassati. Il link viene creato e inviato subito al cliente su WhatsApp; a operazione riuscita la carta resta registrata sul cliente per gli addebiti successivi.'
+                  : 'Pagamento non legato a una prenotazione. Il link viene creato e inviato subito al cliente su WhatsApp. A pagamento riuscito la carta resta registrata sul cliente per gli addebiti successivi.'}
               </p>
             </div>
 
@@ -3277,7 +3330,18 @@ export default function CustomersTab() {
                 type="text"
                 value={linkDescrizione}
                 onChange={e => setLinkDescrizione(e.target.value)}
-                placeholder="es. Acconto noleggio"
+                placeholder={linkTipo === 'preauth' ? 'es. Garanzia noleggio' : 'es. Acconto noleggio'}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Validita' del link (ore)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={linkOre}
+                onChange={e => setLinkOre(e.target.value.replace(/\D/g, ''))}
+                placeholder="24"
                 className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
               />
             </div>
