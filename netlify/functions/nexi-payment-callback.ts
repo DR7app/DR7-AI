@@ -40,6 +40,52 @@ async function fetchNexiOperationDetails(operationId: string): Promise<any> {
     return null;
 }
 
+/**
+ * Chiede a Nexi l'esito REALE di un ordine.
+ *
+ * Serve perche' questa function e' un endpoint pubblico non firmato: senza
+ * questo controllo bastava una POST con `result: 'OK'` per marcare pagata una
+ * prenotazione e far partire il WhatsApp di conferma pagamento.
+ *
+ *   'paid'    → Nexi conferma un'operazione autorizzata/eseguita
+ *   'not_paid'→ Nexi risponde e l'ordine NON risulta incassato
+ *   'unknown' → non si e' potuto chiedere (chiave assente, API giu', 5xx):
+ *               il chiamante NON deve declassare un pagamento che potrebbe
+ *               essere vero, deve far ritentare la notifica.
+ */
+async function verificaOrdineSuNexi(orderId: string): Promise<'paid' | 'not_paid' | 'unknown'> {
+    if (!NEXI_API_KEY) {
+        console.error('[nexi-payment-callback] NEXI_API_KEY assente — impossibile verificare l\'ordine');
+        return 'unknown';
+    }
+    const esitiPagati = ['AUTHORIZED', 'EXECUTED'];
+    const pagato = (e: unknown) => esitiPagati.includes(String(e || '').toUpperCase());
+    try {
+        const res = await fetch(`${NEXI_BASE_URL}/orders/${encodeURIComponent(orderId)}`, {
+            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': randomUUID() }
+        });
+        // 404 = ordine inesistente su Nexi: notifica falsa o link mai pagato.
+        if (res.status === 404) return 'not_paid';
+        if (!res.ok) {
+            console.warn(`[nexi-payment-callback] Verifica ordine ${orderId}: HTTP ${res.status}`);
+            return 'unknown';
+        }
+        const data: any = await res.json();
+        if (pagato(data?.operationResult) || pagato(data?.orderStatus?.lastOperationResult)) return 'paid';
+        // Un ordine puo' avere piu' tentativi: basta un'autorizzazione riuscita.
+        if (Array.isArray(data?.operations)) {
+            const ok = data.operations.some((o: any) => pagato(o?.operationResult)
+                && ['AUTHORIZATION', 'CAPTURE'].includes(String(o?.operationType || '').toUpperCase()));
+            if (ok) return 'paid';
+        }
+        console.warn(`[nexi-payment-callback] Ordine ${orderId} non risulta incassato su Nexi:`, JSON.stringify(data).substring(0, 300));
+        return 'not_paid';
+    } catch (e) {
+        console.warn(`[nexi-payment-callback] Verifica ordine ${orderId} fallita:`, e);
+        return 'unknown';
+    }
+}
+
 // BIN lookup to determine card type (credit/debit/prepaid) and brand
 // (visa/mastercard/etc). Delegata al helper condiviso che ha:
 //   1) tabella locale di prefissi IT (Intesa/Unicredit/Postepay/Nexi/Revolut...)
@@ -104,7 +150,26 @@ const handler: Handler = async (event) => {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing orderId' }) };
         }
 
-        const isSuccess = result === 'OK' || result === 'AUTHORIZED' || result === 'EXECUTED' || resultCode === '00';
+        // Esito dichiarato dalla notifica. NON basta: questo endpoint e'
+        // pubblico e senza firma, quindi un POST qualsiasi con
+        // {orderId, result:'OK'} marcherebbe pagata una prenotazione e farebbe
+        // partire il WhatsApp "pagato" senza un centesimo incassato.
+        const claimedSuccess = result === 'OK' || result === 'AUTHORIZED' || result === 'EXECUTED' || resultCode === '00';
+
+        // L'unica fonte di verita' e' Nexi: si interroga l'ordine
+        // server-to-server prima di considerare incassato qualsiasi importo.
+        const verifica = await verificaOrdineSuNexi(orderId);
+        if (claimedSuccess && verifica === 'unknown') {
+            // Nexi non raggiungibile: NON si declassa un pagamento che potrebbe
+            // essere vero (declassarlo farebbe ripartire un link a chi ha gia'
+            // pagato). Si risponde 5xx cosi' Nexi ritenta la notifica.
+            console.error(`[nexi-payment-callback] Verifica ordine ${orderId} non riuscita — rispondo 503 per far ritentare Nexi`);
+            return { statusCode: 503, headers, body: JSON.stringify({ error: 'Order verification unavailable — retry' }) };
+        }
+        const isSuccess = claimedSuccess && verifica === 'paid';
+        if (claimedSuccess && !isSuccess) {
+            console.warn(`[nexi-payment-callback] Notifica dichiara pagato ma Nexi NON conferma l'ordine ${orderId} — trattato come NON pagato`);
+        }
 
         // Find the nexi_transaction by order_id
         const { data: transaction } = await supabase
@@ -629,7 +694,16 @@ const handler: Handler = async (event) => {
                     const invRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
-                        body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extensionAmountEur })
+                        // 2026-09-01: chiave di idempotenza. Nexi ripete il callback
+                        // finche' non riceve un 200, e ogni ripetizione emetteva
+                        // un'altra fattura di estensione: l'identita' del pagamento
+                        // e' l'ordine, quindi la seconda chiamata ritrova la prima.
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            includeIVA: true,
+                            extensionAmount: extensionAmountEur,
+                            idempotencyKey: `nexi:${transaction.order_id}`,
+                        })
                     });
                     if (invRes.ok) {
                         console.log(`[nexi-payment-callback] Extension fattura generated — €${amountEur}`);
@@ -902,7 +976,12 @@ const handler: Handler = async (event) => {
                     await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
-                        body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: topupAmountEur })
+                        body: JSON.stringify({
+                            bookingId: booking.id,
+                            includeIVA: true,
+                            extensionAmount: topupAmountEur,
+                            idempotencyKey: `nexi:${transaction.order_id}`,
+                        })
                     });
                     console.log(`[nexi-payment-callback] Topup fattura generated — €${topupAmountEur.toFixed(2)}`);
                 } catch (invErr) {

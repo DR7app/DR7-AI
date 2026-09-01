@@ -720,6 +720,7 @@ export interface PaymentSuccessCopy {
   err_purchase_update_it: string; err_purchase_update_en: string;
   err_credit_add_it: string; err_credit_add_en: string;
   err_order_not_found_it: string; err_order_not_found_en: string;
+  err_payment_not_confirmed_it: string; err_payment_not_confirmed_en: string;
   err_generic_it: string; err_generic_en: string;
 }
 
@@ -1933,6 +1934,8 @@ export const INITIAL_PAYMENT_SUCCESS: PaymentSuccessCopy = {
   err_credit_add_it: 'Pagamento ricevuto ma errore nell\'aggiunta dei crediti. Contatta il supporto.',
   err_credit_add_en: 'Payment received but error adding credits. Please contact support.',
   err_order_not_found_it: 'Ordine non trovato.', err_order_not_found_en: 'Order not found.',
+  err_payment_not_confirmed_it: 'Non risulta ancora nessun pagamento per questo ordine. Se hai completato il pagamento riceverai la conferma a breve, altrimenti riprova o contattaci.',
+  err_payment_not_confirmed_en: 'No payment has been recorded for this order yet. If you completed the payment you will receive confirmation shortly, otherwise please try again or contact us.',
   err_generic_it: 'Si è verificato un errore.', err_generic_en: 'An error occurred.',
 };
 
