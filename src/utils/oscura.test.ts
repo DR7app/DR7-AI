@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mascheraDati, mascheraRisposta, elencoDaSfocare } from './oscura'
+import { mascheraDati, mascheraRisposta, elencoDaSfocare, daSfocare } from './oscura'
 
 type Riga = Record<string, unknown>
 
@@ -75,5 +75,58 @@ describe('Oscurare — i dati restano veri, si sfoca solo cio che si vede', () =
     mascheraDati([{ id: 'abc-123', targa: 'KRA124EF', status: 'confirmed' }])
     expect(segnato('KRA124EF')).toBe(false)
     expect(segnato('confirmed')).toBe(false)
+  })
+})
+
+describe('Oscurare — una lista di clienti veri, non i primi quattrocento', () => {
+  it('sfoca ANCHE il cliente numero 5000 (prima il dizionario era pieno a 2000 voci)', () => {
+    const lista = []
+    for (let i = 0; i < 5000; i++) {
+      lista.push({
+        customer_name: `Cliente Cognomesuo${i}`,
+        customer_email: `cliente${i}@tiscali.it`,
+        customer_phone: `+39 340 ${1000000 + i}`,
+        customer_address: `Via delle Rimembranze ${i}`,
+        customer_tax_code: `CLNCGN${i}A01B354K`,
+      })
+    }
+    mascheraDati(lista)
+    // Il primo e' sempre stato coperto. Il guasto era su quelli dopo.
+    expect(daSfocare('Cliente Cognomesuo0')).toBe(true)
+    expect(daSfocare('Cliente Cognomesuo2500')).toBe(true)
+    expect(daSfocare('Cliente Cognomesuo4999')).toBe(true)
+    expect(daSfocare('cliente4999@tiscali.it')).toBe(true)
+    expect(daSfocare('Via delle Rimembranze 4999')).toBe(true)
+  })
+
+  it('sfoca il nome anche quando la tabella lo spezza su due colonne', () => {
+    mascheraDati([{ nome: 'Fedrico', cognome: 'Frongiargiu', email: 'ff@x.it' }])
+    // A schermo sono due celle distinte: due nodi di testo separati.
+    expect(daSfocare('Fedrico')).toBe(true)
+    expect(daSfocare('Frongiargiu')).toBe(true)
+  })
+
+  it('sfoca il nome dentro una frase', () => {
+    mascheraDati([{ customer_name: 'Ivan Muschitiello' }])
+    expect(daSfocare('Prenotazione di Ivan Muschitiello confermata')).toBe(true)
+  })
+
+  it('sfoca il telefono comunque sia scritto a schermo', () => {
+    mascheraDati([{ customer_name: 'Tizio Caio', telefono: '+393401112233' }])
+    expect(daSfocare('340 111 2233')).toBe(true)
+    expect(daSfocare('+39 340 111 22 33')).toBe(true)
+  })
+
+  it('riconosce il nome anche scritto con gli accenti', () => {
+    mascheraDati([{ customer_name: 'Ophelie Giraud' }])
+    expect(daSfocare('Ophélie Giraud')).toBe(true)
+  })
+
+  it('NON sfoca le etichette del gestionale ne i nomi dei mezzi', () => {
+    mascheraDati([{ id: 'v1', name: 'Lamborghini Urus', plate: 'GA1AB', category: 'supercars' }])
+    expect(daSfocare('Lamborghini Urus')).toBe(false)
+    expect(daSfocare('Prenotazioni del mese')).toBe(false)
+    expect(daSfocare('Totale incassato')).toBe(false)
+    expect(daSfocare('Noleggio Auto')).toBe(false)
   })
 })

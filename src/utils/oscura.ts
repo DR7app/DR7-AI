@@ -213,7 +213,7 @@ function maschera(dato: unknown, profondita: number, persona = false): unknown {
       if (genere && genere !== 'testo') {
         // L'operatore collegato resta leggibile: e' lui che sta filmando.
         const suo = genere === 'email' && emailOperatore && valore.toLowerCase() === emailOperatore
-        if (!suo) segnaSensibile(valore)
+        if (!suo) segnaSensibile(valore, genere)
       }
       // Il dato NON viene mai cambiato.
       fuori[chiave] = valore
@@ -240,7 +240,7 @@ export function mascheraDati(dato: unknown): unknown {
 
 /** I valori riconosciuti come personali, cioe' quelli che verranno sfocati. */
 export function elencoDaSfocare(): string[] {
-  return [...valoriSensibili]
+  return [...valoriEsatti]
 }
 
 // ---------------------------------------------------------------------------
@@ -255,17 +255,99 @@ export function elencoDaSfocare(): string[] {
 // aggiungendo una classe. Solo un attributo: React puo' ridisegnare quanto
 // vuole, l'osservatore rimette la classe al giro dopo.
 
-/** Valori (veri e finti) che a schermo vanno sfocati. */
-const valoriSensibili = new Set<string>()
-const LIMITE_SENSIBILI = 2000
-let cercaSensibili: RegExp | null = null
+/**
+ * Valori che a schermo vanno sfocati.
+ *
+ * 01/09/2026 — prima erano un solo elenco interrogato tramite UNA regex con
+ * tutti i valori in alternanza, con un tetto di 2000 voci. Su una lista di
+ * clienti veri i due limiti si sommavano ed e' esattamente il guasto
+ * segnalato: una riga cliente segna nome, email, telefono, indirizzo, codice
+ * fiscale e citta', quindi il dizionario si riempiva dopo circa 400 clienti e
+ * tutti i successivi restavano IN CHIARO.
+ *
+ * Alzare soltanto il tetto non bastava: misurata, l'alternanza con 60.000 voci
+ * impiega ~2 secondi ogni 300 nodi di testo, e la pagina si sarebbe fermata.
+ *
+ * Adesso la ricerca non scorre piu' un elenco: guarda in tabelle ad accesso
+ * diretto. Costa uguale con 400 clienti o con 40.000, e il tetto puo' stare
+ * dove non lo si incontra.
+ */
+const LIMITE_SENSIBILI = 200000
 
-function segnaSensibile(valore: string): void {
-  if (valoriSensibili.size >= LIMITE_SENSIBILI) return
-  const v = valore.trim().toLowerCase()
-  if (v.length < 3 || v.length > 120 || valoriSensibili.has(v)) return
-  valoriSensibili.add(v)
-  cercaSensibili = null
+/** Il valore intero: una cella che contiene esattamente quel dato. */
+const valoriEsatti = new Set<string>()
+
+/**
+ * Le parole dei nomi. Servono per i due casi che il valore intero non copre:
+ * il nome dentro una frase ("Prenotazione di Mario Rossi") e il nome spezzato
+ * su due colonne ("Nome" | "Cognome"), che a schermo sono due nodi separati.
+ */
+const paroleSensibili = new Set<string>()
+
+/** Telefoni in sole cifre: a schermo la spaziatura non e' mai quella salvata. */
+const cifreSensibili = new Set<string>()
+
+/**
+ * Accenti via e spazi normali: "Ophélie  Giraud" e "Ophelie Giraud" sono la
+ * stessa persona, e a schermo capitano scritti in entrambi i modi.
+ */
+function normalizza(testo: string): string {
+  return testo
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Generi da indicizzare anche parola per parola: sono quelli che nominano qualcuno. */
+const GENERI_A_PAROLE = new Set<Genere>(['nome', 'solo-nome', 'solo-cognome', 'azienda', 'email'])
+
+/**
+ * Parole che compaiono in un nome ma appartengono a tutti: indicizzarle
+ * sfocherebbe le etichette del gestionale invece dei clienti.
+ */
+const PAROLE_COMUNI = new Set([
+  'srls', 'sarl', 'group', 'service', 'services', 'italia', 'italy', 'auto',
+  'rent', 'rental', 'noleggio', 'cliente', 'clienti', 'test', 'none', 'null',
+  'societa', 'ditta', 'studio', 'azienda',
+])
+
+const SEPARATORE = /[^\p{L}\p{N}]+/u
+
+function segnaSensibile(valore: string, genere: Genere): void {
+  if (valoriEsatti.size >= LIMITE_SENSIBILI) return
+  const v = normalizza(valore)
+  if (v.length < 3 || v.length > 200) return
+
+  let nuovo = false
+  if (!valoriEsatti.has(v)) {
+    valoriEsatti.add(v)
+    nuovo = true
+  }
+
+  if (genere === 'telefono') {
+    const cifre = v.replace(/\D/g, '')
+    if (cifre.length >= 6 && !cifreSensibili.has(cifre)) {
+      cifreSensibili.add(cifre)
+      // Lo stesso numero si vede con e senza prefisso internazionale.
+      if (cifre.length > 9) cifreSensibili.add(cifre.slice(-9))
+      nuovo = true
+    }
+  }
+
+  if (GENERI_A_PAROLE.has(genere)) {
+    // Dell'email si prende solo la parte prima della chiocciola: il dominio
+    // (gmail, libero, tiscali) e' di tutti e sfocherebbe mezza pagina.
+    const sorgente = genere === 'email' ? v.split('@')[0] : v
+    for (const parola of sorgente.split(SEPARATORE)) {
+      if (parola.length >= 4 && !PAROLE_COMUNI.has(parola) && !paroleSensibili.has(parola)) {
+        paroleSensibili.add(parola)
+        nuovo = true
+      }
+    }
+  }
+
+  if (!nuovo) return
   nodiVisti = new WeakMap<Text, string>() // c'e' qualcosa di nuovo da cercare
   programmaScansione()
 }
@@ -281,23 +363,32 @@ const SCHEMI_SENSIBILI: RegExp[] = [
 /** Campi di scrittura da sfocare anche se vuoti. */
 const CAMPO_PERSONALE = /(nome|cognome|email|mail|telefono|phone|cellulare|indirizzo|address|codice_?fiscale|partita_?iva|piva|iban|patente|documento|nascita)/i
 
+/**
+ * Questo testo, cosi' come si vede a schermo, va sfocato?
+ * Esportata perche' e' il cuore della modalita': va provata a mano.
+ */
+export function daSfocare(testo: string): boolean {
+  return vaOscurato(testo)
+}
+
 function vaOscurato(testo: string): boolean {
   const t = testo.trim()
   if (t.length < 3) return false
-  if (!cercaSensibili && valoriSensibili.size > 0) {
-    const voci = [...valoriSensibili]
-      .sort((a, b) => b.length - a.length)
-      .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    // Con molti clienti caricati l'alternanza diventa lunghissima: se il motore
-    // la rifiuta, senza questa rete l'eccezione fermava TUTTA la scansione e
-    // non si sfocava piu' niente.
-    try {
-      cercaSensibili = new RegExp(voci.join('|'), 'i')
-    } catch {
-      cercaSensibili = null
+
+  const n = normalizza(t)
+  if (valoriEsatti.has(n)) return true
+
+  if (paroleSensibili.size) {
+    for (const parola of n.split(SEPARATORE)) {
+      if (parola.length >= 4 && paroleSensibili.has(parola)) return true
     }
   }
-  if (cercaSensibili && cercaSensibili.test(t)) return true
+
+  if (cifreSensibili.size) {
+    const cifre = n.replace(/\D/g, '')
+    if (cifre.length >= 6 && (cifreSensibili.has(cifre) || cifreSensibili.has(cifre.slice(-9)))) return true
+  }
+
   return SCHEMI_SENSIBILI.some(schema => schema.test(t))
 }
 
