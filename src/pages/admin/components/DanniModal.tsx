@@ -156,7 +156,20 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             if (!cancelled) setResolvedCategory(cat)
         })()
         return () => { cancelled = true }
-    }, [isOpen, booking, serviceType])
+        // 01/09/2026 — NON dipendere dall'oggetto `booking`.
+        //
+        // ReservationsTab lo costruisce inline dentro il JSX, quindi e' un
+        // oggetto NUOVO a ogni rendere. Come dipendenza faceva ripartire questo
+        // effetto a ogni rendere, e ogni ripartenza segnava `cancelled = true`
+        // su quella prima: se un rendere cadeva mentre Supabase rispondeva, le
+        // set...() non venivano mai applicate. Da fuori si vedeva la categoria
+        // non risolta e le liste vuote — "Nessun danno configurato" su una
+        // Yaris che i danni ce li ha.
+        //
+        // Qui bastano i valori stabili: cambiano solo quando cambia davvero la
+        // prenotazione aperta.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, booking.id, booking.vehicle_id, booking.vehicle_plate, booking.vehicle_category, booking.vehicle_name, serviceType])
 
     const vehicleCategory = resolvedCategory
         || booking.booking_details?.vehicle?.category

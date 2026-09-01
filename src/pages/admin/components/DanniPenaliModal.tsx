@@ -119,8 +119,14 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             // `main` resta il fallback per chi non ha configurato.
             try {
                 const { business, main } = await loadBusinessConfig(serviceType)
-                const cats = ((business as { categories?: unknown })?.categories
-                    ?? (main as { categories?: unknown })?.categories) as Array<{ id?: string; label?: string }> | undefined
+                // Regola di casa (businessConfigClient.ts): una lista VUOTA conta
+                // come "non configurata" e fa scattare il fallback su `main`.
+                // `??` da solo non basta: un array vuoto non e' null e vincerebbe.
+                const catsBusiness = (business as { categories?: unknown })?.categories
+                const catsMain = (main as { categories?: unknown })?.categories
+                const cats = ((Array.isArray(catsBusiness) && catsBusiness.length)
+                    ? catsBusiness
+                    : catsMain) as Array<{ id?: string; label?: string }> | undefined
                 if (!cancelled && Array.isArray(cats)) {
                     const mappa: Record<string, string> = {}
                     for (const c of cats) {
@@ -274,7 +280,20 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             }
         })()
         return () => { cancelled = true }
-    }, [isOpen, booking, serviceType])
+        // 01/09/2026 — NON dipendere dall'oggetto `booking`.
+        //
+        // ReservationsTab lo costruisce inline dentro il JSX, quindi e' un
+        // oggetto NUOVO a ogni rendere. Come dipendenza faceva ripartire questo
+        // effetto a ogni rendere, e ogni ripartenza segnava `cancelled = true`
+        // su quella prima: se un rendere cadeva mentre Supabase rispondeva, le
+        // set...() non venivano mai applicate. Da fuori si vedeva la categoria
+        // non risolta e le liste vuote — "Nessun danno configurato" su una
+        // Yaris che i danni ce li ha.
+        //
+        // Qui bastano i valori stabili: cambiano solo quando cambia davvero la
+        // prenotazione aperta.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, booking.id, booking.vehicle_id, booking.vehicle_plate, booking.vehicle_category, booking.vehicle_name, serviceType])
 
     const rawCategory = resolvedCategory ||
         booking.booking_details?.vehicle?.category ||
