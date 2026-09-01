@@ -470,7 +470,7 @@ function segnaSensibile(valore: string): void {
   if (v.length < 3 || v.length > 120 || valoriSensibili.has(v)) return
   valoriSensibili.add(v)
   cercaSensibili = null
-  nodiVisti = new WeakSet<Text>() // c'e' qualcosa di nuovo da cercare
+  nodiVisti = new WeakMap<Text, string>() // c'e' qualcosa di nuovo da cercare
   programmaScansione()
 }
 
@@ -492,7 +492,14 @@ function vaOscurato(testo: string): boolean {
     const voci = [...valoriSensibili]
       .sort((a, b) => b.length - a.length)
       .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    cercaSensibili = new RegExp(voci.join('|'), 'i')
+    // Con molti clienti caricati l'alternanza diventa lunghissima: se il motore
+    // la rifiuta, senza questa rete l'eccezione fermava TUTTA la scansione e
+    // non si sfocava piu' niente.
+    try {
+      cercaSensibili = new RegExp(voci.join('|'), 'i')
+    } catch {
+      cercaSensibili = null
+    }
   }
   if (cercaSensibili && cercaSensibili.test(t)) return true
   return SCHEMI_SENSIBILI.some(schema => schema.test(t))
@@ -501,7 +508,17 @@ function vaOscurato(testo: string): boolean {
 /** Elementi che non vanno mai sfocati per intero. */
 const MAI_SFOCARE = new Set(['HTML', 'BODY', 'HEADER', 'NAV', 'MAIN', 'TABLE', 'TBODY', 'THEAD', 'TR', 'FORM'])
 
-let nodiVisti = new WeakSet<Text>()
+/**
+ * Nodo di testo gia' esaminato -> il contenuto che aveva quando lo si e' visto.
+ *
+ * 01/09/2026 — prima era un WeakSet del solo nodo, e bastava a perdere meta'
+ * dei nomi: React NON ricrea i nodi di testo, ci riscrive dentro. Il nodo
+ * veniva segnato "visto" con il contenuto di quel momento e non veniva piu'
+ * riesaminato, cosi' il nome scritto dopo restava nitido mentre la riga
+ * accanto era sfocata. Confrontando anche il CONTENUTO, un nodo riscritto
+ * torna in coda.
+ */
+let nodiVisti = new WeakMap<Text, string>()
 let attesa: ReturnType<typeof setTimeout> | null = null
 
 function programmaScansione(): void {
@@ -521,9 +538,9 @@ function scansiona(): void {
   let nodo = cammino.nextNode()
   while (nodo) {
     const testo = nodo as Text
-    if (!nodiVisti.has(testo)) {
-      nodiVisti.add(testo)
-      const contenuto = testo.nodeValue || ''
+    const contenuto = testo.nodeValue || ''
+    if (nodiVisti.get(testo) !== contenuto) {
+      nodiVisti.set(testo, contenuto)
       if (contenuto.length <= 400 && vaOscurato(contenuto)) {
         const el = testo.parentElement
         if (el && !el.classList.contains('oscurato')
@@ -628,9 +645,24 @@ function rispostaFermata(url: string): Response {
   })
 }
 
-async function mascheraRisposta(res: Response): Promise<Response> {
+/**
+ * Tipi che NON sono dati: leggerli come testo li rovinerebbe.
+ * Tutto il resto si prova a interpretare come JSON.
+ */
+const BINARI = /^(image|video|audio|font)\/|application\/(pdf|octet-stream|zip|vnd)/i
+
+export async function mascheraRisposta(res: Response): Promise<Response> {
   const tipo = res.headers.get('content-type') || ''
-  if (!tipo.includes('json')) return res
+  // 01/09/2026 — NON si guarda piu' se l'intestazione dice "json".
+  //
+  // Netlify non mette `content-type` quando la function non lo dichiara, e 58
+  // delle nostre non lo dichiarano: monthly-report e dashboard-kpi sono fra
+  // quelle. Il risultato era che i report — proprio dove i clienti si vedono
+  // tutti in fila — passavano in chiaro, anche con Oscurare acceso.
+  //
+  // Ora si esclude solo cio' che e' dichiaratamente binario; per il resto si
+  // tenta il JSON e, se non lo e', il corpo torna indietro intatto.
+  if (BINARI.test(tipo)) return res
   if (!res.ok) return res
 
   let testo: string

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mascheraDati } from './oscura'
+import { mascheraDati, mascheraRisposta } from './oscura'
 
 type Riga = Record<string, unknown>
 
@@ -96,5 +96,22 @@ describe('Oscurare — mascheratura dei dati clienti', () => {
     expect(v.display_name).toBe('Lamborghini Urus')
     const [s2] = mascheraDati([{ nome: 'Lavaggio Completo', price_per_day: 5000, is_active: true }]) as Riga[]
     expect(s2.nome).toBe('Lavaggio Completo')
+  })
+
+  // Regressione 01/09/2026: Report Noleggio mostrava tutti i nomi. monthly-report
+  // non dichiara `content-type` e la mascheratura si fermava li'.
+  it('maschera anche una risposta SENZA content-type (come monthly-report)', async () => {
+    const corpo = JSON.stringify([{ customer_name: 'Fabrizio Atzeni', totale: 390 }])
+    const res = new Response(corpo, { status: 200 })
+    const fuori = await mascheraRisposta(res)
+    const [r] = await fuori.json() as Riga[]
+    expect(r.customer_name).not.toBe('Fabrizio Atzeni')
+    expect(r.totale).toBe(390)
+  })
+
+  it('non tocca una risposta binaria (PDF)', async () => {
+    const res = new Response('%PDF-1.4 binario', { status: 200, headers: { 'content-type': 'application/pdf' } })
+    const fuori = await mascheraRisposta(res)
+    expect(await fuori.text()).toBe('%PDF-1.4 binario')
   })
 })
