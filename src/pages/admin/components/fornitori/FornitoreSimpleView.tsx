@@ -426,7 +426,13 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 try { blob = await scaricaPdf(f) } catch { blob = null }
                 if (!blob) { mancanti++; continue }
                 const numero = (f.numero_documento || 'fattura').replace(/[^\w-]/g, '_')
-                zip.file(`${f.data_documento}_${numero}.pdf`, blob)
+                // Senza `date` JSZip timbra ogni file con l'ora dello zip: una
+                // fattura di luglio usciva dall'archivio datata oggi. La data
+                // buona e' quella del documento; a mezzogiorno per non farla
+                // scivolare al giorno prima cambiando fuso.
+                const [aa, mm, gg] = String(f.data_documento || '').split('-').map(Number)
+                const dataFile = (aa && mm && gg) ? new Date(aa, mm - 1, gg, 12, 0, 0) : undefined
+                zip.file(`${f.data_documento}_${numero}.pdf`, blob, dataFile ? { date: dataFile } : undefined)
                 presi++
             }
             if (presi === 0) {
