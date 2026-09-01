@@ -9,6 +9,7 @@ import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 import { hasApprovedOverride } from './utils/verifyOverride'
 import { loadBusinessConfig } from './utils/businessConfig'
+import { isFatturaPrincipale, isUscitaSdi, TIPO_ESTENSIONE } from './utils/fatturaTipi'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -190,6 +191,15 @@ export const handler: Handler = async (event) => {
         purchaseId,
         purchaseData,
         customerId: explicitCustomerId,
+        // 2026-09-01: chiave di idempotenza facoltativa, per i flussi che NON
+        // hanno una fattura principale su cui appoggiarsi — le estensioni, che
+        // creano sempre una riga nuova. Il callback Nexi puo' arrivare piu'
+        // volte per lo stesso pagamento (il gestore riprova finche' non riceve
+        // 200) e ogni arrivo emetteva un'altra fattura di estensione. Passando
+        // qui l'identita' del pagamento (`nexi:<order_id>`) o dell'estensione
+        // (`estensione:<bookingId>:<indice>`) la seconda chiamata ritrova la
+        // fattura gia' emessa invece di crearne una gemella.
+        idempotencyKey,
     } = body
 
     // ── WALLET / CREDIT RECHARGE FATTURA (no auth required) ───────────────
@@ -618,19 +628,102 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Chiave di idempotenza: se questa esatta emissione e' gia' passata di
+        // qui, si restituisce la fattura di allora. Vale soprattutto per le
+        // estensioni, che altrimenti non hanno nulla che le identifichi.
+        const chiaveIdempotenza = typeof idempotencyKey === 'string' && idempotencyKey.trim()
+            ? idempotencyKey.trim().slice(0, 200)
+            : null
+        if (chiaveIdempotenza) {
+            const { data: giaEmessa, error: erroreChiave } = await supabase
+                .from('fatture')
+                .select('*')
+                .eq('fattura_dedup_key', chiaveIdempotenza)
+                .maybeSingle()
+            // Stesso ripiego dell'inserimento: se la migrazione
+            // 20260901_fatture_doppie non e' ancora passata la colonna non
+            // esiste e questa lettura fallisce con 42703. Senza il ripiego il
+            // deploy fermerebbe TUTTE le fatture dei pagamenti Nexi, che la
+            // chiave la passano sempre. Si prosegue senza: si perde la
+            // protezione contro il callback ripetuto, non l'emissione.
+            if (erroreChiave && String((erroreChiave as any).code) !== '42703') throw erroreChiave
+            if (erroreChiave) {
+                console.warn('[Invoice] colonna fattura_dedup_key assente — proseguo senza idempotenza')
+            }
+            if (giaEmessa) {
+                console.log(`[Invoice] ${chiaveIdempotenza} gia' fatturato: ${giaEmessa.numero_fattura}`)
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: `Fattura ${giaEmessa.numero_fattura} gia' emessa per questa operazione.`,
+                        invoice: giaEmessa,
+                        skipped: true,
+                    })
+                }
+            }
+        }
+
         // For extensions, always create a NEW invoice (not update existing)
         // For regular bookings, update if one already exists
+        //
+        // 2026-09-01 (fatture in doppio): qui c'era `.single()`. PostgREST
+        // considera un errore sia zero righe sia PIU' di una, e l'errore
+        // veniva scartato: bastava che la prenotazione avesse gia' DUE righe
+        // in `fatture` — il caso normale appena si emette una penale o un
+        // danno, che vivono sullo stesso booking_id — perche' `data` tornasse
+        // nullo. Il codice concludeva "nessuna fattura esiste" e ne creava
+        // un'altra. Ogni chiamata successiva (callback Nexi, cron di
+        // riconciliazione, "segna pagato" ripetuto) ne aggiungeva una in piu':
+        // i doppioni si moltiplicavano da soli.
+        //
+        // Ora si leggono TUTTE le righe della prenotazione e si sceglie la
+        // fattura principale: si escludono note di credito, penali/danni,
+        // fatture di estensione e righe annullate. Tra le rimaste vince quella
+        // gia' uscita verso SDI (ha valore fiscale), altrimenti la piu'
+        // vecchia — cosi' si aggiorna sempre la stessa riga.
         let existingInvoice: any = null
         if (!extensionAmount) {
-            const { data } = await supabase
+            const COLONNE_FATTURA = 'id, numero_fattura, sdi_status, aruba_invoice_id, tipo_fattura, stato, created_at'
+            let { data: righe, error: righeError } = await supabase
                 .from('fatture')
-                .select('id, numero_fattura, sdi_status, aruba_invoice_id')
+                .select(COLONNE_FATTURA)
                 .eq('booking_id', bookingId)
-                .single()
-            existingInvoice = data
+                .is('extension_index', null)
+                .order('created_at', { ascending: true })
+
+            // `extension_index` e' una colonna storica che potrebbe non essere
+            // ancora stata creata su questo database (add_extension_index_to_fatture.sql
+            // vive fuori da supabase/migrations). Se manca, il filtro fa fallire
+            // la query: senza questo ripiego l'emissione delle fatture si
+            // fermerebbe del tutto il giorno del deploy. Nessuna riga l'ha mai
+            // valorizzata, quindi rileggere senza il filtro da' lo stesso
+            // insieme; a distinguere le estensioni ci pensa `tipo_fattura`.
+            if (righeError && String((righeError as any).code) === '42703') {
+                console.warn('[Invoice] colonna extension_index assente — rileggo senza il filtro')
+                const ripiego = await supabase
+                    .from('fatture')
+                    .select(COLONNE_FATTURA)
+                    .eq('booking_id', bookingId)
+                    .order('created_at', { ascending: true })
+                righe = ripiego.data
+                righeError = ripiego.error
+            }
+
+            if (righeError) throw righeError
+
+            const principali = (righe || []).filter(isFatturaPrincipale)
+            existingInvoice = principali.find(isUscitaSdi) || principali[0] || null
+
+            if (principali.length > 1) {
+                console.warn(
+                    `[Invoice] Prenotazione ${bookingId}: ${principali.length} fatture principali gia' presenti ` +
+                    `(${principali.map((r: any) => r.numero_fattura).join(', ')}). ` +
+                    `Aggiorno ${existingInvoice.numero_fattura} invece di crearne un'altra.`
+                )
+            }
 
             // If fattura already exists and was already sent to SDI, return it immediately
-            if (existingInvoice && (existingInvoice.sdi_status === 'sending' || existingInvoice.sdi_status === 'sent' || existingInvoice.sdi_status === 'delivered' || existingInvoice.aruba_invoice_id)) {
+            if (existingInvoice && isUscitaSdi(existingInvoice)) {
                 console.log(`[Invoice] Fattura ${existingInvoice.numero_fattura} already sent to SDI — returning existing`)
                 return {
                     statusCode: 400,
@@ -987,10 +1080,18 @@ export const handler: Handler = async (event) => {
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
             sdi_status: 'draft',
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            ...(chiaveIdempotenza ? { fattura_dedup_key: chiaveIdempotenza } : {}),
+            // 2026-09-01: la fattura di estensione dice di esserlo. Prima era
+            // indistinguibile dalla fattura principale (`extension_index` non
+            // l'ha mai scritto nessuno), quindi una prenotazione con una
+            // estensione sembrava averne due di principali: e' meta' del motivo
+            // per cui nascevano i doppioni, e senza questo tipo l'indice unico
+            // rifiuterebbe le estensioni legittime.
+            ...(extensionAmount ? { tipo_fattura: TIPO_ESTENSIONE } : {}),
         }
 
-        const { data: invoice, error: insertError } = existingInvoice
+        let { data: invoice, error: insertError } = existingInvoice
             ? await supabase
                 .from('fatture')
                 .update(invoiceData)
@@ -1002,6 +1103,64 @@ export const handler: Handler = async (event) => {
                 .insert([invoiceData])
                 .select()
                 .single()
+
+        // Stesso ripiego della lettura: se la migrazione 20260901_fatture_doppie
+        // non e' ancora passata su questo database la colonna non esiste e
+        // l'inserimento fallisce. Si riprova senza la chiave — si perde la
+        // protezione contro il callback ripetuto, non l'emissione della fattura.
+        if (insertError && String((insertError as any).code) === '42703' && chiaveIdempotenza) {
+            console.warn('[Invoice] colonna fattura_dedup_key assente — reinserisco senza chiave di idempotenza')
+            const senzaChiave = { ...(invoiceData as any) }
+            delete senzaChiave.fattura_dedup_key
+            const ritentativo = existingInvoice
+                ? await supabase.from('fatture').update(senzaChiave).eq('id', existingInvoice.id).select().single()
+                : await supabase.from('fatture').insert([senzaChiave]).select().single()
+            invoice = ritentativo.data
+            insertError = ritentativo.error
+        }
+
+        // 2026-09-01: rete di sicurezza contro le chiamate in parallelo. Sulla
+        // stessa prenotazione arrivano fino a tre richieste insieme (callback
+        // Nexi, "segna pagato" dell'operatore, cron di riconciliazione): tutte
+        // leggono "nessuna fattura" nello stesso istante e tutte inseriscono.
+        // L'indice unico a database (migrazione 20260901_fatture_doppie) fa
+        // fallire le seconde con 23505: qui si rilegge la riga vincente e la si
+        // aggiorna, invece di restituire un errore all'operatore.
+        if (insertError && (insertError as any).code === '23505' && !existingInvoice) {
+            console.warn(`[Invoice] Inserimento in conflitto per ${bookingId} — riprendo la fattura gia' creata`)
+            let vincente: any = null
+            if (chiaveIdempotenza) {
+                const { data: perChiave } = await supabase
+                    .from('fatture')
+                    .select('id, numero_fattura')
+                    .eq('fattura_dedup_key', chiaveIdempotenza)
+                    .maybeSingle()
+                vincente = perChiave || null
+            }
+            if (!vincente) {
+                const { data: righe } = await supabase
+                    .from('fatture')
+                    .select('id, numero_fattura, sdi_status, aruba_invoice_id, tipo_fattura, stato, created_at')
+                    .eq('booking_id', bookingId)
+                    .is('extension_index', null)
+                    .order('created_at', { ascending: true })
+                vincente = (righe || []).filter(isFatturaPrincipale)[0] || null
+            }
+            if (vincente) {
+                // Il numero e' gia' stato assegnato dall'altra chiamata: si tiene
+                // quello, altrimenti la stessa prenotazione avrebbe due numeri.
+                const senzaNumero = { ...(invoiceData as any) }
+                delete senzaNumero.numero_fattura
+                const ripresa = await supabase
+                    .from('fatture')
+                    .update(senzaNumero)
+                    .eq('id', vincente.id)
+                    .select()
+                    .single()
+                invoice = ripresa.data
+                insertError = ripresa.error
+            }
+        }
 
         if (insertError) {
             throw insertError
