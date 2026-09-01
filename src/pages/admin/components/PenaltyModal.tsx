@@ -18,6 +18,14 @@ interface PenaltyModalProps {
         customer_id?: string
         user_id?: string
         vehicle_name?: string
+        /** 01/09/2026 — la categoria si legge dal VEICOLO, non dalla prenotazione.
+            Senza questi tre campi il risolutore non poteva arrivare alla tabella
+            `vehicles` e restava prigioniero di `booking_details`.
+            OBBLIGATORI di proposito (niente `?`): erano opzionali, ReservationsTab
+            si dimenticava di passarli e il compilatore non diceva niente. */
+        vehicle_id: string | null | undefined
+        vehicle_plate: string | null | undefined
+        vehicle_category: string | null | undefined
         km_overage_fee?: number
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         booking_details?: any
@@ -101,22 +109,32 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
             //    vehicles table by id/plate.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const bd = (booking as { booking_details?: any }).booking_details
-            let cat = String(bd?.vehicle?.category || bd?.vehicleCategory || bd?.category || '').toLowerCase().trim()
+            // 01/09/2026 — comanda il VEICOLO, non la prenotazione.
+            // `booking_details` e' la fotografia scattata alla nascita della
+            // prenotazione: se il mezzo cambia dopo, resta quella vecchia.
+            // Vedi il commento lungo in DanniPenaliModal.tsx (caso Yaris
+            // HD694XW annunciata come "scooter").
+            let cat = ''
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const vid = (booking as any).vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const plate = (booking as any).vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
+                if (vid) {
+                    const { data: v } = await supabase.from('vehicles').select('category').eq('id', vid).limit(1)
+                    if (v?.[0]?.category) cat = String(v[0].category).toLowerCase().trim()
+                }
+                if (!cat && plate) {
+                    const normalizedPlate = String(plate).replace(/\s+/g, '').toUpperCase()
+                    const { data: v } = await supabase.from('vehicles').select('category').eq('plate', normalizedPlate).limit(1)
+                    if (v?.[0]?.category) cat = String(v[0].category).toLowerCase().trim()
+                }
+            } catch { /* il veicolo non si trova: si scende alla rete sotto */ }
+
+            // Rete: quello che la prenotazione si ricorda del mezzo.
             if (!cat) {
-                try {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const vid = (booking as any).vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const plate = (booking as any).vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
-                    if (vid) {
-                        const { data: v } = await supabase.from('vehicles').select('category').eq('id', vid).maybeSingle()
-                        if (v?.category) cat = String(v.category).toLowerCase().trim()
-                    }
-                    if (!cat && plate) {
-                        const { data: v } = await supabase.from('vehicles').select('category').eq('plate', plate).maybeSingle()
-                        if (v?.category) cat = String(v.category).toLowerCase().trim()
-                    }
-                } catch { /* ignore */ }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                cat = String(bd?.vehicle?.category || bd?.vehicleCategory || bd?.category || (booking as any).vehicle_category || '').toLowerCase().trim()
             }
             // Normalise common aliases
             if (cat === 'supercar' || cat === 'supercars') cat = 'exotic'

@@ -20,6 +20,14 @@ interface DanniPenaliModalProps {
         customer_email?: string
         customer_phone?: string
         vehicle_name?: string
+        /** 01/09/2026 — la categoria si legge dal VEICOLO, non dalla prenotazione.
+            Senza questi tre campi il risolutore non poteva arrivare alla tabella
+            `vehicles` e restava prigioniero di `booking_details`.
+            OBBLIGATORI di proposito (niente `?`): erano opzionali, ReservationsTab
+            si dimenticava di passarli e il compilatore non diceva niente. */
+        vehicle_id: string | null | undefined
+        vehicle_plate: string | null | undefined
+        vehicle_category: string | null | undefined
         km_overage_fee?: number
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         booking_details?: any
@@ -145,35 +153,54 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             const bd = (booking as { booking_details?: any }).booking_details
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const bookingAny = booking as any
-            let cat = String(
-                bd?.vehicle?.category ||
-                bd?.vehicleCategory ||
-                bd?.category ||
-                bookingAny.vehicle_category ||
-                ''
-            ).toLowerCase().trim()
+            // 01/09/2026 — l'ordine e' ROVESCIATO rispetto a prima.
+            //
+            // Prima vinceva `booking_details`, che pero' e' una FOTOGRAFIA
+            // scattata quando la prenotazione e' nata. Se il mezzo cambia dopo
+            // (sostituzione, proroga con cambio auto, prenotazione nata come
+            // copia di un'altra) quella foto resta la vecchia e non la corregge
+            // nessuno. Risultato visto sul campo: Yaris Hybrid Premium, targa
+            // HD694XW, categoria `urban` in Veicoli, e la modale annunciava
+            // "Nessun danno configurato per la categoria scooter" — cioe' non
+            // si poteva addebitare niente su quella prenotazione.
+            //
+            // Adesso comanda il VEICOLO: `vehicles.category`, la stessa che la
+            // Centralina Pro usa per il listino. `booking_details` scende a
+            // rete di sicurezza, per quando il veicolo non si trova piu'.
+            let cat = ''
+            try {
+                const vid = bookingAny.vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
+                const plate = bookingAny.vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
+                if (vid) {
+                    const { data: v } = await supabase
+                        .from('vehicles')
+                        .select('category')
+                        .eq('id', vid)
+                        .limit(1)
+                    if (v?.[0]?.category) cat = String(v[0].category).toLowerCase().trim()
+                }
+                if (!cat && plate) {
+                    // La targa si scrive in mille modi: qui si confronta senza
+                    // spazi e in maiuscolo, come e' salvata in Veicoli.
+                    const normalizedPlate = String(plate).replace(/\s+/g, '').toUpperCase()
+                    const { data: v } = await supabase
+                        .from('vehicles')
+                        .select('category')
+                        .eq('plate', normalizedPlate)
+                        .limit(1)
+                    if (v?.[0]?.category) cat = String(v[0].category).toLowerCase().trim()
+                }
+            } catch { /* il veicolo non si trova: si scende alla rete sotto */ }
+
+            // Rete: quello che la prenotazione si ricorda del mezzo.
             if (!cat) {
-                try {
-                    const vid = bookingAny.vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
-                    const plate = bookingAny.vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
-                    if (vid) {
-                        const { data: v } = await supabase
-                            .from('vehicles')
-                            .select('category')
-                            .eq('id', vid)
-                            .maybeSingle()
-                        if (v?.category) cat = String(v.category).toLowerCase().trim()
-                    }
-                    if (!cat && plate) {
-                        const normalizedPlate = String(plate).replace(/\s+/g, '').toUpperCase()
-                        const { data: v } = await supabase
-                            .from('vehicles')
-                            .select('category')
-                            .eq('plate', normalizedPlate)
-                            .maybeSingle()
-                        if (v?.category) cat = String(v.category).toLowerCase().trim()
-                    }
-                } catch { /* ignore */ }
+                cat = String(
+                    bd?.vehicle?.category ||
+                    bd?.vehicleCategory ||
+                    bd?.category ||
+                    bookingAny.vehicle_category ||
+                    ''
+                ).toLowerCase().trim()
             }
             // Last-resort heuristic: classify by vehicle_name when DB lookup
             // failed. Keeps the modal usable even if the vehicles row was

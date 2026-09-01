@@ -8692,6 +8692,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               customer_name: selectedBookingForPenalty.customer_name || 'Cliente',
               customer_id: selectedBookingForPenalty.booking_details?.customer?.customerId || undefined,
               user_id: selectedBookingForPenalty.user_id || undefined,
+              vehicle_name: selectedBookingForPenalty.vehicle_name || undefined,
+              // 01/09/2026 — senza questi tre campi la modale non poteva
+              // leggere `vehicles.category` e restava prigioniera della
+              // categoria fotografata in booking_details.
+              vehicle_id: selectedBookingForPenalty.vehicle_id || undefined,
+              vehicle_plate: selectedBookingForPenalty.vehicle_plate || undefined,
+              vehicle_category: (selectedBookingForPenalty as { vehicle_category?: string | null }).vehicle_category || undefined,
               km_overage_fee: selectedBookingForPenalty.km_overage_fee,
               booking_details: selectedBookingForPenalty.booking_details || undefined,
             }}
@@ -8720,7 +8727,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               customer_id: selectedBookingForDanni.booking_details?.customer?.customerId || selectedBookingForDanni.booking_details?.customer_id || undefined,
               user_id: selectedBookingForDanni.user_id || undefined,
               customer_email: selectedBookingForDanni.customer_email || selectedBookingForDanni.booking_details?.customer?.email || undefined,
-              customer_phone: selectedBookingForDanni.customer_phone || selectedBookingForDanni.booking_details?.customer?.phone || undefined
+              customer_phone: selectedBookingForDanni.customer_phone || selectedBookingForDanni.booking_details?.customer?.phone || undefined,
+              vehicle_name: selectedBookingForDanni.vehicle_name || undefined,
+              // 01/09/2026 — senza questi tre campi la modale non poteva
+              // leggere `vehicles.category` e restava prigioniera della
+              // categoria fotografata in booking_details.
+              vehicle_id: selectedBookingForDanni.vehicle_id || undefined,
+              vehicle_plate: selectedBookingForDanni.vehicle_plate || undefined,
+              vehicle_category: (selectedBookingForDanni as { vehicle_category?: string | null }).vehicle_category || undefined,
+              // Mancava del tutto: senza, la modale non aveva nessuna
+              // fonte per la categoria e mostrava sempre "sconosciuta".
+              booking_details: selectedBookingForDanni.booking_details || undefined,
             }}
             onClose={() => {
               setDanniModalOpen(false)
@@ -8750,6 +8767,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               customer_email: selectedBookingForDanniPenali.customer_email || selectedBookingForDanniPenali.booking_details?.customer?.email || undefined,
               customer_phone: selectedBookingForDanniPenali.customer_phone || selectedBookingForDanniPenali.booking_details?.customer?.phone || undefined,
               vehicle_name: selectedBookingForDanniPenali.vehicle_name || undefined,
+              // 01/09/2026 — senza questi tre campi la modale non poteva
+              // leggere `vehicles.category` e restava prigioniera della
+              // categoria fotografata in booking_details.
+              vehicle_id: selectedBookingForDanniPenali.vehicle_id || undefined,
+              vehicle_plate: selectedBookingForDanniPenali.vehicle_plate || undefined,
+              vehicle_category: (selectedBookingForDanniPenali as { vehicle_category?: string | null }).vehicle_category || undefined,
               km_overage_fee: selectedBookingForDanniPenali.km_overage_fee,
               booking_details: selectedBookingForDanniPenali.booking_details || undefined,
             }}
