@@ -185,7 +185,6 @@ export default function CustomersTab() {
   const [linkPagamentoCliente, setLinkPagamentoCliente] = useState<Customer | null>(null)
   const [linkImporto, setLinkImporto] = useState('')
   const [linkDescrizione, setLinkDescrizione] = useState('')
-  const [linkCreato, setLinkCreato] = useState('')
   const [creandoLink, setCreandoLink] = useState(false)
   // Cliente per cui mostrare il modale Addebito (importo + scelta carta) dalla
   // riga della lista Clienti.
@@ -1096,11 +1095,23 @@ export default function CustomersTab() {
         toast.error(json.error || 'Creazione link non riuscita')
         return
       }
-      setLinkCreato(json.paymentUrl)
-      // Un solo gesto: creato il link parte subito su WhatsApp. Passiamo l'url
-      // appena tornato da Nexi, non lo stato (che a questo punto non e' ancora
-      // aggiornato nel render corrente).
-      await inviaLinkPagamentoWhatsapp(json.paymentUrl)
+      // Un solo gesto: creato il link parte subito su WhatsApp e la modale si
+      // chiude, senza schermata di conferma. Passiamo l'url appena tornato da
+      // Nexi, non lo stato (a questo punto non e' ancora nel render corrente).
+      const inviato = await inviaLinkPagamentoWhatsapp(json.paymentUrl)
+      if (inviato) {
+        setLinkPagamentoCliente(null)
+        setLinkImporto('')
+        setLinkDescrizione('')
+      } else {
+        // Invio fallito: il link esiste gia' su Nexi, non deve andare perso.
+        try {
+          await navigator.clipboard.writeText(json.paymentUrl)
+          toast.error('Invio non riuscito: link copiato negli appunti')
+        } catch {
+          toast.error('Invio non riuscito')
+        }
+      }
     } catch (e) {
       toast.error('Creazione link non riuscita')
     } finally {
@@ -1109,13 +1120,13 @@ export default function CustomersTab() {
   }
 
   /** Manda il link al cliente col template Pro "Richiesta Pagamento". */
-  async function inviaLinkPagamentoWhatsapp(url: string) {
+  async function inviaLinkPagamentoWhatsapp(url: string): Promise<boolean> {
     const cliente = linkPagamentoCliente
-    if (!cliente || !url) return
+    if (!cliente || !url) return false
     const telefono = (cliente.phone || '').trim()
     if (!telefono) {
       toast.error('Il cliente non ha un numero di telefono')
-      return
+      return false
     }
     const importoStr = parseFloat(String(linkImporto).replace(',', '.')).toFixed(2)
     const nome = (cliente.full_name || 'Cliente').split(' ')[0]
@@ -1145,13 +1156,17 @@ export default function CustomersTab() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
         toast.error(json.error || 'Invio non riuscito')
-      } else if (json.skipped) {
-        toast.error('Nessun template Pro collegato a "Richiesta Pagamento": il messaggio non e\' partito')
-      } else {
-        toast.success('Link inviato su WhatsApp')
+        return false
       }
+      if (json.skipped) {
+        toast.error('Nessun template Pro collegato a "Richiesta Pagamento": il messaggio non e\' partito')
+        return false
+      }
+      toast.success('Link inviato su WhatsApp')
+      return true
     } catch (e) {
       toast.error('Invio non riuscito')
+      return false
     }
   }
 
@@ -3142,7 +3157,6 @@ export default function CustomersTab() {
                               setLinkPagamentoCliente(customer)
                               setLinkImporto('')
                               setLinkDescrizione('')
-                              setLinkCreato('')
                             },
                           },
                         ],
@@ -3245,68 +3259,43 @@ export default function CustomersTab() {
               </p>
             </div>
 
-            {!linkCreato ? (
-              <>
-                <div>
-                  <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Importo (EUR)*</label>
-                  {/* mai type="number": con la tastiera italiana blocca i decimali */}
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={linkImporto}
-                    onChange={e => setLinkImporto(e.target.value)}
-                    placeholder="es. 150,00"
-                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Causale</label>
-                  <input
-                    type="text"
-                    value={linkDescrizione}
-                    onChange={e => setLinkDescrizione(e.target.value)}
-                    placeholder="es. Acconto noleggio"
-                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
-                  />
-                </div>
-                <div className="flex gap-2 justify-end pt-2">
-                  <button
-                    onClick={() => setLinkPagamentoCliente(null)}
-                    className="px-4 py-2 text-sm rounded-full bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-                  >
-                    Annulla
-                  </button>
-                  <button
-                    onClick={() => creaEInviaLinkPagamento()}
-                    disabled={creandoLink || creandoLinkFlight}
-                    className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
-                  >
-                    {creandoLink ? 'Invio in corso...' : 'Crea e invia'}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3">
-                  <p className="text-[11px] text-theme-text-muted mb-1">Link inviato su WhatsApp</p>
-                  <p className="text-xs text-theme-text-primary break-all">{linkCreato}</p>
-                </div>
-                <div className="flex gap-2 flex-wrap justify-end pt-2">
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(linkCreato); toast.success('Link copiato') }}
-                    className="px-4 py-2 text-sm rounded-full bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-                  >
-                    Copia link
-                  </button>
-                  <button
-                    onClick={() => setLinkPagamentoCliente(null)}
-                    className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 transition-colors"
-                  >
-                    Chiudi
-                  </button>
-                </div>
-              </>
-            )}
+            <div>
+              <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Importo (EUR)*</label>
+              {/* mai type="number": con la tastiera italiana blocca i decimali */}
+              <input
+                type="text"
+                inputMode="decimal"
+                value={linkImporto}
+                onChange={e => setLinkImporto(e.target.value)}
+                placeholder="es. 150,00"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Causale</label>
+              <input
+                type="text"
+                value={linkDescrizione}
+                onChange={e => setLinkDescrizione(e.target.value)}
+                placeholder="es. Acconto noleggio"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                onClick={() => setLinkPagamentoCliente(null)}
+                className="px-4 py-2 text-sm rounded-full bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => creaEInviaLinkPagamento()}
+                disabled={creandoLink || creandoLinkFlight}
+                className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
+              >
+                {creandoLink ? 'Invio in corso...' : 'Crea e invia'}
+              </button>
+            </div>
           </div>
         </div>
       )}
