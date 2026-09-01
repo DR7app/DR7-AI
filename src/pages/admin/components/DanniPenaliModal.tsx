@@ -190,6 +190,25 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         .limit(1)
                     if (v?.[0]?.category) cat = String(v[0].category).toLowerCase().trim()
                 }
+
+                // Ne' id ne' targa: capita sulle prenotazioni vecchie e su
+                // quelle nate da una copia. Si cerca il veicolo per NOME, ma
+                // solo se il nome individua UNA riga sola: se ce ne sono due
+                // non si tira a indovinare e si scende alla rete sotto.
+                if (!cat) {
+                    const nome = String(
+                        bookingAny.vehicle_name || bd?.vehicle?.name || bd?.vehicleName || ''
+                    ).trim()
+                    if (nome.length >= 3) {
+                        const { data: v } = await supabase
+                            .from('vehicles')
+                            .select('category')
+                            .ilike('display_name', nome)
+                            .limit(2)
+                        const categorie = [...new Set((v || []).map(r => String(r.category || '').toLowerCase().trim()).filter(Boolean))]
+                        if (categorie.length === 1) cat = categorie[0]
+                    }
+                }
             } catch { /* il veicolo non si trova: si scende alla rete sotto */ }
 
             // Rete: quello che la prenotazione si ricorda del mezzo.
