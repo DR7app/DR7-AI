@@ -8,6 +8,16 @@ import CustomerAddebitoButton from './CustomerAddebitoButton'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import CustomerAutocomplete from './CustomerAutocomplete'
+import NewClientModal from './NewClientModal'
+
+interface PreauthCustomerLite {
+    id: string
+    full_name: string
+    email: string | null
+    phone: string | null
+    user_id?: string | null
+}
 
 interface PendingAddebito {
     id: string
@@ -364,6 +374,59 @@ export default function NexiTab() {
     const [preauthLinkSending, setPreauthLinkSending] = useState(false)
     const [preauthLinkResult, setPreauthLinkResult] = useState<{ url: string; orderId: string } | null>(null)
     const [preauthLinkSendWhatsApp, setPreauthLinkSendWhatsApp] = useState(true)
+    // Il cliente si SCEGLIE dall'anagrafica, non si scrive a mano: un nome
+    // digitato non aggancia la pre-autorizzazione a nessuna scheda cliente.
+    const [preauthLinkCustomerId, setPreauthLinkCustomerId] = useState('')
+    const [preauthLinkCustomers, setPreauthLinkCustomers] = useState<PreauthCustomerLite[]>([])
+    const [preauthLinkCustomersLoading, setPreauthLinkCustomersLoading] = useState(false)
+    const [showPreauthNewClient, setShowPreauthNewClient] = useState(false)
+
+    async function loadPreauthLinkCustomers(selectId?: string) {
+        setPreauthLinkCustomersLoading(true)
+        try {
+            // ?fields=picker: qui l'anagrafica serve solo a scegliere il
+            // cliente, la riga intera pesa ~8x. Se il parametro viene
+            // rifiutato si ripiega sulla risposta completa.
+            let res = await authFetch('/.netlify/functions/list-customers?fields=picker')
+            if (!res.ok) res = await authFetch('/.netlify/functions/list-customers')
+            if (!res.ok) {
+                toast.error('Caricamento clienti fallito')
+                return
+            }
+            const json = await res.json()
+            const rows = (json?.customers || json?.data || []) as Record<string, unknown>[]
+            const list: PreauthCustomerLite[] = rows.map((c, i) => {
+                const g = (k: string) => (c[k] == null ? '' : String(c[k])).trim()
+                const fullName = g('tipo_cliente') === 'azienda'
+                    ? (g('denominazione') || `${g('nome')} ${g('cognome')}`.trim() || g('email') || 'Azienda')
+                    : (`${g('nome')} ${g('cognome')}`.trim() || g('denominazione') || g('email') || g('telefono') || 'Cliente senza nome')
+                return {
+                    id: g('id') || `c-${i}`,
+                    full_name: g('full_name') || fullName,
+                    email: g('email') || null,
+                    phone: g('telefono') || g('phone') || null,
+                    user_id: g('user_id') || null,
+                }
+            })
+            setPreauthLinkCustomers(list)
+            if (selectId) {
+                const found = list.find(c => c.id === selectId)
+                if (found) pickPreauthLinkCustomer(found)
+            }
+        } catch (e) {
+            console.error('[NexiTab] loadPreauthLinkCustomers error:', e)
+            toast.error('Caricamento clienti fallito')
+        } finally {
+            setPreauthLinkCustomersLoading(false)
+        }
+    }
+
+    function pickPreauthLinkCustomer(c: PreauthCustomerLite) {
+        setPreauthLinkCustomerId(c.id)
+        setPreauthLinkCustomerName(c.full_name || '')
+        setPreauthLinkCustomerEmail(c.email || '')
+        setPreauthLinkCustomerPhone(c.phone || '')
+    }
 
     function openPreauthModal(card: TokenizedCard) {
         setPreauthCard(card)
@@ -500,6 +563,7 @@ export default function NexiTab() {
 
     function openPreauthLinkModal() {
         setPreauthLinkAmount('')
+        setPreauthLinkCustomerId('')
         setPreauthLinkCustomerName('')
         setPreauthLinkCustomerEmail('')
         setPreauthLinkCustomerPhone('')
@@ -508,12 +572,18 @@ export default function NexiTab() {
         setPreauthLinkSendWhatsApp(true)
         setPreauthLinkResult(null)
         setShowPreauthLinkModal(true)
+        // Anagrafica caricata alla prima apertura e poi tenuta in memoria.
+        if (preauthLinkCustomers.length === 0) void loadPreauthLinkCustomers()
     }
 
     async function handleCreatePreauthLink() {
         const amt = parseFloat(preauthLinkAmount)
         if (!amt || amt <= 0) {
             toast.error('Inserisci un importo valido')
+            return
+        }
+        if (!preauthLinkCustomerId) {
+            toast.error('Seleziona un cliente dall\'anagrafica')
             return
         }
         const hours = Math.max(1, Math.min(8760, parseInt(preauthLinkExpirationHours) || 168))
@@ -526,6 +596,7 @@ export default function NexiTab() {
                 body: JSON.stringify({
                     // cauzioneId omesso → backend genera orderId con prefisso "PA"
                     amount: amt,
+                    customerId: preauthLinkCustomerId || null,
                     customerEmail: preauthLinkCustomerEmail || null,
                     customerName: preauthLinkCustomerName || null,
                     description: preauthLinkDescription || `Pre-autorizzazione - ${preauthLinkCustomerName || preauthLinkCustomerEmail || 'cliente'}`,
@@ -2233,20 +2304,46 @@ export default function NexiTab() {
                                     </label>
                                 </div>
 
-                                <label className="block">
-                                    <span className="text-xs text-theme-text-muted">Nome cliente</span>
-                                    <input
-                                        type="text"
-                                        value={preauthLinkCustomerName}
-                                        onChange={e => setPreauthLinkCustomerName(e.target.value)}
-                                        placeholder="Mario Rossi"
-                                        className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
-                                    />
-                                </label>
+                                <div className="block">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-theme-text-muted">Cliente *</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPreauthNewClient(true)}
+                                            className="text-xs text-dr7-gold hover:underline font-semibold"
+                                        >+ Nuovo Cliente</button>
+                                    </div>
+                                    <div className="mt-1">
+                                        <CustomerAutocomplete
+                                            customers={preauthLinkCustomers}
+                                            selectedCustomerId={preauthLinkCustomerId}
+                                            onSelectCustomer={(id) => {
+                                                const c = preauthLinkCustomers.find(x => x.id === id)
+                                                if (c) {
+                                                    pickPreauthLinkCustomer(c)
+                                                } else {
+                                                    setPreauthLinkCustomerId('')
+                                                    setPreauthLinkCustomerName('')
+                                                }
+                                            }}
+                                            placeholder={preauthLinkCustomersLoading ? 'Caricamento clienti...' : 'Cerca cliente per nome, email o telefono...'}
+                                            required={false}
+                                        />
+                                    </div>
+                                    {preauthLinkCustomerId ? (
+                                        <div className="mt-2 p-2 rounded-lg bg-dr7-gold/10 border border-dr7-gold/30 text-xs text-theme-text-secondary">
+                                            {preauthLinkCustomerName}
+                                            {preauthLinkCustomerEmail ? ` \u00b7 ${preauthLinkCustomerEmail}` : ''}
+                                            {preauthLinkCustomerPhone ? ` \u00b7 ${preauthLinkCustomerPhone}` : ''}
+                                        </div>
+                                    ) : (
+                                        <span className="text-[10px] text-theme-text-muted">Seleziona il cliente dall'anagrafica: il nome non si scrive a mano.</span>
+                                    )}
+                                </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <label className="block">
-                                        <span className="text-xs text-theme-text-muted">Email cliente</span>
+                                        <span className="text-xs text-theme-text-muted">Email cliente (dalla scheda, modificabile)</span>
                                         <input
                                             type="email"
                                             value={preauthLinkCustomerEmail}
@@ -2256,7 +2353,7 @@ export default function NexiTab() {
                                         />
                                     </label>
                                     <label className="block">
-                                        <span className="text-xs text-theme-text-muted">Telefono (WhatsApp)</span>
+                                        <span className="text-xs text-theme-text-muted">Telefono WhatsApp (dalla scheda, modificabile)</span>
                                         <div className="mt-1">
                                             <TelefonoConPrefisso
                                                 value={preauthLinkCustomerPhone}
@@ -2298,7 +2395,7 @@ export default function NexiTab() {
                                     >Annulla</button>
                                     <button
                                         onClick={handleCreatePreauthLink}
-                                        disabled={preauthLinkSending || !preauthLinkAmount}
+                                        disabled={preauthLinkSending || !preauthLinkAmount || !preauthLinkCustomerId}
                                         className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-black hover:bg-dr7-gold/85 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {preauthLinkSending ? 'Creazione...' : 'Crea link e invia'}
@@ -2334,6 +2431,17 @@ export default function NexiTab() {
                     </div>
                 </div>
             )}
+
+            {/* Fuori dall'overlay: dentro, ogni click sarebbe risalito al
+                backdrop chiudendo la modale del link pre-autorizzazione. */}
+            <NewClientModal
+                isOpen={showPreauthNewClient}
+                onClose={() => setShowPreauthNewClient(false)}
+                onClientCreated={(clientId) => {
+                    setShowPreauthNewClient(false)
+                    void loadPreauthLinkCustomers(clientId)
+                }}
+            />
         </div>
     )
 }
