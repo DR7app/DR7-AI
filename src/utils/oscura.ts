@@ -402,6 +402,16 @@ const PAROLE_COMUNI = new Set([
   'srls', 'sarl', 'group', 'service', 'services', 'italia', 'italy', 'auto',
   'rent', 'rental', 'noleggio', 'cliente', 'clienti', 'test', 'none', 'null',
   'societa', 'ditta', 'studio', 'azienda',
+  // 01/09/2026 — caselle di servizio: `info@`, `amministrazione@`... sono
+  // ruoli, non persone. Indicizzarle sfocava le voci del menu con lo stesso
+  // nome (Amministrazione, Preventivi, Contratti, Magazzino, Ticket).
+  'info', 'amministrazione', 'amministrazioni', 'fatturazione', 'fatture',
+  'contabilita', 'segreteria', 'commerciale', 'assistenza', 'supporto',
+  'support', 'staff', 'admin', 'direzione', 'ufficio', 'officina', 'meccanica',
+  'lavaggio', 'preventivi', 'contratti', 'prenotazioni', 'booking', 'bookings',
+  'magazzino', 'ticket', 'tickets', 'marketing', 'report', 'sito', 'mail',
+  'posta', 'privacy', 'legale', 'acquisti', 'vendite', 'terra', 'mare',
+  'aria', 'soggiorni', 'business', 'core', 'gestione', 'sistemi',
 ])
 
 const SEPARATORE = /[^\p{L}\p{N}]+/u
@@ -501,6 +511,25 @@ function vaOscurato(testo: string): boolean {
 const MAI_SFOCARE = new Set(['HTML', 'BODY', 'HEADER', 'NAV', 'MAIN', 'TABLE', 'TBODY', 'THEAD', 'TR', 'FORM'])
 
 /**
+ * Il gestionale stesso non si sfoca MAI.
+ *
+ * 01/09/2026 — segnalato dal campo con la schermata davanti: con Oscurare
+ * acceso sparivano le voci del menu ("Noleggio Mare", "Lavaggio & Meccanica",
+ * la scritta CORE BUSINESS). Il perche': una parola di quelle etichette e'
+ * anche la parola di un cliente o di una ragione sociale ("Mare", "Meccanica",
+ * "Business"), e il dizionario dei nomi lavora anche parola per parola.
+ *
+ * Il menu, l'intestazione e le schede in alto sono l'ARREDAMENTO del
+ * gestionale: non contengono dati di clienti, quindi non vanno nemmeno
+ * guardati. Chi filma deve continuare a vedere dove sta navigando.
+ */
+const ARREDAMENTO = 'nav, aside, header, [role="navigation"], [data-oscura-chrome]'
+
+function eArredamento(el: Element | null): boolean {
+  return !!el && !!el.closest(ARREDAMENTO)
+}
+
+/**
  * Nodo di testo gia' esaminato -> il contenuto che aveva quando lo si e' visto.
  *
  * 01/09/2026 — prima era un WeakSet del solo nodo, e bastava a perdere meta'
@@ -534,7 +563,13 @@ function scansiona(): void {
     if (nodiVisti.get(testo) !== contenuto) {
       nodiVisti.set(testo, contenuto)
       const el = testo.parentElement
-      if (contenuto.length <= 400 && vaOscurato(contenuto)) {
+      if (eArredamento(el)) {
+        // Il menu era stato sfocato prima di questa regola: torna nitido.
+        if (el && el.classList.contains('oscurato')) {
+          el.classList.remove('oscurato')
+          el.removeAttribute('data-oscura-auto')
+        }
+      } else if (contenuto.length <= 400 && vaOscurato(contenuto)) {
         if (el && !el.classList.contains('oscurato')
             && !MAI_SFOCARE.has(el.tagName)
             && el.children.length <= 12
@@ -559,6 +594,7 @@ function scansiona(): void {
   for (const campo of campi) {
     if (campo.classList.contains('oscurato')) continue
     if ((campo as HTMLInputElement).type === 'password') continue
+    if (eArredamento(campo)) continue
     const etichetta = `${campo.name || ''} ${campo.id || ''} ${campo.getAttribute('placeholder') || ''}`
     if ((CAMPO_PERSONALE.test(etichetta) && !CAMPO_DI_COSA.test(etichetta))
         || vaOscurato(campo.value || '')) {

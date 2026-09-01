@@ -1287,7 +1287,12 @@ export default function AdminDashboard() {
           ? collaboratoreFlatTabs.length > 1
           : sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1
         ) && (
-          <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin sticky top-[60px] z-20">
+          <div
+            /* 01/09/2026: la barra delle schede e' arredamento del gestionale:
+               con Oscurare acceso non si sfoca (src/utils/oscura.ts). Prima
+               sparivano le voci il cui nome e' anche la parola di un cliente. */
+            data-oscura-chrome=""
+            className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin sticky top-[60px] z-20">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {(isCollaboratore
                 ? collaboratoreFlatTabs
