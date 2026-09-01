@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useTheme, PALETTES, type Palette } from '../../contexts/ThemeContext'
+import { oscuraAttivo, impostaOscura } from '../../utils/oscura'
 // Uscite Straordinarie di Mare/Aria/Soggiorni: stesso componente del Noleggio
 // Terra in viewMode='uscite', parametrizzato per business. Nessun peso in piu'
 // sul bundle: RentalTabs lo importa gia' in modo eager.
@@ -180,6 +181,9 @@ export default function AdminDashboard() {
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const avatarMostrato = avatarLocale || adminAvatar
   const { theme, toggleTheme, palette, setPalette } = useTheme()
+  // Oscurare: acceso/spento sta in localStorage e la pagina si ricarica al
+  // cambio, quindi qui basta leggerlo una volta per render.
+  const oscurato = oscuraAttivo()
   const [paletteMenuOpen, setPaletteMenuOpen] = useState(false)
 
   // Permission gate: a tab is restricted iff the operator's permissions[]
@@ -966,6 +970,26 @@ export default function AdminDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
                 </svg>
                 <span className="hidden sm:inline">I miei orari</span>
+              </button>
+            )}
+            {(adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')) && (
+              <button
+                onClick={() => impostaOscura(!oscurato)}
+                title="Oscurare"
+                aria-label="Oscurare"
+                aria-pressed={oscurato}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold active:scale-95 transition-all ${
+                  oscurato
+                    ? 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
+                    : 'border border-dr7-gold/40 bg-dr7-gold/5 text-dr7-gold hover:bg-dr7-gold/10'
+                }`}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.6 10.6a2 2 0 002.8 2.8" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 6.6C4.6 7.9 3.1 9.8 2.5 12c1.6 4 5.3 6.5 9.5 6.5 1.6 0 3.2-.4 4.6-1.1M9.9 5.7A9.9 9.9 0 0112 5.5c4.2 0 7.9 2.5 9.5 6.5-.5 1.3-1.3 2.5-2.3 3.5" />
+                </svg>
+                <span className="hidden sm:inline">Oscurare</span>
               </button>
             )}
             <button

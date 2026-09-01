@@ -984,3 +984,20 @@ html[data-palette="frost"].light {
   --card-border: #D9E1EB;
   --gradient-primary: linear-gradient(135deg, #38BDF8 0%, #0284C7 50%, #0369A1 100%);
 }
+
+/* Modalita' Oscurare (src/utils/oscura.ts).
+   I campi dei clienti arrivano gia' mascherati dalla rete, ma documenti e
+   contratti sono immagini e PDF: li' non c'e' niente da riscrivere, si
+   sfocano. */
+html[data-oscura] iframe,
+html[data-oscura] embed,
+html[data-oscura] object,
+html[data-oscura] canvas.pdf-page,
+html[data-oscura] img[src*="driver-licenses"],
+html[data-oscura] img[src*="carta-identita"],
+html[data-oscura] img[src*="customer-documents"],
+html[data-oscura] img[src*="codice-fiscale"],
+html[data-oscura] img[src*="contracts"],
+html[data-oscura] img[src*="signature"] {
+  filter: blur(9px);
+}
