@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { getIncomingInvoice } from './aruba-utils'
+import { leggiDettagliCache, salvaDettaglioCache } from './utils/arubaDettaglioCache'
 
 /**
  * Per-row detail fetch — UI calls this for each visible incoming invoice
@@ -25,6 +26,23 @@ export const handler: Handler = async (event) => {
   }
 
   try {
+    // Una fattura gia' emessa non cambia piu': se l'abbiamo gia' letta, si
+    // risponde subito invece di spendere i ~4,3s della chiamata ad Aruba.
+    const giaNoto = (await leggiDettagliCache([filename])).get(filename)
+    if (giaNoto) {
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({
+          success: true,
+          filename,
+          amount: giaNoto.importo,
+          invoiceDate: giaNoto.data_documento || '',
+          invoiceNumber: giaNoto.numero_documento || '',
+          from_cache: true,
+        })
+      }
+    }
+
     // Fetch with the actual XML file (no PDF, smaller payload)
     const detail = await getIncomingInvoice(filename, false)
 
@@ -102,6 +120,14 @@ export const handler: Handler = async (event) => {
         console.warn('[get-incoming-invoice-detail] XML parse failed:', xerr?.message)
       }
     }
+
+    // Si mette da parte per le prossime aperture. Se la migrazione non e'
+    // ancora passata questo non fa niente e non rompe la risposta.
+    await salvaDettaglioCache(filename, {
+      numero_documento: invoiceNumber || null,
+      data_documento: invoiceDate || null,
+      importo: amount,
+    })
 
     return {
       statusCode: 200, headers,

@@ -3,6 +3,7 @@ import { requireAuth } from './require-auth'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllIncomingInvoices, getIncomingInvoice } from './aruba-utils'
+import { leggiDettagliCache } from './utils/arubaDettaglioCache'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -192,9 +193,26 @@ export const handler: Handler = async (event) => {
         ? filteredByMode.filter(i => !i.invoiceDate || i.invoiceDate.startsWith(month))
         : filteredByMode
 
-    // No server-side enrichment — would blow Netlify's 10s timeout for many rows.
-    // The UI calls /get-incoming-invoice-detail per row to populate amount/date/number.
+    // Numero, data e importo che abbiamo gia' letto una volta arrivano dalla
+    // cache in una query sola, invece di una chiamata Aruba da ~4,3s per riga.
+    // Si applica DOPO il filtro per periodo, di proposito: il filtro qui sopra
+    // lavora sulla data che manda Aruba (vuota), quindi non seleziona niente.
+    // Riempire le date PRIMA lo farebbe scattare all'improvviso e delle righe
+    // sparirebbero dall'elenco a seconda di cosa e' gia' in cache.
+    // Le righe non ancora in cache restano vuote: le chiede la UI, e da quel
+    // momento in poi ci sono.
     const invoices = filteredByMonth
+    const cache = await leggiDettagliCache(invoices.map(i => i.filename))
+    let daCache = 0
+    for (const inv of invoices) {
+      const d = cache.get(inv.filename)
+      if (!d) continue
+      if ((!inv.amount || inv.amount === 0) && d.importo != null) inv.amount = d.importo
+      if (!inv.invoiceDate && d.data_documento) inv.invoiceDate = d.data_documento
+      if (!inv.invoiceNumber && d.numero_documento) inv.invoiceNumber = d.numero_documento
+      daCache++
+    }
+    console.log(`[get-incoming-invoices] ${daCache}/${invoices.length} righe gia' in cache`)
 
     // Sort by date descending
     invoices.sort((a: any, b: any) => (b.invoiceDate || '').localeCompare(a.invoiceDate || ''))
