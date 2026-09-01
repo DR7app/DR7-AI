@@ -5,24 +5,21 @@
  * condivisione schermo) senza mostrare nomi, email, telefoni, indirizzi,
  * codici fiscali, partite IVA, IBAN e documenti dei clienti veri.
  *
- * Come funziona: invece di andare a toccare le duecento schede una per una,
- * si interviene in un punto solo — la rete. Quando la modalita' e' accesa
- * ogni risposta JSON (Supabase e funzioni Netlify) passa di qui e i campi
- * personali vengono sostituiti con dati finti ma plausibili PRIMA che il
- * gestionale li veda. Lo schermo resta pieno e credibile: "Marco Rossi",
- * "+39 348 512 7734", "Via Roma 14". Nessun componente cambia.
+ * Come funziona: i dati restano QUELLI VERI — non viene sostituito niente.
+ * Quando la modalita' e' accesa ogni risposta (Supabase e funzioni Netlify)
+ * passa di qui solo per RICONOSCERE quali valori sono personali; poi quei
+ * valori, quando compaiono a schermo, vengono SFOCATI via CSS.
  *
- * I dati finti sono DETERMINISTICI: lo stesso cliente diventa sempre lo
- * stesso nome finto, in ogni tab, prenotazione, fattura e report. La demo
- * resta coerente.
+ * 01/09/2026 — prima i valori venivano sostituiti con nomi finti plausibili.
+ * Sul gestionale vero sembravano dati sbagliati e non era quello che serviva:
+ * si deve conservare tutto correttamente e nascondere solo cio' che si vede.
  *
- * SICUREZZA — perche' la modalita' blocca le scritture: se una scheda viene
- * riempita con dati finti e qualcuno preme Salva, i dati finti finirebbero
- * nel database VERO. Quindi finche' Oscurare e' acceso ogni scrittura
- * (INSERT/UPDATE/DELETE su Supabase, invii WhatsApp/email, fatture,
+ * SICUREZZA — perche' la modalita' blocca comunque le scritture: e' una
+ * modalita' di RIPRESA. Mentre si filma si clicca in giro, e senza blocco
+ * partirebbero WhatsApp, email, fatture e pagamenti veri a clienti veri.
+ * Quindi ogni scrittura (INSERT/UPDATE/DELETE su Supabase, invii, fatture,
  * pagamenti Nexi, firme) viene fermata nel browser e riceve una risposta
- * finta di successo: la registrazione scorre, il database non si muove e
- * nessun cliente vero riceve messaggi.
+ * finta di successo: la registrazione scorre e nessuno riceve niente.
  *
  * Non e' una modalita' di lavoro: e' una modalita' di ripresa. Si spegne
  * dallo stesso bottone in alto a destra.
@@ -69,162 +66,12 @@ export function impostaOscura(attivo: boolean): void {
 }
 
 /**
- * L'email dell'operatore collegato non va MAI mascherata: alcuni controlli di
- * ruolo confrontano la riga letta con la sessione, e un'email finta li
- * farebbe fallire (schermate vuote, tab che spariscono).
+ * L'operatore collegato e' chi sta filmando: la sua email non va sfocata,
+ * altrimenti non si vede piu' con che utenza si sta lavorando.
  */
 let emailOperatore: string | null = null
 export function proteggiOperatore(email?: string | null): void {
   emailOperatore = (email || '').trim().toLowerCase() || null
-}
-
-// ---------------------------------------------------------------------------
-// Generatore di dati finti, stabile per valore di partenza
-// ---------------------------------------------------------------------------
-
-const NOMI = [
-  'Marco', 'Luca', 'Giulia', 'Francesca', 'Andrea', 'Chiara', 'Matteo', 'Sara',
-  'Davide', 'Elena', 'Alessandro', 'Martina', 'Simone', 'Valentina', 'Federico',
-  'Silvia', 'Riccardo', 'Anna', 'Nicola', 'Laura', 'Stefano', 'Ilaria',
-]
-
-const COGNOMI = [
-  'Rossi', 'Bianchi', 'Ferrari', 'Esposito', 'Romano', 'Colombo', 'Ricci',
-  'Marino', 'Greco', 'Bruno', 'Gallo', 'Conti', 'De Luca', 'Costa', 'Giordano',
-  'Mancini', 'Rizzo', 'Lombardi', 'Moretti', 'Barbieri', 'Serra', 'Pinna',
-]
-
-const VIE = [
-  'Via Roma', 'Via Garibaldi', 'Via Dante', 'Viale Marconi', 'Via Verdi',
-  'Corso Italia', 'Via Manzoni', 'Via Cavour', 'Via Nazionale', 'Via Milano',
-]
-
-const CITTA = [
-  'Cagliari', 'Quartu Sant\'Elena', 'Sassari', 'Olbia', 'Nuoro', 'Oristano',
-  'Iglesias', 'Carbonia', 'Alghero', 'Selargius',
-]
-
-const SOCIETA = ['Alba', 'Mediterranea', 'Nuraghe', 'Tirreno', 'Sardegna', 'Orion', 'Aurora']
-const FORME = ['SRL', 'SRLS', 'SPA', 'SNC']
-
-/**
- * Impronta FNV-1a: stessa stringa, stesso numero, sempre.
- *
- * Il rimescolamento finale non e' un vezzo: senza, i bit bassi si somigliano
- * troppo e due indirizzi diversi finivano sulla stessa via allo stesso civico.
- */
-function impronta(testo: string): number {
-  let h = 2166136261
-  for (let i = 0; i < testo.length; i++) {
-    h ^= testo.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  h ^= h >>> 15
-  h = Math.imul(h, 2246822507)
-  h ^= h >>> 13
-  h = Math.imul(h, 3266489909)
-  h ^= h >>> 16
-  return h >>> 0
-}
-
-function scegli<T>(elenco: T[], seme: number): T {
-  return elenco[seme % elenco.length]
-}
-
-function cifre(seme: number, quante: number): string {
-  let s = ''
-  let n = seme
-  for (let i = 0; i < quante; i++) {
-    n = (Math.imul(n, 1103515245) + 12345) >>> 0
-    s += String(n % 10)
-  }
-  return s
-}
-
-function lettere(seme: number, quante: number): string {
-  const A = 'ABCDEFGHILMNOPQRSTUVZ'
-  let s = ''
-  let n = seme
-  for (let i = 0; i < quante; i++) {
-    n = (Math.imul(n, 1103515245) + 12345) >>> 0
-    s += A[n % A.length]
-  }
-  return s
-}
-
-function nomeFinto(orig: string): string {
-  const h = impronta(orig)
-  return `${scegli(NOMI, h)} ${scegli(COGNOMI, h >>> 5)}`
-}
-
-function soloNomeFinto(orig: string): string {
-  return scegli(NOMI, impronta(orig))
-}
-
-function soloCognomeFinto(orig: string): string {
-  return scegli(COGNOMI, impronta(orig))
-}
-
-function emailFinta(orig: string): string {
-  const h = impronta(orig)
-  const n = scegli(NOMI, h).toLowerCase()
-  const c = scegli(COGNOMI, h >>> 5).toLowerCase().replace(/\s+/g, '')
-  return `${n}.${c}${h % 90 + 10}@example.it`
-}
-
-function telefonoFinto(orig: string): string {
-  const h = impronta(orig)
-  return `+39 3${(h % 5) + 2}${cifre(h, 1)} ${cifre(h >>> 3, 3)} ${cifre(h >>> 7, 4)}`
-}
-
-function cfFinto(orig: string): string {
-  const h = impronta(orig)
-  return `${lettere(h, 6)}${cifre(h >>> 4, 2)}${lettere(h >>> 8, 1)}${cifre(h >>> 11, 2)}${lettere(h >>> 15, 1)}${cifre(h >>> 19, 3)}${lettere(h >>> 23, 1)}`
-}
-
-function pivaFinta(orig: string): string {
-  return cifre(impronta(orig), 11)
-}
-
-function ibanFinto(orig: string): string {
-  const h = impronta(orig)
-  return `IT${cifre(h, 2)}${lettere(h >>> 6, 1)}${cifre(h >>> 9, 22)}`
-}
-
-function indirizzoFinto(orig: string): string {
-  const h = impronta(orig)
-  return `${scegli(VIE, h)} ${(h % 120) + 1}`
-}
-
-function cittaFinta(orig: string): string {
-  return scegli(CITTA, impronta(orig))
-}
-
-function aziendaFinta(orig: string): string {
-  const h = impronta(orig)
-  return `${scegli(SOCIETA, h)} ${scegli(COGNOMI, h >>> 5)} ${scegli(FORME, h >>> 9)}`
-}
-
-function documentoFinto(orig: string): string {
-  const h = impronta(orig)
-  return `${lettere(h, 2)}${cifre(h >>> 5, 7)}`
-}
-
-function sdiFinto(orig: string): string {
-  const h = impronta(orig)
-  return `${lettere(h, 3)}${cifre(h >>> 5, 4)}`
-}
-
-/** Sposta una data di nascita di qualche anno/giorno, mantenendo il formato. */
-function dataFinta(orig: string): string {
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(orig)
-  if (!iso) return orig
-  const h = impronta(orig)
-  const anno = Math.max(1950, Number(iso[1]) - (h % 7) - 1)
-  const mese = (h % 12) + 1
-  const giorno = (h % 27) + 1
-  const dueCifre = (n: number) => String(n).padStart(2, '0')
-  return `${anno}-${dueCifre(mese)}-${dueCifre(giorno)}${orig.slice(10)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -283,8 +130,7 @@ function genereDelCampo(chiave: string, valore: string, persona: boolean, cosa =
 
   if (NOMI_COMPLETI.has(k)) return 'nome'
   // `cliente` porta il nome del cliente nei report (monthly-report, cauzioni,
-  // riconciliazioni). A volte pero' ci finisce l'email: si maschera per quello
-  // che e', altrimenti un indirizzo diventerebbe un nome finto.
+  // riconciliazioni). A volte pero' ci finisce l'email: va segnata lo stesso.
   if (k === 'cliente' || k === 'customer') return valore.includes('@') ? 'email' : 'nome'
   if (/(^|_)(ragione_sociale|denominazione|azienda|company_name)$/.test(k)) return 'azienda'
   if (/(^|_)(cognome|last_name|surname)$/.test(k)) return 'solo-cognome'
@@ -335,62 +181,17 @@ function sembraPersona(oggetto: Record<string, unknown>): boolean {
   return false
 }
 
-// ---------------------------------------------------------------------------
-// Dizionario reale -> finto, per ripulire anche i testi liberi
-// ---------------------------------------------------------------------------
-
-const dizionario = new Map<string, string>()
-const LIMITE_DIZIONARIO = 1200
-let cercaTutti: RegExp | null = null
-
-function ricorda(reale: string, finto: string): void {
-  if (dizionario.size >= LIMITE_DIZIONARIO) return
-  const chiave = reale.trim().toLowerCase()
-  if (chiave.length < 4 || dizionario.has(chiave)) return
-  dizionario.set(chiave, finto)
-  cercaTutti = null // il dizionario e' cambiato: la ricerca si ricostruisce
-}
-
-/**
- * Nelle note, nei messaggi e nelle descrizioni i nomi sono scritti dentro la
- * frase: nessuna chiave da mascherare. Si riusano i valori gia' incontrati,
- * cercandoli tutti in una passata sola.
- */
-function ripuliscTesto(testo: string): string {
-  if (!testo || testo.length > 4000 || dizionario.size === 0) return testo
-  if (!cercaTutti) {
-    // I piu' lunghi per primi: "Mario Rossi" prima di "Rossi".
-    const voci = [...dizionario.keys()]
-      .sort((a, b) => b.length - a.length)
-      .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    cercaTutti = new RegExp(voci.join('|'), 'gi')
-  }
-  return testo.replace(cercaTutti, trovato => dizionario.get(trovato.toLowerCase()) || trovato)
-}
-
-function valoreFinto(genere: Genere, valore: string): string {
-  switch (genere) {
-    case 'nome': return nomeFinto(valore)
-    case 'solo-nome': return soloNomeFinto(valore)
-    case 'solo-cognome': return soloCognomeFinto(valore)
-    case 'azienda': return aziendaFinta(valore)
-    case 'email': return emailFinta(valore)
-    case 'telefono': return telefonoFinto(valore)
-    case 'cf': return cfFinto(valore)
-    case 'piva': return pivaFinta(valore)
-    case 'iban': return ibanFinto(valore)
-    case 'indirizzo': return indirizzoFinto(valore)
-    case 'citta': return cittaFinta(valore)
-    case 'documento': return documentoFinto(valore)
-    case 'sdi': return sdiFinto(valore)
-    case 'data-nascita': return dataFinta(valore)
-    default: return valore
-  }
-}
-
 const PROFONDITA_MASSIMA = 12
 
-/** Percorre la risposta e sostituisce i campi personali. */
+/**
+ * Percorre la risposta e SEGNA i campi personali, senza toccarli.
+ *
+ * 01/09/2026 — prima qui i valori venivano SOSTITUITI con nomi finti. Sul
+ * gestionale vero quello si vedeva come dati sbagliati ("perche' ho dei nomi a
+ * caso?"), e non era quello che serviva: i dati devono restare quelli giusti,
+ * va nascosto solo cio' che si vede a schermo. Quindi il valore torna indietro
+ * intatto e viene solo registrato fra quelli da SFOCARE.
+ */
 function maschera(dato: unknown, profondita: number, persona = false): unknown {
   if (profondita > PROFONDITA_MASSIMA) return dato
   if (Array.isArray(dato)) return dato.map(v => maschera(v, profondita + 1, persona))
@@ -406,25 +207,16 @@ function maschera(dato: unknown, profondita: number, persona = false): unknown {
 
     if (typeof valore === 'string' && valore) {
       const genere = genereDelCampo(chiave, valore, eScheda, eCosa)
-      if (genere === 'testo') {
-        fuori[chiave] = ripuliscTesto(valore)
-      } else if (genere) {
-        const finto = valoreFinto(genere, valore)
-        if (genere === 'nome' || genere === 'azienda' || genere === 'email'
-            || genere === 'telefono' || genere === 'solo-cognome') {
-          ricorda(valore, finto)
-        }
-        // Quello che si vede a schermo va anche sfocato: si segnano sia il
-        // valore vero (se qualcosa sfuggisse alla mascheratura) sia il finto.
-        segnaSensibile(valore)
-        segnaSensibile(finto)
-        // L'operatore collegato resta se stesso: i controlli di ruolo lo cercano.
-        fuori[chiave] = (genere === 'email' && emailOperatore && valore.toLowerCase() === emailOperatore)
-          ? valore
-          : finto
-      } else {
-        fuori[chiave] = valore
+      // I testi liberi (note, messaggi) non si segnano: dentro c'e' di tutto e
+      // sfocare l'intera nota per una parola non serve. I nomi che contengono
+      // vengono comunque colti, perche' sono gia' segnati come campo a se'.
+      if (genere && genere !== 'testo') {
+        // L'operatore collegato resta leggibile: e' lui che sta filmando.
+        const suo = genere === 'email' && emailOperatore && valore.toLowerCase() === emailOperatore
+        if (!suo) segnaSensibile(valore)
       }
+      // Il dato NON viene mai cambiato.
+      fuori[chiave] = valore
       continue
     }
 
@@ -446,13 +238,17 @@ export function mascheraDati(dato: unknown): unknown {
   return maschera(dato, 0)
 }
 
+/** I valori riconosciuti come personali, cioe' quelli che verranno sfocati. */
+export function elencoDaSfocare(): string[] {
+  return [...valoriSensibili]
+}
+
 // ---------------------------------------------------------------------------
 // Sfocatura a schermo
 // ---------------------------------------------------------------------------
 //
-// Sostituire i dati non basta: un nome finto sembra un nome vero, e a schermo
-// non si vede nessuna differenza — chi guarda la registrazione non sa se la
-// modalita' e' accesa. Quello che appare va anche SFOCATO.
+// I dati restano quelli veri: l'unica cosa che nasconde i clienti e' questa.
+// Quello che compare a schermo e risulta personale va SFOCATO.
 //
 // Non si possono marcare i campi uno per uno: sono duecento schede. Si guarda
 // il testo che finisce nella pagina e si sfoca l'elemento che lo contiene,
