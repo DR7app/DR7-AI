@@ -1483,10 +1483,25 @@ export default function FatturaTab() {
               <option value={0}>Tutte</option>
             </select>
           </div>
+          {doppioni.ids.size > 0 && (
+            <div className="flex flex-col justify-end">
+              <button
+                onClick={() => setSoloDoppioni(v => !v)}
+                title="Prenotazioni con piu' di una fattura principale. Le bozze mai partite si eliminano; quelle gia' inviate a SDI si annullano con una nota di credito."
+                className={`px-3 py-2 rounded text-sm border ${
+                  soloDoppioni
+                    ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+                }`}
+              >
+                {soloDoppioni ? 'Mostra tutte' : `In doppio: ${doppioni.ids.size}`}
+              </button>
+            </div>
+          )}
           {filtriAttivi && (
             <button
               onClick={() => {
-                setFilterSdi('all'); setFilterTipo('all'); setFilterCliente('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery('')
+                setFilterSdi('all'); setFilterTipo('all'); setFilterCliente('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery(''); setSoloDoppioni(false)
               }}
               className="px-3 py-2 rounded text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-border"
             >
@@ -1585,7 +1600,22 @@ export default function FatturaTab() {
                           />
                         </td>
                       )}
-                      <td className="px-4 py-3 font-mono text-theme-text-primary whitespace-nowrap">{invoice.numero_fattura}</td>
+                      <td className="px-4 py-3 font-mono text-theme-text-primary whitespace-nowrap">
+                        {invoice.numero_fattura}
+                        {/* La stessa prenotazione ha piu' di una fattura
+                            principale: finche' resta in elenco il suo importo
+                            e' contato due volte nei KPI e nel report. */}
+                        {doppioni.ids.has(invoice.id) && (
+                          <span
+                            className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-rose-500/10 text-rose-400 border-rose-500/30 align-middle"
+                            title={doppioni.idsConValoreFiscale.has(invoice.id)
+                              ? 'Fattura in doppio sulla stessa prenotazione. Questa e\' gia\' uscita verso SDI: si annulla con una nota di credito, non si elimina.'
+                              : 'Fattura in doppio sulla stessa prenotazione. Mai partita verso SDI: si puo\' eliminare.'}
+                          >
+                            In doppio
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 max-w-[200px]">
                         <div className="text-theme-text-primary font-medium truncate" title={invoice.customer_name}>{invoice.customer_name}</div>
                         {invoice.customer_email && (
