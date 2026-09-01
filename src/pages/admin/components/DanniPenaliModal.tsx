@@ -98,6 +98,11 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [resolvedCategory, setResolvedCategory] = useState<string>('')
     const [categoryLoading, setCategoryLoading] = useState<boolean>(true)
+    // 01/09/2026 — id e etichetta di una categoria NON sono la stessa cosa.
+    // In Centralina Pro le etichette si rinominano, gli id no: la categoria
+    // che si chiama "Urban" ha id `scooter`. La modale mostrava l'id grezzo e
+    // mandava l'operatore su un "tab scooter" che nell'interfaccia non esiste.
+    const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({})
 
     useEffect(() => {
         if (!isOpen) return
@@ -114,6 +119,17 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             // `main` resta il fallback per chi non ha configurato.
             try {
                 const { business, main } = await loadBusinessConfig(serviceType)
+                const cats = ((business as { categories?: unknown })?.categories
+                    ?? (main as { categories?: unknown })?.categories) as Array<{ id?: string; label?: string }> | undefined
+                if (!cancelled && Array.isArray(cats)) {
+                    const mappa: Record<string, string> = {}
+                    for (const c of cats) {
+                        const id = String(c?.id || '').toLowerCase().trim()
+                        const label = String(c?.label || '').trim()
+                        if (id && label) mappa[id] = label
+                    }
+                    setCategoryLabels(mappa)
+                }
                 const cfg = { penali: business?.penali ?? main?.penali, danni: business?.danni ?? main?.danni } as { penali?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>; danni?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> } | undefined
                 if (!cancelled && cfg) {
                     const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
@@ -273,6 +289,8 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // veicolo Hypercar che ha la sua lista dedicata, e nessun matching errato
     // verso 'exotic' quando esiste una lista specifica.
     const vehicleCategory = String(rawCategory || '').toLowerCase().trim()
+    // Quello che si scrive all'operatore: il nome che legge in Centralina Pro.
+    const categoryLabel = categoryLabels[vehicleCategory] || vehicleCategory
 
     // Legacy alias helper — used by the list selectors when the raw lookup
     // returns nothing. Maps old/Italian aliases to the canonical Pro keys.
@@ -857,8 +875,8 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                             )}
                             {!categoryLoading && danniPresetList.length === 0 && (
                                 <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
-                                    Nessun danno configurato per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
-                                    Apri <strong>Centralina Pro → Danni &amp; Penali → Danni → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
+                                    Nessun danno configurato per la categoria <strong>{categoryLabel || 'sconosciuta'}</strong>.
+                                    Apri <strong>Centralina Pro → Danni &amp; Penali → Danni → tab {categoryLabel || 'corretto'}</strong> e aggiungi le voci.
                                 </div>
                             )}
                             {danniPresetList.length > 0 && (
@@ -993,8 +1011,8 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                             )}
                             {!categoryLoading && penaltyList.length === 0 && (
                                 <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
-                                    Nessuna penale configurata per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
-                                    Apri <strong>Centralina Pro → Danni &amp; Penali → Penali → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
+                                    Nessuna penale configurata per la categoria <strong>{categoryLabel || 'sconosciuta'}</strong>.
+                                    Apri <strong>Centralina Pro → Danni &amp; Penali → Penali → tab {categoryLabel || 'corretto'}</strong> e aggiungi le voci.
                                 </div>
                             )}
                             <div className="rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
