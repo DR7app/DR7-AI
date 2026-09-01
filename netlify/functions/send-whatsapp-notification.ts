@@ -3,6 +3,10 @@ import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
 import { langFromPhone, translateText } from './utils/i18n';
+// System Control: un messaggio non partito diventa un'operazione ripetibile
+// dal pannello. `automatica: false` di proposito — un ritentativo automatico
+// rischierebbe di mandare due volte lo stesso messaggio al cliente.
+import { registraEvento, accodaOperazione, segnaChiamata } from './utils/systemControl';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -1075,6 +1079,30 @@ const handler: Handler = async (event) => {
     };
   } catch (error: any) {
     console.error('Error sending WhatsApp notification:', error);
+
+    // ── System Control ──────────────────────────────────────────────────
+    try {
+      await segnaChiamata('green_api', false, { errore: String(error?.message || error) });
+      const gruppo = await registraEvento({
+        messaggio: `Messaggio WhatsApp non inviato: ${error?.message || error}`,
+        categoria: 'notifiche', modulo: 'Messaggi', funzione: 'send-whatsapp-notification',
+        integrazione: 'green_api', severita: 'medio',
+        contesto: { destinatario: targetPhone, tipo: body?.type || null },
+      });
+      await accodaOperazione({
+        tipo: 'messaggio_whatsapp',
+        chiaveIdempotenza: `wa:${targetPhone}:${new Date().toISOString().slice(0, 13)}:${String(body?.type || 'manuale')}`,
+        descrizione: `Messaggio WhatsApp a ${targetPhone}${body?.type ? ` (${body.type})` : ''}`,
+        integrazione: 'green_api', entitaTipo: 'messaggio', entitaId: targetPhone,
+        endpoint: 'send-whatsapp-notification',
+        payload: JSON.parse(event.body || '{}'),
+        errore: String(error?.message || error),
+        gruppoId: gruppo.gruppoId, automatica: false,
+      });
+    } catch (scErr) {
+      console.warn('[send-whatsapp] System Control non raggiungibile:', scErr);
+    }
+
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'Error sending WhatsApp notification', error: error.message }),

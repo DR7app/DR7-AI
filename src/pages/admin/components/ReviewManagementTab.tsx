@@ -20,6 +20,9 @@ interface ReviewCandidate {
   contact_available_email: boolean
   contact_available_whatsapp: boolean
   is_internal_record: boolean
+  // Persona della prenotazione a cui va la richiesta. Assente sulle righe
+  // create prima della migrazione 20260831 = intestatario.
+  recipient_role?: string | null
   created_at: string
   updated_at: string
 }
@@ -71,6 +74,20 @@ const TEMPLATE_LABELS: Record<string, string> = {
 }
 const PLACEHOLDERS = ['{{customer_name}}', '{{review_link}}']
 
+// Su una prenotazione ci sono piu' persone che hanno vissuto il servizio e
+// firmato il contratto: ognuna ha la sua riga e puo' ricevere la richiesta.
+// Stessi ruoli dei firmatari in ContrattoTab.
+const RECIPIENT_ROLE_LABELS: Record<string, string> = {
+  CLIENTE: 'Cliente',
+  SECONDO_GUIDATORE: '2° Guidatore',
+  GARANTE: 'Garante',
+  FIDEIUSSORE_1: 'Fideiussore 1',
+  FIDEIUSSORE_2: 'Fideiussore 2',
+  FIDEIUSSORE_3: 'Fideiussore 3',
+}
+const roleLabel = (c: ReviewCandidate): string =>
+  RECIPIENT_ROLE_LABELS[c.recipient_role || 'CLIENTE'] || (c.recipient_role || 'Cliente')
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ReviewManagementTab() {
@@ -100,6 +117,7 @@ export default function ReviewManagementTab() {
   const [settingsDraft, setSettingsDraft] = useState<ReviewSettings>(DEFAULT_SETTINGS)
   const [templatesDraft, setTemplatesDraft] = useState<ReviewTemplate[]>([])
   const [sendingId, setSendingId] = useState<string | null>(null)
+  const [copyingId, setCopyingId] = useState<string | null>(null)
   const [generatingCodeId, setGeneratingCodeId] = useState<string | null>(null)
   const [bulkSending, setBulkSending] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
@@ -149,58 +167,109 @@ export default function ReviewManagementTab() {
 
       if (!eligible || eligible.length === 0) return
 
-      for (const candidate of eligible) {
-        if (candidate.exclusion_reason_code === 'ALREADY_REVIEWED') continue
-        const { data: booking } = await supabase
+      // 01/09/2026 - TRE LETTURE IN BLOCCO, non tre per candidato.
+      //
+      // Prima questo sweep girava un candidato alla volta e per ognuno faceva
+      // in fila prenotazione + fatture + cauzioni, poi una UPDATE. Misurato:
+      // 624 richieste e 34,5 secondi per aprire la tab Recensioni, ogni volta.
+      //
+      // Ora si chiedono le stesse righe per TUTTI i candidati insieme e il
+      // confronto avviene in memoria. Stessi candidati, stessi motivi di
+      // esclusione, stesse scritture: cambia solo il numero di viaggi.
+      const daValutare = eligible.filter(c => c.exclusion_reason_code !== 'ALREADY_REVIEWED')
+      if (daValutare.length === 0) return
+
+      const recordIds = [...new Set(daValutare.map(c => c.source_record_id).filter(Boolean))] as string[]
+      // `.in()` con troppi id fa una URL troppo lunga: si chiede a blocchi,
+      // ma i blocchi partono tutti insieme.
+      const aBlocchi = <T,>(arr: T[], n: number): T[][] => {
+        const out: T[][] = []
+        for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
+        return out
+      }
+      const blocchi = aBlocchi(recordIds, 200)
+
+      const rentalIds = [...new Set(
+        daValutare.filter(c => c.service_type === 'RENTAL').map(c => c.source_record_id).filter(Boolean),
+      )] as string[]
+
+      const [bookingRows, fattureRows, cauzioniRows] = await Promise.all([
+        Promise.all(blocchi.map(ids => supabase
           .from('bookings')
-          .select('booking_details')
-          .eq('id', candidate.source_record_id)
-          .single()
-
-        const details = booking?.booking_details || {}
-        const hasPenalty = Array.isArray(details.penalties) && details.penalties.length > 0
-        const hasDamage = Array.isArray(details.danni) && details.danni.length > 0
-
-        const { data: penaltyInvoices } = await supabase
+          .select('id, booking_details')
+          .in('id', ids)
+          .then(r => r.data || []))).then(r => r.flat()),
+        Promise.all(blocchi.map(ids => supabase
           .from('fatture')
-          .select('id')
-          .eq('booking_id', candidate.source_record_id)
+          .select('booking_id')
+          .in('booking_id', ids)
           .in('tipo_fattura', ['penale', 'danno'])
-          .limit(1)
-        const hasInvoice = !!(penaltyInvoices && penaltyInvoices.length > 0)
+          .then(r => r.data || []))).then(r => r.flat()),
+        Promise.all(aBlocchi(rentalIds, 200).map(ids => supabase
+          .from('cauzioni')
+          .select('riferimento_contratto_id, stato')
+          .in('riferimento_contratto_id', ids)
+          .then(r => r.data || []))).then(r => r.flat()),
+      ])
 
-        let hasOpenDeposit = false
-        if (candidate.service_type === 'RENTAL') {
-          const { data: openCauzioni } = await supabase
-            .from('cauzioni')
-            .select('id, stato')
-            .eq('riferimento_contratto_id', candidate.source_record_id)
-          hasOpenDeposit = (openCauzioni || []).some((c: { stato?: string }) => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
-        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dettagliPerBooking = new Map<string, any>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const b of bookingRows as any[]) dettagliPerBooking.set(b.id, b.booking_details || {})
 
-        if (hasPenalty || hasDamage || hasInvoice || hasOpenDeposit) {
-          const reason = hasPenalty ? 'Presenza di penale registrata'
-            : hasDamage ? 'Danno registrato sul veicolo'
-            : hasInvoice ? 'Fattura penale/danno presente'
-            : 'Cauzione ancora aperta o in attesa'
-          const code = hasPenalty ? 'HAS_PENALTY'
-            : hasDamage ? 'HAS_DAMAGE'
-            : hasInvoice ? 'HAS_PENALTY'
-            : 'OPEN_DEPOSIT'
+      const conFattura = new Set<string>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const f of fattureRows as any[]) if (f.booking_id) conFattura.add(f.booking_id)
 
-          await supabase
-            .from('review_candidates')
-            .update({
-              eligibility_status: 'TO_REVIEW',
-              review_risk: 'RED',
-              send_status: 'BLOCKED',
-              exclusion_reason_code: code,
-              exclusion_reason_text: reason,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', candidate.id)
+      const conCauzioneAperta = new Set<string>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const c of cauzioniRows as any[]) {
+        if (c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.riferimento_contratto_id) {
+          conCauzioneAperta.add(c.riferimento_contratto_id)
         }
       }
+
+      // Le scritture si raggruppano per motivo: al massimo quattro UPDATE
+      // invece di una per candidato escluso.
+      const daEscludere = new Map<string, { reason: string; ids: string[] }>()
+      for (const candidate of daValutare) {
+        const details = dettagliPerBooking.get(candidate.source_record_id) || {}
+        const hasPenalty = Array.isArray(details.penalties) && details.penalties.length > 0
+        const hasDamage = Array.isArray(details.danni) && details.danni.length > 0
+        const hasInvoice = conFattura.has(candidate.source_record_id)
+        const hasOpenDeposit = candidate.service_type === 'RENTAL'
+          && conCauzioneAperta.has(candidate.source_record_id)
+
+        if (!(hasPenalty || hasDamage || hasInvoice || hasOpenDeposit)) continue
+
+        const reason = hasPenalty ? 'Presenza di penale registrata'
+          : hasDamage ? 'Danno registrato sul veicolo'
+          : hasInvoice ? 'Fattura penale/danno presente'
+          : 'Cauzione ancora aperta o in attesa'
+        const code = hasPenalty ? 'HAS_PENALTY'
+          : hasDamage ? 'HAS_DAMAGE'
+          : hasInvoice ? 'HAS_PENALTY'
+          : 'OPEN_DEPOSIT'
+
+        // Codice e motivo vanno insieme: 'HAS_PENALTY' vale sia per la penale
+        // registrata sia per la fattura, con due testi diversi.
+        const chiave = `${code}|${reason}`
+        const gruppo = daEscludere.get(chiave) || { reason, ids: [] }
+        gruppo.ids.push(candidate.id)
+        daEscludere.set(chiave, gruppo)
+      }
+
+      await Promise.all([...daEscludere.entries()].map(([chiave, gruppo]) => supabase
+        .from('review_candidates')
+        .update({
+          eligibility_status: 'TO_REVIEW',
+          review_risk: 'RED',
+          send_status: 'BLOCKED',
+          exclusion_reason_code: chiave.split('|')[0],
+          exclusion_reason_text: gruppo.reason,
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', gruppo.ids)))
     } catch (err) {
       console.error('autoFixEligibility error:', err)
     }
@@ -371,6 +440,32 @@ export default function ReviewManagementTab() {
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
+
+  // Copia negli appunti il messaggio ESATTO che partirebbe a questa persona
+  // (stesso template di Messaggi di Sistema Pro, stesso link recensione).
+  // Serve quando l'operatore vuole mandarlo a mano — tipico per il garante o
+  // il 2° guidatore che scrivono da un altro numero.
+  async function handleCopiaMessaggio(candidate: ReviewCandidate) {
+    setCopyingId(candidate.id)
+    try {
+      const res = await fetch(`${NETLIFY_BASE}/review-send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId: candidate.id, previewOnly: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.preview) {
+        throw new Error(data?.error || 'Messaggio non disponibile')
+      }
+      await navigator.clipboard.writeText(data.preview)
+      toast.success(`Messaggio copiato (${roleLabel(candidate)})`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore copia messaggio'
+      toast.error(msg)
+    } finally {
+      setCopyingId(null)
+    }
+  }
 
   async function handleSend(candidateId: string, _channel?: 'EMAIL' | 'WHATSAPP' | 'BOTH') {
     // 2026-05-28: review flow e' WhatsApp-only. Il parametro `_channel`
@@ -1305,6 +1400,16 @@ export default function ReviewManagementTab() {
                       Invia
                     </button>
                   )}
+                  <button
+                    onClick={() => handleCopiaMessaggio(candidate)}
+                    disabled={copyingId === candidate.id}
+                    title="Copia il messaggio negli appunti (non invia nulla)"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
                   {(candidate.customer_email || candidate.customer_phone) && (
                     <button
                       onClick={() => handleGenerateAndSendCode(candidate)}
@@ -1356,6 +1461,16 @@ export default function ReviewManagementTab() {
                     Approva
                   </button>
                   <button
+                    onClick={() => handleCopiaMessaggio(candidate)}
+                    disabled={copyingId === candidate.id}
+                    title="Copia il messaggio negli appunti (non invia nulla)"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                  <button
                     onClick={() => handleExclude(candidate.id)}
                     disabled={sendingId === candidate.id}
                     className="inline-flex items-center px-3 h-8 rounded-full border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-50"
@@ -1394,7 +1509,14 @@ export default function ReviewManagementTab() {
               <td className="px-4 py-3">{renderStatusPill(candidate)}</td>
               <td className="px-4 py-3">
                 <div className="font-medium text-theme-text-primary">{candidate.customer_name || 'N/A'}</div>
-                <div className="text-xs text-theme-text-secondary">#{shortId}</div>
+                <div className="text-xs text-theme-text-secondary flex items-center gap-1.5">
+                  <span>#{shortId}</span>
+                  {(candidate.recipient_role || 'CLIENTE') !== 'CLIENTE' && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-theme-bg-hover text-theme-text-primary border border-theme-border">
+                      {roleLabel(candidate)}
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-4 py-3">{getServiceBadge(candidate.service_type)}</td>
               <td className="px-4 py-3 text-theme-text-secondary">

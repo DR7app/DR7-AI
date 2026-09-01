@@ -2,6 +2,9 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { adjustVehicleReport, adjustWashReport, type OverrideIndex } from '../../src/utils/reportTotals'
 import { requireAuth } from './require-auth'
+// System Control: misura la funzione e registra da solo gli errori 500.
+// Registra SOLO le chiamate lente o fallite, per non pesare sulle altre.
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -60,7 +63,7 @@ async function tutteLeRighe(
   return { data: righe, error: null }
 }
 
-export const handler: Handler = async (event) => {
+const handlerInterno: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
@@ -1519,3 +1522,5 @@ export const handler: Handler = async (event) => {
     }
   }
 }
+
+export const handler = conSystemControl('dashboard-kpi', handlerInterno)

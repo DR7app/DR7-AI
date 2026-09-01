@@ -3,8 +3,11 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
 import { rispostaJson } from './utils/rispostaCompressa'
+// System Control: misura la funzione e registra da solo gli errori 500.
+// Registra SOLO le chiamate lente o fallite, per non pesare sulle altre.
+import { conSystemControl } from './utils/systemControl'
 
-export const handler: Handler = async (event) => {
+const handlerInterno: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -134,3 +137,5 @@ export const handler: Handler = async (event) => {
         };
     }
 };
+
+export const handler = conSystemControl('list-bookings', handlerInterno)

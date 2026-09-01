@@ -89,7 +89,33 @@ interface CustomerResult {
     nome: string
     cognome: string
     telefono: string
+    email: string
     full_name: string
+}
+
+/**
+ * 29/08/2026: l'invio manuale sostituiva SOLO {nome}. Chi sceglieva
+ * {customer_name} dalla legenda delle variabili si ritrovava il token grezzo
+ * dentro il WhatsApp del cliente. Qui si sostituisce tutto il gruppo
+ * "Cliente" della legenda, alias compresi ({cliente}, {name}).
+ * Un token senza valore (email mancante) resta vuoto, mai "{customer_email}".
+ */
+function sostituisciVariabiliCliente(text: string, c: CustomerResult): string {
+    const nomeCompleto = c.full_name || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente'
+    const primoNome = c.nome || nomeCompleto.split(' ')[0] || ''
+    const valori: Record<string, string> = {
+        nome: primoNome,
+        cognome: c.cognome || '',
+        customer_name: nomeCompleto,
+        cliente: nomeCompleto,
+        name: nomeCompleto,
+        customer_email: c.email || '',
+        email: c.email || '',
+        customer_phone: c.telefono || '',
+        telefono: c.telefono || '',
+    }
+    return text.replace(/\{(\w+)\}/g, (intero, chiave: string) =>
+        valori[chiave] !== undefined ? valori[chiave] : intero)
 }
 
 interface SentMessageLog {
@@ -3789,14 +3815,14 @@ export default function MessaggiSistemaProTab() {
             const q = query.toLowerCase()
             const { data: byName } = await supabase
                 .from('customers_extended')
-                .select('id, nome, cognome, telefono')
+                .select('id, nome, cognome, telefono, email')
                 .or(`nome.ilike.%${q}%,cognome.ilike.%${q}%`)
                 .limit(20)
 
             const cleanQ = query.replace(/[\s\-+()]/g, '')
             const { data: byPhone } = await supabase
                 .from('customers_extended')
-                .select('id, nome, cognome, telefono')
+                .select('id, nome, cognome, telefono, email')
                 .ilike('telefono', `%${cleanQ}%`)
                 .limit(10)
 
@@ -3810,6 +3836,7 @@ export default function MessaggiSistemaProTab() {
                             nome: c.nome || '',
                             cognome: c.cognome || '',
                             telefono: c.telefono,
+                            email: c.email || '',
                             full_name: `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente',
                         })
                     }
@@ -3847,10 +3874,9 @@ export default function MessaggiSistemaProTab() {
     function getPreviewText(): string {
         const text = getMessageText()
         if (!text) return ''
-        const firstName = selectedCustomers.length > 0
-            ? (selectedCustomers[0].nome || selectedCustomers[0].full_name.split(' ')[0])
-            : '{nome}'
-        return text.replace(/\{nome\}/g, firstName)
+        // Senza cliente selezionato i token restano visibili come sono scritti.
+        if (selectedCustomers.length === 0) return text
+        return sostituisciVariabiliCliente(text, selectedCustomers[0])
     }
 
     function cleanPhone(phone: string): string {
@@ -3887,11 +3913,11 @@ export default function MessaggiSistemaProTab() {
         setSendProgress({ current: 0, total: customersWithPhone.length })
         let successCount = 0
         let failCount = 0
+        let motivoScarto = ''
 
         for (let i = 0; i < customersWithPhone.length; i++) {
             const customer = customersWithPhone[i]
-            const firstName = customer.nome || customer.full_name.split(' ')[0]
-            const personalizedMessage = messageText.replace(/\{nome\}/g, firstName)
+            const personalizedMessage = sostituisciVariabiliCliente(messageText, customer)
             const phone = cleanPhone(customer.telefono)
 
             setSendProgress({ current: i + 1, total: customersWithPhone.length })
@@ -3909,7 +3935,19 @@ export default function MessaggiSistemaProTab() {
                 })
 
                 const result = await response.json()
-                if (response.ok && result.success) {
+                // 29/08/2026: il server risponde 200 + success:true anche quando
+                // NON invia (skipped: template disabilitato, servizio non
+                // combaciante, oppure un {token} rimasto nel testo). Contarlo
+                // come riuscito riempiva lo storico di invii mai partiti.
+                if (response.ok && result.skipped) {
+                    failCount++
+                    if (!motivoScarto) {
+                        motivoScarto = result.reason === 'body_collapsed_or_unresolved'
+                            ? 'il testo contiene una variabile non riconosciuta (es. {qualcosa})'
+                            : result.message || result.reason || 'invio scartato dal server'
+                    }
+                    console.error(`Send skipped for ${customer.full_name}:`, result)
+                } else if (response.ok && result.success) {
                     successCount++
                     const templateLabel = sendMode === 'template'
                         ? templates.find(t => t.id === selectedTemplateId)?.label || null
@@ -3943,7 +3981,9 @@ export default function MessaggiSistemaProTab() {
             toast.success(`Inviato a ${successCount} cliente/i`)
         }
         if (failCount > 0) {
-            toast.error(`${failCount} invio/i fallito/i`)
+            toast.error(motivoScarto
+                ? `${failCount} invio/i non partito/i: ${motivoScarto}`
+                : `${failCount} invio/i fallito/i`)
         }
 
         if (successCount > 0) {

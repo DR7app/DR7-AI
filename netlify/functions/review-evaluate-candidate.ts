@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { buildReviewRecipients, type ReviewRecipient } from './utils/reviewRecipients';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -64,15 +65,30 @@ async function loadSourceRecord(sourceRecordId: string, serviceType: ServiceType
   return data;
 }
 
-async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) {
+// Righe gia' presenti per questa prenotazione: dal 2026-08-31 ce n'e' una per
+// PERSONA (cliente, 2° guidatore, garante, fideiussori), non piu' una sola.
+// La lettura NON filtra su recipient_role: se la migrazione
+// 20260831_review_destinatari_multipli non e' ancora stata applicata la colonna
+// non esiste e un .eq() su colonna mancante farebbe fallire OGNI valutazione.
+async function loadExistingCandidates(sourceRecordId: string, serviceType: ServiceType) {
   const { data, error } = await supabase
     .from('review_candidates')
     .select('*')
     .eq('source_record_id', sourceRecordId)
-    .eq('service_type', serviceType)
-    .maybeSingle();
+    .eq('service_type', serviceType);
   if (error) throw new Error(`Duplicate check failed: ${error.message}`);
-  return data;
+  return data || [];
+}
+
+// Le righe scritte prima della migrazione non hanno il ruolo: sono l'intestatario.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const roleOf = (row: any): string => (row?.recipient_role || 'CLIENTE');
+
+/** true se l'errore e' "la colonna recipient_role non esiste" (migrazione non applicata). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isMissingRoleColumn(error: any): boolean {
+  const msg = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return msg.includes('recipient_role');
 }
 
 // 2026-06-20: rimossa checkCustomerAlreadyExists (deduplica per cliente a vita).
@@ -81,7 +97,8 @@ async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) 
 
 function checkInternalOrBasicExclusions(
   record: any,
-  serviceType: ServiceType
+  serviceType: ServiceType,
+  recipient: ReviewRecipient
 ): { excluded: boolean; reasons: Array<{ code: ExclusionReasonCode; text: string }>; is_internal: boolean } {
   const reasons: Array<{ code: ExclusionReasonCode; text: string }> = [];
   let is_internal = false;
@@ -108,15 +125,15 @@ function checkInternalOrBasicExclusions(
     }
   }
 
-  // Missing name
-  if (!record.customer_name || record.customer_name.trim() === '') {
+  // Missing name — del DESTINATARIO, non della prenotazione
+  if (!recipient.name || recipient.name.trim() === '') {
     reasons.push({ code: 'MISSING_NAME', text: EXCLUSION_REASONS.MISSING_NAME });
     return { excluded: true, reasons, is_internal };
   }
 
   // No contact info
-  const hasEmail = record.customer_email && record.customer_email.trim() !== '';
-  const hasPhone = record.customer_phone && record.customer_phone.trim() !== '';
+  const hasEmail = !!(recipient.email && recipient.email.trim() !== '');
+  const hasPhone = !!(recipient.phone && recipient.phone.trim() !== '');
   if (!hasEmail && !hasPhone) {
     reasons.push({ code: 'NO_CONTACT', text: EXCLUSION_REASONS.NO_CONTACT });
     return { excluded: true, reasons, is_internal };
@@ -249,19 +266,19 @@ async function evaluateEligibility(
 async function insertCandidate(
   sourceRecordId: string,
   serviceType: ServiceType,
-  record: any,
+  recipient: ReviewRecipient,
   evaluation: EvaluationResult
 ) {
   const firstReason = evaluation.exclusion_reasons?.[0];
-  const hasEmail = !!(record.customer_email && record.customer_email.trim());
-  const hasPhone = !!(record.customer_phone && record.customer_phone.trim());
+  const hasEmail = !!(recipient.email && recipient.email.trim());
+  const hasPhone = !!(recipient.phone && recipient.phone.trim());
 
-  const candidateData = {
+  const candidateData: Record<string, unknown> = {
     source_record_id: sourceRecordId,
     service_type: serviceType,
-    customer_name: record.customer_name || 'N/A',
-    customer_email: record.customer_email || null,
-    customer_phone: record.customer_phone || null,
+    customer_name: recipient.name || 'N/A',
+    customer_email: recipient.email || null,
+    customer_phone: recipient.phone || null,
     eligibility_status: evaluation.eligibility_status,
     review_risk: evaluation.review_risk,
     send_status: evaluation.send_status,
@@ -271,6 +288,7 @@ async function insertCandidate(
     contact_available_whatsapp: hasPhone,
     is_internal_record: evaluation.is_internal_record,
     auto_created: true,
+    recipient_role: recipient.role,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -281,8 +299,34 @@ async function insertCandidate(
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to insert candidate: ${error.message}`);
-  return data;
+  if (!error) return data;
+
+  // Migrazione 20260831 non ancora applicata: la colonna recipient_role non
+  // esiste. Il CLIENTE viene comunque salvato (comportamento storico), le
+  // persone aggiuntive sono saltate dal chiamante — senza la colonna finirebbero
+  // sullo stesso vincolo UNIQUE (source_record_id, service_type).
+  if (isMissingRoleColumn(error)) {
+    if (recipient.role !== 'CLIENTE') {
+      throw new MissingRoleColumnError();
+    }
+    delete candidateData.recipient_role;
+    const retry = await supabase
+      .from('review_candidates')
+      .insert(candidateData)
+      .select()
+      .single();
+    if (retry.error) throw new Error(`Failed to insert candidate: ${retry.error.message}`);
+    return retry.data;
+  }
+
+  throw new Error(`Failed to insert candidate: ${error.message}`);
+}
+
+class MissingRoleColumnError extends Error {
+  constructor() {
+    super('Colonna recipient_role assente: eseguire la migrazione 20260831_review_destinatari_multipli');
+    this.name = 'MissingRoleColumnError';
+  }
 }
 
 async function insertAuditLog(
@@ -347,66 +391,96 @@ const handler: Handler = async (event) => {
       };
     }
 
-    // 1. Check for duplicate
-    const existing = await checkDuplicate(sourceRecordId, serviceType);
-    if (existing && !forceReEvaluate) {
-      return {
-        statusCode: 200,
-        headers: getHeaders(event.headers.origin),
-        body: JSON.stringify({ candidate: existing, duplicate: true }),
-      };
-    }
-    // If forceReEvaluate and existing, delete old record first
-    if (existing && forceReEvaluate) {
-      await supabase.from('review_candidates').delete().eq('id', existing.id);
-    }
+    // 1. Righe gia' esistenti per questa prenotazione (una per persona)
+    const existingRows = await loadExistingCandidates(sourceRecordId, serviceType);
 
     // 2. Load source record
     const record = await loadSourceRecord(sourceRecordId, serviceType);
 
     // 2b. RIMOSSO il blocco "una candidatura per cliente a vita". Regola scelta
     // dalla direzione (2026-06-20): UNA richiesta recensione PER OGNI lavaggio/
-    // noleggio (per visita). La deduplica resta PER PRENOTAZIONE (checkDuplicate
-    // su sourceRecordId, sopra): stessa prenotazione = stessa candidatura, ma un
-    // cliente che torna per un nuovo servizio genera una NUOVA candidatura ed e'
-    // di nuovo idoneo a ricevere la richiesta. Prima un cliente che combaciava
-    // per telefono/email con una vecchia candidatura veniva scartato come "gia'
-    // candidato/gia' recensito" e non riceveva piu' nulla.
+    // noleggio (per visita). La deduplica resta PER PRENOTAZIONE + PERSONA:
+    // stessa prenotazione e stesso ruolo = stessa candidatura, ma un cliente che
+    // torna per un nuovo servizio genera una NUOVA candidatura ed e' di nuovo
+    // idoneo a ricevere la richiesta.
 
-    // 3. Check internal / basic exclusions
-    const basicCheck = checkInternalOrBasicExclusions(record, serviceType);
-    if (basicCheck.excluded) {
-      const excludedEvaluation: EvaluationResult = {
-        eligibility_status: 'EXCLUDED',
-        review_risk: 'RED',
-        send_status: 'EXCLUDED',
-        exclusion_reasons: basicCheck.reasons,
-        is_internal_record: basicCheck.is_internal,
-      };
+    // 2c. Destinatari: intestatario + 2° guidatore + garante + fideiussori.
+    // Sono le stesse persone che firmano il contratto: chi ha vissuto il
+    // servizio deve poter ricevere la richiesta di recensione.
+    const recipients = buildReviewRecipients(record);
 
-      const candidate = await insertCandidate(sourceRecordId, serviceType, record, excludedEvaluation);
-      await insertAuditLog(candidate.id, sourceRecordId, serviceType, excludedEvaluation);
+    // 3. Valutazione a livello di PRENOTAZIONE (penali, danni, cauzione,
+    //    pagamento, contratto): identica per tutte le persone, si calcola una
+    //    volta sola. Le esclusioni per nome/contatto mancante restano per persona.
+    let bookingEvaluationCache: EvaluationResult | null = null;
+    const bookingEvaluation = async (): Promise<EvaluationResult> => {
+      if (!bookingEvaluationCache) {
+        bookingEvaluationCache = await evaluateEligibility(record, sourceRecordId, serviceType);
+      }
+      return bookingEvaluationCache;
+    };
 
-      return {
-        statusCode: 200,
-        headers: getHeaders(event.headers.origin),
-        body: JSON.stringify({ candidate, duplicate: false }),
-      };
+    const created: any[] = [];
+    const skipped: Array<{ role: string; reason: string }> = [];
+    let migrationMissing = false;
+
+    for (const recipient of recipients) {
+      const existing = existingRows.find((r) => roleOf(r) === recipient.role);
+      if (existing && !forceReEvaluate) {
+        created.push(existing);
+        skipped.push({ role: recipient.role, reason: 'duplicate' });
+        continue;
+      }
+      if (existing && forceReEvaluate) {
+        await supabase.from('review_candidates').delete().eq('id', existing.id);
+      }
+
+      const basicCheck = checkInternalOrBasicExclusions(record, serviceType, recipient);
+      const evaluation: EvaluationResult = basicCheck.excluded
+        ? {
+            eligibility_status: 'EXCLUDED',
+            review_risk: 'RED',
+            send_status: 'EXCLUDED',
+            exclusion_reasons: basicCheck.reasons,
+            is_internal_record: basicCheck.is_internal,
+          }
+        : await bookingEvaluation();
+
+      try {
+        const candidate = await insertCandidate(sourceRecordId, serviceType, recipient, evaluation);
+        await insertAuditLog(candidate.id, sourceRecordId, serviceType, evaluation);
+        created.push(candidate);
+      } catch (err: any) {
+        if (err instanceof MissingRoleColumnError) {
+          // Senza la colonna si salva solo l'intestatario, come prima.
+          migrationMissing = true;
+          skipped.push({ role: recipient.role, reason: 'migration_missing' });
+          continue;
+        }
+        throw err;
+      }
     }
 
-    // 4. Full eligibility evaluation
-    const evaluation = await evaluateEligibility(record, sourceRecordId, serviceType);
+    if (migrationMissing) {
+      console.warn(
+        '[review-evaluate-candidate] recipient_role assente: eseguire la migrazione ' +
+          '20260831_review_destinatari_multipli. Salvato solo l\'intestatario.'
+      );
+    }
 
-    // 5. Insert candidate
-    const candidate = await insertCandidate(sourceRecordId, serviceType, record, evaluation);
-
-    // 6. Insert audit log
-    await insertAuditLog(candidate.id, sourceRecordId, serviceType, evaluation);
+    // `candidate` (singolare) resta l'intestatario per compatibilita' con i
+    // chiamanti esistenti; `candidates` contiene tutte le persone.
+    const principale = created.find((c) => roleOf(c) === 'CLIENTE') || created[0] || null;
 
     return {
       statusCode: 200,
       headers: getHeaders(event.headers.origin),
-      body: JSON.stringify({ candidate, duplicate: false }),
+      body: JSON.stringify({
+        candidate: principale,
+        candidates: created,
+        duplicate: created.length > 0 && skipped.filter((s) => s.reason === 'duplicate').length === created.length,
+        migration_missing: migrationMissing || undefined,
+      }),
     };
   } catch (error: any) {
     console.error('review-evaluate-candidate error:', error);

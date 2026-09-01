@@ -106,8 +106,12 @@ export default function CodiciScontoTab() {
     }
 
     /** Testo dell'invio: template Pro coi token sostituiti, o quello storico. */
-    function componiMessaggioCodice(code: DiscountCode, nome: string): string {
-        return componiMessaggioCodiceSconto(templateBody, code, nome)
+    function componiMessaggioCodice(
+        code: DiscountCode,
+        nome: string,
+        cliente: { nomeCompleto?: string | null; email?: string | null; telefono?: string | null } = {},
+    ): string {
+        return componiMessaggioCodiceSconto(templateBody, code, nome, cliente)
     }
 
     async function loadDiscountCodes() {
@@ -306,7 +310,14 @@ export default function CodiciScontoTab() {
         // solo se l'admin non ha gia' modificato il testo a mano.
         if (sendModalCode && sendMessage === ultimoGenerato) {
             const primoNome = (c.nome || c.denominazione || '').trim().split(/\s+/)[0] || ''
-            const testo = componiMessaggioCodice(sendModalCode, primoNome)
+            // Il template puo' usare {nome} oppure {customer_name}/{cliente}:
+            // si passano tutti, altrimenti il token resta grezzo e il server
+            // scarta il messaggio senza inviarlo.
+            const testo = componiMessaggioCodice(sendModalCode, primoNome, {
+                nomeCompleto: name,
+                email: c.email,
+                telefono: c.telefono,
+            })
             setSendMessage(testo)
             setUltimoGenerato(testo)
         }
@@ -347,6 +358,21 @@ export default function CodiciScontoTab() {
             const data = await res.json().catch(() => ({}))
             if (!res.ok) {
                 throw new Error(data.message || `HTTP ${res.status}`)
+            }
+            // 29/08/2026: send-whatsapp-notification risponde 200 anche quando
+            // NON invia (skipped) — es. il testo contiene ancora un {token} non
+            // risolto. Prima si mostrava "inviato" e il cliente non riceveva
+            // niente: ora si dice la verita' e il modal resta aperto.
+            if (data.skipped) {
+                const motivo = data.reason === 'body_collapsed_or_unresolved'
+                    ? 'il testo contiene una variabile non riconosciuta (es. {qualcosa}): correggila e riprova'
+                    : data.message || data.reason || 'invio scartato dal server'
+                toast.error(`Non inviato: ${motivo}`)
+                return
+            }
+            if (data.deduped) {
+                toast.error('Messaggio identico appena inviato allo stesso numero: attendi qualche secondo e riprova')
+                return
             }
             toast.success(`Codice ${sendModalCode.code} inviato a ${clean}`)
             setSendModalCode(null)

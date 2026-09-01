@@ -3,6 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { indirizzoUtilizzabile, cercaIndirizzoAltrove, riparaIndirizzo } from './utils/indirizzoCliente'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
+// System Control: la fattura non trasmessa diventa un'operazione visibile e
+// ripetibile dal pannello. VOLUTAMENTE `automatica: false` — un ritentativo
+// automatico rinumererebbe la fattura e potrebbe mandarne una seconda allo
+// SDI. La ripresa la decide una persona.
+import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -329,6 +334,24 @@ export const handler: Handler = async (event) => {
         } catch (apiError: any) {
             console.error('[Aruba] API Error:', apiError)
 
+            // ── System Control ────────────────────────────────────────────
+            await segnaChiamata('aruba_sdi', false, { errore: String(apiError?.message || apiError) })
+            const gruppo = await registraEvento({
+                messaggio: `Fattura ${invoice.numero_fattura} non trasmessa allo SDI: ${apiError?.message || apiError}`,
+                categoria: 'fatturazione', modulo: 'Fatture', funzione: 'send-invoice-to-sdi',
+                integrazione: 'aruba_sdi', severita: 'alto',
+                contesto: { invoiceId, numero: invoice.numero_fattura },
+            })
+            await accodaOperazione({
+                tipo: 'fattura_sdi',
+                chiaveIdempotenza: `sdi:${invoiceId}`,
+                descrizione: `Fattura ${invoice.numero_fattura} da trasmettere allo SDI`,
+                integrazione: 'aruba_sdi', entitaTipo: 'fattura', entitaId: String(invoiceId),
+                endpoint: 'send-invoice-to-sdi', payload: { invoiceId },
+                errore: String(apiError?.message || apiError),
+                gruppoId: gruppo.gruppoId, automatica: false,
+            })
+
             // Log error to new status table
             await supabase.from('invoice_status_logs').insert({
                 invoice_id: invoiceId,
@@ -350,6 +373,8 @@ export const handler: Handler = async (event) => {
         }
 
         // 3. Success - Update Database
+        await segnaChiamata('aruba_sdi', true)
+        await chiudiOperazione(`sdi:${invoiceId}`)
         await supabase
             .from('fatture')
             .update({

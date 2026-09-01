@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { authFetch } from '../utils/authFetch'
 import { supabase } from '../supabaseClient'
+import { fetchAllRows } from '../utils/fetchAllRows'
 import {
   clientStatusColor,
   loadClientStatusConfig,
@@ -128,41 +129,47 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const PAGE = 1000
+      // 01/09/2026 - questa lettura sta sul percorso critico di OGNI pagina
+      // admin: il provider avvolge tutta la dashboard, quindi finche' non
+      // finisce non si vede niente.
+      //
+      // Prima: `select('*')` su customers_extended, una pagina dopo l'altra
+      // IN SERIE. Al provider servono sei campi, ma scaricava la riga intera
+      // - decine di colonne per decine di migliaia di clienti - e il tempo
+      // totale era la SOMMA di tutte le pagine.
+      //
+      // Ora: le sei colonne che servono davvero, e le pagine partono insieme
+      // (fetchAllRows). Stessi clienti, stessi status, stessi badge: cambia
+      // solo quanto pesa la risposta e quanto si aspetta.
+      //
+      // La lista DR7 Club parte INSIEME ai clienti invece che dopo: sono due
+      // letture indipendenti, non c'e' motivo di sommarle.
+      const customersPromise = fetchAllRows<RawCustomer>((from, to) => supabase
+        .from('customers_extended')
+        .select('id, user_id, email, telefono, status, status_cliente')
+        .range(from, to))
 
-      const customers: RawCustomer[] = []
-      let from = 0
-      for (let i = 0; i < 50; i++) {
-        const { data, error } = await supabase
-          .from('customers_extended')
-          .select('*')
-          .range(from, from + PAGE - 1)
-        if (error) {
-          console.warn('[ClientStatusContext] customers_extended fetch error:', error)
-          break
-        }
-        if (!data || data.length === 0) break
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const row of data as any[]) {
-          customers.push({
-            id: row.id,
-            user_id: row.user_id ?? null,
-            email: row.email ?? null,
-            telefono: row.telefono ?? null,
-            status: (row.status ?? null) as RawStatus,
-            status_cliente: (row.status_cliente ?? null) as RawStatus,
-          })
-        }
-        if (data.length < PAGE) break
-        from += PAGE
+      const clubPromise = authFetch('/.netlify/functions/list-club-members').catch(() => null)
+
+      const { data: customersRaw, error: customersError } = await customersPromise
+      if (customersError) {
+        console.warn('[ClientStatusContext] customers_extended fetch error:', customersError)
       }
+      const customers: RawCustomer[] = customersRaw.map(row => ({
+        id: row.id,
+        user_id: row.user_id ?? null,
+        email: row.email ?? null,
+        telefono: row.telefono ?? null,
+        status: (row.status ?? null) as RawStatus,
+        status_cliente: (row.status_cliente ?? null) as RawStatus,
+      }))
       console.info('[ClientStatusContext] loaded customers:', customers.length)
 
       const dr7UserIds = new Set<string>()
       const dr7Emails = new Set<string>()
       try {
-        const res = await authFetch('/.netlify/functions/list-club-members')
-        if (res.ok) {
+        const res = await clubPromise
+        if (res && res.ok) {
           const data = await res.json()
           for (const m of (data.members || [])) {
             if (m.user_id) dr7UserIds.add(m.user_id)

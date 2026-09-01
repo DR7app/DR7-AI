@@ -1,5 +1,8 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+// System Control: misura la funzione e registra da solo gli errori 500.
+// Registra SOLO le chiamate lente o fallite, per non pesare sulle altre.
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -170,7 +173,7 @@ function getOccupiedDaysInMonth(
   return days
 }
 
-export const handler: Handler = async (event) => {
+const handlerInterno: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
@@ -1300,8 +1303,12 @@ async function generateWashReport(
   billableWashes.forEach(wash => {
     let serviceName = wash.service_name || 'Altro'
     const details = wash.booking_details || {}
-    if (details.cartItems && Array.isArray(details.cartItems) && details.cartItems.length > 0) {
-      details.cartItems.forEach((item: any) => {
+    // Il sito ha scritto a lungo `cart_items` invece di `cartItems`: senza
+    // la seconda chiave i lavaggi prenotati dal sito finivano tutti sotto un
+    // nome solo, quello di `service_name`.
+    const righeCarrello = details.cartItems ?? details.cart_items
+    if (Array.isArray(righeCarrello) && righeCarrello.length > 0) {
+      righeCarrello.forEach((item: any) => {
         const name = item.serviceName || serviceName
         if (!byType[name]) byType[name] = { count: 0, revenue: 0 }
         byType[name].count += (item.quantity || 1)
@@ -1466,3 +1473,5 @@ async function generateCauzioniReport(
     })
   }
 }
+
+export const handler = conSystemControl('monthly-report', handlerInterno)

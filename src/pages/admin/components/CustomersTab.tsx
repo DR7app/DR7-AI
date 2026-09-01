@@ -1072,6 +1072,10 @@ export default function CustomersTab() {
       toast.error('Inserisci un importo valido')
       return
     }
+    if (!(cliente.phone || '').trim()) {
+      toast.error('Il cliente non ha un numero di telefono')
+      return
+    }
     setCreandoLink(true)
     try {
       const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -1093,7 +1097,10 @@ export default function CustomersTab() {
         return
       }
       setLinkCreato(json.paymentUrl)
-      toast.success('Link di pagamento creato')
+      // Un solo gesto: creato il link parte subito su WhatsApp. Passiamo l'url
+      // appena tornato da Nexi, non lo stato (che a questo punto non e' ancora
+      // aggiornato nel render corrente).
+      await inviaLinkPagamentoWhatsapp(json.paymentUrl)
     } catch (e) {
       toast.error('Creazione link non riuscita')
     } finally {
@@ -1102,9 +1109,9 @@ export default function CustomersTab() {
   }
 
   /** Manda il link al cliente col template Pro "Richiesta Pagamento". */
-  async function inviaLinkPagamentoWhatsapp() {
+  async function inviaLinkPagamentoWhatsapp(url: string) {
     const cliente = linkPagamentoCliente
-    if (!cliente || !linkCreato) return
+    if (!cliente || !url) return
     const telefono = (cliente.phone || '').trim()
     if (!telefono) {
       toast.error('Il cliente non ha un numero di telefono')
@@ -1126,9 +1133,9 @@ export default function CustomersTab() {
             '{nome_cliente}': cliente.full_name || 'Cliente',
             '{cliente}': cliente.full_name || 'Cliente',
             '{customer_name}': cliente.full_name || 'Cliente',
-            '{link}': linkCreato,
-            '{payment_link}': linkCreato,
-            '{link_pagamento}': linkCreato,
+            '{link}': url,
+            '{payment_link}': url,
+            '{link_pagamento}': url,
             '{importo}': importoStr,
             '{amount}': importoStr,
             '{total}': importoStr,
@@ -1151,8 +1158,7 @@ export default function CustomersTab() {
   // Regola del click singolo: ogni azione che manda qualcosa fuori (link,
   // WhatsApp) passa da useSingleFlight. Senza, dieci click impazienti = dieci
   // messaggi al cliente.
-  const [creaLinkPagamento, creandoLinkFlight] = useSingleFlight(creaLinkPagamentoCliente)
-  const [inviaLinkWhatsapp, inviandoLinkWhatsapp] = useSingleFlight(inviaLinkPagamentoWhatsapp)
+  const [creaEInviaLinkPagamento, creandoLinkFlight] = useSingleFlight(creaLinkPagamentoCliente)
 
   async function handleEdit(customer: Customer) {
     logger.log('[handleEdit] Customer object:', customer)
@@ -3235,7 +3241,7 @@ export default function CustomersTab() {
                 {linkPagamentoCliente.full_name}{linkPagamentoCliente.email ? ` - ${linkPagamentoCliente.email}` : ''}
               </p>
               <p className="text-[11px] text-theme-text-muted mt-2">
-                Pagamento non legato a una prenotazione. A pagamento riuscito la carta resta registrata sul cliente per gli addebiti successivi. Link valido 24 ore.
+                Pagamento non legato a una prenotazione. Il link viene creato e inviato subito al cliente su WhatsApp. A pagamento riuscito la carta resta registrata sul cliente per gli addebiti successivi. Link valido 24 ore.
               </p>
             </div>
 
@@ -3271,18 +3277,18 @@ export default function CustomersTab() {
                     Annulla
                   </button>
                   <button
-                    onClick={() => creaLinkPagamento()}
+                    onClick={() => creaEInviaLinkPagamento()}
                     disabled={creandoLink || creandoLinkFlight}
                     className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
                   >
-                    {creandoLink ? 'Creo il link...' : 'Crea link'}
+                    {creandoLink ? 'Invio in corso...' : 'Crea e invia'}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3">
-                  <p className="text-[11px] text-theme-text-muted mb-1">Link</p>
+                  <p className="text-[11px] text-theme-text-muted mb-1">Link inviato su WhatsApp</p>
                   <p className="text-xs text-theme-text-primary break-all">{linkCreato}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap justify-end pt-2">
@@ -3291,13 +3297,6 @@ export default function CustomersTab() {
                     className="px-4 py-2 text-sm rounded-full bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
                   >
                     Copia link
-                  </button>
-                  <button
-                    onClick={() => inviaLinkWhatsapp()}
-                    disabled={inviandoLinkWhatsapp}
-                    className="px-4 py-2 text-sm rounded-full bg-green-700 text-white font-semibold hover:bg-green-600 disabled:opacity-50 transition-colors"
-                  >
-                    {inviandoLinkWhatsapp ? 'Invio...' : 'Invia su WhatsApp'}
                   </button>
                   <button
                     onClick={() => setLinkPagamentoCliente(null)}

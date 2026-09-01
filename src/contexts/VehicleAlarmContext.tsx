@@ -1082,7 +1082,6 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         if (!session) return
         if (alarmsDisabledForUser !== false) return
 
-        let interval: ReturnType<typeof setInterval> | null = null
         let isRunning = false
 
         const runChecks = async () => {
@@ -1103,34 +1102,21 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             }
         }
 
-        const startPolling = () => {
-            runChecks()
-            interval = setInterval(runChecks, 60000)
-        }
-
-        const stopPolling = () => {
-            if (interval) {
-                clearInterval(interval)
-                interval = null
-            }
-        }
-
-        // Pause polling when tab is hidden to save resources
-        const handleVisibilityChange = () => {
-            if (document.hidden) {
-                stopPolling()
-            } else {
-                startPolling()
-            }
-        }
-
-        startPolling()
-        document.addEventListener('visibilitychange', handleVisibilityChange)
-
-        return () => {
-            stopPolling()
-            document.removeEventListener('visibilitychange', handleVisibilityChange)
-        }
+        // 01/09/2026 - UN SOLO GIRO PER APERTURA, mai un polling periodico.
+        // Parole della direzione: "une fois les alarmes c'est amplement
+        // suffisant".
+        //
+        // Prima: `setInterval(runChecks, 60000)`, piu' un riavvio a ogni
+        // ritorno sulla scheda. Misurato con un browser vero su tutte le 87
+        // pagine dell'admin, quel giro era il traffico numero uno del
+        // gestionale: 137 chiamate su 226 di una pagina qualsiasi, rifatte
+        // ogni minuto, per ogni scheda aperta e per ogni operatore collegato.
+        //
+        // Quello che cambia si vede lo stesso: il pannello Allarmi resta
+        // agganciato in tempo reale ad `alarm_events` (postgres_changes).
+        // Resta invece il polling a 30 s di LateReturnAlarm - e' la sirena
+        // dei rientri in ritardo, query stretta su poche righe.
+        runChecks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, alarmsDisabledForUser])
 

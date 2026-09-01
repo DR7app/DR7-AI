@@ -55,19 +55,37 @@ function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
 // PostgREST tronca ogni select a 1000 righe: senza paginazione il report
 // perdeva prenotazioni, fatture e cauzioni oltre la prima pagina, quindi la
 // spesa dei clienti risultava piu' bassa del reale.
+//
+// 29/08/2026 — le pagine venivano chieste UNA ALLA VOLTA: l'anagrafica da
+// 2.100 schede (22.000 sulla demo) voleva un giro di rete ogni mille righe e
+// il report ci metteva decine di secondi. Ora la prima pagina porta anche il
+// totale delle righe e tutte le altre partono insieme: il costo torna a
+// essere quello di un solo giro di rete, non di venti.
 async function fetchAll<T = Record<string, unknown>>(table: string, columns: string, tweak?: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const PAGE = 1000
-  const out: T[] = []
-  for (let i = 0; i < 200; i++) {
-    let q: any = supabase.from(table).select(columns) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const query = (conConteggio: boolean) => {
+    let q: any = conConteggio // eslint-disable-line @typescript-eslint/no-explicit-any
+      ? supabase.from(table).select(columns, { count: 'exact' })
+      : supabase.from(table).select(columns)
     if (tweak) q = tweak(q)
-    const { data, error } = await q.range(i * PAGE, i * PAGE + PAGE - 1)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    out.push(...(data as T[]))
-    if (data.length < PAGE) break
+    return q
   }
-  return out
+
+  const prima = await query(true).range(0, PAGE - 1)
+  if (prima.error) throw prima.error
+  const righe: T[] = [...((prima.data || []) as T[])]
+  const totale = typeof prima.count === 'number' ? prima.count : righe.length
+  if (righe.length < PAGE || totale <= PAGE) return righe
+
+  const altre: Promise<any>[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (let start = PAGE; start < totale; start += PAGE) {
+    altre.push(query(false).range(start, start + PAGE - 1))
+  }
+  for (const res of await Promise.all(altre)) {
+    if (res.error) throw res.error
+    righe.push(...((res.data || []) as T[]))
+  }
+  return righe
 }
 
 // 29/08/2026 — "column customers_extended.status_cliente does not exist": il
@@ -113,27 +131,33 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    // 0) Pull every customer in customers_extended — this is the canonical roster.
-    //    Even customers with zero bookings appear in the report.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allCustomers: any[] = await fetchAll<any>( // eslint-disable-line @typescript-eslint/no-explicit-any
-      'customers_extended',
-      await soloColonneEsistenti(
-        'customers_extended',
-        'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
-      ),
-    )
-
-    // 1) Bookings, vehicles, cauzioni, fatture, dr7 club, wallet — in parallel.
+    // 0) Anagrafica + attivita': tutte le tabelle partono insieme.
+    //    Prima l'anagrafica veniva letta per intera PRIMA di far partire le
+    //    altre sette letture: due attese in fila invece di una sola.
+    //    customers_extended e' la lista canonica — anche chi non ha mai
+    //    prenotato compare nel report.
+    const dodiciMesiFa = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [bookingsAll, vehiclesAll, cauzioniAll, fattureAll, clubAll, walletAll, rechargeAll] = await Promise.all([
+    const [allCustomers, bookingsAll, vehiclesAll, cauzioniAll, fattureAll, clubAll, walletAll, rechargeAll] = await Promise.all([
+      (async () => fetchAll<any>(
+        'customers_extended',
+        await soloColonneEsistenti(
+          'customers_extended',
+          'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
+        ),
+      ))(),
       fetchAll<any>('bookings', 'id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, booked_at, created_at'),
       fetchAll<any>('vehicles', 'id, category'),
       fetchAll<any>('cauzioni', 'cliente_id, importo, stato, riferimento_contratto_id'),
       fetchAll<any>('fatture', 'id, booking_id, importo_totale, items, customer_name, customer_email'),
       fetchAll<any>('dr7_club_subscriptions', 'user_id, plan, status, expires_at', q => q.eq('status', 'active')),
       fetchAll<any>('user_credit_balance', 'user_id, balance'),
-      fetchAll<any>('credit_wallet_purchases', 'user_id, recharge_amount, payment_status, created_at'),
+      // Le ricariche fuori periodo o non riuscite venivano scaricate tutte e
+      // buttate via qui: ora le scarta il database. Il ramo `is.null` tiene
+      // le righe senza data, che il filtro in memoria contava comunque.
+      fetchAll<any>('credit_wallet_purchases', 'user_id, recharge_amount, payment_status, created_at',
+        q => q.in('payment_status', ['succeeded', 'paid', 'completed'])
+              .or(`created_at.gte.${dodiciMesiFa},created_at.is.null`)),
     ])
     /* eslint-enable @typescript-eslint/no-explicit-any */
     const bookingsRes = { data: bookingsAll }

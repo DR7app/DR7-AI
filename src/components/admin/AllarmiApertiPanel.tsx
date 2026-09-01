@@ -96,12 +96,15 @@ export default function AllarmiApertiPanel() {
 
     useEffect(() => {
         ricarica()
-        const t = setInterval(ricarica, 60_000)
+        // 01/09/2026 - niente `setInterval(ricarica, 60_000)`: rifaceva ogni
+        // minuto esattamente le letture che la sottoscrizione qui sotto gia'
+        // porta appena qualcosa cambia. Il pannello resta vivo in tempo reale,
+        // ma smette di ricaricarsi da solo quando non e' successo niente.
         const sub = supabase
             .channel('alarm-events-live')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'alarm_events' }, () => ricarica())
             .subscribe()
-        return () => { clearInterval(t); sub.unsubscribe() }
+        return () => { sub.unsubscribe() }
     }, [ricarica])
 
     useEffect(() => { if (mostraStorico) ricaricaStorico() }, [mostraStorico, ricaricaStorico])

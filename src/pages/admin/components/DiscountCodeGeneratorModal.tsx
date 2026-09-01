@@ -284,17 +284,29 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
         const body = await caricaTemplateCodiceSconto('discount_code_created')
         if (!body) return // nessun template assegnato all'evento: non si invia
 
-        const nome = (selectedCustomerLabel.split('·')[0] || '').trim().split(/\s+/)[0] || ''
+        const nomeCompleto = (selectedCustomerLabel.split('·')[0] || '').trim()
+        const nome = nomeCompleto.split(/\s+/)[0] || ''
         try {
             const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    customMessage: componiMessaggioCodiceSconto(body, codice, nome),
+                    customMessage: componiMessaggioCodiceSconto(body, codice, nome, {
+                        nomeCompleto,
+                        telefono: codice.customer_phone,
+                    }),
                     customPhone: numero,
                 }),
             })
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            // 200 + skipped = il server NON ha inviato (es. {token} rimasto nel
+            // testo): non si puo' dire "inviato" all'admin.
+            const esito = await res.json().catch(() => ({}))
+            if (esito.skipped) {
+                throw new Error(esito.reason === 'body_collapsed_or_unresolved'
+                    ? 'il template contiene una variabile non riconosciuta'
+                    : esito.message || esito.reason || 'invio scartato')
+            }
             toast.success(`Codice inviato a ${numero}`)
         } catch (err) {
             // Il codice e' gia' salvato: l'invio fallito non deve annullarlo.

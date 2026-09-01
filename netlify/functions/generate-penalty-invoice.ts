@@ -330,8 +330,17 @@ export const handler: Handler = async (event) => {
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
             sdi_status: 'draft',
-            note: note || undefined
-            // tipo_fattura: 'penale' // Commented out to prevent errors if column is missing. Use description to identify.
+            note: note || undefined,
+            // 2026-09-01: il tipo torna sulla riga. Restava commentato "per non
+            // rompere se la colonna manca", ma la colonna c'e' da un pezzo
+            // (add_tipo_fattura.sql) e la sua assenza costava due cose:
+            //  1. generate-invoice-from-booking cercava "la fattura di questa
+            //     prenotazione" e ne trovava due (principale + penale): non
+            //     riuscendo a sceglierne una ne creava una terza, ed e' cosi'
+            //     che nascevano le fatture in doppio;
+            //  2. ReviewManagementTab e review-evaluate-candidate filtrano gia'
+            //     per tipo_fattura in ('penale','danno') e non trovavano nulla.
+            tipo_fattura: isDanni ? 'danno' : 'penale',
         }
 
         const { data: invoice, error: insertError } = await supabase

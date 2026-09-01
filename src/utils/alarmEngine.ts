@@ -214,12 +214,29 @@ export async function sincronizzaEventi(
         await supabase.from('alarm_events').upsert(daInserire, { ignoreDuplicates: true })
     }
 
-    // Ripetizioni: una UPDATE per riga, ma sono poche e solo su quelle aperte.
-    for (const r of daRipetere) {
-        await supabase
-            .from('alarm_events')
-            .update({ ripetizioni: r.ripetizioni })
-            .eq('id', r.id)
+    // Ripetizioni: UNA richiesta per tutte le occorrenze ancora aperte.
+    //
+    // 01/09/2026 - prima era una UPDATE PER RIGA: con 845 occorrenze aperte
+    // erano centinaia di richieste in fila, a ogni apertura del gestionale e
+    // per ogni operatore collegato. Ora l'incremento lo fa il database
+    // (`incrementa_ripetizioni_allarmi`), che somma +1 sul valore corrente:
+    // due schede che girano nello stesso istante non si sovrascrivono piu'.
+    //
+    // Se la migration non e' ancora passata, la funzione non esiste: si torna
+    // alle UPDATE una per una, cosi' il gestionale non resta senza contatori
+    // aspettando il database.
+    if (daRipetere.length > 0) {
+        const { error: errRpc } = await supabase.rpc('incrementa_ripetizioni_allarmi', {
+            ids: daRipetere.map(r => r.id),
+        })
+        if (errRpc) {
+            for (const r of daRipetere) {
+                await supabase
+                    .from('alarm_events')
+                    .update({ ripetizioni: r.ripetizioni })
+                    .eq('id', r.id)
+            }
+        }
     }
 
     // Chiusura automatica: la condizione non c'e' piu'.

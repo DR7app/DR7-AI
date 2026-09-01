@@ -74,10 +74,17 @@ export async function caricaTemplateCodiceSconto(evento: string): Promise<string
  * Token sostituiti nel body. Senza template si usa il testo di sempre, cosi'
  * l'invio non si ferma mai per una configurazione mancante.
  */
+export interface ClientePerMessaggio {
+    nomeCompleto?: string | null
+    email?: string | null
+    telefono?: string | null
+}
+
 export function componiMessaggioCodiceSconto(
     body: string | null,
     code: CodicePerMessaggio,
     nome = '',
+    cliente: ClientePerMessaggio = {},
 ): string {
     const servizi = etichetteServizi(code.scope)
     const validita = code.valid_until ? new Date(code.valid_until).toLocaleDateString('it-IT') : ''
@@ -85,8 +92,20 @@ export function componiMessaggioCodiceSconto(
         ? `${code.value_amount}%`
         : `€${Number(code.value_amount).toFixed(2)}`
     const spesaMinima = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
+    // 29/08/2026: il template Pro puo' usare qualunque variabile della legenda
+    // di Messaggi di Sistema Pro. Un token non sostituito NON esce dal server
+    // (gate anti-placeholder di send-whatsapp-notification): il messaggio
+    // sembrava inviato e non partiva. Qui si coprono tutti gli alias del nome.
+    const nomeCompleto = (cliente.nomeCompleto || '').trim() || nome
     const token: Record<string, string> = {
         nome,
+        customer_name: nomeCompleto,
+        cliente: nomeCompleto,
+        name: nomeCompleto,
+        customer_email: cliente.email || '',
+        email: cliente.email || '',
+        customer_phone: cliente.telefono || '',
+        telefono: cliente.telefono || '',
         codice: code.code,
         valore,
         servizi,

@@ -1,5 +1,7 @@
+import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata } from './utils/systemControl'
 
 /**
  * CARGOS Auto-Send — called after contract is signed
@@ -212,7 +214,71 @@ export async function avvisaDirezione(motivo: string, dettagli: string): Promise
     }
 }
 
+/**
+ * Involucro System Control attorno all'invio vero (`inviaCargos`).
+ * Registra l'esito di ogni tentativo e, quando fallisce, mette la
+ * comunicazione in coda cosi' non si perde: il ritentativo automatico e'
+ * sicuro perche' CARGOS accetta lo stesso record una sola volta e il codice
+ * salta le prenotazioni gia' marcate come inviate.
+ */
 export async function sendToCargos(
+    bookingId: string,
+    opts?: { silent?: boolean },
+): Promise<{ success: boolean; error?: string }> {
+    const t0 = Date.now()
+    const esito = await inviaCargos(bookingId, opts)
+    try {
+        await segnaChiamata('cargos', esito.success, { durataMs: Date.now() - t0, errore: esito.error })
+        if (!esito.success && esito.error) {
+            const gruppo = await registraEvento({
+                messaggio: `CARGOS: ${esito.error}`,
+                categoria: 'adempimenti', modulo: 'Cargos', funzione: 'cargos-auto-send',
+                integrazione: 'cargos', severita: 'alto',
+                contesto: { bookingId },
+            })
+            await accodaOperazione({
+                tipo: 'cargos_invio',
+                chiaveIdempotenza: `cargos:${bookingId}`,
+                descrizione: `Comunicazione CARGOS per la prenotazione ${bookingId}`,
+                integrazione: 'cargos', entitaTipo: 'booking', entitaId: bookingId,
+                endpoint: 'cargos-auto-send', payload: { bookingId, silent: true },
+                errore: esito.error, gruppoId: gruppo.gruppoId,
+            })
+        } else if (esito.success) {
+            await chiudiOperazione(`cargos:${bookingId}`)
+        }
+    } catch (e) {
+        console.warn('[cargos-auto-send] System Control non raggiungibile:', e)
+    }
+    return esito
+}
+
+/**
+ * Punto di ripresa per il System Control. Protetto: serve il token interno
+ * (ADMIN_API_TOKEN) oppure la chiave gia' usata da dr7trust. Restituisce 500
+ * quando l'invio fallisce, cosi' la coda dei ritentativi non scambia un
+ * fallimento per un successo.
+ */
+export const handler: Handler = async (event) => {
+    if (event.httpMethod !== 'POST') {
+        return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
+    }
+    const bearer = (event.headers.authorization || event.headers.Authorization || '').replace('Bearer ', '')
+    const chiaveCargos = event.headers['x-cargos-key'] || ''
+    const attesa = process.env.CARGOS_TRIGGER_KEY || 'dr7-cargos-auto-2024'
+    const autorizzato = (!!process.env.ADMIN_API_TOKEN && bearer === process.env.ADMIN_API_TOKEN) || chiaveCargos === attesa
+    if (!autorizzato) {
+        return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    }
+    const { bookingId } = JSON.parse(event.body || '{}')
+    if (!bookingId) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'bookingId richiesto' }) }
+    }
+    const esito = await sendToCargos(bookingId, { silent: true })
+    return { statusCode: esito.success ? 200 : 500, body: JSON.stringify(esito) }
+}
+
+async function inviaCargos(
     bookingId: string,
     opts?: { silent?: boolean },
 ): Promise<{ success: boolean; error?: string }> {

@@ -193,3 +193,11 @@
 # alla bozza.
 [functions."magazzino-riordino-periodico-cron"]
   schedule = "0 7 * * *"
+
+# DR7 A.I System Control — ciclo di auto-riparazione ogni 5 minuti:
+# riprende le operazioni fallite (con ritardo crescente e chiave anti-doppione),
+# riapre in prova i collegamenti messi in pausa, chiude i problemi temporanei
+# rientrati, prepara gli avvisi raggruppati e sorveglia l'ultimo rilascio.
+# Si puo' lanciare a mano da System Control > Strumenti.
+[functions."system-control-worker"]
+  schedule = "*/5 * * * *"

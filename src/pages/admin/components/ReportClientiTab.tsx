@@ -209,6 +209,14 @@ export default function ReportClientiTab() {
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
   const [openCustomerId, setOpenCustomerId] = useState<string | null>(null)
+  // 29/08/2026 — la tabella montava TUTTE le righe, e in piu' le card mobile,
+  // che restano nel DOM anche da desktop (`md:hidden` nasconde, non smonta):
+  // con 2.100 clienti erano oltre centomila nodi disegnati all'apertura e
+  // ridisegnati a ogni ricerca o riordino, e la tab sembrava bloccata. Ora si
+  // disegna una pagina per volta; totali, classifiche, grafici e riepiloghi
+  // restano calcolati su TUTTI i clienti filtrati, non sulla pagina.
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
 
   // #38 Modifica manuale report
   const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
@@ -312,6 +320,25 @@ export default function ReportClientiTab() {
     [...adjustedClienti].sort((a, b) => sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField]),
     [adjustedClienti, sortField, sortAsc]
   )
+
+  const totalPages = Math.max(1, Math.ceil(sortedClienti.length / pageSize))
+  const pageCorrente = Math.min(page, totalPages)
+  const pageClienti = useMemo(
+    () => sortedClienti.slice((pageCorrente - 1) * pageSize, pageCorrente * pageSize),
+    [sortedClienti, pageCorrente, pageSize]
+  )
+  // Cambiare ricerca, periodo, ordinamento o dimensione pagina riporta in testa.
+  useEffect(() => { setPage(1) }, [search, dateRange, sortField, sortAsc, pageSize])
+  // Numeri di pagina a finestra: con 2.100 clienti le pagine sono decine, non
+  // si stampano tutte.
+  const pageNumbers = useMemo(() => {
+    const intorno = 2
+    const start = Math.max(1, Math.min(pageCorrente - intorno, totalPages - intorno * 2))
+    const end = Math.min(totalPages, start + intorno * 2)
+    const out: number[] = []
+    for (let i = start; i <= end; i++) out.push(i)
+    return out
+  }, [pageCorrente, totalPages])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const removedClienti = useMemo(() =>
@@ -678,7 +705,7 @@ export default function ReportClientiTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedClienti.map((c, i) => (
+                  {pageClienti.map((c, i) => (
                     <tr key={c.customerId || i} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
                       {/* Sticky Cliente column */}
                       <td
@@ -784,7 +811,7 @@ export default function ReportClientiTab() {
 
             {/* Mobile Cards */}
             <div className="md:hidden p-3 space-y-3">
-              {sortedClienti.map((c, i) => (
+              {pageClienti.map((c, i) => (
                 <div key={c.customerId || i} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
                   {/* Name + Email */}
                   <div className="mb-3">
@@ -876,6 +903,39 @@ export default function ReportClientiTab() {
                 </div>
               ))}
             </div>
+
+            {totalPages > 1 && (
+              <div className="px-4 py-3 border-t border-theme-border flex flex-wrap items-center justify-between gap-3 text-xs text-theme-text-secondary">
+                <span>
+                  Mostra {(pageCorrente - 1) * pageSize + 1}-{Math.min(pageCorrente * pageSize, sortedClienti.length)} di {sortedClienti.length} clienti
+                </span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPage(1)} disabled={pageCorrente === 1} className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover" title="Prima pagina">{'\u00AB'}</button>
+                  <button onClick={() => setPage(pageCorrente - 1)} disabled={pageCorrente === 1} className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover" title="Pagina precedente">{'\u2039'}</button>
+                  {pageNumbers.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setPage(n)}
+                      className={`w-7 h-7 rounded text-xs font-medium ${pageCorrente === n ? 'bg-dr7-gold text-white' : 'border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover'}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button onClick={() => setPage(pageCorrente + 1)} disabled={pageCorrente === totalPages} className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover" title="Pagina successiva">{'\u203A'}</button>
+                  <button onClick={() => setPage(totalPages)} disabled={pageCorrente === totalPages} className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover" title="Ultima pagina">{'\u00BB'}</button>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="ml-2 px-2 py-1 bg-theme-bg-primary border border-theme-border rounded text-theme-text-primary"
+                    title="Clienti per pagina"
+                  >
+                    {[25, 50, 100, 200].map(n => (
+                      <option key={n} value={n}>{n} per pagina</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           {sortedClienti.length === 0 && (

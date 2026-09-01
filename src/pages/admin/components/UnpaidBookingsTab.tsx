@@ -1131,7 +1131,15 @@ export default function UnpaidBookingsTab() {
           const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extAmount })
+            // 2026-09-01: la fattura di estensione non ha nulla che la
+            // identifichi (nasce sempre nuova), quindi ripetere "segna pagata"
+            // ne creava una gemella. L'indice dell'estensione la identifica.
+            body: JSON.stringify({
+              bookingId: booking.id,
+              includeIVA: true,
+              extensionAmount: extAmount,
+              idempotencyKey: `estensione:${booking.id}:${extIndex}`,
+            })
           })
           if (invoiceRes.ok) {
             toast.success('Fattura estensione generata!')
@@ -1195,7 +1203,12 @@ export default function UnpaidBookingsTab() {
           const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: total })
+            body: JSON.stringify({
+              bookingId: booking.id,
+              includeIVA: true,
+              extensionAmount: total,
+              idempotencyKey: `estensione:${booking.id}:${extIndex}`,
+            })
           })
           if (invoiceRes.ok) {
             toast.success('Fattura estensione generata!')

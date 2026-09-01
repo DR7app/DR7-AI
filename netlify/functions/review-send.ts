@@ -59,13 +59,17 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const { candidateId, sendChannel, sendMode } = JSON.parse(event.body || '{}') as {
+    const { candidateId, sendChannel, sendMode, previewOnly } = JSON.parse(event.body || '{}') as {
       candidateId: string;
       sendChannel: SendChannel;
       sendMode: SendMode;
+      // previewOnly: compone il messaggio e lo restituisce senza inviare nulla
+      // e senza scrivere review_requests. Serve al pulsante "Copia messaggio"
+      // della tab Recensioni: l'operatore incolla il testo dove vuole.
+      previewOnly?: boolean;
     };
 
-    if (!candidateId || !sendChannel || !sendMode) {
+    if (!candidateId || (!previewOnly && (!sendChannel || !sendMode))) {
       return {
         statusCode: 400,
         headers: getHeaders(event.headers.origin),
@@ -90,11 +94,11 @@ const handler: Handler = async (event) => {
     }
 
     // 2. Validate eligibility
-    const allowedStatuses = sendMode === 'MANUAL'
+    const allowedStatuses = (sendMode || 'MANUAL') === 'MANUAL'
       ? ['ELIGIBLE', 'TO_REVIEW']
       : ['ELIGIBLE'];
 
-    if (!allowedStatuses.includes(candidate.eligibility_status)) {
+    if (!previewOnly && !allowedStatuses.includes(candidate.eligibility_status)) {
       return {
         statusCode: 400,
         headers: getHeaders(event.headers.origin),
@@ -113,7 +117,7 @@ const handler: Handler = async (event) => {
     const needsEmail = false
     const needsWhatsapp = true
 
-    if (needsEmail && !candidate.contact_available_email) {
+    if (!previewOnly && needsEmail && !candidate.contact_available_email) {
       return {
         statusCode: 400,
         headers: getHeaders(event.headers.origin),
@@ -121,7 +125,7 @@ const handler: Handler = async (event) => {
       };
     }
 
-    if (needsWhatsapp && !candidate.contact_available_whatsapp) {
+    if (!previewOnly && needsWhatsapp && !candidate.contact_available_whatsapp) {
       return {
         statusCode: 400,
         headers: getHeaders(event.headers.origin),
@@ -136,7 +140,7 @@ const handler: Handler = async (event) => {
     // Prima il check guardava SOLO review_requests, quindi un candidato
     // sbloccato veniva bloccato con 409 perche' la vecchia riga
     // review_requests aveva ancora send_status='SENT'.
-    if (candidate.send_status !== 'TO_SEND') {
+    if (!previewOnly && candidate.send_status !== 'TO_SEND') {
       const { data: existingRequest } = await supabase
         .from('review_requests')
         .select('id')
@@ -239,6 +243,21 @@ const handler: Handler = async (event) => {
         review_link: reviewLink,
       };
       whatsappMessage = (await getMessageTemplate('review_request_whatsapp', proVars)) || '';
+    }
+
+    // 5b. Anteprima: restituisce il testo composto senza inviare e senza
+    // registrare nulla. Il messaggio e' identico a quello che partirebbe.
+    if (previewOnly) {
+      return {
+        statusCode: 200,
+        headers: getHeaders(event.headers.origin),
+        body: JSON.stringify({
+          preview: whatsappMessage,
+          review_link: reviewLink,
+          customer_name: candidate.customer_name || '',
+          customer_phone: candidate.customer_phone || '',
+        }),
+      };
     }
 
     // 6. Create review_request record with TO_SEND status

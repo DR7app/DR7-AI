@@ -13,6 +13,7 @@ import { useBirthdayCount } from '../../hooks/useBirthdayCount'
 import { useFatturaScartataCount } from '../../hooks/useFatturaScartataCount'
 import PlaceholderTab from './components/PlaceholderTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
+import { avviaRilevazioneErrori } from '../../utils/systemControl'
 import { clearAdminCache } from '../../utils/logAdminAction'
 import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../utils/avatarImage'
 import { errorePassword, regolePassword, PASSWORD_MIN } from '../../utils/passwordPolicy'
@@ -81,6 +82,8 @@ const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreve
 const PreventiviTab = lazyWithRetry(() => import('./components/PreventiviTab'))
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
 const InterruttoriTab = lazyWithRetry(() => import('./components/InterruttoriTab'))
+const SystemControlTab = lazyWithRetry(() => import('./components/SystemControlTab'))
+
 const AccontiTab = lazyWithRetry(() => import('./components/AccontiTab'))
 const SitoTab = lazyWithRetry(() => import('./components/SitoTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
@@ -94,7 +97,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -165,7 +168,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
+  const { role: adminRole, hasPermission, hasRole, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
   // 2026-05-19: isElevated rimosso (era declared but never read). Quando
   // serve in futuro, riaggiungerlo qui basato su:
   // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -190,6 +193,10 @@ export default function AdminDashboard() {
   // accessibile a questo operatore, redirigi alla PRIMA tab autorizzata.
   // Cosi' un utente con solo carwash + customers non atterra mai sulla
   // pagina Noleggio "vuota".
+  // System Control: da qui in poi ogni errore non gestito del pannello viene
+  // registrato e raggruppato, invece di finire solo nella console del browser.
+  useEffect(() => { avviaRilevazioneErrori() }, [])
+
   useEffect(() => {
     if (roleLoading) return
     if (hasPermission(activeTab)) return
@@ -197,6 +204,7 @@ export default function AdminDashboard() {
     for (const s of SECTIONS) {
       for (const t of s.tabs) {
         if (t.superadminOnly && adminRole !== 'superadmin') continue
+        if (t.soloTecnici && !hasRole('direzione') && !hasRole('developer')) continue
         if (hasPermission(t.permKey || t.tab)) {
           _setActiveTab(t.tab)
           try { sessionStorage.setItem(ACTIVE_TAB_KEY, t.tab) } catch { /* ignore */ }
@@ -433,7 +441,9 @@ export default function AdminDashboard() {
   // permKey overrides the default permission check (which uses `tab`).
   // Used when two sub-tabs share the same TabType but need separate access
   // grants — e.g. Preventivi vs Prenotazioni both target tab='reservations'.
-  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi' | 'uscite'; permKey?: string }
+  // soloTecnici: visibile solo a direzione/developer (DR7 A.I System Control).
+  // Il permesso per tab non basta: e' un'area tecnica, non operativa.
+  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; soloTecnici?: boolean; subView?: 'bookings' | 'preventivi' | 'uscite'; permKey?: string }
   const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi' | 'uscite'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
     { name: 'Noleggio Terra', tabs: [
@@ -587,6 +597,11 @@ export default function AdminDashboard() {
       { tab: 'centralina-pro', label: 'Centralina Pro' },
       { tab: 'interruttori', label: 'Interruttori ON/OFF' },
     ] },
+    // DR7 A.I System Control (31/08/2026): centro tecnico della piattaforma.
+    // Non e' una tab operativa: la vedono solo direzione e developer.
+    { name: 'System Control', tabs: [
+      { tab: 'system-control', label: 'DR7 A.I System Control', soloTecnici: true },
+    ] },
     { name: 'Sito', tabs: [
       { tab: 'sito', label: 'Sito' },
     ] },
@@ -615,6 +630,7 @@ export default function AdminDashboard() {
     'Magazzino':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/> },
     'Amministrazione':{ group: 'sistemi', icon: <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></> },
     'Centralina Pro':  { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 10V3L4 14h7v7l9-11h-7z"/> },
+    'System Control':  { group: 'sistemi', icon: <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2"/><rect x="7" y="7" width="10" height="10" rx="2" strokeWidth={1.7}/></> },
     'DR7 Trust':       { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/> },
     'DR7 Emtn':        { group: 'sistemi', icon: <><circle cx="12" cy="12" r="9" strokeWidth={1.7}/><path strokeWidth={1.7} d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></> },
     'Sito':            { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/> },
@@ -631,7 +647,7 @@ export default function AdminDashboard() {
   // piatta in alto. Tutti gli operatori standard mantengono sidebar +
   // sezioni come prima.
   const visibleSectionCount = SECTIONS.filter(s =>
-    s.tabs.some(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+    s.tabs.some(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin') && (!t.soloTecnici || hasRole('direzione') || hasRole('developer')))
   ).length
   const hideSidebar = visibleSectionCount <= 1 || isCollaboratore
   // Lista piatta di tutte le tab accessibili (per collaboratori). Tiene il
@@ -642,7 +658,7 @@ export default function AdminDashboard() {
   // Centralina Pro), per evitare confusione nel bar in alto.
   const hasCauzioniReadOnly = permissions.includes('view-cauzioni-readonly')
   const collaboratoreFlatTabs = SECTIONS.flatMap(s => s.tabs)
-    .filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+    .filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin') && (!t.soloTecnici || hasRole('direzione') || hasRole('developer')))
     .map(t => (t.tab === 'centralina-pro' && hasCauzioniReadOnly) ? { ...t, label: 'Cauzioni' } : t)
 
   // Mobile tab labels
@@ -684,6 +700,7 @@ export default function AdminDashboard() {
     'emtn': 'DR7 Emtn',
     'gestione-otp': 'Gestione OTP',
     'interruttori': 'Interruttori ON/OFF',
+    'system-control': 'DR7 A.I System Control',
     'acconti': 'Acconti Giornalieri',
     'verifica-documenti': 'Verifica Documenti',
     'fornitori': 'Fornitori',
@@ -795,7 +812,7 @@ export default function AdminDashboard() {
             const groupSections = SECTIONS.filter(s => (SECTION_META[s.name]?.group || 'sistemi') === grp)
             const renderable = groupSections
               .map(section => {
-                const visibleTabs = section.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+                const visibleTabs = section.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin') && (!t.soloTecnici || hasRole('direzione') || hasRole('developer')))
                 return visibleTabs.length > 0 ? { section, visibleTabs } : null
               })
               .filter((x): x is { section: typeof groupSections[number]; visibleTabs: typeof groupSections[number]['tabs'] } => x !== null)
@@ -1415,6 +1432,7 @@ export default function AdminDashboard() {
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           {activeTab === 'interruttori' && <InterruttoriTab />}
+          {activeTab === 'system-control' && <SystemControlTab />}
           {activeTab === 'acconti' && <AccontiTab />}
           {activeTab === 'sito' && <SitoTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
