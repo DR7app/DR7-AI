@@ -90,6 +90,9 @@ const MAI = new Set([
   'email_inviata', 'phone_verified', 'nome_file', 'file_name', 'nome_tab',
   'nome_campo', 'nome_template', 'nome_servizio', 'nome_categoria',
   'nome_veicolo', 'nome_azienda_mittente',
+  // 01/09/2026 — i mezzi non sono clienti: il nome del veicolo non si sfoca.
+  'display_name', 'vehicle_name', 'nome_mezzo', 'veicolo', 'vehicle',
+  'modello', 'model', 'marca', 'brand', 'allestimento', 'versione',
 ])
 
 /** Nomi completi: sempre personali, in qualunque tabella arrivino. */
@@ -117,6 +120,7 @@ const COSE = new Set([
   'categoria', 'category', 'service_type', 'servizio', 'price_per_day',
   'daily_rate', 'prezzo', 'price', 'marca', 'modello', 'model', 'brand',
   'is_active', 'nome_servizio', 'nome_categoria', 'nome_veicolo',
+  'display_name', 'nome_mezzo', 'daily_rate', 'status_veicolo',
 ])
 
 function sembraCosa(oggetto: Record<string, unknown>): boolean {
@@ -206,6 +210,15 @@ function maschera(dato: unknown, profondita: number, persona = false): unknown {
     const valore = oggetto[chiave]
 
     if (typeof valore === 'string' && valore) {
+      // Prima di tutto: se questa chiave porta il nome di una COSA (il mezzo,
+      // il servizio, la categoria), quel nome va protetto. Cosi' la flotta si
+      // impara da sola e i mezzi nuovi non spariscono dallo schermo.
+      const kk = chiave.toLowerCase()
+      if (NOMI_DI_COSE.has(kk) || (eCosa && SE_PERSONA.has(kk))) {
+        proteggiCosa(valore)
+        fuori[chiave] = valore
+        continue
+      }
       const genere = genereDelCampo(chiave, valore, eScheda, eCosa)
       // I testi liberi (note, messaggi) non si segnano: dentro c'e' di tutto e
       // sfocare l'intera nota per una parola non serve. I nomi che contengono
@@ -306,6 +319,85 @@ const GENERI_A_PAROLE = new Set<Genere>(['nome', 'solo-nome', 'solo-cognome', 'a
  * Parole che compaiono in un nome ma appartengono a tutti: indicizzarle
  * sfocherebbe le etichette del gestionale invece dei clienti.
  */
+/**
+ * Parole dei MEZZI: non si sfocano mai.
+ *
+ * 01/09/2026 — segnalato dal campo: con Oscurare acceso sparivano anche i nomi
+ * delle auto. Il perche': i nomi dei clienti vengono indicizzati anche parola
+ * per parola (serve per la tabella che spezza "Nome | Cognome" su due colonne),
+ * e in Italia le parole di un'auto sono anche cognomi e ragioni sociali —
+ * "Ferrari", "Mercedes", "Vito", oppure una societa' cliente che si chiama
+ * "Mercedes-Benz Financial". Bastava UN cliente cosi' e tutta la flotta con
+ * quella parola spariva dallo schermo.
+ *
+ * Regola: Oscurare nasconde i CLIENTI, non i mezzi. Le parole qui sotto non
+ * entrano mai nel dizionario dei nomi e non fanno mai scattare la sfocatura.
+ * Il cliente resta comunque coperto: il suo nome intero ("Luca Ferrari"), la
+ * mail, il telefono, l'indirizzo e il codice fiscale si sfocano lo stesso.
+ */
+const paroleProtette = new Set<string>()
+
+/** Marchi e parole di listino: valgono da subito, prima ancora di leggere la flotta. */
+const MARCHI = [
+  // auto
+  'abarth', 'alfa', 'romeo', 'alpine', 'aston', 'martin', 'audi', 'bentley',
+  'bmw', 'bugatti', 'citroen', 'cupra', 'dacia', 'ferrari', 'fiat', 'ford',
+  'honda', 'hummer', 'hyundai', 'jaguar', 'jeep', 'kia', 'lamborghini',
+  'lancia', 'land', 'rover', 'lexus', 'lotus', 'maserati', 'mazda', 'mclaren',
+  'mercedes', 'benz', 'mini', 'mitsubishi', 'nissan', 'opel', 'pagani',
+  'peugeot', 'porsche', 'renault', 'rolls', 'royce', 'seat', 'skoda', 'smart',
+  'subaru', 'suzuki', 'tesla', 'toyota', 'volkswagen', 'volvo',
+  // moto e scooter
+  'aprilia', 'ducati', 'harley', 'davidson', 'kawasaki', 'ktm', 'piaggio',
+  'vespa', 'yamaha', 'tmax', 'akrapovic', 'termignoni',
+  // modelli e allestimenti che si vedono in flotta
+  'urus', 'huracan', 'aventador', 'performante', 'tecnica', 'spyder', 'panda',
+  'ypsilon', 'yaris', 'renegade', 'macan', 'cayenne', 'cayman', 'boxster',
+  'panamera', 'taycan', 'carrera', 'ducato', 'sprinter', 'vito', 'transporter',
+  'crafter', 'trafic', 'master', 'movano', 'jumper', 'boxer', 'daily',
+  'expert', 'partner', 'berlingo', 'kangoo', 'caddy', 'classe', 'class',
+  'coupe', 'cabrio', 'spider', 'competition', 'edition', 'hybrid', 'premium',
+  'maxi', 'aircross', 'manhart', 'quattro', 'avant', 'sportback', 'gtline',
+  'exotic', 'supercar', 'supercars', 'hypercar', 'urban', 'aziendali',
+  'scooter', 'luxury', 'flotta',
+]
+for (const m of MARCHI) paroleProtette.add(m)
+
+/** Il nome intero di un mezzo, cosi' come si vede a schermo. */
+const valoriProtetti = new Set<string>()
+
+/** Chiavi che portano SEMPRE il nome di una cosa, mai di una persona. */
+const NOMI_DI_COSE = new Set([
+  'display_name', 'vehicle_name', 'nome_veicolo', 'nome_mezzo', 'veicolo',
+  'vehicle', 'modello', 'model', 'marca', 'brand', 'nome_servizio',
+  'nome_categoria', 'categoria', 'category', 'allestimento', 'versione',
+])
+
+/**
+ * Segna il nome di un mezzo/servizio come da NON sfocare mai.
+ * Chiamata mentre la risposta passa: la flotta si impara da sola, quindi vale
+ * anche per i mezzi aggiunti domani senza toccare l'elenco qui sopra.
+ */
+function proteggiCosa(valore: string): void {
+  const v = normalizza(valore)
+  if (v.length < 2 || v.length > 120) return
+  let nuovo = false
+  if (!valoriProtetti.has(v)) { valoriProtetti.add(v); nuovo = true }
+  for (const parola of v.split(SEPARATORE)) {
+    if (parola.length >= 3 && !paroleProtette.has(parola)) {
+      paroleProtette.add(parola)
+      // Se quella parola era gia' finita fra i nomi, esce: comanda il mezzo.
+      paroleSensibili.delete(parola)
+      nuovo = true
+    }
+  }
+  // Qualcosa e' tornato leggibile: si ripassa lo schermo per togliere la sfocatura.
+  if (nuovo && typeof document !== 'undefined') {
+    nodiVisti = new WeakMap<Text, string>()
+    programmaScansione()
+  }
+}
+
 const PAROLE_COMUNI = new Set([
   'srls', 'sarl', 'group', 'service', 'services', 'italia', 'italy', 'auto',
   'rent', 'rental', 'noleggio', 'cliente', 'clienti', 'test', 'none', 'null',
@@ -340,7 +432,8 @@ function segnaSensibile(valore: string, genere: Genere): void {
     // (gmail, libero, tiscali) e' di tutti e sfocherebbe mezza pagina.
     const sorgente = genere === 'email' ? v.split('@')[0] : v
     for (const parola of sorgente.split(SEPARATORE)) {
-      if (parola.length >= 4 && !PAROLE_COMUNI.has(parola) && !paroleSensibili.has(parola)) {
+      if (parola.length >= 4 && !PAROLE_COMUNI.has(parola) && !paroleProtette.has(parola)
+          && !paroleSensibili.has(parola)) {
         paroleSensibili.add(parola)
         nuovo = true
       }
@@ -364,6 +457,13 @@ const SCHEMI_SENSIBILI: RegExp[] = [
 const CAMPO_PERSONALE = /(nome|cognome|email|mail|telefono|phone|cellulare|indirizzo|address|codice_?fiscale|partita_?iva|piva|iban|patente|documento|nascita)/i
 
 /**
+ * ...ma "Nome" da solo non vuol dire cliente: c'e' il nome del veicolo, del
+ * servizio, del template. Su quei campi l'etichetta non fa scattare niente
+ * (il valore, se e' personale, viene comunque colto).
+ */
+const CAMPO_DI_COSA = /(veicolo|vehicle|mezzo|targa|plate|modello|model|marca|brand|servizio|service|categoria|category|template|tariffa|prezzo|price|file|tab|campo|azienda_mittente)/i
+
+/**
  * Questo testo, cosi' come si vede a schermo, va sfocato?
  * Esportata perche' e' il cuore della modalita': va provata a mano.
  */
@@ -376,11 +476,16 @@ function vaOscurato(testo: string): boolean {
   if (t.length < 3) return false
 
   const n = normalizza(t)
+  // Il valore esatto di un cliente vince sempre: se un cliente si chiama
+  // davvero come un mezzo, resta coperto.
   if (valoriEsatti.has(n)) return true
+  // Il nome di un mezzo non e' un cliente: non si sfoca mai.
+  if (valoriProtetti.has(n)) return false
 
   if (paroleSensibili.size) {
     for (const parola of n.split(SEPARATORE)) {
-      if (parola.length >= 4 && paroleSensibili.has(parola)) return true
+      if (parola.length < 4 || paroleProtette.has(parola)) continue
+      if (paroleSensibili.has(parola)) return true
     }
   }
 
@@ -428,14 +533,21 @@ function scansiona(): void {
     const contenuto = testo.nodeValue || ''
     if (nodiVisti.get(testo) !== contenuto) {
       nodiVisti.set(testo, contenuto)
+      const el = testo.parentElement
       if (contenuto.length <= 400 && vaOscurato(contenuto)) {
-        const el = testo.parentElement
         if (el && !el.classList.contains('oscurato')
             && !MAI_SFOCARE.has(el.tagName)
             && el.children.length <= 12
             && !el.closest('.oscurato')) {
           el.classList.add('oscurato')
+          el.setAttribute('data-oscura-auto', '1')
         }
+      } else if (el && el.getAttribute('data-oscura-auto') === '1'
+                 && !vaOscurato(el.textContent || '')) {
+        // Il mezzo era stato sfocato prima di sapere che era un mezzo (la
+        // flotta arriva dopo l'elenco clienti): appena si sa, torna nitido.
+        el.classList.remove('oscurato')
+        el.removeAttribute('data-oscura-auto')
       }
     }
     nodo = cammino.nextNode()
@@ -448,7 +560,8 @@ function scansiona(): void {
     if (campo.classList.contains('oscurato')) continue
     if ((campo as HTMLInputElement).type === 'password') continue
     const etichetta = `${campo.name || ''} ${campo.id || ''} ${campo.getAttribute('placeholder') || ''}`
-    if (CAMPO_PERSONALE.test(etichetta) || vaOscurato(campo.value || '')) {
+    if ((CAMPO_PERSONALE.test(etichetta) && !CAMPO_DI_COSA.test(etichetta))
+        || vaOscurato(campo.value || '')) {
       campo.classList.add('oscurato')
     }
   }

@@ -122,6 +122,26 @@ describe('Oscurare — una lista di clienti veri, non i primi quattrocento', () 
     expect(daSfocare('Ophélie Giraud')).toBe(true)
   })
 
+  // 01/09/2026 — segnalato dal campo: con Oscurare acceso sparivano anche le
+  // auto. Oscurare nasconde i CLIENTI, i mezzi restano leggibili.
+  it('NON sfoca la flotta quando un cliente si chiama come un marchio', () => {
+    mascheraDati([{ customer_name: 'Luca Ferrari', email: 'luca.ferrari@libero.it' }])
+    expect(daSfocare('Luca Ferrari')).toBe(true)
+    expect(daSfocare('Ferrari 296 gtb')).toBe(false)
+    expect(daSfocare('Mercedes Classe A45S AMG')).toBe(false)
+  })
+
+  it('impara i nomi della flotta e li lascia leggibili', () => {
+    mascheraDati([{ id: 'v9', display_name: 'YARIS HYBRID PREMIUM', plate: 'HD694XW', category: 'scooter' }])
+    expect(daSfocare('YARIS HYBRID PREMIUM')).toBe(false)
+  })
+
+  it('NON sfoca il mezzo nella riga di una prenotazione', () => {
+    mascheraDati([{ customer_name: 'Ivan Saba', vehicle_name: 'Lamborghini Huracan Tecnica', vehicle_plate: 'GA111AA' }])
+    expect(daSfocare('Ivan Saba')).toBe(true)
+    expect(daSfocare('Lamborghini Huracan Tecnica')).toBe(false)
+  })
+
   it('NON sfoca le etichette del gestionale ne i nomi dei mezzi', () => {
     mascheraDati([{ id: 'v1', name: 'Lamborghini Urus', plate: 'GA1AB', category: 'supercars' }])
     expect(daSfocare('Lamborghini Urus')).toBe(false)
