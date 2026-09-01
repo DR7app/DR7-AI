@@ -16,7 +16,7 @@
 
 export type PageResult<T> = { data: T[] | null; error: unknown }
 
-export interface FetchAllRowsOptions {
+export interface FetchAllRowsOptions<T> {
   /** Righe per pagina. 1000 e' il massimo di PostgREST. */
   pageSize?: number
   /** Quante pagine chiedere in parallelo per ogni giro. */
@@ -27,11 +27,17 @@ export interface FetchAllRowsOptions {
    * scivolerebbe in due pagine diverse). Non elimina mai righe distinte.
    */
   dedupeById?: boolean
+  /**
+   * Chiamata dopo OGNI giro con le righe lette finora, gia' in ordine e gia'
+   * deduplicate. Serve a chi vuole disegnare la prima pagina subito invece di
+   * aspettare tutta la tabella: il risultato finale non cambia.
+   */
+  onPartial?: (rows: T[]) => void
 }
 
 export async function fetchAllRows<T>(
   page: (from: number, to: number) => PromiseLike<PageResult<T>>,
-  options: FetchAllRowsOptions = {}
+  options: FetchAllRowsOptions<T> = {}
 ): Promise<{ data: T[]; error: unknown | null }> {
   const pageSize = options.pageSize ?? 1000
   const burst = Math.max(1, options.burst ?? 4)
@@ -42,6 +48,22 @@ export async function fetchAllRows<T>(
   let nextPage = 0
   let done = false
 
+  const raccogli = (): T[] => {
+    const flat: T[] = []
+    for (const p of pages) if (p) flat.push(...p)
+    if (!dedupeById) return flat
+    const seen = new Set<unknown>()
+    const unique: T[] = []
+    for (const row of flat) {
+      const id = (row as { id?: unknown })?.id
+      if (id === undefined || id === null) { unique.push(row); continue }
+      if (seen.has(id)) continue
+      seen.add(id)
+      unique.push(row)
+    }
+    return unique
+  }
+
   // Primo giro da sola: se la tabella sta in una pagina evitiamo richieste inutili.
   {
     const res = await page(0, pageSize - 1)
@@ -50,6 +72,7 @@ export async function fetchAllRows<T>(
     pages[0] = rows
     nextPage = 1
     if (rows.length < pageSize) done = true
+    if (!done) options.onPartial?.(raccogli())
   }
 
   while (!done) {
@@ -70,21 +93,8 @@ export async function fetchAllRows<T>(
       // giro sono gia' partite ma torneranno vuote, e le ignoriamo.
       if (rows.length < pageSize) done = true
     }
+    if (!done && !error) options.onPartial?.(raccogli())
   }
 
-  const flat: T[] = []
-  for (const p of pages) if (p) flat.push(...p)
-
-  if (!dedupeById) return { data: flat, error }
-
-  const seen = new Set<unknown>()
-  const unique: T[] = []
-  for (const row of flat) {
-    const id = (row as { id?: unknown })?.id
-    if (id === undefined || id === null) { unique.push(row); continue }
-    if (seen.has(id)) continue
-    seen.add(id)
-    unique.push(row)
-  }
-  return { data: unique, error }
+  return { data: raccogli(), error }
 }

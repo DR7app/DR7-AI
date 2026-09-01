@@ -12,6 +12,8 @@ import IncomingInvoicesView from './IncomingInvoicesView'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
+import { trovaDoppioni } from '../../../utils/fattureDoppie'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 // Stessa geometria del menu Gestisci: il pannello si vede intero, senza
 // scorrerlo e senza uscire dallo schermo.
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
@@ -20,43 +22,24 @@ interface Invoice {
   id: string
   numero_fattura: string
   data_emissione: string
-  data_scadenza?: string | null
   importo_totale: number
   stato: string
   customer_name: string
   customer_email?: string
-  customer_phone?: string
-  customer_address?: string
   customer_tax_code?: string
-  customer_vat?: string
   booking_id?: string
-  invoice_html?: string
-  items?: InvoiceItem[]
-  subtotal?: number
-  vat_amount?: number
-  exempt_amount?: number
-  created_at: string
-  updated_at?: string
   // SDI fields
   sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'scartata' | 'error'
-  sdi_id?: string
-  sdi_sent_at?: string
   sdi_notification_seen?: boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sdi_response?: any
-  customer_sdi_code?: string
-  customer_pec?: string
+  // Solo il motivo, estratto da sdi_response lato database: vedi loadInvoices.
+  sdi_auto_send_error?: string | null
   // Nota di credito
   tipo_fattura?: string
-  related_invoice_id?: string
-}
-
-interface InvoiceItem {
-  description: string
-  unit_price: number
-  quantity: number
-  vat_rate: number
-  total: number
+  // Servono a riconoscere le fatture in doppio: che documento e' (una
+  // estensione ha `extension_index` valorizzato) e se e' gia' uscito verso
+  // SDI. Vedi utils/fattureDoppie.
+  extension_index?: number | null
+  aruba_invoice_id?: string | null
 }
 
 // Chi può cambiare lo stato di pagamento delle fatture: il flag `role:payment-manager`
@@ -331,12 +314,16 @@ export default function FatturaTab() {
   const [view, setView] = useState<'emesse' | 'ricevute'>('emesse')
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
+  // Vero mentre le pagine successive alla prima stanno ancora arrivando: la
+  // tabella e' gia' usabile ma i totali in alto non sono ancora definitivi.
+  const [caricandoStorico, setCaricandoStorico] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterSdi, setFilterSdi] = useState<'all' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'error' | 'draft'>('all')
   const [filterTipo, setFilterTipo] = useState<'all' | 'fattura' | 'nota_credito'>('all')
+  const [soloDoppioni, setSoloDoppioni] = useState(false)
   const [filterDateFrom, setFilterDateFrom] = useState<string>('')
   const [filterDateTo, setFilterDateTo] = useState<string>('')
   const [filterCliente, setFilterCliente] = useState<string>('all')
@@ -414,6 +401,15 @@ export default function FatturaTab() {
   // Filter pipeline — single source of truth for both the table rows and
   // the pagination counter. Resetting the page when filters change avoids
   // landing on an empty page.
+  /**
+   * Le fatture in doppio: piu' di una fattura PRINCIPALE sulla stessa
+   * prenotazione. Non e' un caso di scuola — nasceva ogni volta che una
+   * prenotazione aveva anche una penale o un danno (vedi la migrazione
+   * 20260901_fatture_doppie) — e finche' resta in elenco l'importo compare due
+   * volte nei KPI e nel report.
+   */
+  const doppioni = useMemo(() => trovaDoppioni(invoices), [invoices])
+
   const filteredInvoices = useMemo(() => {
     return invoices.filter(invoice => {
       if (filterCliente !== 'all' && invoice.customer_name !== filterCliente) return false
@@ -434,6 +430,7 @@ export default function FatturaTab() {
           return false
         }
       }
+      if (soloDoppioni && !doppioni.ids.has(invoice.id)) return false
       if (filterTipo !== 'all') {
         const isNotaCredito = invoice.tipo_fattura === 'nota_credito' || invoice.tipo_fattura === 'TD04'
         if (filterTipo === 'nota_credito' && !isNotaCredito) return false
@@ -446,13 +443,13 @@ export default function FatturaTab() {
       }
       return true
     })
-  }, [invoices, filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo])
+  }, [invoices, filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo, soloDoppioni, doppioni])
 
   // Filtri attivi: quando l'operatore ha cercato qualcosa, il risultato e'
   // gia' ristretto e spezzarlo in pagine da 10 lo obbliga a scorrere fino in
   // fondo alla tabella solo per vedere il resto.
   const filtriAttivi = (
-    filterSdi !== 'all' || filterTipo !== 'all' || filterCliente !== 'all' ||
+    filterSdi !== 'all' || filterTipo !== 'all' || filterCliente !== 'all' || soloDoppioni ||
     !!filterDateFrom || !!filterDateTo || !!searchQuery
   )
 
@@ -475,7 +472,7 @@ export default function FatturaTab() {
 
   // Reset to page 0 whenever a filter changes — keeps the operator from
   // staring at an empty page after a narrow filter.
-  useEffect(() => { setCurrentPage(0) }, [filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo, pageSize])
+  useEffect(() => { setCurrentPage(0) }, [filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo, pageSize, soloDoppioni])
 
   // ─── KPI metrics ─────────────────────────────────────────────────────
   // Calcoli derivati dalle fatture caricate. Confronto vs mese precedente
@@ -707,20 +704,65 @@ export default function FatturaTab() {
     loadInvoices()
   }, [])
 
+  // 01/09/2026 — il tab ci metteva decine di secondi ad aprirsi.
+  //
+  // Due cause, entrambe in questa funzione:
+  //  1. `select('*')` si portava dietro TUTTE le colonne della fattura:
+  //     `xml_fattura_pa` (l'XML FatturaPA intero, una per riga), `items`,
+  //     `sdi_response` completo, `note`, `pdf_url`, i totali parziali.
+  //     Niente di tutto questo si vede in questa pagina: il PDF lo genera il
+  //     server partendo dal solo `invoiceId` (generate-invoice-pdf). Erano
+  //     megabyte scaricati per non disegnarli.
+  //  2. Nessuna paginazione: PostgREST tronca comunque a 1000 righe, quindi
+  //     oltre quella soglia le fatture piu' vecchie sparivano dalla lista E
+  //     dai KPI senza alcun avviso. Sulla demo (5.984 fatture) se ne vedeva
+  //     una su sei.
+  //
+  // Di `sdi_response` serve solo `auto_send_error` (il motivo per cui una
+  // bozza non e' mai partita): si estrae lato database invece di portarsi
+  // dietro tutta la risposta Aruba.
+  const FATTURA_COLUMNS = [
+    'id', 'numero_fattura', 'data_emissione', 'importo_totale', 'stato',
+    'customer_name', 'customer_email', 'customer_tax_code', 'booking_id',
+    'sdi_status', 'sdi_notification_seen', 'tipo_fattura',
+    'extension_index', 'aruba_invoice_id', 'created_at',
+    'sdi_auto_send_error:sdi_response->>auto_send_error',
+  ].join(',')
+
   async function loadInvoices() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('fatture')
-        .select('*')
-        .order('updated_at', { ascending: false })
+      // Le fatture arrivano a pagine: la prima (le piu' recenti, quelle che
+      // l'operatore vede subito) sblocca la tabella, lo storico continua a
+      // caricarsi dietro. Cosi' l'attesa all'apertura resta quella di UNA
+      // richiesta anche quando le fatture sono migliaia.
+      const { data, error } = await fetchAllRows<Invoice>(
+        (from, to) => supabase
+          .from('fatture')
+          .select(FATTURA_COLUMNS)
+          .order('updated_at', { ascending: false })
+          // `id` come secondo criterio: a parita' di `updated_at` l'ordine
+          // sarebbe arbitrario e le pagine si sovrapporrebbero, perdendo
+          // fatture per strada.
+          .order('id', { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Invoice[] | null; error: unknown }>,
+        {
+          burst: 6,
+          onPartial: parziali => {
+            setInvoices(parziali)
+            setLoading(false)
+            setCaricandoStorico(true)
+          },
+        },
+      )
 
       if (error) throw error
-      setInvoices(data || [])
+      setInvoices(data)
     } catch (error) {
       console.error('Failed to load invoices:', error)
     } finally {
       setLoading(false)
+      setCaricandoStorico(false)
     }
   }
 
@@ -1506,7 +1548,7 @@ export default function FatturaTab() {
                   // 'rejected'/'error' farebbero assegnare un NUOVO numero al
                   // reinvio, e questa fattura non e' mai uscita.
                   const sdiBlockReason = (sdiStatus === 'draft' || sdiStatus === 'error')
-                    ? String(invoice.sdi_response?.auto_send_error || '').trim()
+                    ? String(invoice.sdi_auto_send_error || '').trim()
                     : ''
                   const scartataLocale = sdiStatus === 'draft' && !!sdiBlockReason
                   const sdiLabel = scartataLocale ? 'Scartata (dati mancanti)'
@@ -1689,12 +1731,19 @@ export default function FatturaTab() {
               </select>
               <span className="text-theme-text-muted">risultati</span>
             </div>
-            <div className="text-theme-text-muted">
-              {filteredInvoices.length === 0
-                ? '0'
-                : mostraTutte
-                  ? `${filteredInvoices.length} ${filteredInvoices.length === 1 ? 'fattura' : 'fatture'}`
-                  : `${safePage * pageSize + 1} - ${Math.min((safePage + 1) * pageSize, filteredInvoices.length)} di ${filteredInvoices.length} fatture`}
+            <div className="text-theme-text-muted flex items-center gap-2">
+              <span>
+                {filteredInvoices.length === 0
+                  ? '0'
+                  : mostraTutte
+                    ? `${filteredInvoices.length} ${filteredInvoices.length === 1 ? 'fattura' : 'fatture'}`
+                    : `${safePage * pageSize + 1} - ${Math.min((safePage + 1) * pageSize, filteredInvoices.length)} di ${filteredInvoices.length} fatture`}
+              </span>
+              {/* Senza questo avviso i totali in alto sembrerebbero sbagliati
+                  per il secondo scarso in cui lo storico sta ancora arrivando. */}
+              {caricandoStorico && (
+                <span className="text-dr7-gold/80">· sto caricando lo storico…</span>
+              )}
             </div>
             {/* Con una pagina sola i comandi sarebbero tutti spenti: si tolgono. */}
             <div className={`flex items-center gap-1 ${mostraTutte ? 'hidden' : ''}`}>

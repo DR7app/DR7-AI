@@ -64,6 +64,28 @@ describe('fetchAllRows', () => {
     expect(res.data).toHaveLength(1500)
   })
 
+  it('onPartial: consegna la prima pagina prima di avere tutto', async () => {
+    const t = makeTable(2500)
+    const parziali: number[] = []
+    const res = await fetchAllRows<{ id: string }>(t.page, {
+      pageSize: 1000,
+      onPartial: rows => parziali.push(rows.length),
+    })
+    // Primo avviso con la sola prima pagina, risultato finale completo.
+    expect(parziali[0]).toBe(1000)
+    expect(res.data).toHaveLength(2500)
+    // L'ultimo giro non richiama onPartial: ci pensa il return.
+    expect(parziali[parziali.length - 1]).toBeLessThan(2500)
+  })
+
+  it('onPartial: tabella che sta in una pagina non lo chiama mai', async () => {
+    const t = makeTable(42)
+    let chiamate = 0
+    const res = await fetchAllRows(t.page, { pageSize: 1000, onPartial: () => { chiamate++ } })
+    expect(chiamate).toBe(0)
+    expect(res.data).toHaveLength(42)
+  })
+
   it('propaga errore della prima pagina', async () => {
     const page = async () => ({ data: null, error: { message: 'boom' } })
     const res = await fetchAllRows(page, { pageSize: 1000 })
