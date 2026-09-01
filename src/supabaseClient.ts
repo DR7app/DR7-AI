@@ -13,7 +13,17 @@ if (!supabaseAnonKey) {
   throw new Error('Missing VITE_SUPABASE_ANON_KEY environment variable')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// La fetch va risolta a ogni chiamata, non al momento della creazione.
+//
+// supabase-js si tiene `fetch` cosi' com'e' quando il client nasce, e il client
+// nasce durante gli import — cioe' PRIMA che main.tsx installi i suoi strati.
+// Senza questo passaggio la modalita' Oscurare (src/utils/oscura.ts) non vedeva
+// nemmeno una delle query a Supabase: si accendeva e non cambiava niente.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: (...argomenti: Parameters<typeof fetch>) => window.fetch(...argomenti),
+  },
+})
 
 // 25/08/2026 — account salvati e token che scadono.
 //

@@ -107,13 +107,23 @@ const CITTA = [
 const SOCIETA = ['Alba', 'Mediterranea', 'Nuraghe', 'Tirreno', 'Sardegna', 'Orion', 'Aurora']
 const FORME = ['SRL', 'SRLS', 'SPA', 'SNC']
 
-/** Impronta FNV-1a: stessa stringa, stesso numero, sempre. */
+/**
+ * Impronta FNV-1a: stessa stringa, stesso numero, sempre.
+ *
+ * Il rimescolamento finale non e' un vezzo: senza, i bit bassi si somigliano
+ * troppo e due indirizzi diversi finivano sulla stessa via allo stesso civico.
+ */
 function impronta(testo: string): number {
   let h = 2166136261
   for (let i = 0; i < testo.length; i++) {
     h ^= testo.charCodeAt(i)
     h = Math.imul(h, 16777619)
   }
+  h ^= h >>> 15
+  h = Math.imul(h, 2246822507)
+  h ^= h >>> 13
+  h = Math.imul(h, 3266489909)
+  h ^= h >>> 16
   return h >>> 0
 }
 
@@ -372,6 +382,10 @@ function maschera(dato: unknown, profondita: number, persona = false): unknown {
             || genere === 'telefono' || genere === 'solo-cognome') {
           ricorda(valore, finto)
         }
+        // Quello che si vede a schermo va anche sfocato: si segnano sia il
+        // valore vero (se qualcosa sfuggisse alla mascheratura) sia il finto.
+        segnaSensibile(valore)
+        segnaSensibile(finto)
         // L'operatore collegato resta se stesso: i controlli di ruolo lo cercano.
         fuori[chiave] = (genere === 'email' && emailOperatore && valore.toLowerCase() === emailOperatore)
           ? valore
@@ -398,6 +412,120 @@ function maschera(dato: unknown, profondita: number, persona = false): unknown {
 /** Uguale a quello che vede il gestionale: usato dai test. */
 export function mascheraDati(dato: unknown): unknown {
   return maschera(dato, 0)
+}
+
+// ---------------------------------------------------------------------------
+// Sfocatura a schermo
+// ---------------------------------------------------------------------------
+//
+// Sostituire i dati non basta: un nome finto sembra un nome vero, e a schermo
+// non si vede nessuna differenza — chi guarda la registrazione non sa se la
+// modalita' e' accesa. Quello che appare va anche SFOCATO.
+//
+// Non si possono marcare i campi uno per uno: sono duecento schede. Si guarda
+// il testo che finisce nella pagina e si sfoca l'elemento che lo contiene,
+// aggiungendo una classe. Solo un attributo: React puo' ridisegnare quanto
+// vuole, l'osservatore rimette la classe al giro dopo.
+
+/** Valori (veri e finti) che a schermo vanno sfocati. */
+const valoriSensibili = new Set<string>()
+const LIMITE_SENSIBILI = 2000
+let cercaSensibili: RegExp | null = null
+
+function segnaSensibile(valore: string): void {
+  if (valoriSensibili.size >= LIMITE_SENSIBILI) return
+  const v = valore.trim().toLowerCase()
+  if (v.length < 3 || v.length > 120 || valoriSensibili.has(v)) return
+  valoriSensibili.add(v)
+  cercaSensibili = null
+  nodiVisti = new WeakSet<Text>() // c'e' qualcosa di nuovo da cercare
+  programmaScansione()
+}
+
+/** Riconoscimenti che valgono anche senza dizionario. */
+const SCHEMI_SENSIBILI: RegExp[] = [
+  /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i,                 // email
+  /(?:\+\d{1,3}[\s.-]?)?\b3\d{2}[\s.-]?\d{3}[\s.-]?\d{3,4}\b/, // cellulare italiano
+  /\bIT\d{2}[A-Z]\d{10,22}\b/i,                            // IBAN
+  /\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/i,            // codice fiscale
+]
+
+/** Campi di scrittura da sfocare anche se vuoti. */
+const CAMPO_PERSONALE = /(nome|cognome|email|mail|telefono|phone|cellulare|indirizzo|address|codice_?fiscale|partita_?iva|piva|iban|patente|documento|nascita)/i
+
+function vaOscurato(testo: string): boolean {
+  const t = testo.trim()
+  if (t.length < 3) return false
+  if (!cercaSensibili && valoriSensibili.size > 0) {
+    const voci = [...valoriSensibili]
+      .sort((a, b) => b.length - a.length)
+      .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    cercaSensibili = new RegExp(voci.join('|'), 'i')
+  }
+  if (cercaSensibili && cercaSensibili.test(t)) return true
+  return SCHEMI_SENSIBILI.some(schema => schema.test(t))
+}
+
+/** Elementi che non vanno mai sfocati per intero. */
+const MAI_SFOCARE = new Set(['HTML', 'BODY', 'HEADER', 'NAV', 'MAIN', 'TABLE', 'TBODY', 'THEAD', 'TR', 'FORM'])
+
+let nodiVisti = new WeakSet<Text>()
+let attesa: ReturnType<typeof setTimeout> | null = null
+
+function programmaScansione(): void {
+  if (attesa) return
+  attesa = setTimeout(() => {
+    attesa = null
+    try {
+      scansiona()
+    } catch { /* una schermata storta non deve fermare il gestionale */ }
+  }, 120)
+}
+
+function scansiona(): void {
+  if (!document.body) return
+
+  const cammino = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+  let nodo = cammino.nextNode()
+  while (nodo) {
+    const testo = nodo as Text
+    if (!nodiVisti.has(testo)) {
+      nodiVisti.add(testo)
+      const contenuto = testo.nodeValue || ''
+      if (contenuto.length <= 400 && vaOscurato(contenuto)) {
+        const el = testo.parentElement
+        if (el && !el.classList.contains('oscurato')
+            && !MAI_SFOCARE.has(el.tagName)
+            && el.children.length <= 12
+            && !el.closest('.oscurato')) {
+          el.classList.add('oscurato')
+        }
+      }
+    }
+    nodo = cammino.nextNode()
+  }
+
+  // Nei campi di scrittura il testo non e' un nodo della pagina: si guarda
+  // il valore, e il nome del campo per quelli ancora vuoti.
+  const campi = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+  for (const campo of campi) {
+    if (campo.classList.contains('oscurato')) continue
+    if ((campo as HTMLInputElement).type === 'password') continue
+    const etichetta = `${campo.name || ''} ${campo.id || ''} ${campo.getAttribute('placeholder') || ''}`
+    if (CAMPO_PERSONALE.test(etichetta) || vaOscurato(campo.value || '')) {
+      campo.classList.add('oscurato')
+    }
+  }
+}
+
+/** Prima passata e sorveglianza di quello che React ridisegna. */
+function avviaSfocatura(): void {
+  scansiona()
+  new MutationObserver(programmaScansione).observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -509,6 +637,9 @@ export function installaOscuramento(): void {
   if (!oscuraAttivo()) return
 
   document.documentElement.setAttribute('data-oscura', '')
+
+  if (document.body) avviaSfocatura()
+  else document.addEventListener('DOMContentLoaded', avviaSfocatura, { once: true })
 
   const finestra = window as unknown as { __dr7OscuraInstallato?: boolean }
   if (finestra.__dr7OscuraInstallato) return

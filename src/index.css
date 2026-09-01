@@ -986,6 +986,16 @@ html[data-palette="frost"].light {
 }
 
 /* Modalita' Oscurare (src/utils/oscura.ts).
+   Quello che si vede a schermo viene sfocato: la classe la mette l'osservatore
+   sugli elementi che contengono dati dei clienti. Vale in chiaro e in scuro,
+   il testo non e' piu' leggibile ne' selezionabile. */
+html[data-oscura] .oscurato {
+  filter: blur(4.5px) !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Modalita' Oscurare (src/utils/oscura.ts).
    I campi dei clienti arrivano gia' mascherati dalla rete, ma documenti e
    contratti sono immagini e PDF: li' non c'e' niente da riscrivere, si
    sfocano. */
