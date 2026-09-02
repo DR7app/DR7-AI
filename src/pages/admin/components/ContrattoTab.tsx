@@ -10,6 +10,8 @@ import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { useSelezioneMultipla } from '../../../utils/selezioneMultipla'
+import { BarraSelezioneMultipla, CasellaSelezione } from '../../../components/SelezioneMultipla'
 import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 
 interface Contract {
@@ -188,6 +190,10 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
    * selezione sono le stesse di prima, spostate dentro la query.
    */
   const CONTRATTI_PER_PAGINA = 25
+  // Contratti scritti a mano, senza prenotazione collegata: si leggono a
+  // parte e si mescolano per data. Sono una manciata; il tetto e' solo per
+  // non trasformare un caso raro in una lettura pesante a ogni pagina.
+  const MAX_SENZA_PRENOTAZIONE = 200
   const [contrattiPagina, setContrattiPagina] = useState(1)
   const [totaleContratti, setTotaleContratti] = useState(0)
   // La ricerca aspetta che si smetta di digitare: una query per parola cercata,
@@ -300,6 +306,10 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   // ricerca, la risposta vecchia che arriva dopo viene buttata.
   const richiestaRef = useRef(0)
 
+  // Dopo un'eliminazione il totale in fondo non e' piu' quello: la lettura
+  // successiva lo richiede, anche se non siamo sulla prima pagina.
+  const ricontaRef = useRef(false)
+
   // Estremi UTC della giornata Europe/Rome: il filtro periodo e' su created_at,
   // che e' salvato in UTC. `romeIsoFromParts` tiene conto dell'ora legale.
   function inizioGiornoRoma(giorno: string): string {
@@ -346,49 +356,99 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         ? `service_type.eq.${businessCorrente},and(service_type.is.null,booking_details->>service_type.eq.${businessCorrente})`
         : `service_type.not.in.(${ALTRI_BUSINESS}),and(service_type.is.null,or(booking_details->>service_type.is.null,booking_details->>service_type.not.in.(${ALTRI_BUSINESS})))`
 
-      // Prima lettura: solo id e data, per sapere QUALI 25 contratti mostrare
-      // e quanti sono in tutto. Sono due elenchi perche' i contratti scritti
-      // a mano da questa tab non hanno prenotazione collegata: restano su
-      // Terra, dove sono sempre stati, e il join li lascerebbe fuori.
-      const fine = contrattiPagina * CONTRATTI_PER_PAGINA
+      // Del `booking_details` (3,2 KB a riga) servono SOLO i quattro rami da
+      // cui si ricavano i firmatari. Chiedendo quelli invece dell'oggetto
+      // intero la pagina scende da 99,6 KB a 34,2 KB: stessi 25 contratti,
+      // stesse informazioni a schermo.
+      // `!inner`: il filtro per business deve tagliare i CONTRATTI, non solo
+      // svuotare la prenotazione agganciata. Senza, Mare e Aria mostravano di
+      // nuovo tutti i contratti auto.
+      const COLONNE_ELENCO = '*, bookings!inner(customer_name, customer_email, customer_phone, service_type,'
+        + ' bd_cliente:booking_details->customer,'
+        + ' bd_secondo:booking_details->second_driver,'
+        + ' bd_garante:booking_details->garante_veicolo,'
+        + ' bd_fideiussori:booking_details->guarantors)'
+
+      const da = (contrattiPagina - 1) * CONTRATTI_PER_PAGINA
+      const a = da + CONTRATTI_PER_PAGINA - 1
+
+      // Il totale si conta solo quando serve: cambiare pagina non cambia
+      // quante righe ci sono, e ogni filtro riporta alla prima pagina.
+      const conteggio = (contrattiPagina === 1 || ricontaRef.current) ? { count: 'exact' as const } : undefined
+      ricontaRef.current = false
+
+      // Una lettura sola, gia' tagliata dal server e con dentro le righe
+      // intere. Prima erano due giri in fila (prima gli id, poi le righe) e il
+      // primo si portava dietro tutte le pagine precedenti: alla pagina 40
+      // scaricava mille righe per mostrarne 25.
+      //
+      // I contratti scritti a mano da questa tab non hanno prenotazione
+      // collegata e il join `!inner` li lascerebbe fuori: si contano a parte.
+      // Sono una manciata, quindi la strada normale e' quella dove non ce ne
+      // sono e questa lettura basta da sola.
       const [conPrenotazione, senzaPrenotazione] = await Promise.all([
         filtriComuni(supabase
           .from('contracts')
-          .select('id, updated_at, bookings!inner(service_type)', { count: 'exact' })
+          .select(COLONNE_ELENCO, conteggio)
           .or(filtroBusiness, { referencedTable: 'bookings' })
-        ).range(0, fine - 1),
+        ).range(da, a),
         businessCorrente ? null : filtriComuni(supabase
           .from('contracts')
           .select('id, updated_at', { count: 'exact' })
           .is('booking_id', null)
-        ).range(0, fine - 1),
+        ).range(0, MAX_SENZA_PRENOTAZIONE - 1),
       ])
       if (conPrenotazione.error) throw conPrenotazione.error
       if (senzaPrenotazione?.error) throw senzaPrenotazione.error
 
-      // I due elenchi arrivano gia' ordinati: si rimescolano per data e si
-      // taglia la pagina richiesta.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const indice = [...(conPrenotazione.data || []), ...(senzaPrenotazione?.data || [])] as any[]
-      indice.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-      const idsPagina = indice
-        .slice((contrattiPagina - 1) * CONTRATTI_PER_PAGINA, fine)
-        .map(r => r.id)
-      const totale = (conPrenotazione.count || 0) + (senzaPrenotazione?.count || 0)
+      const senza = (senzaPrenotazione?.data || []) as any[]
+      const totale = conteggio
+        ? (conPrenotazione.count || 0) + (senzaPrenotazione?.count || 0)
+        : totaleContratti
 
-      // Seconda lettura: le righe intere, con il booking_details, SOLO per i
-      // 25 contratti della pagina.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let rows: any[] = []
-      if (idsPagina.length > 0) {
-        const { data, error } = await supabase
-          .from('contracts')
-          .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details, service_type)')
-          .in('id', idsPagina)
-        if (error) throw error
+      let rows: any[] = (conPrenotazione.data || []) as any[]
+      if (senza.length > 0) {
+        // Caso raro: ci sono contratti senza prenotazione e vanno mescolati
+        // per data con gli altri. Ognuno di loro puo' spingere in avanti di un
+        // posto le righe che seguono, quindi si riapre la finestra allargata
+        // di altrettanti posti: la pagina esce esatta senza dover scaricare
+        // tutto quello che viene prima.
+        const inizio = Math.max(0, da - senza.length)
+        const [finestra, righeSenza] = await Promise.all([
+          filtriComuni(supabase
+            .from('contracts')
+            .select(COLONNE_ELENCO)
+            .or(filtroBusiness, { referencedTable: 'bookings' })
+          ).range(inizio, a),
+          filtriComuni(supabase
+            .from('contracts')
+            .select('*')
+            .is('booking_id', null)
+          ).range(0, MAX_SENZA_PRENOTAZIONE - 1),
+        ])
+        if (finestra.error) throw finestra.error
+        if (righeSenza.error) throw righeSenza.error
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const perId = new Map((data || []).map((c: any) => [c.id, c]))
-        rows = idsPagina.map(id => perId.get(id)).filter(Boolean)
+        const unite = [...(finestra.data || []), ...(righeSenza.data || [])] as any[]
+        unite.sort((x, y) => String(y.updated_at || '').localeCompare(String(x.updated_at || '')))
+        rows = unite.slice(da - inizio, da - inizio + CONTRATTI_PER_PAGINA)
+      }
+
+      // I quattro rami arrivano come colonne a se': si rimettono dentro un
+      // `booking_details`, cosi' `buildContractSigners` e il resto della tab
+      // leggono quello che hanno sempre letto.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const c of rows as any[]) {
+        const b = c?.bookings
+        if (!b) continue
+        b.booking_details = {
+          customer: b.bd_cliente ?? undefined,
+          second_driver: b.bd_secondo ?? undefined,
+          garante_veicolo: b.bd_garante ?? undefined,
+          guarantors: b.bd_fideiussori ?? undefined,
+        }
       }
 
       // Stato firma: matchiamo per BOOKING_ID (oltre che per contract_id).
@@ -583,10 +643,47 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         .eq('id', id)
 
       if (error) throw error
+      ricontaRef.current = true
       loadContracts()
     } catch (error) {
       console.error('Failed to delete contract:', error)
       alert('Impossibile eliminare il contratto')
+    }
+  }
+
+  /**
+   * Selezione multipla (02/09/2026): prima i contratti si cancellavano uno
+   * per uno, con un giro sul server per ognuno. Il comportamento delle
+   * caselle sta in `SelezioneMultipla.tsx` ed e' lo stesso di ogni altra tab.
+   */
+  const selezione = useSelezioneMultipla()
+  const [eliminandoSelezione, setEliminandoSelezione] = useState(false)
+
+  async function eliminaSelezionati() {
+    const ids = selezione.selezionati
+    if (ids.length === 0) return
+    const ok = window.confirm(
+      `Eliminare ${ids.length} contratt${ids.length === 1 ? 'o' : 'i'}?\n\n` +
+      'L\'operazione non si puo\' annullare.'
+    )
+    if (!ok) return
+    setEliminandoSelezione(true)
+    try {
+      // A blocchi: la lista di id finisce nell'indirizzo della richiesta e
+      // sopra un certo numero non ci starebbe.
+      for (let i = 0; i < ids.length; i += 80) {
+        const { error } = await supabase.from('contracts').delete().in('id', ids.slice(i, i + 80))
+        if (error) throw error
+      }
+      toast.success(`${ids.length} contratt${ids.length === 1 ? 'o eliminato' : 'i eliminati'}`)
+      selezione.azzera()
+      ricontaRef.current = true
+      loadContracts()
+    } catch (error) {
+      console.error('Eliminazione multipla contratti fallita:', error)
+      toast.error('Impossibile eliminare i contratti selezionati')
+    } finally {
+      setEliminandoSelezione(false)
     }
   }
 
@@ -1127,6 +1224,13 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         />
         {/* 2026-06-01: filtro periodo su created_at del contratto */}
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        <BarraSelezioneMultipla
+          selezione={selezione}
+          idsPagina={contracts.map(c => c.id)}
+          onAzione={eliminaSelezionati}
+          inCorso={eliminandoSelezione}
+          nomeElemento="contratti"
+        />
       </div>
 
       {/* Contracts List */}
@@ -1143,8 +1247,21 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {contracts.map((contract) => (
-            <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+            <div
+              key={contract.id}
+              className={`bg-theme-bg-secondary rounded-lg p-4 border transition-colors ${
+                selezione.attiva && selezione.scelto(contract.id)
+                  ? 'border-dr7-gold'
+                  : 'border-theme-border'}`}
+            >
               <div className="flex justify-between items-start">
+                {selezione.attiva && (
+                  <CasellaSelezione
+                    scelto={selezione.scelto(contract.id)}
+                    onChange={() => selezione.alterna(contract.id)}
+                    etichetta={`Seleziona il contratto ${contract.contract_number}`}
+                  />
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-theme-text-primary">{contract.contract_number}</h3>
