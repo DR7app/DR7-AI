@@ -320,17 +320,46 @@ export default function ReviewManagementTab() {
         }
       }
 
+      // 02/09/2026 — si valuta solo cio' che non e' gia' stato valutato.
+      //
+      // Prima questo giro rivalutava OGNI prenotazione chiusa negli ultimi
+      // trenta giorni a ogni apertura della tab, una richiesta per volta e in
+      // fila: centinaia di POST che continuavano ad arrivare per un minuto
+      // buono, con il contatore "Valutazione: 12/300" a coprire lo schermo.
+      // Le righe c'erano gia' tutte: l'unico lavoro utile e' la prenotazione
+      // chiusa da poco, che ancora non ha un candidato.
+      //
+      // Chi e' gia' valutato continua a essere controllato da
+      // autoFixEligibility, che legge penali, danni e cauzioni in blocco e
+      // sposta fra Pronti ed Esclusi.
+      const { data: giaValutati } = await supabase
+        .from('review_candidates')
+        .select('source_record_id')
+        .in('source_record_id', allRecords.map(r => r.id).slice(0, 1000))
+      const noti = new Set((giaValutati || []).map((c: { source_record_id: string }) => c.source_record_id))
+      const nuovi = allRecords.filter(r => !noti.has(r.id))
+
+      if (nuovi.length === 0) {
+        toast.dismiss(toastId)
+        return
+      }
+
+      // I nuovi partono a gruppi di sei: il database non viene sommerso e non
+      // si aspetta la somma di tutte le chiamate.
       let done = 0
-      for (const record of allRecords) {
-        try {
-          await fetch(`${NETLIFY_BASE}/review-evaluate-candidate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sourceRecordId: record.id, serviceType: record.serviceType }),
-          })
-        } catch { /* skip */ }
-        done++
-        if (done % 5 === 0) toast.loading(`Valutazione: ${done}/${allRecords.length}`, { id: toastId })
+      const PARALLELE = 6
+      for (let i = 0; i < nuovi.length; i += PARALLELE) {
+        await Promise.all(nuovi.slice(i, i + PARALLELE).map(async record => {
+          try {
+            await fetch(`${NETLIFY_BASE}/review-evaluate-candidate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sourceRecordId: record.id, serviceType: record.serviceType }),
+            })
+          } catch { /* skip */ }
+          done++
+        }))
+        toast.loading(`Valutazione: ${done}/${nuovi.length}`, { id: toastId })
       }
 
       toast.dismiss(toastId)
