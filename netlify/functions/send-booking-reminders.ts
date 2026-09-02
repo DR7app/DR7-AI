@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -572,4 +573,4 @@ export const reminderHandler: Handler = async () => {
 };
 
 // Run every 2 hours via Netlify scheduled functions.
-export const handler = schedule('0 */2 * * *', reminderHandler);
+export const handler = schedule('0 */2 * * *', conSystemControl('send-booking-reminders', reminderHandler, { cron: true }));

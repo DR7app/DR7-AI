@@ -25,6 +25,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { conSystemControl } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -218,4 +219,4 @@ const cronHandler: Handler = async () => {
 }
 
 // Ogni giorno alle 07:00 UTC (~9 Rome in estate, ~8 in inverno).
-export const handler = schedule('0 7 * * *', cronHandler)
+export const handler = schedule('0 7 * * *', conSystemControl('vehicle-deadlines-cron', cronHandler, { cron: true }))

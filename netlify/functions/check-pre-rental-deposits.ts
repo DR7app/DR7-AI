@@ -1,4 +1,5 @@
 import { Handler, schedule } from '@netlify/functions'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * DISABLED - This function is not needed
@@ -14,4 +15,4 @@ const scheduledHandler: Handler = async (event) => {
 }
 
 // Keep schedule to prevent errors, but function does nothing
-export const handler = schedule('0 0 * * *', scheduledHandler) // Once per day at midnight (basically never triggers anything useful)
+export const handler = schedule('0 0 * * *', conSystemControl('check-pre-rental-deposits', scheduledHandler, { cron: true })) // Once per day at midnight (basically never triggers anything useful)

@@ -1,4 +1,5 @@
 import { Handler, schedule } from '@netlify/functions'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * DEPRECATED — Birthday messages are now handled by send-birthday-messages.ts
@@ -13,4 +14,4 @@ const scheduledHandler: Handler = async (event) => {
     }
 }
 
-export const handler = schedule('0 10 * * *', scheduledHandler)
+export const handler = schedule('0 10 * * *', conSystemControl('check-birthdays', scheduledHandler, { cron: true }))

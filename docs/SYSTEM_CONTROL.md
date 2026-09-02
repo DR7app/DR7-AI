@@ -21,6 +21,49 @@ Sta in **Sistemi > System Control** e la vedono solo `direzione` e `developer`.
 | Storico | Audit di ogni intervento, configurazioni con ripristino, avvisi, rilasci, backup |
 | Rapporti tecnici | Il documento completo da consegnare allo sviluppatore |
 
+## Il controllo orario
+
+`system-control-controllo-orario` gira **ogni ora** (pianificato in
+`netlify.toml`) e fa il giro completo della piattaforma. Il verbale finisce in
+`sc_actions_log` con azione `controllo_orario` e si legge in **Stato generale
+> Controllo orario**. Lo stesso giro si lancia a mano con il pulsante
+"Controlla adesso": non passa da HTTP, chiama direttamente
+`eseguiControlloOrario()` dentro `system-control-actions`.
+
+Sei controlli, tutti in sola lettura — non modificano dati, non inviano niente
+ai clienti, non toccano il codice:
+
+1. **Database** — risponde, e in quanto tempo.
+2. **Collegamenti** — prova davvero ogni integrazione (`systemControlTest.ts`)
+   e aggiorna `sc_integrations`. Un servizio **mai configurato** non e' un
+   guasto: si segnala e basta. Guasto e' quando le credenziali ci sono a meta'
+   o il servizio risponde male.
+3. **Automatismi fermi** — il caso piu' pericoloso, perche' un cron che non
+   gira non produce nessun errore. Ogni automatismo sorvegliato
+   (`CRON_SORVEGLIATI`) e' avvolto in `conSystemControl(nome, handler, { cron:
+   true })` e lascia un **battito** in `sc_metrics` (tipo `job`) a ogni giro.
+   Il controllo confronta l'ultimo battito con la cadenza dichiarata e apre un
+   problema se mancano tre giri.
+4. **Operazioni ferme** — quante hanno smesso di ritentare e aspettano una
+   persona.
+5. **Errori dell'ultima ora** — quanti nuovi, quanti gravi, quanti da passare
+   allo sviluppatore.
+6. **Funzioni** — quali stanno restituendo errori o sono diventate lente.
+
+Quello che trova diventa un problema normale del pannello, con severita',
+classe di risoluzione e azioni suggerite. Gli avvisi verso l'esterno restano
+compito del worker di auto-riparazione, che li raggruppa: cosi' un guasto non
+manda un messaggio a ogni controllo.
+
+### Aggiungere un automatismo alla sorveglianza
+
+1. Una riga in `CRON_SORVEGLIATI` (`utils/systemControlCatalog.ts`) con la
+   cadenza reale in minuti e cosa smette di succedere se si ferma.
+2. Nella funzione: `export const handler = schedule('...', conSystemControl('nome-funzione', handlerVero, { cron: true }))`
+   (oppure, per chi e' pianificato da `netlify.toml`, si avvolge l'handler
+   esportato). Senza il battito il controllo dira' per sempre "nessun giro
+   registrato".
+
 ## Le tre categorie di problema
 
 1. **Si risolve da solo** — il ciclo di auto-riparazione ritenta con ritardo
@@ -62,7 +105,9 @@ private diventano `[nascosto]`.
 1. Esegui `supabase/migrations/20260831_system_control.sql` nel SQL editor di
    Supabase. Finche' non gira, il gestionale funziona normalmente e la tab
    dice che la migrazione manca: nessuna scrittura, nessun errore.
-2. Il cron `system-control-worker` (ogni 5 minuti) e gia in `netlify.toml`.
+2. I due cron sono gia in `netlify.toml`: `system-control-worker` (ogni 5
+   minuti, auto-riparazione) e `system-control-controllo-orario` (ogni ora,
+   giro completo).
 3. Variabili d'ambiente **facoltative**:
    - `SYSTEM_CONTROL_ALERT_PHONES` — numeri (CSV) che ricevono su WhatsApp i
      soli problemi **critici**. Senza questa variabile gli avvisi restano nel

@@ -12,8 +12,32 @@ import { requireAuth } from './require-auth'
 import { userHasRole } from './utils/adminRoles'
 import { registraAzione, registraConfig, mascheraTesto } from './utils/systemControl'
 import { JOB_RILANCIABILI } from './utils/systemControlCatalog'
+import { eseguiControlloOrario } from './utils/systemControlControllo'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+// Un automatismo pianificato NON si puo' richiamare via HTTP: Netlify
+// risponde 403 a chiunque provi a chiamarlo da fuori. Per rilanciarlo si
+// importa il modulo e si chiama il suo handler qui dentro, nello stesso
+// processo. L'elenco e' fisso: nessun modulo arbitrario viene mai caricato.
+type ModuloJob = { handler: (event: unknown, context: unknown) => Promise<unknown> }
+const MODULI_JOB: Record<string, () => Promise<ModuloJob>> = {
+  'cargos-retry-missed':            () => import('./cargos-retry-missed') as unknown as Promise<ModuloJob>,
+  'fornitori-fatture-sync-cron':    () => import('./fornitori-fatture-sync-cron') as unknown as Promise<ModuloJob>,
+  'fatture-bozza-alert-cron':       () => import('./fatture-bozza-alert-cron') as unknown as Promise<ModuloJob>,
+  'process-scheduled-campaigns-cron': () => import('./process-scheduled-campaigns-cron') as unknown as Promise<ModuloJob>,
+  'system-control-worker':          () => import('./system-control-worker') as unknown as Promise<ModuloJob>,
+}
+
+/** Evento minimo per un automatismo: i cron non leggono la richiesta. */
+function eventoDiServizio(email: string) {
+  return {
+    httpMethod: 'POST', path: '', headers: {}, multiValueHeaders: {},
+    queryStringParameters: null, multiValueQueryStringParameters: null,
+    body: JSON.stringify({ manuale: true, richiestoDa: email }),
+    isBase64Encoded: false, rawUrl: '', rawQuery: '',
+  }
+}
 
 // Tabelle di CONFIGURAZIONE ripristinabili. Volutamente corta: qui non
 // compaiono ne dati contabili ne dati operativi, che hanno bisogno di
@@ -50,19 +74,29 @@ const handler: Handler = async (event) => {
       case 'riavvia_job': {
         const job = JOB_RILANCIABILI.find(j => j.chiave === body.bersaglio)
         if (!job) { ok = false; messaggio = 'Automatismo sconosciuto.'; break }
-        const base = process.env.URL || process.env.DEPLOY_PRIME_URL || ''
-        const res = await fetch(`${base}/.netlify/functions/${job.funzione}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(process.env.ADMIN_API_TOKEN ? { Authorization: `Bearer ${process.env.ADMIN_API_TOKEN}` } : {}),
-          },
-          body: JSON.stringify({ manuale: true, richiestoDa: email }),
-        })
-        ok = res.ok
-        messaggio = res.ok
-          ? `${job.etichetta}: ciclo lanciato adesso.`
-          : `${job.etichetta}: il lancio ha risposto ${res.status}.`
+        const carica = MODULI_JOB[job.funzione]
+        if (!carica) { ok = false; messaggio = `${job.etichetta}: non rilanciabile da qui.`; break }
+        const modulo = await carica()
+        const risposta = await modulo.handler(eventoDiServizio(email), {}) as { statusCode?: number; body?: string }
+        const stato = risposta?.statusCode ?? 200
+        ok = stato < 400
+        let dettaglio = ''
+        try {
+          const corpo = JSON.parse(risposta?.body || '{}') as Record<string, unknown>
+          if (typeof corpo.motivo === 'string') dettaglio = ` ${corpo.motivo}`
+        } catch { /* corpo non JSON: nessun dettaglio */ }
+        messaggio = ok
+          ? `${job.etichetta}: ciclo lanciato adesso.${dettaglio}`
+          : `${job.etichetta}: il ciclo ha risposto ${stato}.${dettaglio}`
+        break
+      }
+
+      // ── Controllo completo della piattaforma, adesso ───────────────────
+      case 'controllo_adesso': {
+        const esito = await eseguiControlloOrario({ attoreEmail: email })
+        ok = esito.statoGenerale !== 'critico'
+        messaggio = esito.riepilogo
+        extra = { controllo: esito }
         break
       }
 

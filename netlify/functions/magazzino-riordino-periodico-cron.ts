@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * Riordino PERIODICO del magazzino (24/08/2026).
@@ -143,4 +144,7 @@ const handler: Handler = async () => {
   return { statusCode: 200, body: JSON.stringify({ controllati: (articoli || []).length, esiti }) }
 }
 
-export { handler }
+// Battito per il controllo orario del System Control: ogni giro lascia
+// traccia, cosi' il pannello si accorge se questo automatismo si ferma.
+const handlerSorvegliato = conSystemControl('magazzino-riordino-periodico-cron', handler, { cron: true })
+export { handlerSorvegliato as handler }

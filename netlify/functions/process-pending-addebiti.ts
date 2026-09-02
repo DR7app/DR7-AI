@@ -5,6 +5,7 @@ import { PDFDocument } from 'pdf-lib'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFrom } from './utils/emailFrom'
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -430,4 +431,4 @@ const processHandler: Handler = async () => {
 }
 
 // TEST: Run every minute (prod: '0 * * * *' = every hour)
-export const handler = schedule('* * * * *', processHandler)
+export const handler = schedule('* * * * *', conSystemControl('process-pending-addebiti', processHandler, { cron: true }))

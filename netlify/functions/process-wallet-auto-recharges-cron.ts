@@ -28,6 +28,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { conSystemControl } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -193,4 +194,4 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 // Cron runs at :00 of every hour. The handler gates per-customer on
 // scheduledHour === currentHour so each customer only fires at their
 // chosen time of day.
-export const handler = schedule('0 * * * *', cronHandler)
+export const handler = schedule('0 * * * *', conSystemControl('process-wallet-auto-recharges-cron', cronHandler, { cron: true }))

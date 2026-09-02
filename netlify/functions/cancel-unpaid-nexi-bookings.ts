@@ -2,6 +2,7 @@ import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -234,4 +235,4 @@ const cancelHandler: Handler = async () => {
 };
 
 // Run every 5 minutes for tighter expiry enforcement
-export const handler = schedule('*/5 * * * *', cancelHandler);
+export const handler = schedule('*/5 * * * *', conSystemControl('cancel-unpaid-nexi-bookings', cancelHandler, { cron: true }));

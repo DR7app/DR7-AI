@@ -115,6 +115,9 @@ export interface EventoTecnico {
   severita?: Severita
   classe?: ClasseRisoluzione
   titolo?: string
+  /** Spiegazione e azioni gia' pronte: usate dai controlli automatici. */
+  causa?: string
+  azioni?: string[]
 }
 
 export interface EsitoRegistrazione {
@@ -176,7 +179,7 @@ export async function registraEvento(e: EventoTecnico): Promise<EsitoRegistrazio
         impronta: fp,
         titolo,
         messaggio_tecnico: messaggioPulito,
-        causa_probabile: tradotto.causa,
+        causa_probabile: e.causa || tradotto.causa,
         severita,
         categoria: e.categoria || 'altro',
         classe_risoluzione: classe,
@@ -184,7 +187,7 @@ export async function registraEvento(e: EventoTecnico): Promise<EsitoRegistrazio
         funzione: e.funzione || null,
         integrazione: e.integrazione || null,
         business: e.business || null,
-        azioni_suggerite: tradotto.azioni,
+        azioni_suggerite: e.azioni || tradotto.azioni,
         prima_comparsa: ora,
         ultima_comparsa: ora,
         occorrenze: 1,
@@ -582,11 +585,17 @@ export async function registraMetrica(
  * Avvolge una Netlify function: misura, cattura l'errore, lo registra e lo
  * rilancia. Da usare cosi':
  *   export const handler = conSystemControl('nome-funzione', handlerVero)
+ *
+ * Per un automatismo pianificato si aggiunge `{ cron: true }`: ogni giro
+ * lascia un battito in `sc_metrics` (tipo `job`), e il controllo orario se ne
+ * serve per accorgersi quando un cron ha smesso di girare.
  */
 export function conSystemControl<F extends (...args: never[]) => unknown>(
   nome: string,
   handler: F,
+  opzioni: { cron?: boolean } = {},
 ): F {
+  const tipoMetrica = opzioni.cron ? 'job' : 'funzione'
   const avvolto = async (...args: Parameters<F>): Promise<unknown> => {
     const t0 = Date.now()
     try {
@@ -597,7 +606,8 @@ export function conSystemControl<F extends (...args: never[]) => unknown>(
       // Si registra solo cio' che serve al pannello Prestazioni: le chiamate
       // lente e quelle in errore. Cronometrare anche le chiamate veloci
       // aggiungerebbe una scrittura inutile su ogni richiesta.
-      if (errore || durata > 1000) await registraMetrica('funzione', nome, durata, { errore })
+      // I cron fanno eccezione: il battito serve proprio a dire "sono girato".
+      if (opzioni.cron || errore || durata > 1000) await registraMetrica(tipoMetrica, nome, durata, { errore })
       if (errore) {
         let corpo = ''
         try { corpo = String((res as { body?: string }).body || '').slice(0, 500) } catch { /* ignora */ }
@@ -608,11 +618,12 @@ export function conSystemControl<F extends (...args: never[]) => unknown>(
       }
       return res
     } catch (err) {
-      await registraMetrica('funzione', nome, Date.now() - t0, { errore: true })
+      await registraMetrica(tipoMetrica, nome, Date.now() - t0, { errore: true })
       await registraEvento({
         messaggio: (err as Error)?.message || String(err),
         stack: (err as Error)?.stack,
-        categoria: 'api', modulo: nome, funzione: nome,
+        categoria: opzioni.cron ? 'automatismo' : 'api',
+        modulo: nome, funzione: nome, origine: opzioni.cron ? 'cron' : 'server',
         severita: 'alto', durataMs: Date.now() - t0,
       })
       throw err

@@ -173,6 +173,27 @@ const handler: Handler = async (event) => {
   const { data: backup } = await supabase.from('sc_backups').select('*').order('eseguito_at', { ascending: false }).limit(1)
   const { data: release } = await supabase.from('sc_releases').select('*').order('rilasciato_at', { ascending: false }).limit(1)
 
+  // ── Ultimo controllo orario ──────────────────────────────────────────────
+  // Il giro completo gira ogni ora (system-control-controllo-orario) e lascia
+  // qui il suo verbale: se manca da troppo, e' il controllo stesso a essersi
+  // fermato, e va detto invece di far finta che sia tutto a posto.
+  const { data: controlloData } = await supabase.from('sc_actions_log')
+    .select('created_at, esito, messaggio, parametri, automatico')
+    .eq('azione', 'controllo_orario').order('created_at', { ascending: false }).limit(1)
+  const c = controlloData?.[0] as {
+    created_at: string; esito: string; messaggio: string | null
+    parametri: { statoGenerale?: string; voci?: unknown[] } | null; automatico: boolean
+  } | undefined
+  const ultimoControllo = c ? {
+    eseguitoAt: c.created_at,
+    esito: c.esito,
+    riepilogo: c.messaggio,
+    statoGenerale: c.parametri?.statoGenerale || null,
+    voci: c.parametri?.voci || [],
+    automatico: c.automatico,
+    inRitardo: Date.now() - new Date(c.created_at).getTime() > 3 * 3600_000,
+  } : null
+
   const statoGenerale: Stato = servizi.some(s => s.stato === 'critico') ? 'critico'
     : servizi.some(s => s.stato === 'problema') ? 'problema'
     : servizi.some(s => s.stato === 'degradato') ? 'degradato' : 'operativo'
@@ -200,6 +221,7 @@ const handler: Handler = async (event) => {
       interruttori: { spente, manutenzione },
       backup: backup?.[0] || null,
       release: release?.[0] || null,
+      ultimoControllo,
     }),
   }
 }

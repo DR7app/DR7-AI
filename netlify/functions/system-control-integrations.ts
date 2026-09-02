@@ -9,72 +9,12 @@ import { createClient } from '@supabase/supabase-js'
 import { corsHeaders } from './cors-headers'
 import { requireAuth } from './require-auth'
 import { userHasRole } from './utils/adminRoles'
-import { registraAzione, prossimoTentativo, mascheraTesto } from './utils/systemControl'
+import { registraAzione, prossimoTentativo } from './utils/systemControl'
 import { diagnosticaIntegrazione } from './utils/systemControlDiagnosi'
 import { INTEGRAZIONI, INTEGRAZIONE_BY_CHIAVE } from './utils/systemControlCatalog'
+import { testaConnessione } from './utils/systemControlTest'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
-interface EsitoTest { ok: boolean; messaggio: string; latenzaMs: number }
-
-/** Prova davvero il collegamento. Non restituisce mai valori di credenziali. */
-async function testaConnessione(chiave: string): Promise<EsitoTest> {
-  const meta = INTEGRAZIONE_BY_CHIAVE[chiave]
-  const t0 = Date.now()
-  const durata = () => Date.now() - t0
-
-  if (!meta) return { ok: false, messaggio: 'Integrazione sconosciuta.', latenzaMs: 0 }
-
-  try {
-    switch (meta.test) {
-      case 'supabase': {
-        const { error } = await supabase.from('admins').select('id', { head: true, count: 'exact' }).limit(1)
-        return { ok: !error, messaggio: error ? mascheraTesto(error.message) : 'Il database risponde alle letture.', latenzaMs: durata() }
-      }
-      case 'auth': {
-        const { error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 })
-        return { ok: !error, messaggio: error ? mascheraTesto(error.message) : 'Il servizio di accesso risponde.', latenzaMs: durata() }
-      }
-      case 'storage': {
-        const { data, error } = await supabase.storage.listBuckets()
-        return { ok: !error, messaggio: error ? mascheraTesto(error.message) : `Archivio raggiungibile (${data?.length || 0} contenitori).`, latenzaMs: durata() }
-      }
-      case 'http': {
-        // WhatsApp: la prova ufficiale di Green API e' getStateInstance.
-        // L'URL contiene il token, quindi non viene MAI restituito ne loggato.
-        if (chiave === 'green_api') {
-          const id = process.env.GREEN_API_ID_INSTANCE
-          const token = process.env.GREEN_API_TOKEN
-          if (!id || !token) return { ok: false, messaggio: 'Credenziali WhatsApp non configurate.', latenzaMs: durata() }
-          const res = await fetch(`https://api.green-api.com/waInstance${id}/getStateInstance/${token}`)
-          const stato = res.ok ? ((await res.json()) as { stateInstance?: string })?.stateInstance : null
-          return {
-            ok: res.ok && stato === 'authorized',
-            messaggio: res.ok ? `Stato dell istanza: ${stato || 'sconosciuto'}.` : `Il servizio ha risposto ${res.status}.`,
-            latenzaMs: durata(),
-          }
-        }
-        if (!meta.testUrl) return { ok: false, messaggio: 'Nessuna prova disponibile.', latenzaMs: durata() }
-        const res = await fetch(meta.testUrl)
-        return { ok: res.ok, messaggio: res.ok ? 'Il servizio risponde.' : `Il servizio ha risposto ${res.status}.`, latenzaMs: durata() }
-      }
-      case 'env': {
-        const mancanti = meta.variabili.filter(v => !process.env[v])
-        return {
-          ok: mancanti.length === 0,
-          messaggio: mancanti.length
-            ? `Impostazioni mancanti: ${mancanti.join(', ')}.`
-            : 'Credenziali presenti. Il servizio non espone una prova sicura: il primo utilizzo reale confermera il collegamento.',
-          latenzaMs: durata(),
-        }
-      }
-      default:
-        return { ok: true, messaggio: 'Nessuna prova prevista per questo collegamento.', latenzaMs: durata() }
-    }
-  } catch (err) {
-    return { ok: false, messaggio: mascheraTesto((err as Error)?.message || String(err)), latenzaMs: durata() }
-  }
-}
 
 const handler: Handler = async (event) => {
   const headers = corsHeaders(event.headers.origin || event.headers.Origin)

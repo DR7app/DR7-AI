@@ -3,6 +3,7 @@
 // un WhatsApp al numero admin/direzione con l'elenco dei rifiuti da esporre.
 import { schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -76,4 +77,4 @@ const cronHandler = async () => {
 }
 
 // Ogni sera alle 18:00 UTC (~19/20 Rome): promemoria per i ritiri di domani.
-export const handler = schedule('0 18 * * *', cronHandler)
+export const handler = schedule('0 18 * * *', conSystemControl('immondizia-reminder-cron', cronHandler, { cron: true }))

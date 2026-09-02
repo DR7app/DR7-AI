@@ -20,7 +20,7 @@ export interface Integrazione {
   /** Nomi (non valori) delle variabili d'ambiente che la fanno funzionare. */
   variabili: string[]
   /** Come si prova la connessione: gestito in system-control-integrations.ts */
-  test: 'supabase' | 'auth' | 'storage' | 'http' | 'env' | 'nessuno'
+  test: 'supabase' | 'auth' | 'storage' | 'http' | 'env' | 'segreto' | 'nessuno'
   /** URL usato dal test quando test = 'http'. Mai con credenziali in query. */
   testUrl?: string
   /** Cosa smette di funzionare se cade: serve a spiegare la gravita'. */
@@ -38,31 +38,33 @@ export const INTEGRAZIONI: Integrazione[] = [
     variabili: ['VITE_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'], test: 'storage',
     impatto: 'Contratti, documenti e immagini non si caricano ne si scaricano.' },
   { chiave: 'nexi', etichetta: 'Pagamenti Nexi', categoria: 'pagamenti',
-    variabili: ['NEXI_API_KEY', 'NEXI_BASE_URL'], test: 'env',
+    variabili: ['NEXI_API_KEY', 'NEXI_MERCHANT_ID'], test: 'env',
     impatto: 'I clienti non possono pagare online e i link di pagamento non partono.' },
   { chiave: 'aruba_sdi', etichetta: 'Fatturazione elettronica (SDI)', categoria: 'fatturazione',
     variabili: ['ARUBA_USERNAME', 'ARUBA_PASSWORD'], test: 'env',
     impatto: 'Le fatture restano in bozza e non arrivano allo SDI.' },
+  // La PEC non vive nelle variabili d'ambiente: mittente e server stanno in
+  // Centralina Pro, la password in service_secrets.
   { chiave: 'pec', etichetta: 'PEC', categoria: 'comunicazione',
-    variabili: ['PEC_USER', 'PEC_PASSWORD'], test: 'env',
+    variabili: [], test: 'segreto',
     impatto: 'Le comunicazioni certificate (multe, diffide) non partono.' },
   { chiave: 'email', etichetta: 'E-mail', categoria: 'comunicazione',
     variabili: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD'], test: 'env',
     impatto: 'Conferme, contratti e promemoria via e-mail non arrivano ai clienti.' },
   { chiave: 'green_api', etichetta: 'WhatsApp (Green API)', categoria: 'comunicazione',
-    variabili: ['GREEN_API_ID_INSTANCE', 'GREEN_API_TOKEN'], test: 'http',
+    variabili: ['GREEN_API_INSTANCE_ID', 'GREEN_API_TOKEN'], test: 'http',
     impatto: 'Nessun messaggio WhatsApp parte: conferme, promemoria, recensioni.' },
   { chiave: 'trustera', etichetta: 'Firma elettronica (DR7 Trust)', categoria: 'documenti',
-    variabili: ['TRUSTERA_API_URL', 'TRUSTERA_API_KEY'], test: 'env',
+    variabili: [], test: 'http',
     impatto: 'I contratti non si possono firmare: il noleggio si blocca alla consegna.' },
   { chiave: 'cargos', etichetta: 'CARGOS', categoria: 'adempimenti',
     variabili: ['CARGOS_USERNAME', 'CARGOS_PASSWORD'], test: 'env',
     impatto: 'Le comunicazioni obbligatorie alle autorita non vengono trasmesse.' },
   { chiave: 'openapi_targhe', etichetta: 'Visure targhe (OpenAPI)', categoria: 'dati',
-    variabili: ['OPENAPI_TOKEN'], test: 'env',
+    variabili: [], test: 'segreto',
     impatto: 'Le visure targa non rispondono: i dati del veicolo vanno inseriti a mano.' },
-  { chiave: 'gps', etichetta: 'GPS flotta', categoria: 'dati',
-    variabili: ['GPS_API_URL', 'GPS_API_KEY'], test: 'env',
+  { chiave: 'gps', etichetta: 'GPS flotta (SafeFleet)', categoria: 'dati',
+    variabili: ['SAFEFLEET_USERNAME', 'SAFEFLEET_PASSWORD'], test: 'env',
     impatto: 'Le posizioni dei veicoli non si aggiornano.' },
   { chiave: 'google_gbp', etichetta: 'Google Business Profile', categoria: 'dati',
     variabili: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN'], test: 'env',
@@ -201,6 +203,7 @@ export const AZIONI_SICURE: AzioneSicura[] = [
   { chiave: 'riattiva_integrazione',   etichetta: 'Riattiva',            descrizione: 'Rimette in servizio l integrazione e svuota la coda in sospeso.', conferma: false, ambito: 'integrazione' },
   { chiave: 'aggiorna_credenziali',etichetta: 'Aggiorna credenziali',    descrizione: 'Spiega quali variabili aggiornare. I valori non passano mai da questa pagina.', conferma: false, ambito: 'integrazione' },
   { chiave: 'riavvia_job',         etichetta: 'Riavvia job',             descrizione: 'Rilancia subito un automatismo pianificato.', conferma: true,  ambito: 'sistema' },
+  { chiave: 'controllo_adesso',    etichetta: 'Controlla adesso',        descrizione: 'Rifa subito il giro completo della piattaforma: collegamenti, automatismi, errori, coda, database.', conferma: false, ambito: 'sistema' },
   { chiave: 'svuota_cache',        etichetta: 'Svuota cache',            descrizione: 'Forza il ricalcolo dei report messi in cache. Non tocca i dati.', conferma: false, ambito: 'sistema' },
   { chiave: 'ricalcola_stato',     etichetta: 'Ricalcola stato',         descrizione: 'Rifa i conti sullo stato di un elemento partendo dai dati reali.', conferma: false, ambito: 'problema' },
   { chiave: 'ricalcola_permessi',  etichetta: 'Ricalcola permessi',      descrizione: 'Rilegge ruoli e permessi dell operatore.', conferma: false, ambito: 'problema' },
@@ -241,3 +244,58 @@ export const JOB_RILANCIABILI: { chiave: string; etichetta: string; funzione: st
   { chiave: 'campagne',        etichetta: 'Motore campagne',            funzione: 'process-scheduled-campaigns-cron', descrizione: 'Fa girare subito un ciclo di invio delle campagne pianificate.' },
   { chiave: 'system_control',  etichetta: 'Auto-riparazione',           funzione: 'system-control-worker',      descrizione: 'Fa girare subito il ciclo di auto-riparazione e degli avvisi.' },
 ]
+
+// ── Automatismi sorvegliati dal controllo orario ───────────────────────────
+// Ogni funzione pianificata lascia un battito in `sc_metrics` (tipo `job`) a
+// ogni giro. Il controllo orario confronta l'ultimo battito con la cadenza
+// attesa: se manca, apre un problema. `ogniMinuti` e' la cadenza dichiarata
+// in netlify.toml o nella chiamata `schedule(...)` dentro la funzione.
+export interface CronSorvegliato {
+  funzione: string
+  etichetta: string
+  ogniMinuti: number
+  /** Cosa smette di succedere se l'automatismo non gira. */
+  impatto: string
+}
+
+export const CRON_SORVEGLIATI: CronSorvegliato[] = [
+  { funzione: 'process-pending-addebiti',              etichetta: 'Addebiti in attesa',              ogniMinuti: 1,     impatto: 'Gli addebiti sulle carte salvate restano fermi.' },
+  { funzione: 'process-scheduled-campaigns-cron',      etichetta: 'Campagne pianificate',            ogniMinuti: 2,     impatto: 'Le campagne programmate non partono all ora prevista.' },
+  { funzione: 'cancel-unpaid-nexi-bookings',           etichetta: 'Annullo prenotazioni non pagate', ogniMinuti: 5,     impatto: 'I link di pagamento scaduti restano validi e i mezzi restano occupati.' },
+  { funzione: 'system-control-worker',                 etichetta: 'Auto-riparazione',                ogniMinuti: 5,     impatto: 'Le operazioni fallite non vengono piu ritentate da sole.' },
+  { funzione: 'process-scheduled-system-messages-cron',etichetta: 'Messaggi programmati',            ogniMinuti: 8,     impatto: 'I messaggi programmati non partono.' },
+  { funzione: 'maxi-promo-gap-cron',                   etichetta: 'Promo sui buchi di calendario',   ogniMinuti: 10,    impatto: 'Le promo automatiche sui giorni vuoti non partono.' },
+  { funzione: 'reconcile-wallet-fatture-cron',         etichetta: 'Riconciliazione wallet-fatture',  ogniMinuti: 15,    impatto: 'Le ricariche wallet restano senza fattura collegata.' },
+  { funzione: 'cargos-retry-missed',                   etichetta: 'Recupero invii CARGOS',           ogniMinuti: 30,    impatto: 'Le comunicazioni obbligatorie non trasmesse restano indietro.' },
+  { funzione: 'check-sdi-statuses-cron',               etichetta: 'Stato fatture allo SDI',          ogniMinuti: 30,    impatto: 'Non si vede piu se una fattura e stata accettata o scartata.' },
+  { funzione: 'signature-reminder',                    etichetta: 'Promemoria firma contratti',      ogniMinuti: 30,    impatto: 'I clienti non ricevono il sollecito a firmare.' },
+  { funzione: 'process-wallet-auto-recharges-cron',    etichetta: 'Ricariche wallet automatiche',    ogniMinuti: 60,    impatto: 'Le ricariche automatiche del wallet non partono.' },
+  { funzione: 'weather-alert-cron',                    etichetta: 'Allerta meteo',                   ogniMinuti: 60,    impatto: 'I clienti non ricevono l allerta meteo prima dell uscita.' },
+  { funzione: 'send-booking-reminders',                etichetta: 'Promemoria prenotazioni',         ogniMinuti: 120,   impatto: 'I promemoria di ritiro e riconsegna non partono.' },
+  { funzione: 'sollecito-pagamento-cron',              etichetta: 'Solleciti di pagamento',          ogniMinuti: 360,   impatto: 'I solleciti sulle somme da saldare non partono.' },
+  { funzione: 'promo-incassi-cron',                    etichetta: 'Promo sugli incassi',             ogniMinuti: 480,   impatto: 'Le promo legate agli incassi non partono.' },
+  { funzione: 'fornitori-fatture-sync-cron',           etichetta: 'Fatture fornitori dallo SDI',     ogniMinuti: 1440,  impatto: 'Le fatture dei fornitori non entrano in automatico.' },
+  { funzione: 'accrue-club-wallet-interest',           etichetta: 'Interessi DR7 Club',              ogniMinuti: 1440,  impatto: 'Gli interessi del wallet Club non maturano.' },
+  { funzione: 'nexi-preauth-refresh-cron',             etichetta: 'Rinnovo pre-autorizzazioni Nexi', ogniMinuti: 1440,  impatto: 'Le pre-autorizzazioni scadono senza essere rinnovate.' },
+  { funzione: 'fornitori-alerts-cron',                 etichetta: 'Avvisi fornitori',                ogniMinuti: 1440,  impatto: 'Le scadenze fornitori non vengono segnalate.' },
+  { funzione: 'fatture-bozza-alert-cron',              etichetta: 'Fatture rimaste in bozza',        ogniMinuti: 1440,  impatto: 'Le fatture mai trasmesse non vengono segnalate.' },
+  { funzione: 'magazzino-riordino-periodico-cron',     etichetta: 'Riordino magazzino',              ogniMinuti: 1440,  impatto: 'I riordini periodici non vengono proposti.' },
+  { funzione: 'vehicle-deadlines-cron',                etichetta: 'Scadenze veicoli',                ogniMinuti: 1440,  impatto: 'Bollo, revisione e assicurazione non vengono segnalati.' },
+  { funzione: 'check-deposit-expiration',              etichetta: 'Scadenza cauzioni',               ogniMinuti: 1440,  impatto: 'Le cauzioni da restituire non vengono segnalate.' },
+  { funzione: 'check-pre-rental-deposits',             etichetta: 'Cauzioni pre-noleggio',           ogniMinuti: 1440,  impatto: 'Le cauzioni da incassare prima del ritiro non vengono preparate.' },
+  { funzione: 'check-birthdays',                       etichetta: 'Compleanni',                      ogniMinuti: 1440,  impatto: 'Gli auguri ai clienti non partono.' },
+  { funzione: 'send-birthday-messages',                etichetta: 'Invio auguri',                    ogniMinuti: 1440,  impatto: 'Gli auguri ai clienti non partono.' },
+  { funzione: 'immondizia-reminder-cron',              etichetta: 'Promemoria immondizia',           ogniMinuti: 1440,  impatto: 'Il promemoria della raccolta non parte.' },
+  { funzione: 'sync-ipa-cron',                         etichetta: 'Sincronizzazione IPA',            ogniMinuti: 43200, impatto: 'L elenco degli enti notificatori non si aggiorna.' },
+  { funzione: 'fornitori-crosscheck-cron',             etichetta: 'Controllo incrociato fornitori',  ogniMinuti: 43200, impatto: 'Le differenze fra fatture e pagamenti fornitori non emergono.' },
+  { funzione: 'payout-club-wallet-interest',           etichetta: 'Pagamento interessi DR7 Club',    ogniMinuti: 43200, impatto: 'Gli interessi maturati non vengono accreditati.' },
+]
+
+/**
+ * Quanto si aspetta prima di dire che un automatismo non gira piu'.
+ * Tre giri saltati (e comunque mai meno di mezz'ora di pazienza): cosi' un
+ * singolo ritardo di Netlify non fa scattare un falso allarme.
+ */
+export function tolleranzaMinuti(ogniMinuti: number): number {
+  return Math.max(ogniMinuti * 3, ogniMinuti + 30)
+}

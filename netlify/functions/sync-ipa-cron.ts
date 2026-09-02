@@ -5,8 +5,9 @@
 // =============================================================================
 import { schedule } from '@netlify/functions'
 import { runSync } from './sync-ipa'
+import { conSystemControl } from './utils/systemControl'
 
-export const handler = schedule('0 3 1 * *', async () => {
+export const handler = schedule('0 3 1 * *', conSystemControl('sync-ipa-cron', async () => {
     try {
         const result = await runSync()
         console.log('[sync-ipa-cron] done:', result)
@@ -14,4 +15,4 @@ export const handler = schedule('0 3 1 * *', async () => {
         console.error('[sync-ipa-cron] error:', e)
     }
     return { statusCode: 200, body: 'ok' }
-})
+}, { cron: true }))

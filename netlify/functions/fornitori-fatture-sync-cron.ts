@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * Wrapper schedulato per il sync notturno. Il lavoro vero lo fa la
@@ -23,4 +24,7 @@ const handler: Handler = async () => {
     return { statusCode: 200, body: JSON.stringify({ ok: true, dispatched: true }) }
 }
 
-export { handler }
+// Battito per il controllo orario del System Control: ogni giro lascia
+// traccia, cosi' il pannello si accorge se questo automatismo si ferma.
+const handlerSorvegliato = conSystemControl('fornitori-fatture-sync-cron', handler, { cron: true })
+export { handlerSorvegliato as handler }

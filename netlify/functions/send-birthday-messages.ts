@@ -2,6 +2,7 @@ import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getMarketingConfig } from './utils/loadMarketing';
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -383,4 +384,4 @@ function parseBirthday(dateStr: string): Date | null {
 }
 
 // Run every day at 9:00 AM (Rome time = UTC+1, so 8:00 UTC)
-export const handler = schedule('0 8 * * *', birthdayHandler);
+export const handler = schedule('0 8 * * *', conSystemControl('send-birthday-messages', birthdayHandler, { cron: true }));

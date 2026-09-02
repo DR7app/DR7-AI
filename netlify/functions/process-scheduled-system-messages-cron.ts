@@ -36,6 +36,7 @@ import { matchesAdvancedFilters, matchesServiceType, passesCustomerFilters, load
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 import { getEmailFromSmtp } from './utils/emailFrom'
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -1643,4 +1644,4 @@ const cronHandler = async () => {
 // In passato c'era un mismatch (file `*/15`, toml `*/2`) che lasciava il
 // comportamento ambiguo: i messaggi automatici a volte non partivano nei
 // tempi previsti perché la pianificazione effettiva era indeterminata.
-export const handler = schedule('*/8 * * * *', cronHandler);
+export const handler = schedule('*/8 * * * *', conSystemControl('process-scheduled-system-messages-cron', cronHandler, { cron: true }));

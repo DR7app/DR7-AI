@@ -7,6 +7,7 @@ import {
   loadMeteoConfig, valutaMeteo, dentroFascia, rankLivello,
   type MeteoBusiness, type MeteoEsito,
 } from './weather-config'
+import { conSystemControl } from './utils/systemControl'
 
 // Cron Allerta Meteo automatica (2026-07-18).
 //
@@ -187,4 +188,7 @@ const handler: Handler = async () => {
   return { statusCode: 200, body: JSON.stringify(results) }
 }
 
-export { handler }
+// Battito per il controllo orario del System Control: ogni giro lascia
+// traccia, cosi' il pannello si accorge se questo automatismo si ferma.
+const handlerSorvegliato = conSystemControl('weather-alert-cron', handler, { cron: true })
+export { handlerSorvegliato as handler }

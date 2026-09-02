@@ -14,6 +14,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { computeRealPrincipalEur } from './utils/walletCredit'
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -101,4 +102,7 @@ const handler: Handler = async () => {
 
 // Cron registered via netlify.toml [functions."accrue-club-wallet-interest"]
 // schedule = "30 1 * * *" — runs daily at 01:30 UTC (~02:30/03:30 Rome).
-export { handler }
+// Battito per il controllo orario del System Control: ogni giro lascia
+// traccia, cosi' il pannello si accorge se questo automatismo si ferma.
+const handlerSorvegliato = conSystemControl('accrue-club-wallet-interest', handler, { cron: true })
+export { handlerSorvegliato as handler }

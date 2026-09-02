@@ -1,5 +1,6 @@
 import { Handler, schedule } from '@netlify/functions'
 import { pollAllPendingSdi } from './_check-sdi-statuses'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * Scheduled SDI status check.
@@ -25,4 +26,4 @@ const statusCheckHandler: Handler = async () => {
     }
 }
 
-export const handler = schedule('*/30 * * * *', statusCheckHandler)
+export const handler = schedule('*/30 * * * *', conSystemControl('check-sdi-statuses-cron', statusCheckHandler, { cron: true }))

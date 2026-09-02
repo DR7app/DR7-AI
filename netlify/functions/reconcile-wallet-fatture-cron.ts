@@ -1,5 +1,6 @@
 import { Handler, schedule } from '@netlify/functions'
 import { reconcileWalletFatture, reconcileBookingFatture } from './_reconcile-wallet-fatture'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * BACKSTOP schedulato — garantisce la fattura per OGNI ricarica Credit Wallet
@@ -31,4 +32,4 @@ const reconcileHandler: Handler = async () => {
   }
 }
 
-export const handler = schedule('*/15 * * * *', reconcileHandler)
+export const handler = schedule('*/15 * * * *', conSystemControl('reconcile-wallet-fatture-cron', reconcileHandler, { cron: true }))

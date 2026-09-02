@@ -18,6 +18,7 @@ import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { computeVehicleMonthlyRevenue } from './utils/vehicleRevenue'
+import { conSystemControl } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -313,4 +314,4 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 // Scheduled at UTC 07:00, 08:00, 15:00, 16:00. The function checks the
 // Rome-local hour and only fires when it equals 09 or 17 — so depending
 // on DST the right two invocations run, the others exit early.
-export const handler = schedule('0 7,8,15,16 * * *', cronHandler)
+export const handler = schedule('0 7,8,15,16 * * *', conSystemControl('promo-incassi-cron', cronHandler, { cron: true }))

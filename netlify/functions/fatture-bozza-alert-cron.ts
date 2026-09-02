@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminNotificationPhone } from './utils/notificationPhone'
+import { conSystemControl } from './utils/systemControl'
 
 /**
  * fatture-bozza-alert-cron — promemoria giornaliero WhatsApp sulle fatture
@@ -95,4 +96,7 @@ const handler: Handler = async () => {
     }
 }
 
-export { handler }
+// Battito per il controllo orario del System Control: ogni giro lascia
+// traccia, cosi' il pannello si accorge se questo automatismo si ferma.
+const handlerSorvegliato = conSystemControl('fatture-bozza-alert-cron', handler, { cron: true })
+export { handlerSorvegliato as handler }

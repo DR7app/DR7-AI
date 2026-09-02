@@ -25,6 +25,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { conSystemControl } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -221,4 +222,4 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 
 // Ogni 6 ore. La finestra 48h è enforced dentro l'handler, quindi più run
 // ravvicinati non causano doppi invii.
-export const handler = schedule('0 */6 * * *', cronHandler)
+export const handler = schedule('0 */6 * * *', conSystemControl('sollecito-pagamento-cron', cronHandler, { cron: true }))

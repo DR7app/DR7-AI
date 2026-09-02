@@ -26,6 +26,15 @@ interface Panoramica {
   interruttori?: { spente: { chiave: string; business: string }[]; manutenzione: { chiave: string; business: string }[] }
   backup?: { eseguito_at: string; esito: string; messaggio: string | null } | null
   release?: { versione: string; esito: string; rilasciato_at: string; note: string | null } | null
+  ultimoControllo?: {
+    eseguitoAt: string
+    esito: string
+    riepilogo: string | null
+    statoGenerale: string | null
+    voci: { area: string; esito: 'ok' | 'attenzione' | 'ko'; titolo: string; dettaglio: string }[]
+    automatico: boolean
+    inRitardo: boolean
+  } | null
 }
 
 export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
@@ -34,6 +43,23 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
 }) {
   const [dati, setDati] = useState<Panoramica | null>(null)
   const [caricamento, setCaricamento] = useState(true)
+  const [inControllo, setInControllo] = useState(false)
+  const [mostraTutte, setMostraTutte] = useState(false)
+
+  // Il giro completo gira da solo ogni ora: questo pulsante lo rifa adesso,
+  // per chi non vuole aspettare il prossimo scatto.
+  async function controllaAdesso() {
+    setInControllo(true)
+    try {
+      const r = await systemControl.azioneSistema('controllo_adesso')
+      toast[r.ok ? 'success' : 'error'](r.messaggio)
+      await carica(true)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setInControllo(false)
+    }
+  }
 
   async function carica(silenzioso = false) {
     if (!silenzioso) setCaricamento(true)
@@ -96,8 +122,67 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
             Ambiente {dati?.ambiente} · versione {dati?.versione}
           </span>
         </div>
-        <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
+        <div className="flex items-center gap-2">
+          <Bottone onClick={() => void controllaAdesso()} disabilitato={inControllo} variante="primario">
+            {inControllo ? 'Controllo in corso' : 'Controlla adesso'}
+          </Bottone>
+          <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
+        </div>
       </div>
+
+      {/* Controllo orario: il verbale dell'ultimo giro completo */}
+      <Scheda
+        titolo="Controllo orario"
+        azione={dati?.ultimoControllo
+          ? <span className="text-[11px] text-theme-text-muted">
+              {dataOra(dati.ultimoControllo.eseguitoAt)} · {dati.ultimoControllo.automatico ? 'automatico' : 'lanciato a mano'}
+            </span>
+          : undefined}
+      >
+        {dati?.ultimoControllo ? (
+          <div className="px-4 py-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <BadgeStato stato={(dati.ultimoControllo.statoGenerale as StatoServizio) || 'operativo'} />
+              <p className="text-sm text-theme-text-primary">{dati.ultimoControllo.riepilogo}</p>
+            </div>
+            {dati.ultimoControllo.inRitardo && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Il controllo non gira da piu di tre ore: e fermo anche lui. Lancialo a mano con "Controlla adesso".
+              </p>
+            )}
+            {(() => {
+              const voci = dati.ultimoControllo!.voci || []
+              const daVedere = mostraTutte ? voci : voci.filter(v => v.esito !== 'ok')
+              if (!daVedere.length) {
+                return <p className="text-xs text-theme-text-muted">Tutti i {voci.length} controlli sono a posto.</p>
+              }
+              return (
+                <div className="divide-y divide-theme-border border-t border-theme-border">
+                  {daVedere.map((v, i) => (
+                    <div key={`${v.area}-${i}`} className="py-2 flex items-start gap-3">
+                      <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                        v.esito === 'ko' ? 'bg-red-500' : v.esito === 'attenzione' ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`} />
+                      <div className="min-w-0">
+                        <p className="text-sm text-theme-text-primary">{v.titolo}</p>
+                        <p className="text-xs text-theme-text-secondary leading-relaxed">{v.dettaglio}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+            <button
+              onClick={() => setMostraTutte(m => !m)}
+              className="text-xs text-[#007aff] hover:underline"
+            >
+              {mostraTutte ? 'Mostra solo cosa non va' : `Mostra tutti i controlli (${dati.ultimoControllo.voci?.length || 0})`}
+            </button>
+          </div>
+        ) : (
+          <Vuoto testo="Nessun controllo ancora registrato. Il giro completo parte ogni ora, oppure lancialo adesso." />
+        )}
+      </Scheda>
 
       {/* Servizi */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -201,3 +201,11 @@
 # Si puo' lanciare a mano da System Control > Strumenti.
 [functions."system-control-worker"]
   schedule = "*/5 * * * *"
+
+# DR7 A.I System Control — controllo orario.
+# Ogni ora fa il giro completo della piattaforma (collegamenti, automatismi
+# fermi, errori, operazioni in coda, database, funzioni in errore) e scrive
+# nel pannello cosa non va. Sola lettura: non modifica dati e non invia nulla
+# ai clienti. Si lancia anche a mano da Stato generale > "Controlla adesso".
+[functions."system-control-controllo-orario"]
+  schedule = "0 * * * *"

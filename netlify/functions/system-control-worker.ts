@@ -9,7 +9,7 @@
 // In piu' controlla i backup e sorveglia l'ultimo rilascio.
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { registraAzione, statoFunzione, mascheraTesto, VERSIONE, AMBIENTE } from './utils/systemControl'
+import { registraAzione, statoFunzione, mascheraTesto, VERSIONE, AMBIENTE, conSystemControl } from './utils/systemControl'
 import { eseguiRitentativo } from './utils/systemControlRetry'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -105,7 +105,7 @@ async function preparaAvvisi(): Promise<number> {
       // Solo i CRITICI escono dal gestionale, e solo verso i numeri
       // configurati apposta. Tutto il resto resta nel pannello: e' la
       // regola imparata dagli invii massivi non voluti.
-      const idInstance = process.env.GREEN_API_ID_INSTANCE
+      const idInstance = process.env.GREEN_API_INSTANCE_ID
       const token = process.env.GREEN_API_TOKEN
       if (idInstance && token) {
         for (const tel of telefoni) {
@@ -242,4 +242,7 @@ const handler: Handler = async () => {
   }
 }
 
-export { handler }
+// Battito per il controllo orario del System Control: ogni giro lascia
+// traccia, cosi' il pannello si accorge se questo automatismo si ferma.
+const handlerSorvegliato = conSystemControl('system-control-worker', handler, { cron: true })
+export { handlerSorvegliato as handler }

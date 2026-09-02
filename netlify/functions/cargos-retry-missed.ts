@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { sendToCargos, avvisaDirezione } from './cargos-auto-send'
+import { conSystemControl } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -148,4 +149,4 @@ const retryHandler: Handler = async () => {
 }
 
 // Run every 30 minutes
-export const handler = schedule('*/30 * * * *', retryHandler)
+export const handler = schedule('*/30 * * * *', conSystemControl('cargos-retry-missed', retryHandler, { cron: true }))

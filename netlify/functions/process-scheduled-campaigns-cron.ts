@@ -22,6 +22,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { conSystemControl } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -405,4 +406,4 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 }
 
-export const handler = schedule('*/2 * * * *', cronHandler)
+export const handler = schedule('*/2 * * * *', conSystemControl('process-scheduled-campaigns-cron', cronHandler, { cron: true }))
