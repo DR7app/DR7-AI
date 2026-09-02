@@ -294,6 +294,11 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   const [fuoriMese, setFuoriMese] = useState<{ n: number; anno: number; mese0: number } | null>(null)
   useEffect(() => {
     let annullato = false
+    // 02/09/2026: si aspetta che le prenotazioni del mese siano arrivate.
+    // Questo controllo dipende da `bookings`, quindi partiva una prima volta
+    // con la lista ancora vuota e una seconda dopo il caricamento: la stessa
+    // lettura dei prossimi sette giorni fatta due volte a ogni apertura.
+    if (loading) return
     ;(async () => {
       const oggi = new Date()
       const fine = new Date(oggi.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -326,7 +331,7 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     return () => { annullato = true }
     // `bookings` in dipendenza: dopo ogni rilettura l'avviso si riallinea.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate.getFullYear(), currentDate.getMonth(), serviceType, bookings])
+  }, [currentDate.getFullYear(), currentDate.getMonth(), serviceType, bookings, loading])
 
   useEffect(() => {
     let cancelled = false
