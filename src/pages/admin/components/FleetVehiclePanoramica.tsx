@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
+import Miniatura from '../../../components/Miniatura'
 
 interface MaintenanceAlert {
     type: 'service' | 'tires' | 'brakes' | 'insurance' | 'tax' | 'inspection'
@@ -426,7 +427,7 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
                             <div className="rounded-xl bg-theme-bg-primary border border-theme-border aspect-[4/3] flex items-center justify-center overflow-hidden">
                                 {photoUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={photoUrl} alt={vehicle.display_name} className="w-full h-full object-cover" />
+                                    <Miniatura src={photoUrl} alt={vehicle.display_name} larghezza={320} className="w-full h-full object-cover" />
                                 ) : (
                                     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-theme-text-muted">
                                         <path d="M16 17H8m11-7l1.7 4.42a3 3 0 0 1 .3 1.31V19a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3.27a3 3 0 0 1 .3-1.31L5 10m11 0H8m11 0a1 1 0 0 0-.92-.61H5.92A1 1 0 0 0 5 10m0 0L6.5 5.5A2 2 0 0 1 8.4 4h7.2a2 2 0 0 1 1.9 1.5L19 10"/>

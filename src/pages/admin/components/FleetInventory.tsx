@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import Miniatura from '../../../components/Miniatura'
 
 interface Vehicle {
     id: string
@@ -828,7 +829,7 @@ export default function FleetInventory() {
                                 <div className="flex items-center gap-2 min-w-0">
                                     {(() => {
                                         const img = vehicleImageUrl(vehicle)
-                                        if (img) return <img src={img} alt={vehicle.display_name} className="w-14 h-10 rounded object-cover flex-shrink-0 border border-theme-border" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                        if (img) return <Miniatura src={img} alt={vehicle.display_name} larghezza={112} className="w-14 h-10 rounded object-cover flex-shrink-0 border border-theme-border" />
                                         return <div className="w-14 h-10 rounded bg-theme-bg-tertiary flex items-center justify-center text-[10px] font-bold flex-shrink-0">{vehicle.display_name.substring(0, 2).toUpperCase()}</div>
                                     })()}
                                     <div className="min-w-0">

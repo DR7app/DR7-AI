@@ -14,6 +14,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { loadCached } from '../../../utils/dataCache'
 import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 import { useCalendarLayout, LAYOUT_LIMITS } from '../../../hooks/useCalendarLayout'
+import Miniatura from '../../../components/Miniatura'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
@@ -1234,12 +1235,11 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
                       consistent for vehicles that don't have an image uploaded yet. */}
                   <div className={`w-9 h-6 shrink-0 rounded bg-theme-bg-tertiary border border-theme-border/40 overflow-hidden items-center justify-center ${isNarrow ? 'hidden' : 'flex'}`}>
                     {row.vehicle.metadata?.image ? (
-                      <img
+                      <Miniatura
                         src={row.vehicle.metadata.image}
                         alt={row.vehicle.display_name}
+                        larghezza={72}
                         className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                       />
                     ) : (
                       <svg className="w-4 h-4 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>

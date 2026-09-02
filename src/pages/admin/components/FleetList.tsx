@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import { getVehicleStatus } from '../../../utils/fleetUtils'
 import toast from 'react-hot-toast'
+import Miniatura from '../../../components/Miniatura'
 
 interface FleetListProps {
     onOpenDetail: (vehicleId: string) => void
@@ -423,7 +424,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                 >
                                     <div className="flex items-start gap-3">
                                         {img ? (
-                                            <img src={img} alt={vehicle.display_name} className="w-14 h-10 rounded object-cover border border-theme-border shrink-0"/>
+                                            <Miniatura src={img} alt={vehicle.display_name} larghezza={112} className="w-14 h-10 rounded object-cover border border-theme-border shrink-0"/>
                                         ) : (
                                             <div className="w-14 h-10 rounded bg-theme-bg-tertiary border border-theme-border grid place-items-center shrink-0">
                                                 <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -493,7 +494,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                             <td className="py-2 px-3">
                                                 <div className="flex items-center gap-2.5">
                                                     {img ? (
-                                                        <img src={img} alt={vehicle.display_name} className="w-12 h-9 rounded object-cover border border-theme-border flex-shrink-0"/>
+                                                        <Miniatura src={img} alt={vehicle.display_name} larghezza={96} className="w-12 h-9 rounded object-cover border border-theme-border flex-shrink-0"/>
                                                     ) : (
                                                         <div className="w-12 h-9 rounded bg-theme-bg-tertiary border border-theme-border grid place-items-center flex-shrink-0">
                                                             <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -599,7 +600,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                 className="w-full flex items-center gap-2.5 hover:bg-theme-bg-primary/40 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
                                             >
                                                 {img ? (
-                                                    <img src={img} alt={v.display_name} className="w-10 h-7 rounded object-cover border border-theme-border flex-shrink-0"/>
+                                                    <Miniatura src={img} alt={v.display_name} larghezza={80} className="w-10 h-7 rounded object-cover border border-theme-border flex-shrink-0"/>
                                                 ) : (
                                                     <div className="w-10 h-7 rounded bg-theme-bg-tertiary border border-theme-border flex-shrink-0"/>
                                                 )}

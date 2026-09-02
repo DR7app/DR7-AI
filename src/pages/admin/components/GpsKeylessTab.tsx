@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recha
 import { supabase } from '../../../supabaseClient'
 import { toBusiness, usaCatalogoDedicato, BUSINESS_LABELS, BUSINESS_ASSET_LABELS, type Business } from '../../../utils/businessScope'
 import { useTheme } from '../../../contexts/ThemeContext'
+import Miniatura from '../../../components/Miniatura'
 
 type VehicleStatus = 'online' | 'offline' | 'moving' | 'idle' | 'alarm' | 'blocked'
 type MobileView = 'veicoli' | 'mappa' | 'dettaglio'
@@ -203,9 +204,10 @@ function VehicleListItem({ v, selected, onSelect }: { v: SfVehicle; selected: bo
       }`}
     >
       {v.image ? (
-        <img
+        <Miniatura
           src={v.image}
           alt={v.model}
+          larghezza={96}
           className={`h-9 w-12 shrink-0 rounded-md object-cover ring-1 ${selected ? 'ring-cyan-500/50 dark:ring-cyan-400/50' : 'ring-zinc-300 dark:ring-zinc-700'}`}
         />
       ) : (
@@ -662,7 +664,7 @@ export default function GpsKeylessTab({ business = 'rental' }: { business?: Busi
             <div className="flex-1 overflow-y-auto sf-scrollbar p-2.5 space-y-2.5 min-h-0">
               <div className="flex items-center gap-2.5">
                 {selected.image ? (
-                  <img src={selected.image} alt={selected.model} className="h-11 w-16 rounded-md object-cover ring-1 ring-cyan-500/40 dark:ring-cyan-500/30"/>
+                  <Miniatura src={selected.image} alt={selected.model} larghezza={128} className="h-11 w-16 rounded-md object-cover ring-1 ring-cyan-500/40 dark:ring-cyan-500/30"/>
                 ) : (
                   <div className="grid h-11 w-16 place-items-center rounded-md ring-1 ring-cyan-500/40 bg-zinc-50 dark:ring-cyan-500/30 dark:bg-zinc-900">
                     <span className="text-[10px] font-mono text-cyan-700 dark:text-cyan-200">{selected.plate}</span>

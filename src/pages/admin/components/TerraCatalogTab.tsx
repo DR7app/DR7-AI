@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
+import Miniatura from '../../../components/Miniatura'
 
 interface CatalogVehicle {
   id: string
@@ -242,12 +243,11 @@ export default function TerraCatalogTab() {
                     <div key={v.id} className="rounded-xl overflow-hidden border border-theme-border bg-theme-bg-secondary flex flex-col">
                       <div className="aspect-[16/10] bg-theme-bg-tertiary overflow-hidden flex items-center justify-center">
                         {photo ? (
-                          <img
+                          <Miniatura
                             src={photo}
                             alt={v.display_name}
-                            loading="lazy"
+                            larghezza={480}
                             className="w-full h-full object-cover"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
                           />
                         ) : (
                           <span className="text-theme-text-muted text-sm px-3 text-center">{v.display_name}</span>
