@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import toast from 'react-hot-toast'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { supabase } from '../../../supabaseClient'
@@ -187,8 +188,11 @@ interface Preventivo {
   // 2026-07-18: Reparto Cauzione — importo (EURO) scelto nel preventivo, colonna
   // preventivi.deposit_amount. Slitta in prenotazione alla conversione/accettazione.
   deposit_amount?: number | null
-  pricing_trace: Record<string, unknown> | null
-  extras_detail: Record<string, unknown> | null
+  // Le due colonne pesanti NON arrivano con la lista (vedi COLONNE_LISTA).
+  // `undefined` = non ancora caricate; `null` = caricate e vuote. Chi le legge
+  // deve prima passare da `assicuraDettaglio()`.
+  pricing_trace?: Record<string, unknown> | null
+  extras_detail?: Record<string, unknown> | null
   customer_phone: string | null
   customer_name: string | null
   driver_tier: string | null
@@ -206,6 +210,44 @@ interface Preventivo {
   expires_at: string | null
   customer_id: string | null
 }
+
+/**
+ * Colonne che la LISTA preventivi si porta a casa (02/09/2026 — velocita').
+ *
+ * `select('*')` scaricava 2,95 MB per 774 preventivi, e il 52% erano DUE sole
+ * colonne JSONB che la lista non guarda mai: `pricing_trace` (37,6% del
+ * payload) ed `extras_detail` (14,2%). La terza esclusa, `events`, non e'
+ * nemmeno nell'interfaccia Preventivo: la legge e riscrive una riga per volta
+ * `utils/preventivoEvents.ts`.
+ *
+ * Quelle due servono davvero solo quando si apre UN preventivo (Modifica,
+ * Accetta, messaggio WhatsApp): li' le prende `assicuraDettaglio()`, che
+ * rilegge la riga intera e la rimette nella cache di stato.
+ *
+ * SE AGGIUNGI UNA COLONNA a `preventivi` e la lista deve vederla, va aggiunta
+ * anche qui: PostgREST restituisce solo cio' che e' elencato.
+ */
+const COLONNE_LISTA = [
+  'base_daily_rate,booking_id,created_at,created_by,customer_id',
+  'customer_name,customer_phone,daily_rate,daily_rate_after_markup',
+  'delivery_address,delivery_city,delivery_enabled,delivery_fee',
+  'delivery_notes,delivery_province,delivery_street,delivery_zip',
+  'deposit_amount,driver_tier,dropoff_date,dropoff_location,expires_at',
+  'fascia,id,insurance_daily,insurance_daily_price,insurance_option',
+  'insurance_total,km_limit,km_overage_fee,lavaggio_fee,maggiorazione_pct',
+  'motivo_rifiuto,motivo_rifiuto_note,no_cauzione,no_cauzione_daily',
+  'no_cauzione_total,notes,pdf_url,pickup_address,pickup_city,pickup_date',
+  'pickup_enabled,pickup_fee,pickup_location,pickup_notes,pickup_province',
+  'pickup_street,pickup_zip,rental_days,sconto,sconto_note,second_driver',
+  'second_driver_daily,second_driver_total,sent_by,service_type,source',
+  'status,subtotal,total_amount,total_final,unlimited_km',
+  'unlimited_km_daily,unlimited_km_total,updated_at,valid_until',
+  'vehicle_0_100,vehicle_category,vehicle_cv,vehicle_id,vehicle_model_year',
+  'vehicle_name,vehicle_plate,whatsapp_message_id,whatsapp_sent_at',
+].join(',')
+
+/** Le colonne pesanti, prese una riga per volta da `assicuraDettaglio()`. */
+const COLONNE_DETTAGLIO = 'id,pricing_trace,extras_detail'
 
 interface InsuranceOpt {
   id: string
@@ -450,6 +492,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // anche la lista preventivi ai propri (created_by = adminEmail).
   // Direzione / developer / operatori con `reservations` vedono tutto.
   const isPreventivoOnly = !hasPermission('reservations') && hasPermission('reservations-preventivi')
+  // Solo la direzione cancella. Stesso predicato della RLS
+  // (dr7_can_delete_preventivi): niente developer, niente superadmin.
+  const puoEliminare = hasRole('direzione')
+  // La colonna delle spunte esiste solo per chi puo' cancellare: per tutti
+  // gli altri la griglia resta identica a prima. Le due classi sono scritte
+  // per esteso perche' Tailwind non genera i valori arbitrari costruiti a
+  // runtime.
+  const colonneListaPreventivi = puoEliminare
+    ? 'grid-cols-[32px_2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_116px]'
+    : 'grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_88px]'
   // Hide-key esplicito: admin puo' spuntare "Nascondi richieste no cauzione"
   // nella modale invito per togliere il subtab anche a chi non e' collaboratore.
   const hideRichiesteNoCauzione = Array.isArray(permissions) && permissions.includes('hide:richieste-no-cauzione')
@@ -475,7 +527,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   const [ncSubFilter, setNcSubFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [ncPage, setNcPage] = useState(1)
   const [ncSelectedId, setNcSelectedId] = useState<string | null>(null)
-  const [preventivi, setPreventivi] = useState<Preventivo[]>([])
+  const [preventivi, setPreventivi] = useStatoTab<Preventivo[]>(`preventivi:${serviceType}`, [])
   // Snapshot dei valori inviati dal cliente quando il preventivo arriva
   // dal sito (source='website*'). Usato per mostrare un pannello
   // read-only "Richiesta dal cliente" durante la Modifica cosi'
@@ -486,7 +538,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     [editingId, preventivi]
   )
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !statoPronto(`preventivi:${serviceType}`))
   const [saving, setSaving] = useState(false)
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
   const [selectedPreventivo, setSelectedPreventivo] = useState<Preventivo | null>(null)
@@ -496,6 +548,24 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // checkbox is checked.
   const [includeCoefficienti, setIncludeCoefficienti] = useState<boolean>(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  // ─── Eliminazione preventivi (02/09/2026) ───────────────────────────────
+  // Prima non esisteva alcun modo di cancellare: 776 righe accumulate, di cui
+  // 426 scadute, senza pulizia possibile. Tre strade, un solo flusso di
+  // conferma: cestino sulla riga, "Elimina selezionati" (checkbox) e pulizia
+  // in blocco di quello che il filtro sta mostrando.
+  //
+  // Cancellare non si annulla: si passa SEMPRE da una conferma esplicita e
+  // dall'OTP direzionale (codice `preventivo_elimina`, spegnibile da Gestione
+  // OTP). Override separato da convOverride di proposito — quello governa la
+  // conversione in prenotazione, e i due audit non vanno mescolati.
+  // RLS gemella: supabase/migrations/20260902_preventivi_eliminazione.sql.
+  const elimOverride = useLimitationOverride()
+  const [selezionatiElim, setSelezionatiElim] = useState<Set<string>>(new Set())
+  const [confermaElim, setConfermaElim] = useState<{ ids: string[]; titolo: string; dettaglio: string } | null>(null)
+  const [eliminando, setEliminando] = useState(false)
+  // Lock sincrono: la modale OTP puo' far ripartire l'eliminazione dallo
+  // useEffect mentre il click di conferma e' ancora in volo.
+  const eliminandoRef = useRef(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
   // Filtro per data esatta di creazione (YYYY-MM-DD, Europe/Rome).
   // Vuoto = nessun filtro per data.
@@ -1501,12 +1571,41 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
-  // Aspetta che useAdminRole abbia caricato (permissions / adminEmail risolti)
-  // prima di fare la prima query, altrimenti per i collaboratori la query
-  // parte con hasPermission ottimistico = true → niente filtro → la lista
-  // mostra TUTTI i preventivi (bug del 20/05). Re-fetch anche quando
-  // isPreventivoOnly o adminEmail cambiano (es. cambio account, refresh
-  // del role hook).
+  // 02/09/2026 — la richiesta della lista parte al montaggio, non dopo.
+  //
+  // Misurato all'apertura della tab: dei ~1,5 s prima di vedere le righe,
+  // 1,0 s se ne andava PRIMA che la query partisse — si aspettava che
+  // `useAdminRole` avesse finito (auth/v1/user, poi `admins`) solo per sapere
+  // se restringere l'elenco a `created_by = adminEmail`. Ma quel filtro
+  // riguarda i soli collaboratori "preventivi-only": per tutti gli altri la
+  // query e' identica a prima, e stava ferma ad aspettare una risposta che
+  // non l'avrebbe cambiata.
+  //
+  // Ora parte subito, in parallelo al giro del ruolo. Quando il ruolo arriva:
+  //  - utente normale  -> si usa il risultato gia' pronto;
+  //  - collaboratore   -> quel risultato si BUTTA e si rifa' la query
+  //                       filtrata. Non viene mai disegnato: `setPreventivi`
+  //                       avviene solo nel ramo giusto, quindi il bug del
+  //                       20/05 (il collaboratore vedeva tutti i preventivi)
+  //                       non puo' tornare.
+  // Sulla RLS non cambia niente: la policy su `preventivi` e' gia'
+  // `authenticated`, il filtro e' una scelta di prodotto, non un permesso.
+  const prefetchRef = useRef<Promise<Preventivo[]> | null>(null)
+  useEffect(() => {
+    setLoading(true)
+    prefetchRef.current = queryPreventivi(null)
+    // il prefetch non deve morire non gestito se il ramo che lo consuma
+    // decide di buttarlo via
+    prefetchRef.current.catch(() => {})
+    loadVehicles()
+    loadNoCauzioneRequests()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Il ruolo decide COSA si mostra: finche' non e' risolto non si disegna
+  // niente. Per i collaboratori `hasPermission` e' ottimisticamente true, e
+  // partire da li' voleva dire mostrare TUTTI i preventivi (bug del 20/05).
+  // Rigira anche a ogni cambio account / refresh del role hook.
   useEffect(() => {
     if (adminRoleLoading) return
     // 02/09/2026 — l'elenco prima, l'anagrafica dopo.
@@ -1518,8 +1617,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // l'anagrafica ridotta (`fields=picker`) parte quando la lista e' gia' a
     // schermo: il form la trova pronta molto prima che qualcuno lo apra.
     loadPreventivi().finally(() => { void loadCustomers() })
-    loadVehicles()
-    loadNoCauzioneRequests()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminRoleLoading, isPreventivoOnly, adminEmail])
 
@@ -1559,47 +1656,120 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     }
   }
 
+  /**
+   * La query della lista. `soloDi` = email del collaboratore quando l'elenco
+   * va ristretto ai suoi preventivi, `null` per tutti gli altri.
+   *
+   * Sta fuori da `loadPreventivi` perche' il prefetch al montaggio la chiama
+   * prima che il ruolo sia noto: la decisione su `soloDi` arriva dopo.
+   */
+  async function queryPreventivi(soloDi: string | null): Promise<Preventivo[]> {
+    let query = supabase
+      .from('preventivi')
+      .select(COLONNE_LISTA)
+      .order('created_at', { ascending: false })
+    // Il business si filtra anche lato server (il controllo client resta
+    // sotto, e' quello che decide). Terra e' tutto cio' che non e' di un
+    // altro business, NULL compreso: `not.in` da solo scarterebbe i NULL,
+    // quindi va in OR con `is.null`. Sulle altre tab evita di scaricare
+    // gli 800 preventivi di Terra per poi buttarli via.
+    const ALTRI_BUSINESS = 'boat_rental,heli_rental,stay_rental,car_wash,mechanical,mechanical_service'
+    query = biz === 'rental'
+      ? query.or(`service_type.is.null,service_type.not.in.(${ALTRI_BUSINESS})`)
+      : query.eq('service_type', serviceType)
+    // Restringi ai propri preventivi per i collaboratori. created_by
+    // viene salvato con adminEmail. Non si fa il filtro lato server per
+    // direzione/operatori standard: la query resta identica a prima per loro.
+    if (soloDi) {
+      query = query.eq('created_by', soloDi)
+      // Niente vecchi preventivi gia' chiusi: nascondiamo scaduto e
+      // rifiutato per tenere la lista del collaboratore concentrata
+      // sui preventivi attivi (bozza / inviato / accettato).
+      query = query.not('status', 'in', '(scaduto,rifiutato)')
+    }
+    const { data, error } = await query
+    if (error) throw error
+    // Cast: con una select scritta a mano supabase-js non sa dedurre la
+    // forma della riga (le colonne sono una stringa, non un literal type).
+    return (data || []) as unknown as Preventivo[]
+  }
+
   async function loadPreventivi() {
     setLoading(true)
     try {
-      let query = supabase
-        .from('preventivi')
-        .select('*')
-        .order('created_at', { ascending: false })
-      // Restringi ai propri preventivi per i collaboratori. created_by
-      // viene salvato con adminEmail (linea 1650). Non si fa il filtro
-      // lato server per direzione/operatori standard: la query resta
-      // identica a prima per loro.
-      if (isPreventivoOnly && adminEmail) {
-        query = query.eq('created_by', adminEmail)
-        // Niente vecchi preventivi gia' chiusi: nascondiamo scaduto e
-        // rifiutato per tenere la lista del collaboratore concentrata
-        // sui preventivi attivi (bozza / inviato / accettato).
-        query = query.not('status', 'in', '(scaduto,rifiutato)')
-      }
-      const { data, error } = await query
-
-      if (error) throw error
+      const soloDi = isPreventivoOnly && adminEmail ? adminEmail : null
+      // Il prefetch partito al montaggio vale solo per l'elenco NON filtrato:
+      // per un collaboratore si rifa' la query e quello si butta.
+      const pronto = !soloDi && prefetchRef.current ? prefetchRef.current : null
+      prefetchRef.current = null
+      const righe = pronto ? await pronto : await queryPreventivi(soloDi)
 
       const now = new Date()
-      // 2026-08-24: ogni business vede SOLO i suoi preventivi. Il filtro e'
-      // lato client di proposito: se la colonna `service_type` non esiste
-      // ancora, le righe valgono come Noleggio Terra (dove sono sempre
-      // state) invece di far fallire la query e svuotare la tab.
-      const soloBusiness = (data || []).filter(p => toBusiness((p as { service_type?: string }).service_type) === biz)
+      // 2026-08-24: ogni business vede SOLO i suoi preventivi. Questo secondo
+      // passaggio resta anche ora che il server pre-filtra: e' qui che vive la
+      // regola (`toBusiness`), il filtro SQL e' solo per non trasferire righe
+      // che verrebbero buttate. Nota: da qui la colonna `service_type` e'
+      // obbligatoria (migrazione 20260824_preventivi_service_type.sql) —
+      // compare sia in COLONNE_LISTA sia nel filtro.
+      const soloBusiness = righe.filter(p => toBusiness((p as { service_type?: string }).service_type) === biz)
+      const daScadere: string[] = []
       const updated: Preventivo[] = soloBusiness.map(p => {
         if (p.status === 'inviato' && p.expires_at && new Date(p.expires_at) < now) {
-          supabase.from('preventivi').update({ status: 'scaduto' }).eq('id', p.id).then(() => {})
+          daScadere.push(p.id)
           return { ...p, status: 'scaduto' }
         }
         return p
       })
+      // Una sola UPDATE per tutti gli scaduti, non una per riga: con una
+      // giornata di preventivi non spediti erano decine di PATCH in fila
+      // mentre la lista si stava ancora disegnando.
+      if (daScadere.length > 0) {
+        void supabase.from('preventivi').update({ status: 'scaduto' }).in('id', daScadere)
+      }
       setPreventivi(updated)
     } catch (error) {
       console.error('Failed to load preventivi:', error)
       toast.error('Errore caricamento preventivi')
     } finally {
       setLoading(false)
+    }
+  }
+
+  /**
+   * Rilegge le colonne pesanti di UN preventivo e le rimette nella cache di
+   * stato (02/09/2026 — velocita').
+   *
+   * La lista non scarica `pricing_trace` ed `extras_detail`: sono il 52% del
+   * payload e servono solo quando si apre un preventivo. Le tre porte che le
+   * usano — Modifica, Accetta, messaggio WhatsApp — passano tutte da qui.
+   *
+   * Torna la riga completa, oppure `null` se la lettura fallisce: in quel caso
+   * il chiamante NON deve proseguire, perche' senza `extras_detail` il form si
+   * riempirebbe con gli extra spenti (residenza, lavaggio, km illimitati...)
+   * e salvarlo cancellerebbe le scelte del cliente.
+   */
+  async function assicuraDettaglio(p: Preventivo): Promise<Preventivo | null> {
+    if (p.pricing_trace !== undefined && p.extras_detail !== undefined) return p
+    try {
+      const { data, error } = await supabase
+        .from('preventivi')
+        .select(COLONNE_DETTAGLIO)
+        .eq('id', p.id)
+        .single()
+      if (error) throw error
+      const completo: Preventivo = {
+        ...p,
+        pricing_trace: (data?.pricing_trace ?? null) as Record<string, unknown> | null,
+        extras_detail: (data?.extras_detail ?? null) as Record<string, unknown> | null,
+      }
+      // In cache: `confirmAccept` e il pannello "Richiesta dal cliente"
+      // rileggono il preventivo da `preventivi`, non da qui.
+      setPreventivi(prev => prev.map(x => (x.id === completo.id ? completo : x)))
+      return completo
+    } catch (err) {
+      console.error('[PreventiviTab] dettaglio preventivo non caricato:', err)
+      toast.error('Impossibile caricare il dettaglio del preventivo. Riprova.')
+      return null
     }
   }
 
@@ -2196,7 +2366,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     }
   }
 
-  function handleEdit(p: Preventivo) {
+  async function handleEdit(pRiga: Preventivo) {
+    // `extras_detail` non arriva con la lista: senza, ogni extra risulterebbe
+    // spento e il primo salvataggio li cancellerebbe. Vedi assicuraDettaglio().
+    const p = await assicuraDettaglio(pRiga)
+    if (!p) return
     // Extract time from ISO dates (in Europe/Rome)
     const pickupDate = new Date(p.pickup_date)
     const dropoffDate = new Date(p.dropoff_date)
@@ -2353,7 +2527,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     return msg
   }
 
-  async function formatWhatsAppMessage(p: Preventivo, opts?: { includeCoefficienti?: boolean; coefficientiOnly?: boolean }): Promise<string> {
+  async function formatWhatsAppMessage(pRiga: Preventivo, opts?: { includeCoefficienti?: boolean; coefficientiOnly?: boolean }): Promise<string> {
+    // Il messaggio elenca gli extra (`extras_detail`) e i coefficienti
+    // Centralina (`pricing_trace`): entrambi restano fuori dalla lista.
+    // Se il dettaglio non si carica si va avanti con quello che c'e' — un
+    // messaggio senza la riga dei coefficienti e' meglio di nessun messaggio.
+    const p = (await assicuraDettaglio(pRiga)) || pRiga
     // "Solo coefficienti" short-circuits the template loader entirely.
     if (opts?.coefficientiOnly) {
       return buildCoefficientiOnlyMessage(p)
@@ -3046,7 +3225,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     openPreventivoRejectModal({ id: p.id, vehicle_name: p.vehicle_name })
   }
 
-  function openAcceptModal(p: Preventivo) {
+  async function openAcceptModal(pRiga: Preventivo) {
+    // `confirmAccept` ripesca il preventivo da `preventivi` e ne legge
+    // `extras_detail` (asset, pacchetti km, indirizzi): va idratato prima,
+    // altrimenti la prenotazione nasce senza quei dati.
+    const p = await assicuraDettaglio(pRiga)
+    if (!p) return
     if (gateNoCauzioneApproval(p)) return
     // 2026-05-20: template-only mode (Nicola Frongia & simili) — niente
     // selezione cliente / metodo pagamento. "Accetta" segna solo lo stato
@@ -3592,6 +3776,129 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     })
   }, [preventivi, statusFilter, searchQuery, dateFilter, dateRange, sortField, sortDir]
   )
+
+  // ─── Eliminazione: selezione, conferma, esecuzione ──────────────────────
+  const ELIM_OTP_CODE = 'preventivo_elimina'
+
+  // La selezione vive sulle righe visibili. Se l'admin cambia filtro o
+  // ricerca, le spunte rimaste fuori schermo verrebbero cancellate senza che
+  // nessuno le veda piu': si purgano.
+  useEffect(() => {
+    setSelezionatiElim(prev => {
+      if (prev.size === 0) return prev
+      const visibili = new Set(filtered.map(p => p.id))
+      const next = new Set([...prev].filter(id => visibili.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filtered])
+
+  const toggleSelezioneElim = (id: string) => {
+    setSelezionatiElim(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  /** Apre la conferma. Nessuna cancellazione parte da qui. */
+  const chiediEliminazione = (ids: string[], titolo: string, dettaglio: string) => {
+    if (ids.length === 0) return
+    setConfermaElim({ ids, titolo, dettaglio })
+  }
+
+  /** Riepilogo mostrato nella conferma e spedito nella mail OTP alla direzione. */
+  const rigaRiepilogoElim = (p: Preventivo) =>
+    `${p.vehicle_name}${p.vehicle_plate ? ` (${p.vehicle_plate})` : ''} — ${p.customer_name || p.customer_phone || 'senza cliente'} — ${STATUS_LABELS[p.status] || p.status} — € ${formatEur(p.total_final || p.subtotal)}`
+
+  /**
+   * Cancellazione definitiva. Chiamata dal bottone di conferma e ri-chiamata
+   * dallo useEffect qui sotto quando l'OTP viene approvato (la modale non
+   * riprende da sola il flusso interrotto).
+   */
+  async function eseguiEliminazione() {
+    const target = confermaElim
+    if (!target || eliminandoRef.current) return
+
+    if (!elimOverride.hasOverride(ELIM_OTP_CODE)) {
+      // requestOverride ritorna true quando il gate e' bypassato (direzione,
+      // toggle role:bypass-otp, o OTP disattivato in Gestione OTP): in quel
+      // caso si prosegue subito. Se ritorna false ha aperto la modale e
+      // bisogna fermarsi qui: ci ripensa lo useEffect dopo l'approvazione.
+      const bypassato = elimOverride.requestOverride(
+        ELIM_OTP_CODE,
+        target.ids.length === 1
+          ? 'Eliminazione definitiva di un preventivo.'
+          : `Eliminazione definitiva di ${target.ids.length} preventivi.`,
+        { audit: `preventivo_elimina_${target.ids.length}_${Date.now()}` }
+      )
+      if (!bypassato) return
+    }
+
+    eliminandoRef.current = true
+    setEliminando(true)
+    try {
+      // A chunk di 100: l'id list finisce nell'URL della DELETE PostgREST e
+      // 400+ uuid sfondano il limite di lunghezza della request.
+      const chunks: string[][] = []
+      for (let i = 0; i < target.ids.length; i += 100) chunks.push(target.ids.slice(i, i + 100))
+      const eliminati: string[] = []
+      for (const chunk of chunks) {
+        const { error } = await supabase.from('preventivi').delete().in('id', chunk)
+        if (error) {
+          // Parziale: quello che e' passato e' passato, si aggiorna la lista
+          // con i chunk andati a buon fine e si dice quanti ne restano.
+          if (eliminati.length > 0) {
+            const rimossi = new Set(eliminati)
+            setPreventivi(prev => prev.filter(p => !rimossi.has(p.id)))
+            setSelezionatiElim(prev => new Set([...prev].filter(id => !rimossi.has(id))))
+          }
+          throw error
+        }
+        eliminati.push(...chunk)
+      }
+
+      const rimossi = new Set(eliminati)
+      const snapshot = preventivi.filter(p => rimossi.has(p.id))
+      setPreventivi(prev => prev.filter(p => !rimossi.has(p.id)))
+      setSelezionatiElim(prev => new Set([...prev].filter(id => !rimossi.has(id))))
+      if (selectedRowId && rimossi.has(selectedRowId)) setSelectedRowId(null)
+      setListPage(1)
+
+      logAdminAction('delete_preventivi', 'preventivo', eliminati[0] || 'bulk', {
+        count: eliminati.length,
+        ids: eliminati,
+        contesto: target.titolo,
+        righe: snapshot.map(rigaRiepilogoElim),
+        admin_email: adminEmail || 'unknown',
+      })
+      await elimOverride.consumeAllOverrides(eliminati[0])
+
+      toast.success(eliminati.length === 1 ? 'Preventivo eliminato' : `${eliminati.length} preventivi eliminati`)
+      setConfermaElim(null)
+    } catch (e) {
+      console.error('[PreventiviTab] eliminazione fallita:', e)
+      const msg = (e as { message?: string })?.message || ''
+      toast.error(
+        /policy|permission|row-level/i.test(msg)
+          ? "Eliminazione rifiutata dal database: serve un account di direzione."
+          : `Errore eliminazione: ${msg || 'riprova'}`,
+        { duration: 9000 }
+      )
+    } finally {
+      eliminandoRef.current = false
+      setEliminando(false)
+    }
+  }
+
+  // Ripresa dopo l'OTP: la modale approva e si chiude, ma il flusso era
+  // stato interrotto a meta'. Qui riparte da solo, senza far ri-cliccare.
+  useEffect(() => {
+    if (!confermaElim) return
+    if (!elimOverride.overrideCodes.has(ELIM_OTP_CODE)) return
+    if (eliminandoRef.current) return
+    void eseguiEliminazione()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elimOverride.overrideCodes, confermaElim])
 
   /**
    * La pagina che va davvero a schermo (02/09/2026).
@@ -4159,6 +4466,28 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
             )
           })}
           <div className="ml-auto flex items-center gap-2">
+            {/* Pulizia in blocco: cancella esattamente quello che il filtro
+                sta mostrando (stato + ricerca + periodo), non "tutti". */}
+            {puoEliminare && filtered.length > 0 && (() => {
+              const etichettaStato = statusFilter !== 'all' ? (STATUS_LABELS[statusFilter] || statusFilter).toLowerCase() : null
+              return (
+                <button
+                  type="button"
+                  onClick={() => chiediEliminazione(
+                    filtered.map(p => p.id),
+                    etichettaStato ? `Elimina i preventivi in stato "${STATUS_LABELS[statusFilter] || statusFilter}"` : 'Elimina i preventivi filtrati',
+                    etichettaStato
+                      ? `Vengono eliminati i ${filtered.length} preventivi attualmente visibili in stato "${STATUS_LABELS[statusFilter] || statusFilter}" (filtri di ricerca e periodo inclusi).`
+                      : `Vengono eliminati i ${filtered.length} preventivi attualmente visibili con i filtri applicati.`
+                  )}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-rose-200 bg-rose-500/10 ring-1 ring-rose-500/30 hover:bg-rose-500/20 transition-colors"
+                  title="Elimina tutti i preventivi mostrati dai filtri correnti"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                  {etichettaStato ? `Elimina ${etichettaStato}` : 'Elimina risultati'} <span className="opacity-70 font-mono">({filtered.length})</span>
+                </button>
+              )
+            })()}
             <button
               type="button"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-theme-text-secondary bg-theme-bg-tertiary ring-1 ring-transparent hover:ring-theme-border hover:text-theme-text-primary transition-colors"
@@ -4452,8 +4781,56 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
 
             {/* List card (right) */}
             <div className={`hidden sm:block bg-theme-bg-secondary/40 rounded-2xl ring-1 ring-theme-border overflow-hidden ${selectedRowId ? 'lg:flex-1 lg:min-w-0' : ''}`}>
+            {/* Barra selezione — compare solo quando c'e' qualcosa di spuntato */}
+            {puoEliminare && selezionatiElim.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b border-rose-500/30 bg-rose-500/10">
+                <span className="text-[12px] font-semibold text-rose-100">
+                  {selezionatiElim.size} {selezionatiElim.size === 1 ? 'preventivo selezionato' : 'preventivi selezionati'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => chiediEliminazione(
+                    [...selezionatiElim],
+                    'Elimina i preventivi selezionati',
+                    `Vengono eliminati i ${selezionatiElim.size} preventivi spuntati nella lista.`
+                  )}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-rose-100 bg-rose-500/20 ring-1 ring-rose-500/40 hover:bg-rose-500/30 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                  Elimina selezionati ({selezionatiElim.size})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelezionatiElim(new Set())}
+                  className="ml-auto text-[11px] font-semibold text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                >
+                  Deseleziona tutto
+                </button>
+              </div>
+            )}
+
             {/* Header row */}
-            <div className="grid grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_88px] gap-2 px-4 py-3 border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.14em] text-theme-text-muted">
+            <div className={`grid ${colonneListaPreventivi} gap-2 px-4 py-3 border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.14em] text-theme-text-muted`}>
+              {puoEliminare && (
+                <span className="flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    aria-label="Seleziona tutti i preventivi della pagina"
+                    title="Seleziona tutta la pagina"
+                    checked={righePagina.length > 0 && righePagina.every(p => selezionatiElim.has(p.id))}
+                    onChange={(e) => {
+                      const idsPagina = righePagina.map(p => p.id)
+                      setSelezionatiElim(prev => {
+                        const next = new Set(prev)
+                        if (e.target.checked) idsPagina.forEach(id => next.add(id))
+                        else idsPagina.forEach(id => next.delete(id))
+                        return next
+                      })
+                    }}
+                    className="w-3.5 h-3.5 accent-rose-500 cursor-pointer"
+                  />
+                </span>
+              )}
               <button onClick={() => toggleSort('created_at')} className="text-left hover:text-theme-text-primary cursor-pointer">Preventivo{sortArrow('created_at')}</button>
               <span>Cliente</span>
               <button onClick={() => toggleSort('pickup_date')} className="text-left hover:text-theme-text-primary cursor-pointer">Data Noleggio{sortArrow('pickup_date')}</button>
@@ -4534,12 +4911,27 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                         <div
                           key={p.id}
                           onClick={() => setSelectedRowId(prev => prev === p.id ? null : p.id)}
-                          className={`grid grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_88px] gap-2 px-4 py-3 items-center cursor-pointer transition-colors ${
-                            selectedRowId === p.id
-                              ? 'bg-cyan-500/10 ring-1 ring-inset ring-cyan-500/40'
-                              : 'hover:bg-theme-bg-tertiary/30'
+                          className={`grid ${colonneListaPreventivi} gap-2 px-4 py-3 items-center cursor-pointer transition-colors ${
+                            selezionatiElim.has(p.id)
+                              ? 'bg-rose-500/10 ring-1 ring-inset ring-rose-500/30'
+                              : selectedRowId === p.id
+                                ? 'bg-cyan-500/10 ring-1 ring-inset ring-cyan-500/40'
+                                : 'hover:bg-theme-bg-tertiary/30'
                           }`}
                         >
+                          {/* Spunta selezione — solo direzione */}
+                          {puoEliminare && (
+                            <span className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                aria-label={`Seleziona preventivo ${p.vehicle_name}`}
+                                checked={selezionatiElim.has(p.id)}
+                                onChange={() => toggleSelezioneElim(p.id)}
+                                className="w-3.5 h-3.5 accent-rose-500 cursor-pointer"
+                              />
+                            </span>
+                          )}
+
                           {/* Preventivo (vehicle image + name + plate + badge) */}
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
@@ -4672,6 +5064,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                                 className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+                              </button>
+                            )}
+                            {puoEliminare && (
+                              <button
+                                type="button"
+                                onClick={() => chiediEliminazione(
+                                  [p.id],
+                                  'Elimina preventivo',
+                                  rigaRiepilogoElim(p)
+                                )}
+                                title="Elimina preventivo"
+                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                               </button>
                             )}
                           </div>
@@ -4877,6 +5283,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                           title={p.motivo_rifiuto ? `Motivo attuale: ${p.motivo_rifiuto}` : 'Imposta motivo rifiuto'}
                         >
                           {p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo'}
+                        </button>
+                      )}
+                      {puoEliminare && (
+                        <button
+                          type="button"
+                          onClick={() => chiediEliminazione([p.id], 'Elimina preventivo', rigaRiepilogoElim(p))}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/40 text-rose-200 active:opacity-70 text-[13px] font-semibold"
+                        >
+                          Elimina
                         </button>
                       )}
                     </div>
@@ -6119,6 +6534,120 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           righe non causa re-render della lista. */}
       <PreventivoRejectModal onConfirm={confirmReject} />
       <PreventivoAcceptModal onConfirm={confirmAccept} customers={customers} />
+      {/* ─── Conferma eliminazione (02/09/2026) ────────────────────────────
+          Unico punto di conferma per i tre modi di cancellare: cestino sulla
+          riga, selezione multipla, pulizia per stato. Elenca sempre COSA sta
+          per sparire — con 400+ righe filtrate, "sei sicuro?" da solo non
+          basta a capire cosa si sta buttando. */}
+      {confermaElim && (() => {
+        const righe = preventivi.filter(p => confermaElim.ids.includes(p.id))
+        const anteprima = righe.slice(0, 8)
+        const resto = righe.length - anteprima.length
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-2xl bg-theme-bg-secondary ring-1 ring-theme-border shadow-2xl overflow-hidden">
+              <div className="flex items-start gap-3 px-5 py-4 border-b border-theme-border">
+                <div className="grid w-9 h-9 shrink-0 place-items-center rounded-lg bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30">
+                  <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-bold text-theme-text-primary">{confermaElim.titolo}</h3>
+                  <p className="text-[12px] text-theme-text-muted mt-0.5">{confermaElim.dettaglio}</p>
+                </div>
+              </div>
+
+              <div className="px-5 py-4 space-y-3">
+                <div className="rounded-lg bg-rose-500/10 ring-1 ring-rose-500/25 px-3 py-2.5">
+                  <p className="text-[12px] font-semibold text-rose-200">
+                    {confermaElim.ids.length === 1
+                      ? 'Il preventivo viene cancellato definitivamente.'
+                      : `${confermaElim.ids.length} preventivi vengono cancellati definitivamente.`}
+                  </p>
+                  <p className="text-[11px] text-rose-200/70 mt-0.5">
+                    Operazione non annullabile: spariscono dalla lista, dai conteggi di stato e dai report.
+                  </p>
+                </div>
+
+                {/* Preventivi gia' diventati prenotazione: la prenotazione
+                    vive per conto suo, cancellare qui non la tocca. Va detto,
+                    o sembra che si stia cancellando anche il noleggio. */}
+                {righe.some(p => p.booking_id) && (
+                  <div className="rounded-lg bg-amber-500/10 ring-1 ring-amber-500/25 px-3 py-2.5">
+                    <p className="text-[11px] text-amber-200">
+                      {righe.filter(p => p.booking_id).length === 1
+                        ? '1 preventivo e gia convertito in prenotazione: la prenotazione resta, sparisce solo il preventivo.'
+                        : `${righe.filter(p => p.booking_id).length} preventivi sono gia convertiti in prenotazione: le prenotazioni restano, spariscono solo i preventivi.`}
+                    </p>
+                  </div>
+                )}
+
+                {righe.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto rounded-lg ring-1 ring-theme-border divide-y divide-theme-border/50">
+                    {anteprima.map(p => (
+                      <div key={p.id} className="px-3 py-2 text-[11px] text-theme-text-secondary">
+                        {rigaRiepilogoElim(p)}
+                      </div>
+                    ))}
+                    {resto > 0 && (
+                      <div className="px-3 py-2 text-[11px] font-semibold text-theme-text-muted">
+                        …e altri {resto}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-theme-border">
+                <button
+                  type="button"
+                  disabled={eliminando}
+                  onClick={() => { setConfermaElim(null); elimOverride.cancelLimitation() }}
+                  className="px-4 py-2 rounded-lg text-[13px] font-semibold text-theme-text-secondary bg-theme-bg-tertiary hover:text-theme-text-primary transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  disabled={eliminando}
+                  onClick={() => { void eseguiEliminazione() }}
+                  className="px-4 py-2 rounded-lg text-[13px] font-bold text-white bg-rose-600 hover:bg-rose-500 transition-colors disabled:opacity-60"
+                >
+                  {eliminando ? 'Eliminazione…' : 'Elimina definitivamente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      <LimitationOverrideModal
+        isOpen={elimOverride.limitationState.isOpen}
+        limitationCode={elimOverride.limitationState.limitationCode}
+        limitationMessage={elimOverride.limitationState.limitationMessage}
+        actionContext={elimOverride.limitationState.actionContext}
+        draftSessionId={elimOverride.draftSessionId}
+        flowType={elimOverride.flowType}
+        showNotes
+        details={confermaElim ? {
+          operation: {
+            Azione: 'Eliminazione definitiva di preventivi',
+            Quantita: String(confermaElim.ids.length),
+            Contesto: confermaElim.titolo,
+            Richiesta: adminEmail || 'sconosciuto',
+          },
+          meta: {
+            Preventivi: preventivi
+              .filter(p => confermaElim.ids.includes(p.id))
+              .slice(0, 10)
+              .map(rigaRiepilogoElim)
+              .join(' · ') + (confermaElim.ids.length > 10 ? ` · …e altri ${confermaElim.ids.length - 10}` : ''),
+          },
+        } : undefined}
+        onClose={elimOverride.closeLimitation}
+        onCancel={() => { elimOverride.cancelLimitation(); setConfermaElim(null) }}
+        onOverrideApproved={elimOverride.handleOverrideApproved}
+      />
+
       <LimitationOverrideModal
         isOpen={convOverride.limitationState.isOpen}
         limitationCode={convOverride.limitationState.limitationCode}
