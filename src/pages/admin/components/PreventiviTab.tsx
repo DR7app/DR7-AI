@@ -983,6 +983,25 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   )
   const deliveryRateMissing = deliveryRateForVehicle == null
 
+  // 02/09/2026 — l'etichetta della categoria del mezzo scelto, mostrata nel
+  // blocco Itinerario accanto alla tariffa: l'id da solo non si legge
+  // ("scooter" si chiama "Urban" a video, [[categorie_id_diversi_dalle_etichette]]),
+  // e senza etichetta non si capisce da quale categoria arrivano gli €/km.
+  const categoriaLabel = useMemo(() => {
+    const cats = rentalConfig?.vehicle_categories as Record<string, { label?: string }> | undefined
+    if (!cats) return ''
+    // Stesso alias del lookup tariffa: 'exotic' e 'supercars' sono la stessa
+    // categoria ([[category_alias_supercars_exotic]]).
+    const chiavi = proCategoryKey === 'exotic' ? ['exotic', 'supercars']
+      : proCategoryKey === 'supercars' ? ['supercars', 'exotic']
+      : [proCategoryKey]
+    for (const k of chiavi) {
+      const l = cats[k]?.label
+      if (l) return l
+    }
+    return ''
+  }, [rentalConfig, proCategoryKey])
+
   // Pro-resolved extras with safe fallbacks. Each falls back to the
   // legacy Centralina Unica overlay (keeps the form working until the
   // operator finishes migrating). When the operator changes a price
@@ -6064,6 +6083,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         valore={form.itinerario}
         onChange={(v) => setForm(prev => ({ ...prev, itinerario: v }))}
         tariffaCentralina={deliveryRateForVehicle}
+        categoriaLabel={selectedVehicle ? categoriaLabel : ''}
       />
 
       {/* Revenue Pricing Info */}

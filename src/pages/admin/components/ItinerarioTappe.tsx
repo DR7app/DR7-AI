@@ -9,6 +9,8 @@ interface Props {
     onChange: (v: ItinerarioValore) => void
     /** Tariffa €/km della Centralina Pro per la categoria del mezzo (null = non configurata). */
     tariffaCentralina: number | null
+    /** Etichetta della categoria del mezzo scelto: dice da dove arriva la tariffa. */
+    categoriaLabel?: string
 }
 
 function nuovaTappa(): Tappa {
@@ -24,7 +26,7 @@ function nuovaTappa(): Tappa {
  * moltiplica i km totali per la tariffa €/km — che parte da quella della
  * consegna a domicilio in Centralina Pro e resta correggibile a mano.
  */
-export default function ItinerarioTappe({ valore, onChange, tariffaCentralina }: Props) {
+export default function ItinerarioTappe({ valore, onChange, tariffaCentralina, categoriaLabel }: Props) {
     const [calcolo, setCalcolo] = useState(false)
     const onChangeRef = useRef(onChange)
     onChangeRef.current = onChange
@@ -216,6 +218,9 @@ export default function ItinerarioTappe({ valore, onChange, tariffaCentralina }:
                     <div>
                         <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">
                             Tariffa €/km
+                            {categoriaLabel && (
+                                <span className="normal-case tracking-normal text-theme-text-muted"> · {categoriaLabel}</span>
+                            )}
                         </label>
                         <MoneyInput
                             value={valore.prezzo_per_km || ''}
@@ -252,7 +257,7 @@ export default function ItinerarioTappe({ valore, onChange, tariffaCentralina }:
             )}
             {tariffaCentralina == null && tappe.length > 0 && (
                 <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
-                    Tariffa €/km non configurata per questa categoria in Centralina Pro &gt; Servizi &gt; Consegna a Domicilio: inseriscila a mano qui sopra.
+                    Tariffa €/km non configurata{categoriaLabel ? ` per la categoria ${categoriaLabel}` : ' per questa categoria'} in Centralina Pro &gt; Servizi &gt; Consegna a Domicilio: inseriscila a mano qui sopra.
                 </div>
             )}
         </div>
