@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import Paginazione from './Paginazione'
 import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
@@ -168,6 +169,42 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   const [searchQuery, setSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A — su created_at del contratto.
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+
+  /**
+   * Elenco filtrato e a pagine (02/09/2026).
+   *
+   * Il filtro stava dentro il JSX e veniva rifatto a ogni render; soprattutto
+   * la lista finiva a schermo INTERA, una scheda alta per ogni contratto:
+   * 36.000 nodi all'apertura della tab. Le regole di selezione sono le stesse.
+   */
+  const CONTRATTI_PER_PAGINA = 25
+  const [contrattiPagina, setContrattiPagina] = useState(1)
+  const contrattiVisibili = useMemo(() => contracts.filter(contract => {
+    // 2026-06-01: filtro periodo Da/A su created_at (Europe/Rome)
+    if (dateRange.from || dateRange.to) {
+      if (!contract.created_at) return false
+      const day = new Date(contract.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+      if (dateRange.from && day < dateRange.from) return false
+      if (dateRange.to && day > dateRange.to) return false
+    }
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      contract.customer_name.toLowerCase().includes(query) ||
+      contract.contract_number.toLowerCase().includes(query) ||
+      contract.customer_email.toLowerCase().includes(query)
+    )
+  }), [contracts, searchQuery, dateRange.from, dateRange.to])
+  // Cambiare ricerca o periodo riporta alla prima pagina.
+  useEffect(() => { setContrattiPagina(1) }, [searchQuery, dateRange.from, dateRange.to])
+  const contrattiPaginati = useMemo(() => {
+    const inizio = (contrattiPagina - 1) * CONTRATTI_PER_PAGINA
+    return contrattiVisibili.slice(inizio, inizio + CONTRATTI_PER_PAGINA)
+  }, [contrattiVisibili, contrattiPagina])
+  useEffect(() => {
+    const pagine = Math.max(1, Math.ceil(contrattiVisibili.length / CONTRATTI_PER_PAGINA))
+    if (contrattiPagina > pagine) setContrattiPagina(pagine)
+  }, [contrattiVisibili.length, contrattiPagina])
 
   // Master contract template — Supabase Storage bucket 'templates' /
   // file 'master_contract.pdf'. Generate-contract.ts lo scarica con
@@ -1008,22 +1045,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {contracts.filter(contract => {
-            // 2026-06-01: filtro periodo Da/A su created_at (Europe/Rome)
-            if (dateRange.from || dateRange.to) {
-              if (!contract.created_at) return false
-              const day = new Date(contract.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-              if (dateRange.from && day < dateRange.from) return false
-              if (dateRange.to && day > dateRange.to) return false
-            }
-            if (!searchQuery) return true
-            const query = searchQuery.toLowerCase()
-            return (
-              contract.customer_name.toLowerCase().includes(query) ||
-              contract.contract_number.toLowerCase().includes(query) ||
-              contract.customer_email.toLowerCase().includes(query)
-            )
-          }).map((contract) => (
+          {contrattiPaginati.map((contract) => (
             <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -1203,6 +1225,13 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
               </div>
             </div>
           ))}
+          <Paginazione
+            pagina={contrattiPagina}
+            totale={contrattiVisibili.length}
+            perPagina={CONTRATTI_PER_PAGINA}
+            onChange={(p) => { setContrattiPagina(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            etichetta="contratti"
+          />
         </div>
       )}
     </div>

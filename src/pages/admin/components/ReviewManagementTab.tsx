@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import Paginazione from './Paginazione'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,7 +110,12 @@ export default function ReviewManagementTab() {
   // motivoFilter applies to the Esclusi section only — narrows the rows by
   // exclusion reason (penali / danni / cauzione aperta / altri).
   const [motivoFilter, setMotivoFilter] = useState<'ALL' | 'PENALE' | 'DANNO' | 'OPEN_DEPOSIT' | 'ALTRI'>('ALL')
+  const [paginaPronti, setPaginaPronti] = useState(1)
+  const [paginaEsclusi, setPaginaEsclusi] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
+  // Cambiare ricerca, categoria o motivo riporta le due liste a pagina 1:
+  // restare a pagina 5 su un risultato da tre righe mostrerebbe il vuoto.
+  useEffect(() => { setPaginaPronti(1); setPaginaEsclusi(1) }, [searchTerm, categoryFilter, motivoFilter, filterServiceType])
   const [selectAll, setSelectAll] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSettings, setShowSettings] = useState(false)
@@ -1063,6 +1069,7 @@ export default function ReviewManagementTab() {
   // Pronti and Esclusi sections share the user's category + search filters,
   // and Esclusi additionally respects motivoFilter (Penali / Danni / Cauzione
   // aperta / Altri). No pagination — each section shows every matching row.
+  const RECENSIONI_PER_PAGINA = 25
   const pronti = filteredCandidates.filter(c => c.eligibility_status === 'ELIGIBLE')
   const esclusiBase = filteredCandidates.filter(c => c.eligibility_status === 'TO_REVIEW' || c.eligibility_status === 'EXCLUDED')
   const esclusi = esclusiBase.filter(c => {
@@ -1074,6 +1081,14 @@ export default function ReviewManagementTab() {
     if (motivoFilter === 'ALTRI') return code !== 'HAS_PENALTY' && code !== 'HAS_DAMAGE' && code !== 'OPEN_DEPOSIT'
     return true
   })
+  // 02/09/2026 — a schermo una pagina per sezione. Prima le due liste
+  // andavano a video intere: con qualche migliaio di candidati la tab
+  // costruiva oltre 22.000 nodi e restava ferma alcuni secondi.
+  const prontiPagina = Math.min(paginaPronti, Math.max(1, Math.ceil(pronti.length / RECENSIONI_PER_PAGINA)))
+  const prontiInPagina = pronti.slice((prontiPagina - 1) * RECENSIONI_PER_PAGINA, prontiPagina * RECENSIONI_PER_PAGINA)
+  const esclusiPagina = Math.min(paginaEsclusi, Math.max(1, Math.ceil(esclusi.length / RECENSIONI_PER_PAGINA)))
+  const esclusiInPagina = esclusi.slice((esclusiPagina - 1) * RECENSIONI_PER_PAGINA, esclusiPagina * RECENSIONI_PER_PAGINA)
+
   // Counts for the motivo sub-filter pills (computed off the unfiltered
   // Esclusi base so each pill always shows its true count).
   const motivoCounts = {
@@ -1626,10 +1641,17 @@ export default function ReviewManagementTab() {
                           </td>
                         </tr>
                       ) : (
-                        pronti.map(c => renderRow(c, true, false))
+                        prontiInPagina.map(c => renderRow(c, true, false))
                       )}
                     </tbody>
                   </table>
+                    <Paginazione
+                      pagina={prontiPagina}
+                      totale={pronti.length}
+                      perPagina={RECENSIONI_PER_PAGINA}
+                      onChange={setPaginaPronti}
+                      etichetta="clienti"
+                    />
                 </div>
               </div>
             </section>
@@ -1701,10 +1723,17 @@ export default function ReviewManagementTab() {
                           </td>
                         </tr>
                       ) : (
-                        esclusi.map(c => renderRow(c, false, true))
+                        esclusiInPagina.map(c => renderRow(c, false, true))
                       )}
                     </tbody>
                   </table>
+                    <Paginazione
+                      pagina={esclusiPagina}
+                      totale={esclusi.length}
+                      perPagina={RECENSIONI_PER_PAGINA}
+                      onChange={setPaginaEsclusi}
+                      etichetta="clienti"
+                    />
                 </div>
               </div>
             </section>

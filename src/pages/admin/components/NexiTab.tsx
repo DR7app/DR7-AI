@@ -10,6 +10,7 @@ import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import Paginazione from './Paginazione'
 
 interface PreauthCustomerLite {
     id: string
@@ -182,6 +183,13 @@ export default function NexiTab() {
     // Carte visibili nel tab ma su NESSUNA scheda cliente: sono quelle che
     // fanno dire alla fiche "Non tokenizzata" pur avendo il cliente pagato.
     const cardsNotInCustomer = tokenizedCards.filter(c => !c.customer_id).length
+    /**
+     * Le tre liste della tab vanno a schermo una pagina per volta
+     * (02/09/2026): transazioni, carte e addebiti erano disegnate intere e
+     * l'apertura della tab costruiva 27.000 nodi.
+     */
+    const NEXI_PER_PAGINA = 25
+
     const filteredCards = tokenizedCards.filter(c =>
         filterMatches([c.full_name, c.email, c.phone, c.masked_pan, c.contract_id], search)
         && matchesCardType(c.card_type)
@@ -204,6 +212,13 @@ export default function NexiTab() {
         && matchesStatus(tx.status)
         && (!sourceFilter || (tx.source || 'nexi') === sourceFilter)
     )
+    const [paginaCarte, setPaginaCarte] = useState(1)
+    const [paginaTransazioni, setPaginaTransazioni] = useState(1)
+    // Cambiare ricerca o filtri riporta alla prima pagina.
+    useEffect(() => { setPaginaCarte(1); setPaginaTransazioni(1) }, [search, statusFilter, sourceFilter, cardTypeFilter])
+    const carteInPagina = filteredCards.slice((paginaCarte - 1) * NEXI_PER_PAGINA, paginaCarte * NEXI_PER_PAGINA)
+    const transazioniInPagina = filteredTransactions.slice((paginaTransazioni - 1) * NEXI_PER_PAGINA, paginaTransazioni * NEXI_PER_PAGINA)
+
     const transactionsTotalCents = filteredTransactions
         .filter(tx => tx.status === 'completed' || tx.status === 'preauth_captured')
         .reduce((sum, tx) => sum + (tx.amount_cents || 0), 0)
@@ -655,6 +670,9 @@ export default function NexiTab() {
     const filteredAddebiti = allAddebiti.filter(a => filterMatches(
         [a.customer_name, a.customer_email, a.causale, a.contract_id], search
     ))
+    const [paginaAddebiti, setPaginaAddebiti] = useState(1)
+    useEffect(() => { setPaginaAddebiti(1) }, [search])
+    const addebitiInPagina = filteredAddebiti.slice((paginaAddebiti - 1) * NEXI_PER_PAGINA, paginaAddebiti * NEXI_PER_PAGINA)
 
     useEffect(() => {
         fetchTransactions()
@@ -1586,7 +1604,7 @@ export default function NexiTab() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {filteredTransactions.map((tx) => (
+                                {transazioniInPagina.map((tx) => (
                                     <tr key={tx.id} className="hover:bg-theme-text-primary/5 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="text-theme-text-primary font-mono text-sm">
@@ -1675,6 +1693,13 @@ export default function NexiTab() {
                                 ))}
                             </tbody>
                         </table>
+                        <Paginazione
+                            pagina={paginaTransazioni}
+                            totale={filteredTransactions.length}
+                            perPagina={NEXI_PER_PAGINA}
+                            onChange={setPaginaTransazioni}
+                            etichetta="transazioni"
+                        />
                     </div>
                 </div>
             )}
@@ -1721,8 +1746,9 @@ export default function NexiTab() {
                         {search ? `Nessuna carta corrisponde a "${search}"` : 'Nessuna carta tokenizzata'}
                     </div>
                 ) : (
+                    <>
                     <div className="divide-y divide-white/5">
-                        {filteredCards.map((card) => {
+                        {carteInPagina.map((card) => {
                             const paidCents = card.paid_total_cents ?? 0
                             const paidCount = card.paid_count ?? 0
                             const payments = card.payments ?? []
@@ -1921,6 +1947,14 @@ export default function NexiTab() {
                             )
                         })}
                     </div>
+                    <Paginazione
+                        pagina={paginaCarte}
+                        totale={filteredCards.length}
+                        perPagina={NEXI_PER_PAGINA}
+                        onChange={setPaginaCarte}
+                        etichetta="carte"
+                    />
+                    </>
                 )}
             </div>
 
@@ -1932,7 +1966,7 @@ export default function NexiTab() {
                         <button onClick={fetchAllAddebiti} className="text-xs text-theme-text-muted hover:text-dr7-gold">Aggiorna</button>
                     </div>
                     <div className="divide-y divide-white/5">
-                        {filteredAddebiti.map((a) => {
+                        {addebitiInPagina.map((a) => {
                             const statusColors: Record<string, string> = {
                                 email_sent: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
                                 second_email_sent: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
@@ -2009,6 +2043,13 @@ export default function NexiTab() {
                             )
                         })}
                     </div>
+                    <Paginazione
+                        pagina={paginaAddebiti}
+                        totale={filteredAddebiti.length}
+                        perPagina={NEXI_PER_PAGINA}
+                        onChange={setPaginaAddebiti}
+                        etichetta="addebiti"
+                    />
                 </div>
             )}
 
