@@ -17,8 +17,9 @@ import { requireAuth } from './require-auth'
  * `{ configurato: false }` e il client resta su Photon/OSRM: si accende da
  * sola il giorno in cui la chiave viene messa, senza toccare il codice.
  *
- * POST { azione: 'cerca', testo }              -> { configurato, luoghi[] }
- * POST { azione: 'percorso', punti: [{lat,lon}] } -> { configurato, tratte[] }
+ * POST { azione: 'cerca', testo, sessione }         -> { configurato, luoghi[] }  (senza coordinate)
+ * POST { azione: 'dettaglio', placeId, sessione }   -> { configurato, luogo }     (con le coordinate)
+ * POST { azione: 'percorso', punti: [{lat,lon}] }   -> { configurato, tratte[] }
  */
 
 const API_KEY = process.env.GOOGLE_MAPS_API_KEY || ''
@@ -28,9 +29,23 @@ const CENTRO = { lat: 39.2231, lon: 9.1374 }
 /** Raggio del biasing, in metri: tutta l'area di Cagliari e dintorni. */
 const RAGGIO_M = 50000
 
-const PLACES_URL = 'https://places.googleapis.com/v1/places:searchText'
+const PLACES_AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete'
+const PLACES_DETAILS_URL = 'https://places.googleapis.com/v1/places'
 const ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes'
 
+/**
+ * Perche' Autocomplete e non Text Search (02/09/2026, prima di andare in
+ * produzione): Text Search costa 32 $ ogni 1000 chiamate e partiva a ogni
+ * pausa di battitura — scrivere "aeroporto cagliari" sono 3-4 chiamate, un
+ * preventivo da tre tappe ~12, cioe' ~0,38 $ a preventivo. Con venti
+ * preventivi al giorno erano ~200 $ al mese di ricerca indirizzi.
+ *
+ * Con il modello a sessione si paga quasi zero: l'Autocomplete dentro una
+ * sessione non si paga, e si paga solo il Dettaglio del posto SCELTO (una
+ * chiamata per tappa), che sotto le migliaia al mese resta nel gratuito.
+ * Il `sessionToken` lega le battute alla scelta finale: senza, Google
+ * fattura ogni singola battuta.
+ */
 interface PlaceGoogle {
     id?: string
     displayName?: { text?: string }
@@ -40,29 +55,30 @@ interface PlaceGoogle {
     location?: { latitude?: number; longitude?: number }
 }
 
-/** searchText invece di autocomplete: una sola chiamata porta gia' le coordinate. */
-async function cercaPosti(testo: string) {
-    const res = await fetch(PLACES_URL, {
+interface SuggerimentoGoogle {
+    placePrediction?: {
+        placeId?: string
+        text?: { text?: string }
+        structuredFormat?: {
+            mainText?: { text?: string }
+            secondaryText?: { text?: string }
+        }
+    }
+}
+
+/** I suggerimenti mentre si scrive. Nessuna coordinata: quelle costano e arrivano solo alla scelta. */
+async function suggerisciPosti(testo: string, sessione: string) {
+    const res = await fetch(PLACES_AUTOCOMPLETE_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': API_KEY,
-            // Solo i campi che servono: la fatturazione di Places cresce con
-            // la field mask, chiedere tutto costerebbe senza motivo.
-            'X-Goog-FieldMask': [
-                'places.id',
-                'places.displayName',
-                'places.formattedAddress',
-                'places.shortFormattedAddress',
-                'places.primaryTypeDisplayName',
-                'places.location',
-            ].join(','),
         },
         body: JSON.stringify({
-            textQuery: testo,
+            input: testo,
             languageCode: 'it',
             regionCode: 'IT',
-            maxResultCount: 8,
+            sessionToken: sessione,
             locationBias: {
                 circle: {
                     center: { latitude: CENTRO.lat, longitude: CENTRO.lon },
@@ -73,25 +89,56 @@ async function cercaPosti(testo: string) {
     })
     if (!res.ok) {
         const testoErrore = await res.text()
-        throw new Error(`places ${res.status}: ${testoErrore.slice(0, 200)}`)
+        throw new Error(`autocomplete ${res.status}: ${testoErrore.slice(0, 200)}`)
     }
-    const dati = await res.json() as { places?: PlaceGoogle[] }
-    return (dati.places || []).flatMap(p => {
-        const lat = p.location?.latitude
-        const lon = p.location?.longitude
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return []
-        const nome = p.displayName?.text || p.shortFormattedAddress || p.formattedAddress || ''
+    const dati = await res.json() as { suggestions?: SuggerimentoGoogle[] }
+    return (dati.suggestions || []).flatMap(s => {
+        const p = s.placePrediction
+        if (!p?.placeId) return []
+        const nome = p.structuredFormat?.mainText?.text || p.text?.text || ''
         if (!nome) return []
-        const indirizzo = p.shortFormattedAddress || p.formattedAddress || ''
         return [{
-            id: `google-${p.id || `${lat},${lon}`}`,
+            id: `google-${p.placeId}`,
+            placeId: p.placeId,
             nome,
-            indirizzo: indirizzo === nome ? '' : indirizzo,
-            categoria: p.primaryTypeDisplayName?.text || '',
-            lat: lat as number,
-            lon: lon as number,
+            indirizzo: p.structuredFormat?.secondaryText?.text || '',
+            categoria: '',
+            // Le coordinate arrivano con il dettaglio, alla scelta.
+            lat: null as number | null,
+            lon: null as number | null,
         }]
     })
+}
+
+/** Il dettaglio del posto scelto: qui arrivano le coordinate. Una chiamata per tappa. */
+async function dettaglioPosto(placeId: string, sessione: string) {
+    const url = `${PLACES_DETAILS_URL}/${encodeURIComponent(placeId)}`
+        + `?languageCode=it&sessionToken=${encodeURIComponent(sessione)}`
+    const res = await fetch(url, {
+        headers: {
+            'X-Goog-Api-Key': API_KEY,
+            'X-Goog-FieldMask': 'id,displayName,formattedAddress,shortFormattedAddress,location,primaryTypeDisplayName',
+        },
+    })
+    if (!res.ok) {
+        const testoErrore = await res.text()
+        throw new Error(`details ${res.status}: ${testoErrore.slice(0, 200)}`)
+    }
+    const p = await res.json() as PlaceGoogle
+    const lat = p.location?.latitude
+    const lon = p.location?.longitude
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('details: posto senza coordinate')
+    const nome = p.displayName?.text || p.shortFormattedAddress || p.formattedAddress || ''
+    const indirizzo = p.shortFormattedAddress || p.formattedAddress || ''
+    return {
+        id: `google-${p.id || placeId}`,
+        placeId,
+        nome,
+        indirizzo: indirizzo === nome ? '' : indirizzo,
+        categoria: p.primaryTypeDisplayName?.text || '',
+        lat: lat as number,
+        lon: lon as number,
+    }
 }
 
 /**
@@ -172,7 +219,16 @@ export const handler: Handler = async (event) => {
         const body = JSON.parse(event.body || '{}') as {
             azione?: string
             testo?: string
+            placeId?: string
+            sessione?: string
             punti?: { lat: number; lon: number }[]
+        }
+        // La sessione lega le battute alla scelta finale: e' quella che rende
+        // gratuito l'Autocomplete. Se il client non la manda si fattura a
+        // richiesta, quindi meglio saperlo dal log che scoprirlo dal conto.
+        const sessione = String(body.sessione || '')
+        if (!sessione && (body.azione === 'cerca' || body.azione === 'dettaglio')) {
+            console.warn('[google-luoghi] chiamata senza sessione: Autocomplete fatturato a richiesta')
         }
 
         if (body.azione === 'cerca') {
@@ -180,8 +236,17 @@ export const handler: Handler = async (event) => {
             if (testo.length < 2) {
                 return { statusCode: 200, headers, body: JSON.stringify({ configurato: true, luoghi: [] }) }
             }
-            const luoghi = await cercaPosti(testo)
+            const luoghi = await suggerisciPosti(testo, sessione)
             return { statusCode: 200, headers, body: JSON.stringify({ configurato: true, luoghi }) }
+        }
+
+        if (body.azione === 'dettaglio') {
+            const placeId = String(body.placeId || '')
+            if (!placeId) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'placeId mancante' }) }
+            }
+            const luogo = await dettaglioPosto(placeId, sessione)
+            return { statusCode: 200, headers, body: JSON.stringify({ configurato: true, luogo }) }
         }
 
         if (body.azione === 'percorso') {

@@ -143,8 +143,10 @@ export default function ItinerarioTappe({ valore, onChange, tariffaCentralina, c
                                     placeholder="DR7, aeroporto, hotel, via…"
                                     onSelect={(l) => aggiornaTappa(t.id, {
                                         indirizzo: testoLuogo(l),
-                                        lat: l.lat,
-                                        lon: l.lon,
+                                        // Il posto scelto ha sempre le coordinate: chi non le
+                                        // aveva e' gia' passato dal dettaglio.
+                                        lat: l.lat ?? undefined,
+                                        lon: l.lon ?? undefined,
                                     })}
                                 />
                             </div>

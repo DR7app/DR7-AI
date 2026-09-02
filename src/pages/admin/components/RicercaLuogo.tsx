@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cercaLuoghi, testoLuogo, type Luogo } from '../../../utils/luoghiDR7'
+import { cercaLuoghi, risolviLuogo, testoLuogo, type Luogo } from '../../../utils/luoghiDR7'
 
 interface Props {
     value: string
@@ -32,6 +32,15 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
     // Solo l'ultima richiesta scritta a video: le risposte lente non
     // sovrascrivono una ricerca piu' recente.
     const richiestaRef = useRef(0)
+    /**
+     * La sessione di ricerca Google: tutte le battute piu' la scelta finale
+     * fanno UNA sessione, e dentro una sessione i suggerimenti non si pagano
+     * (si paga solo il dettaglio del posto scelto). Se ne apre una nuova dopo
+     * ogni scelta. Senza questo, ogni battuta sarebbe una ricerca fatturata.
+     */
+    const sessioneRef = useRef<string>(crypto.randomUUID())
+    // Il dettaglio del posto scelto e' una chiamata di rete: il campo lo dice.
+    const [risolvo, setRisolvo] = useState(false)
 
     const cerca = useCallback(async (q: string) => {
         if (q.trim().length < 2) {
@@ -43,7 +52,7 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
         const mia = ++richiestaRef.current
         setStato('cerca')
         setAperto(true)
-        const trovati = await cercaLuoghi(q)
+        const trovati = await cercaLuoghi(q, 8, sessioneRef.current)
         if (mia !== richiestaRef.current) return
         setRisultati(trovati)
         setStato(trovati.length === 0 ? 'vuoto' : 'fermo')
@@ -69,12 +78,23 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
         return () => document.removeEventListener('mousedown', fuori)
     }, [])
 
-    function scegli(l: Luogo) {
+    async function scegli(l: Luogo) {
         saltaRicercaRef.current = true
         onChange(testoLuogo(l))
-        onSelect(l)
         setAperto(false)
         setRisultati([])
+        // I suggerimenti Google non portano le coordinate: si chiedono qui,
+        // una volta sola, sul posto davvero scelto.
+        if (Number.isFinite(l.lat) && Number.isFinite(l.lon)) {
+            onSelect(l)
+        } else {
+            setRisolvo(true)
+            const completo = await risolviLuogo(l, sessioneRef.current)
+            setRisolvo(false)
+            if (completo) onSelect(completo)
+        }
+        // Scelta fatta: la sessione si chiude, la prossima ricerca ne apre una nuova.
+        sessioneRef.current = crypto.randomUUID()
     }
 
     function tasti(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -87,7 +107,7 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
             setEvidenziato(i => (i <= 0 ? risultati.length - 1 : i - 1))
         } else if (e.key === 'Enter' && evidenziato >= 0) {
             e.preventDefault()
-            scegli(risultati[evidenziato])
+            void scegli(risultati[evidenziato])
         } else if (e.key === 'Escape') {
             setAperto(false)
         }
@@ -105,7 +125,7 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
                 onFocus={() => { if (risultati.length > 0) setAperto(true) }}
                 onKeyDown={tasti}
                 placeholder={placeholder || 'Nome del posto o indirizzo'}
-                disabled={disabled}
+                disabled={disabled || risolvo}
                 autoComplete="off"
                 className="w-full px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors disabled:opacity-50"
             />
@@ -125,7 +145,7 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
                             key={l.id}
                             type="button"
                             onMouseEnter={() => setEvidenziato(i)}
-                            onClick={() => scegli(l)}
+                            onClick={() => void scegli(l)}
                             className={`w-full text-left px-3 py-2.5 flex items-start gap-3 border-b border-theme-border last:border-b-0 transition-colors ${
                                 i === evidenziato ? 'bg-theme-bg-hover' : 'hover:bg-theme-bg-hover'
                             }`}

@@ -28,14 +28,21 @@ import { authFetch } from './authFetch'
 export interface Luogo {
     /** Chiave stabile per React. */
     id: string
+    /**
+     * Solo per i suggerimenti Google: l'id del posto. Le coordinate non
+     * arrivano con il suggerimento (costerebbero a ogni battuta) ma con
+     * `risolviLuogo`, chiamata una volta sola sul posto scelto.
+     */
+    placeId?: string
     /** Il nome dell'attivita' ("Aeroporto di Cagliari-Elmas", "DR7"). Puo' essere l'indirizzo se il posto non ha nome. */
     nome: string
     /** La riga sotto il nome: via, civico, CAP, comune. */
     indirizzo: string
     /** Etichetta di categoria mostrata accanto al nome ("Hotel", "Aeroporto"). Vuota per gli indirizzi. */
     categoria: string
-    lat: number
-    lon: number
+    /** Coordinate. `null` sui suggerimenti Google finche' non si sceglie il posto. */
+    lat: number | null
+    lon: number | null
     /** true = sede DR7 dalla rubrica interna: nella tendina va in cima con il badge. */
     dr7?: boolean
 }
@@ -155,11 +162,15 @@ async function conTimeout(url: string): Promise<Response> {
  * a Cagliari. Senza questo "Marconi" restituisce mezza Europa.
  */
 function ordinaPerVicinanza(luoghi: (Luogo & { italia?: boolean })[]): Luogo[] {
+    // Chi non ha coordinate (i suggerimenti Google) resta in fondo: qui ci
+    // arrivano solo Photon e Nominatim, che le hanno sempre.
+    const distanza = (l: Luogo) =>
+        Number.isFinite(l.lat) && Number.isFinite(l.lon)
+            ? haversineKm(DR7_OFFICE_COORDS, { lat: l.lat as number, lon: l.lon as number })
+            : Number.POSITIVE_INFINITY
     return [...luoghi].sort((a, b) => {
         if (!!a.italia !== !!b.italia) return a.italia ? -1 : 1
-        const da = haversineKm(DR7_OFFICE_COORDS, { lat: a.lat, lon: a.lon })
-        const db = haversineKm(DR7_OFFICE_COORDS, { lat: b.lat, lon: b.lon })
-        return da - db
+        return distanza(a) - distanza(b)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     }).map(({ italia: _italia, ...l }) => l)
 }
@@ -172,21 +183,23 @@ function ordinaPerVicinanza(luoghi: (Luogo & { italia?: boolean })[]): Luogo[] {
 let googleAttivo: boolean | null = null
 
 /** Ricerca su Google Places (via la funzione Netlify che custodisce la chiave). */
-async function cercaGoogle(testo: string): Promise<Luogo[] | null> {
+async function cercaGoogle(testo: string, sessione: string): Promise<Luogo[] | null> {
     if (googleAttivo === false) return null
     try {
         const res = await authFetch('/.netlify/functions/google-luoghi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ azione: 'cerca', testo }),
+            body: JSON.stringify({ azione: 'cerca', testo, sessione }),
         })
         if (res.status === 503) { googleAttivo = false; return null }
         if (!res.ok) return null
         const dati = await res.json() as { configurato?: boolean; luoghi?: Luogo[] }
         if (dati.configurato === false) { googleAttivo = false; return null }
         googleAttivo = true
-        const luoghi = (dati.luoghi || []).filter(l => Number.isFinite(l.lat) && Number.isFinite(l.lon))
-        // Google ordina gia' per pertinenza e prossimita': non si tocca.
+        // I suggerimenti Google arrivano SENZA coordinate: si prendono con
+        // `risolviLuogo` solo sul posto scelto. Google ordina gia' per
+        // pertinenza e prossimita', quindi l'ordine non si tocca.
+        const luoghi = (dati.luoghi || []).filter(l => l.placeId)
         return luoghi.length > 0 ? luoghi : null
     } catch {
         return null
@@ -270,13 +283,13 @@ async function cercaNominatim(testo: string, limite: number): Promise<Luogo[]> {
  * trovati fuori. Non lancia mai: se entrambe le sorgenti falliscono restano
  * comunque i luoghi DR7 che corrispondono.
  */
-export async function cercaLuoghi(testo: string, limite = 8): Promise<Luogo[]> {
+export async function cercaLuoghi(testo: string, limite = 8, sessione = ''): Promise<Luogo[]> {
     const q = testo.trim()
     if (q.length < 2) return []
     const nostri = cercaLuoghiDR7(q)
     let esterni: Luogo[] = []
     // Prima Google (se configurato), poi le sorgenti gratuite.
-    const daGoogle = await cercaGoogle(q)
+    const daGoogle = await cercaGoogle(q, sessione)
     if (daGoogle) {
         esterni = daGoogle
     } else {
@@ -293,6 +306,33 @@ export async function cercaLuoghi(testo: string, limite = 8): Promise<Luogo[]> {
     // Niente doppioni con la rubrica di casa (stesso nome).
     const nomiNostri = new Set(nostri.map(l => l.nome.toLowerCase()))
     return [...nostri, ...esterni.filter(l => !nomiNostri.has(l.nome.toLowerCase()))].slice(0, limite + nostri.length)
+}
+
+/**
+ * Le coordinate del posto scelto. I suggerimenti Google non le portano (le
+ * battute sarebbero tutte a pagamento): si chiede il dettaglio una volta
+ * sola, sul posto che l'operatore ha davvero scelto, chiudendo la sessione.
+ *
+ * Photon, Nominatim e la rubrica DR7 le hanno gia': tornano com'erano.
+ */
+export async function risolviLuogo(l: Luogo, sessione = ''): Promise<Luogo | null> {
+    if (Number.isFinite(l.lat) && Number.isFinite(l.lon)) return l
+    if (!l.placeId) return null
+    try {
+        const res = await authFetch('/.netlify/functions/google-luoghi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ azione: 'dettaglio', placeId: l.placeId, sessione }),
+        })
+        if (!res.ok) return null
+        const dati = await res.json() as { luogo?: Luogo }
+        const luogo = dati.luogo
+        if (!luogo || !Number.isFinite(luogo.lat) || !Number.isFinite(luogo.lon)) return null
+        // Il nome mostrato nella tendina resta quello scelto dall'operatore.
+        return { ...luogo, nome: l.nome || luogo.nome, indirizzo: luogo.indirizzo || l.indirizzo }
+    } catch {
+        return null
+    }
 }
 
 /** Il testo che finisce nel campo quando si sceglie un luogo. */
