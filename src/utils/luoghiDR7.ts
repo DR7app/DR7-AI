@@ -8,7 +8,12 @@
  * 1. LUOGHI_DR7 — la rubrica di casa. OpenStreetMap non conosce DR7 (cercare
  *    "DR7" restituisce un capannone in Nuova Zelanda), quindi le nostre sedi
  *    stanno qui e vincono sempre sui risultati esterni.
- * 2. Photon (photon.komoot.io) — indice OSM pensato per il type-ahead:
+ * 2. Google Places, quando su Netlify c'e' `GOOGLE_MAPS_API_KEY`. Conosce le
+ *    attivita' con scheda Google (DR7 compresa) e gli indirizzi italiani
+ *    meglio di chiunque altro. Passa dalla funzione `google-luoghi`, che
+ *    tiene la chiave lato server. Se la chiave non c'e' risponde
+ *    "non configurato" una volta e non ci si prova piu' per la sessione.
+ * 3. Photon (photon.komoot.io) — indice OSM pensato per il type-ahead:
  *    trova attivita' (hotel, aeroporti, ristoranti, autonoleggi) e indirizzi
  *    civico compreso. Gratuito, nessuna chiave. Se non risponde si ripiega
  *    su Nominatim, lo stesso servizio gia' usato dagli altri campi indirizzo.
@@ -18,6 +23,7 @@
  */
 
 import { DR7_OFFICE_COORDS, haversineKm } from './dr7Distance'
+import { authFetch } from './authFetch'
 
 export interface Luogo {
     /** Chiave stabile per React. */
@@ -158,6 +164,35 @@ function ordinaPerVicinanza(luoghi: (Luogo & { italia?: boolean })[]): Luogo[] {
     }).map(({ italia: _italia, ...l }) => l)
 }
 
+/**
+ * Google c'e' o no. `null` = ancora da scoprire; una volta che la funzione
+ * risponde "non configurato" si smette di chiamarla per tutta la sessione,
+ * cosi' non si paga un giro di rete inutile a ogni lettera digitata.
+ */
+let googleAttivo: boolean | null = null
+
+/** Ricerca su Google Places (via la funzione Netlify che custodisce la chiave). */
+async function cercaGoogle(testo: string): Promise<Luogo[] | null> {
+    if (googleAttivo === false) return null
+    try {
+        const res = await authFetch('/.netlify/functions/google-luoghi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ azione: 'cerca', testo }),
+        })
+        if (res.status === 503) { googleAttivo = false; return null }
+        if (!res.ok) return null
+        const dati = await res.json() as { configurato?: boolean; luoghi?: Luogo[] }
+        if (dati.configurato === false) { googleAttivo = false; return null }
+        googleAttivo = true
+        const luoghi = (dati.luoghi || []).filter(l => Number.isFinite(l.lat) && Number.isFinite(l.lon))
+        // Google ordina gia' per pertinenza e prossimita': non si tocca.
+        return luoghi.length > 0 ? luoghi : null
+    } catch {
+        return null
+    }
+}
+
 /** Ricerca su Photon: attivita' e indirizzi, con le coordinate. */
 async function cercaPhoton(testo: string, limite: number): Promise<Luogo[]> {
     // Niente `lang`: Photon accetta solo default/de/en/fr e con `lang=it`
@@ -240,13 +275,19 @@ export async function cercaLuoghi(testo: string, limite = 8): Promise<Luogo[]> {
     if (q.length < 2) return []
     const nostri = cercaLuoghiDR7(q)
     let esterni: Luogo[] = []
-    try {
-        esterni = await cercaPhoton(q, limite)
-    } catch {
+    // Prima Google (se configurato), poi le sorgenti gratuite.
+    const daGoogle = await cercaGoogle(q)
+    if (daGoogle) {
+        esterni = daGoogle
+    } else {
         try {
-            esterni = await cercaNominatim(q, limite)
+            esterni = await cercaPhoton(q, limite)
         } catch {
-            esterni = []
+            try {
+                esterni = await cercaNominatim(q, limite)
+            } catch {
+                esterni = []
+            }
         }
     }
     // Niente doppioni con la rubrica di casa (stesso nome).

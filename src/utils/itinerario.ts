@@ -2,9 +2,14 @@
  * Itinerario a tappe: km su strada e tempo di percorrenza fra un punto e
  * l'altro (punto 1 → punto 2 → punto 3 …).
  *
- * I km li chiediamo a OSRM (router pubblico, gratuito, nessuna chiave):
- * una sola richiesta per tutto l'itinerario, che risponde con una "leg"
- * per ogni tratta — metri e secondi reali su strada.
+ * Chi calcola, in ordine:
+ *
+ * 1. Google Routes, quando su Netlify c'e' `GOOGLE_MAPS_API_KEY`: km su
+ *    strada e tempo COL TRAFFICO, via la funzione `google-luoghi` che tiene
+ *    la chiave lato server.
+ * 2. OSRM (router pubblico, gratuito, nessuna chiave): una sola richiesta
+ *    per tutto l'itinerario, che risponde con una "leg" per ogni tratta —
+ *    metri e secondi reali su strada, ma senza traffico.
  *
  * Se OSRM non risponde (offline, rate limit, coordinate mancanti) NON si
  * blocca il preventivo: si ripiega sulla stessa stima gia' usata per la
@@ -14,6 +19,7 @@
  */
 
 import { haversineKm } from './dr7Distance'
+import { authFetch } from './authFetch'
 
 /** Una tappa dell'itinerario. `lat`/`lon` arrivano dai suggerimenti indirizzo. */
 export interface Tappa {
@@ -101,6 +107,10 @@ export async function calcolaTratte(tappe: Tappa[]): Promise<Tratta[]> {
     const stima = (): Tratta[] =>
         punti.slice(0, -1).map((p, i) => trattaStimata(p, punti[i + 1]))
 
+    // Prima Google, se configurato: e' l'unico che tiene conto del traffico.
+    const daGoogle = await percorsoGoogle(punti)
+    if (daGoogle) return daGoogle
+
     try {
         const coord = punti.map(p => `${p.lon},${p.lat}`).join(';')
         const ctrl = new AbortController()
@@ -126,6 +136,36 @@ export async function calcolaTratte(tappe: Tappa[]): Promise<Tratta[]> {
         })
     } catch {
         return stima()
+    }
+}
+
+/**
+ * Google c'e' o no. Come per la ricerca luoghi: appena la funzione risponde
+ * "non configurato" si smette di chiamarla per il resto della sessione.
+ */
+let googleAttivo: boolean | null = null
+
+/** Le tratte secondo Google Routes, o `null` se Google non e' disponibile. */
+async function percorsoGoogle(punti: Tappa[]): Promise<Tratta[] | null> {
+    if (googleAttivo === false) return null
+    try {
+        const res = await authFetch('/.netlify/functions/google-luoghi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                azione: 'percorso',
+                punti: punti.map(p => ({ lat: p.lat, lon: p.lon })),
+            }),
+        })
+        if (res.status === 503) { googleAttivo = false; return null }
+        if (!res.ok) return null
+        const dati = await res.json() as { configurato?: boolean; tratte?: Tratta[] }
+        if (dati.configurato === false) { googleAttivo = false; return null }
+        googleAttivo = true
+        const tratte = dati.tratte || []
+        return tratte.length === punti.length - 1 ? tratte : null
+    } catch {
+        return null
     }
 }
 
