@@ -1,0 +1,260 @@
+/**
+ * Rubrica dei luoghi DR7 e ricerca luoghi in stile "app di consegne": si
+ * scrive il nome di un posto (DR7, un hotel, l'aeroporto) e la tendina
+ * risponde con l'attivita', non solo con la via.
+ *
+ * Due sorgenti, in quest'ordine:
+ *
+ * 1. LUOGHI_DR7 — la rubrica di casa. OpenStreetMap non conosce DR7 (cercare
+ *    "DR7" restituisce un capannone in Nuova Zelanda), quindi le nostre sedi
+ *    stanno qui e vincono sempre sui risultati esterni.
+ * 2. Photon (photon.komoot.io) — indice OSM pensato per il type-ahead:
+ *    trova attivita' (hotel, aeroporti, ristoranti, autonoleggi) e indirizzi
+ *    civico compreso. Gratuito, nessuna chiave. Se non risponde si ripiega
+ *    su Nominatim, lo stesso servizio gia' usato dagli altri campi indirizzo.
+ *
+ * I risultati sono ordinati per vicinanza a Cagliari, con l'Italia prima:
+ * cercando "Marconi" deve uscire Cagliari, non Milano.
+ */
+
+import { DR7_OFFICE_COORDS, haversineKm } from './dr7Distance'
+
+export interface Luogo {
+    /** Chiave stabile per React. */
+    id: string
+    /** Il nome dell'attivita' ("Aeroporto di Cagliari-Elmas", "DR7"). Puo' essere l'indirizzo se il posto non ha nome. */
+    nome: string
+    /** La riga sotto il nome: via, civico, CAP, comune. */
+    indirizzo: string
+    /** Etichetta di categoria mostrata accanto al nome ("Hotel", "Aeroporto"). Vuota per gli indirizzi. */
+    categoria: string
+    lat: number
+    lon: number
+    /** true = sede DR7 dalla rubrica interna: nella tendina va in cima con il badge. */
+    dr7?: boolean
+}
+
+/**
+ * Le sedi DR7. Aggiungerne una qui la rende cercabile in ogni campo che usa
+ * questa ricerca. `alias` sono le parole con cui la si cerca oltre al nome.
+ */
+export const LUOGHI_DR7: (Luogo & { alias: string[] })[] = [
+    {
+        id: 'dr7-ufficio',
+        nome: 'DR7 Luxury Empire',
+        indirizzo: 'Viale Guglielmo Marconi 229, 09131 Cagliari CA',
+        categoria: 'Sede DR7',
+        lat: DR7_OFFICE_COORDS.lat,
+        lon: DR7_OFFICE_COORDS.lon,
+        dr7: true,
+        alias: ['dr7', 'dr 7', 'ufficio', 'sede', 'marconi', 'dubai rent'],
+    },
+]
+
+/** Le sedi DR7 che corrispondono al testo scritto. */
+export function cercaLuoghiDR7(testo: string): Luogo[] {
+    const q = testo.toLowerCase().trim()
+    if (q.length < 2) return []
+    return LUOGHI_DR7
+        .filter(l => {
+            const campi = [l.nome, l.indirizzo, ...l.alias].map(s => s.toLowerCase())
+            return campi.some(c => c.includes(q))
+        })
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        .map(({ alias: _alias, ...luogo }) => luogo)
+}
+
+/** osm_key/osm_value → etichetta italiana. Quello che non e' qui resta senza categoria. */
+const CATEGORIE: Record<string, string> = {
+    'tourism/hotel': 'Hotel',
+    'tourism/guest_house': 'B&B',
+    'tourism/apartment': 'Appartamento',
+    'tourism/attraction': 'Attrazione',
+    'tourism/museum': 'Museo',
+    'tourism/camp_site': 'Camping',
+    'amenity/restaurant': 'Ristorante',
+    'amenity/cafe': 'Bar',
+    'amenity/bar': 'Bar',
+    'amenity/pub': 'Pub',
+    'amenity/fast_food': 'Fast food',
+    'amenity/hospital': 'Ospedale',
+    'amenity/pharmacy': 'Farmacia',
+    'amenity/fuel': 'Distributore',
+    'amenity/parking': 'Parcheggio',
+    'amenity/car_rental': 'Autonoleggio',
+    'amenity/bank': 'Banca',
+    'amenity/police': 'Polizia',
+    'amenity/townhall': 'Comune',
+    'amenity/school': 'Scuola',
+    'amenity/university': 'Universita',
+    'aeroway/aerodrome': 'Aeroporto',
+    'aeroway/terminal': 'Aeroporto',
+    'amenity/ferry_terminal': 'Porto',
+    'harbour/yes': 'Porto',
+    'leisure/marina': 'Porto turistico',
+    'leisure/beach_resort': 'Spiaggia',
+    'natural/beach': 'Spiaggia',
+    'railway/station': 'Stazione',
+    'railway/halt': 'Stazione',
+    'shop/car': 'Concessionaria',
+    'shop/supermarket': 'Supermercato',
+    'office/company': 'Azienda',
+    'building/commercial': 'Azienda',
+    'building/industrial': 'Azienda',
+    'place/city': 'Comune',
+    'place/town': 'Comune',
+    'place/village': 'Comune',
+    'place/suburb': 'Quartiere',
+}
+
+interface PhotonProps {
+    name?: string
+    street?: string
+    housenumber?: string
+    postcode?: string
+    city?: string
+    county?: string
+    state?: string
+    country?: string
+    countrycode?: string
+    osm_key?: string
+    osm_value?: string
+    osm_id?: number
+    osm_type?: string
+}
+
+/** La riga indirizzo sotto il nome: via civico, CAP comune. */
+function componiIndirizzo(p: PhotonProps): string {
+    const via = [p.street, p.housenumber].filter(Boolean).join(' ')
+    const comune = [p.postcode, p.city || p.county].filter(Boolean).join(' ')
+    return [via, comune, p.city ? undefined : p.state].filter(Boolean).join(', ')
+}
+
+const PHOTON_URL = 'https://photon.komoot.io/api/'
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
+const TIMEOUT_MS = 6000
+
+async function conTimeout(url: string): Promise<Response> {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+    try {
+        return await fetch(url, { signal: ctrl.signal })
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+/**
+ * Ordina come se lo facesse un navigatore: prima l'Italia, poi il piu' vicino
+ * a Cagliari. Senza questo "Marconi" restituisce mezza Europa.
+ */
+function ordinaPerVicinanza(luoghi: (Luogo & { italia?: boolean })[]): Luogo[] {
+    return [...luoghi].sort((a, b) => {
+        if (!!a.italia !== !!b.italia) return a.italia ? -1 : 1
+        const da = haversineKm(DR7_OFFICE_COORDS, { lat: a.lat, lon: a.lon })
+        const db = haversineKm(DR7_OFFICE_COORDS, { lat: b.lat, lon: b.lon })
+        return da - db
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    }).map(({ italia: _italia, ...l }) => l)
+}
+
+/** Ricerca su Photon: attivita' e indirizzi, con le coordinate. */
+async function cercaPhoton(testo: string, limite: number): Promise<Luogo[]> {
+    // Niente `lang`: Photon accetta solo default/de/en/fr e con `lang=it`
+    // risponde 400 — la ricerca sarebbe sempre caduta sul ripiego. Il
+    // default restituisce comunque i nomi locali ("Aeroporto di Cagliari").
+    const url = `${PHOTON_URL}?q=${encodeURIComponent(testo)}`
+        + `&lat=${DR7_OFFICE_COORDS.lat}&lon=${DR7_OFFICE_COORDS.lon}`
+        + `&limit=${limite}`
+    const res = await conTimeout(url)
+    if (!res.ok) throw new Error(`photon ${res.status}`)
+    const dati = await res.json() as {
+        features?: { properties?: PhotonProps; geometry?: { coordinates?: [number, number] } }[]
+    }
+    const luoghi = (dati.features || []).flatMap(f => {
+        const p = f.properties || {}
+        const coord = f.geometry?.coordinates
+        if (!coord || !Number.isFinite(coord[0]) || !Number.isFinite(coord[1])) return []
+        const indirizzo = componiIndirizzo(p)
+        const nome = p.name || indirizzo || p.city || ''
+        if (!nome) return []
+        return [{
+            id: `photon-${p.osm_type || 'x'}${p.osm_id || Math.random()}`,
+            nome,
+            // Quando il nome E' gia' l'indirizzo non lo ripetiamo sotto.
+            indirizzo: nome === indirizzo ? [p.city, p.state].filter(Boolean).join(', ') : indirizzo,
+            categoria: CATEGORIE[`${p.osm_key}/${p.osm_value}`] || '',
+            lat: coord[1],
+            lon: coord[0],
+            italia: (p.countrycode || '').toUpperCase() === 'IT',
+        }]
+    })
+    return ordinaPerVicinanza(luoghi)
+}
+
+/** Ripiego su Nominatim quando Photon non risponde. */
+async function cercaNominatim(testo: string, limite: number): Promise<Luogo[]> {
+    const url = `${NOMINATIM_URL}?q=${encodeURIComponent(testo)}`
+        + `&format=json&addressdetails=1&namedetails=1&accept-language=it&limit=${limite}`
+    const res = await conTimeout(url)
+    if (!res.ok) throw new Error(`nominatim ${res.status}`)
+    const dati = await res.json() as {
+        place_id?: number
+        display_name?: string
+        lat?: string
+        lon?: string
+        class?: string
+        type?: string
+        name?: string
+        address?: Record<string, string>
+    }[]
+    const luoghi = (dati || []).flatMap(r => {
+        const lat = parseFloat(r.lat || '')
+        const lon = parseFloat(r.lon || '')
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return []
+        const a = r.address || {}
+        const via = [a.road, a.house_number].filter(Boolean).join(' ')
+        const comune = [a.postcode, a.city || a.town || a.village || a.municipality].filter(Boolean).join(' ')
+        const indirizzo = [via, comune].filter(Boolean).join(', ') || (r.display_name || '')
+        const nome = r.name || via || (r.display_name || '').split(',')[0]
+        return [{
+            id: `nominatim-${r.place_id || Math.random()}`,
+            nome,
+            indirizzo: nome === indirizzo ? comune : indirizzo,
+            categoria: CATEGORIE[`${r.class}/${r.type}`] || '',
+            lat,
+            lon,
+            italia: (a.country_code || '').toUpperCase() === 'IT',
+        }]
+    })
+    return ordinaPerVicinanza(luoghi)
+}
+
+/**
+ * La ricerca completa: rubrica DR7 in cima, poi le attivita' e gli indirizzi
+ * trovati fuori. Non lancia mai: se entrambe le sorgenti falliscono restano
+ * comunque i luoghi DR7 che corrispondono.
+ */
+export async function cercaLuoghi(testo: string, limite = 8): Promise<Luogo[]> {
+    const q = testo.trim()
+    if (q.length < 2) return []
+    const nostri = cercaLuoghiDR7(q)
+    let esterni: Luogo[] = []
+    try {
+        esterni = await cercaPhoton(q, limite)
+    } catch {
+        try {
+            esterni = await cercaNominatim(q, limite)
+        } catch {
+            esterni = []
+        }
+    }
+    // Niente doppioni con la rubrica di casa (stesso nome).
+    const nomiNostri = new Set(nostri.map(l => l.nome.toLowerCase()))
+    return [...nostri, ...esterni.filter(l => !nomiNostri.has(l.nome.toLowerCase()))].slice(0, limite + nostri.length)
+}
+
+/** Il testo che finisce nel campo quando si sceglie un luogo. */
+export function testoLuogo(l: Luogo): string {
+    return l.indirizzo && l.indirizzo !== l.nome ? `${l.nome}, ${l.indirizzo}` : l.nome
+}

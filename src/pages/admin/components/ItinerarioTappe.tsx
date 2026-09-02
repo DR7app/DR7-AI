@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import AddressAutocomplete from './AddressAutocomplete'
+import RicercaLuogo from './RicercaLuogo'
 import Button from './Button'
 import MoneyInput from '../../../components/MoneyInput'
 import { calcolaTratte, totaliItinerario, formattaDurata, tappaValida, type Tappa, type ItinerarioValore } from '../../../utils/itinerario'
+import { testoLuogo } from '../../../utils/luoghiDR7'
 
 interface Props {
     valore: ItinerarioValore
@@ -135,15 +136,15 @@ export default function ItinerarioTappe({ valore, onChange, tariffaCentralina, c
                                 {i + 1}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <AddressAutocomplete
+                                <RicercaLuogo
                                     label={i === 0 ? 'Partenza' : i === tappe.length - 1 ? 'Arrivo' : `Tappa ${i + 1}`}
                                     value={t.indirizzo}
                                     onChange={(v) => aggiornaTappa(t.id, { indirizzo: v })}
-                                    placeholder="Es. Aeroporto di Cagliari-Elmas"
-                                    onSelectParts={(parts) => aggiornaTappa(t.id, {
-                                        indirizzo: parts.full,
-                                        lat: parts.lat,
-                                        lon: parts.lon,
+                                    placeholder="DR7, aeroporto, hotel, via…"
+                                    onSelect={(l) => aggiornaTappa(t.id, {
+                                        indirizzo: testoLuogo(l),
+                                        lat: l.lat,
+                                        lon: l.lon,
                                     })}
                                 />
                             </div>
@@ -179,7 +180,7 @@ export default function ItinerarioTappe({ valore, onChange, tariffaCentralina, c
 
                         {!tappaValida(t) && t.indirizzo.length > 0 && (
                             <div className="ml-9 text-[11px] text-amber-400">
-                                Scegli l'indirizzo dai suggerimenti: senza il punto sulla mappa non si calcolano km e tempo.
+                                Scegli il posto dai suggerimenti: senza il punto sulla mappa non si calcolano km e tempo.
                             </div>
                         )}
 
