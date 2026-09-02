@@ -327,11 +327,27 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       const startDate = new Date(year, month, 1, 0, 0, 0)
       const endDate = new Date(year, month + 1, 0, 23, 59, 59)
 
-      // Fetch ALL bookings via Netlify function (bypasses RLS)
+      // Fetch bookings via Netlify function (bypasses RLS)
+      //
+      // 02/09/2026 - qui si chiedeva `list-bookings` SENZA finestra: la
+      // funzione restituiva TUTTE le prenotazioni di sempre (colonne
+      // comprese) per disegnare UN mese, e oltre il tetto di 6 MB di Netlify
+      // la risposta non arrivava proprio e il calendario restava vuoto.
+      // Stessa correzione gia' fatta sul Calendario Giornaliero il 23/08.
+      //
+      // La finestra chiesta al server e' il mese A VIDEO PIU' UN GIORNO PER
+      // LATO. Il margine non e' un dettaglio: il filtro qui sotto resta
+      // identico (confronta le date in ora locale, il server in UTC), quindi
+      // il giorno di margine assorbe lo scarto di fuso e quello che si vede a
+      // schermo e' esattamente quello di prima. Nessun appuntamento in meno.
+      const windowFrom = new Date(startDate); windowFrom.setDate(windowFrom.getDate() - 1)
+      const windowTo = new Date(endDate); windowTo.setDate(windowTo.getDate() + 1)
+      const qs = `?from=${encodeURIComponent(windowFrom.toISOString())}`
+        + `&to=${encodeURIComponent(windowTo.toISOString())}`
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let bookingsData: any[] | null = null
       try {
-        const res = await authFetch('/.netlify/functions/list-bookings')
+        const res = await authFetch(`/.netlify/functions/list-bookings${qs}`)
         const result = await res.json()
         if (res.ok && result.bookings) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

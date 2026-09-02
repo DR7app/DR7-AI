@@ -62,14 +62,32 @@ const handlerInterno: Handler = async (event) => {
                 .neq('status', 'cancelled')
                 .neq('status', 'annullata');
 
-            if (windowTo) {
-                // Ritiro prima della fine della finestra...
-                query = query.lt('pickup_date', windowTo);
-            }
-            if (windowFrom) {
-                // ...e riconsegna dopo l'inizio: e' il test di sovrapposizione.
-                // dropoff nullo = prenotazione aperta, va sempre tenuta.
-                query = query.or(`dropoff_date.is.null,dropoff_date.gte.${windowFrom}`);
+            // 02/09/2026 - la finestra guardava SOLO pickup_date/dropoff_date.
+            // Un lavaggio si colloca su `appointment_date`: le righe senza
+            // pickup_date sparivano dalla finestra (in SQL `pickup_date < to`
+            // e' falso quando la colonna e' NULL), quindi il Calendario
+            // Lavaggio non poteva usarla senza perdere appuntamenti.
+            //
+            // Ora la sovrapposizione ha tre rami, gli stessi tre che il
+            // Calendario Giornaliero usa gia' nella sua query di riserva:
+            // ritiro/riconsegna dentro la finestra, OPPURE appuntamento
+            // dentro la finestra. E' additivo: nessuna riga che prima
+            // arrivava smette di arrivare.
+            if (windowFrom && windowTo) {
+                query = query.or(
+                    `and(pickup_date.lt.${windowTo},or(dropoff_date.is.null,dropoff_date.gte.${windowFrom})),`
+                    + `and(appointment_date.gte.${windowFrom},appointment_date.lt.${windowTo})`
+                );
+            } else {
+                if (windowTo) {
+                    // Ritiro prima della fine della finestra...
+                    query = query.lt('pickup_date', windowTo);
+                }
+                if (windowFrom) {
+                    // ...e riconsegna dopo l'inizio: e' il test di sovrapposizione.
+                    // dropoff nullo = prenotazione aperta, va sempre tenuta.
+                    query = query.or(`dropoff_date.is.null,dropoff_date.gte.${windowFrom}`);
+                }
             }
 
             return query.order('pickup_date', { ascending: true });
