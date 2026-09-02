@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { supabase } from '../../../supabaseClient'
@@ -16,6 +17,8 @@ import Input from './Input'
 import Select from './Select'
 import AddressAutocomplete from './AddressAutocomplete'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
+import ItinerarioTappe from './ItinerarioTappe'
+import { formattaDurata, itinerarioVuoto, type ItinerarioValore } from '../../../utils/itinerario'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
 import PreventivoAcceptModal, { openPreventivoAcceptModal } from './PreventivoAcceptModal'
@@ -590,6 +593,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   const [sortField, setSortField] = useState<'created_at' | 'pickup_date' | 'total_final' | 'rental_days'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  // ─── La lista la fa il server (02/09/2026 — velocita') ───────────────────
+  //
+  // Terra ha 774 preventivi e la tab se li portava a casa TUTTI a ogni
+  // apertura: 1,47 MB per disegnarne dieci. E c'era il tetto di PostgREST a
+  // 1000 righe dietro l'angolo. Ora ricerca, stato, giorno, periodo,
+  // ordinamento e pagina li applica il database: arrivano dieci righe per
+  // volta (49 KB ogni 25, ~20 KB ogni 10).
+  //
+  // I sei riquadri in cima contano SEMPRE tutto il business, non la pagina:
+  // per quelli parte una lettura a parte della sola colonna `status`
+  // (~20 KB), che e' l'unica cosa che serve per contarli.
+  const [totalePreventivi, setTotalePreventivi] = useStatoTab<number>(`preventivi:${serviceType}:totale`, 0)
+  const [conteggiStato, setConteggiStato] = useStatoTab<Record<string, number>>(`preventivi:${serviceType}:conteggi`, {})
+  // La ricerca aspetta che si smetta di digitare: una query per parola cercata,
+  // non una per tasto premuto.
+  const [ricerca, setRicerca] = useState('')
+
   // No-Cauzione OTP override (when client is Fascia B and admin is not Valerio)
   const draftSessionIdRef = useRef<string>(crypto.randomUUID())
   const [noCauzioneOverrideId, setNoCauzioneOverrideId] = useState<string | null>(null)
@@ -676,6 +696,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     experience_services: {} as Record<string, number>,
     // Per-km services: id → { km, pricePerKm } typed by the operator at quote time
     experience_km_quotes: {} as KmQuoteMap,
+    // 02/09/2026 — Itinerario a tappe: punto 1 → punto 2 → punto 3, con
+    // indirizzo per ogni tappa. Km su strada e tempo li calcola il router
+    // OSRM; il costo e' km × tariffa (quella della consegna a domicilio in
+    // Centralina Pro, correggibile a mano). Passthrough a listino come
+    // consegna e ritiro: nessun coefficiente, nessuna clamp.
+    itinerario: itinerarioVuoto() as ItinerarioValore,
     // Discount
     sconto: '',
     sconto_note: 'valido solo 24h',
@@ -1375,6 +1401,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices, form.experience_km_quotes)
 
+    // Itinerario a tappe: km su strada × tariffa €/km. Come consegna e
+    // ritiro, passa A LISTINO — nessun coefficiente e nessuna clamp: il
+    // costo del trasporto e' quello che paghiamo davvero.
+    const itinerarioCost = Math.round((Number(form.itinerario?.costo) || 0) * 100) / 100
+    const itinerarioKm = Number(form.itinerario?.km) || 0
+    const itinerarioMinuti = Number(form.itinerario?.minuti) || 0
+
     // Pacchetti KM (multi-select cumulativo). Letti da rentalConfig.pacchetti_km
     // con alias supercars<->exotic. Trattati come passthrough (no coefficiente),
     // come experienceCost / location fees.
@@ -1436,7 +1469,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     const splitDelivery       = pick(deliveryFee,         coeffFlags.delivery)
     const splitPickup         = pick(pickupFee,           coeffFlags.pickup)
     const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff + splitKmPackages.inCoeff + splitExperience.inCoeff + splitDelivery.inCoeff + splitPickup.inCoeff
-    const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList  + splitKmPackages.atList  + splitExperience.atList  + splitDelivery.atList  + splitPickup.atList
+    const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList  + splitKmPackages.atList  + splitExperience.atList  + splitDelivery.atList  + splitPickup.atList + itinerarioCost
     const listSubtotalNoExp = listRentalTotal + extrasInCoeff
     const listSubtotal = listSubtotalNoExp + extrasAtList
 
@@ -1533,6 +1566,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       pickupFee,
       experienceCost,
       experienceAfterCoeff,
+      itinerarioCost,
+      itinerarioKm,
+      itinerarioMinuti,
       kmPackagesTotal,
       kmPackagesKm,
       listSubtotal,
@@ -1590,10 +1626,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   //                       non puo' tornare.
   // Sulla RLS non cambia niente: la policy su `preventivi` e' gia'
   // `authenticated`, il filtro e' una scelta di prodotto, non un permesso.
-  const prefetchRef = useRef<Promise<Preventivo[]> | null>(null)
+  const prefetchRef = useRef<Promise<{ righe: Preventivo[]; totale: number }> | null>(null)
   useEffect(() => {
     setLoading(true)
-    prefetchRef.current = queryPreventivi(null)
+    // Prima pagina, nessun filtro: e' quello che si vede aprendo la tab.
+    prefetchRef.current = queryPreventivi({
+      soloDi: null, stato: 'all', giorno: '', da: '', a: '', cerca: '',
+      ordine: 'created_at', verso: 'desc', pagina: 1,
+    })
     // il prefetch non deve morire non gestito se il ramo che lo consuma
     // decide di buttarlo via
     prefetchRef.current.catch(() => {})
@@ -1618,7 +1658,31 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // schermo: il form la trova pronta molto prima che qualcuno lo apra.
     loadPreventivi().finally(() => { void loadCustomers() })
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminRoleLoading, isPreventivoOnly, adminEmail,
+      statusFilter, dateFilter, dateRange.from, dateRange.to, ricerca,
+      sortField, sortDir, listPage])
+
+  // I preventivi spediti e scaduti si segnano una volta all'apertura. Se
+  // qualcosa e' cambiato la pagina si rilegge, senno' non si tocca niente.
+  const scadutiFattiRef = useRef(false)
+  useEffect(() => {
+    if (adminRoleLoading || scadutiFattiRef.current) return
+    scadutiFattiRef.current = true
+    const soloDi = isPreventivoOnly && adminEmail ? adminEmail : null
+    void segnaScaduti(soloDi).then(cambiati => { if (cambiati > 0) void loadPreventivi() })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminRoleLoading, isPreventivoOnly, adminEmail])
+
+  // La ricerca aspetta 300 ms: una query per parola cercata, non una per tasto.
+  useEffect(() => {
+    const attesa = setTimeout(() => setRicerca(searchQuery.trim()), 300)
+    return () => clearTimeout(attesa)
+  }, [searchQuery])
+
+  // Cambiare filtro, ricerca o ordinamento riporta alla prima pagina.
+  useEffect(() => {
+    setListPage(1)
+  }, [ricerca, statusFilter, dateFilter, dateRange.from, dateRange.to, sortField, sortDir])
 
   async function loadCustomers() {
     try {
@@ -1657,81 +1721,232 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   }
 
   /**
-   * La query della lista. `soloDi` = email del collaboratore quando l'elenco
-   * va ristretto ai suoi preventivi, `null` per tutti gli altri.
+   * Il pezzo di query comune a tutte le letture della lista: business e,
+   * per i collaboratori, i soli preventivi che hanno scritto loro.
+   *
+   * Terra e' tutto cio' che non e' di un altro business, NULL compreso:
+   * `not.in` da solo scarterebbe i NULL, quindi va in OR con `is.null`.
+   * E' la stessa regola di `toBusiness`, scritta in SQL.
+   */
+  const ALTRI_BUSINESS = 'boat_rental,heli_rental,stay_rental,car_wash,mechanical,mechanical_service'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function filtriBase(query: any, soloDi: string | null) {
+    query = biz === 'rental'
+      ? query.or(`service_type.is.null,service_type.not.in.(${ALTRI_BUSINESS})`)
+      : query.eq('service_type', serviceType)
+    if (soloDi) {
+      query = query.eq('created_by', soloDi)
+      // Niente vecchi preventivi gia' chiusi: la lista del collaboratore
+      // resta sui preventivi attivi (bozza / inviato / accettato).
+      query = query.not('status', 'in', '(scaduto,rifiutato)')
+    }
+    return query
+  }
+
+  /** I campi su cui cerca la barra di ricerca. Tutti testo. */
+  const CAMPI_RICERCA = [
+    'customer_name', 'customer_phone', 'vehicle_name', 'vehicle_plate',
+    'vehicle_category', 'insurance_option', 'driver_tier', 'sconto_note',
+    'motivo_rifiuto', 'motivo_rifiuto_note', 'status',
+  ]
+  /**
+   * Le parole cercate diventano filtri SQL: AND fra le parole, OR fra i campi
+   * (come prima in memoria). Virgole e parentesi spezzerebbero la sintassi di
+   * PostgREST, quindi si tolgono.
+   */
+  function parole(testo: string): string[] {
+    return testo.toLowerCase().replace(/[,()*%\\"']/g, ' ').split(/\s+/).filter(Boolean)
+  }
+
+  /** Mezzanotte di Roma, in UTC: il filtro e' su `created_at`, salvato in UTC. */
+  function inizioGiornoRoma(giorno: string): string {
+    return romeIsoFromParts(giorno, '00:00')
+  }
+  function inizioGiornoDopoRoma(giorno: string): string {
+    const d = new Date(`${giorno}T12:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 1)
+    return romeIsoFromParts(d.toISOString().slice(0, 10), '00:00')
+  }
+
+  /**
+   * La pagina di lista chiesta al server: filtri, ordinamento, dieci righe e
+   * il totale che serve alla paginazione.
    *
    * Sta fuori da `loadPreventivi` perche' il prefetch al montaggio la chiama
    * prima che il ruolo sia noto: la decisione su `soloDi` arriva dopo.
    */
-  async function queryPreventivi(soloDi: string | null): Promise<Preventivo[]> {
-    let query = supabase
-      .from('preventivi')
-      .select(COLONNE_LISTA)
-      .order('created_at', { ascending: false })
-    // Il business si filtra anche lato server (il controllo client resta
-    // sotto, e' quello che decide). Terra e' tutto cio' che non e' di un
-    // altro business, NULL compreso: `not.in` da solo scarterebbe i NULL,
-    // quindi va in OR con `is.null`. Sulle altre tab evita di scaricare
-    // gli 800 preventivi di Terra per poi buttarli via.
-    const ALTRI_BUSINESS = 'boat_rental,heli_rental,stay_rental,car_wash,mechanical,mechanical_service'
-    query = biz === 'rental'
-      ? query.or(`service_type.is.null,service_type.not.in.(${ALTRI_BUSINESS})`)
-      : query.eq('service_type', serviceType)
-    // Restringi ai propri preventivi per i collaboratori. created_by
-    // viene salvato con adminEmail. Non si fa il filtro lato server per
-    // direzione/operatori standard: la query resta identica a prima per loro.
-    if (soloDi) {
-      query = query.eq('created_by', soloDi)
-      // Niente vecchi preventivi gia' chiusi: nascondiamo scaduto e
-      // rifiutato per tenere la lista del collaboratore concentrata
-      // sui preventivi attivi (bozza / inviato / accettato).
-      query = query.not('status', 'in', '(scaduto,rifiutato)')
+  interface FiltriLista {
+    soloDi: string | null
+    stato: string
+    giorno: string
+    da: string
+    a: string
+    cerca: string
+    ordine: 'created_at' | 'pickup_date' | 'total_final' | 'rental_days'
+    verso: 'asc' | 'desc'
+    pagina: number
+    /** Righe per pagina. Default: quelle a schermo. */
+    perPagina?: number
+  }
+
+  async function queryPreventivi(f: FiltriLista): Promise<{ righe: Preventivo[]; totale: number }> {
+    let query = filtriBase(
+      supabase.from('preventivi').select(COLONNE_LISTA, { count: 'exact' }),
+      f.soloDi,
+    )
+    if (f.stato && f.stato !== 'all' && f.stato !== '__no_cauzione__') {
+      query = query.eq('status', f.stato)
     }
-    const { data, error } = await query
+    // Giorno esatto e periodo Da/A: entrambi su `created_at`, letto in
+    // Europe/Rome. Convivono, come prima in memoria.
+    if (f.giorno) {
+      query = query.gte('created_at', inizioGiornoRoma(f.giorno))
+                   .lt('created_at', inizioGiornoDopoRoma(f.giorno))
+    }
+    if (f.da) query = query.gte('created_at', inizioGiornoRoma(f.da))
+    if (f.a) query = query.lt('created_at', inizioGiornoDopoRoma(f.a))
+    // Ricerca multi-parola: OGNI parola deve comparire in almeno un campo.
+    // Filtri ripetuti si sommano in AND, quindi una `or(...)` per parola.
+    for (const parola of parole(f.cerca)) {
+      query = query.or(CAMPI_RICERCA.map(c => `${c}.ilike.*${parola}*`).join(','))
+    }
+    // `id` come secondo criterio: senza un ordine univoco due righe con lo
+    // stesso valore possono scambiarsi fra una pagina e l'altra, e una riga
+    // compare due volte mentre un'altra non compare mai.
+    query = query.order(f.ordine, { ascending: f.verso === 'asc' }).order('id', { ascending: true })
+    const quante = f.perPagina ?? LIST_PAGE_SIZE
+    const da = (Math.max(1, f.pagina) - 1) * quante
+    query = query.range(da, da + quante - 1)
+    const { data, error, count } = await query
     if (error) throw error
     // Cast: con una select scritta a mano supabase-js non sa dedurre la
     // forma della riga (le colonne sono una stringa, non un literal type).
-    return (data || []) as unknown as Preventivo[]
+    return { righe: (data || []) as unknown as Preventivo[], totale: count ?? 0 }
   }
 
+  /**
+   * I sei riquadri in cima contano tutto il business, non la pagina: si legge
+   * la sola colonna `status` di tutte le righe (~20 KB su 774 preventivi) e si
+   * contano qui. Filtri di ricerca e periodo NON entrano: i riquadri sono la
+   * fotografia dell'insieme, come prima.
+   */
+  async function caricaConteggi(soloDi: string | null) {
+    const BLOCCO = 1000
+    const conta: Record<string, number> = {}
+    // PostgREST manda al massimo 1000 righe: senza pagine, superati i mille
+    // preventivi i riquadri comincerebbero a mentire.
+    for (let da = 0; da < 50_000; da += BLOCCO) {
+      const { data, error } = await filtriBase(
+        supabase.from('preventivi').select('status').order('id', { ascending: true }),
+        soloDi,
+      ).range(da, da + BLOCCO - 1)
+      if (error) throw error
+      const righe = (data || []) as { status: string | null }[]
+      for (const r of righe) {
+        const k = r.status || 'bozza'
+        conta[k] = (conta[k] || 0) + 1
+      }
+      if (righe.length < BLOCCO) break
+    }
+    setConteggiStato(conta)
+  }
+
+  /** I filtri che l'utente sta guardando, nella forma che vuole la query. */
+  function filtriCorrenti(): FiltriLista {
+    return {
+      soloDi: isPreventivoOnly && adminEmail ? adminEmail : null,
+      stato: statusFilter,
+      giorno: dateFilter,
+      da: dateRange.from,
+      a: dateRange.to,
+      cerca: ricerca,
+      ordine: sortField,
+      verso: sortDir,
+      pagina: 1,
+    }
+  }
+
+  /**
+   * TUTTE le righe che i filtri stanno selezionando, non solo la pagina.
+   * Serve a due bottoni soli — "Elimina risultati" ed "Esporta" — e si paga
+   * quando si clicca, non quando si apre la tab. Si pagina perche' PostgREST
+   * manda al massimo 1000 righe per volta.
+   */
+  async function queryTuttiFiltrati(): Promise<Preventivo[]> {
+    const base = filtriCorrenti()
+    const BLOCCO = 1000
+    const tutte: Preventivo[] = []
+    for (let pagina = 1; pagina <= 50; pagina++) {
+      const { righe } = await queryPreventivi({ ...base, pagina, perPagina: BLOCCO })
+      tutte.push(...righe)
+      if (righe.length < BLOCCO) break
+    }
+    return tutte
+  }
+
+  /**
+   * I preventivi spediti e scaduti diventano `scaduto`. Prima lo faceva la
+   * lista, riga per riga, su quello che aveva in memoria: con le pagine
+   * vedrebbe solo dieci righe. Ora e' una UPDATE sola, sul business, e vale
+   * per tutto l'archivio.
+   */
+  async function segnaScaduti(soloDi: string | null): Promise<number> {
+    let q = filtriBase(
+      supabase.from('preventivi').update({ status: 'scaduto' }),
+      soloDi,
+    )
+    q = q.eq('status', 'inviato').lt('expires_at', new Date().toISOString())
+    const { data, error } = await q.select('id')
+    if (error) {
+      console.error('[PreventiviTab] scaduti non aggiornati:', error)
+      return 0
+    }
+    return (data || []).length
+  }
+
+  /**
+   * Ogni caricamento ha un numero: se nel frattempo si e' cambiata pagina,
+   * ricerca o filtro, la risposta vecchia che arriva dopo viene buttata.
+   */
+  const richiestaRef = useRef(0)
+
   async function loadPreventivi() {
+    const mia = ++richiestaRef.current
     setLoading(true)
     try {
       const soloDi = isPreventivoOnly && adminEmail ? adminEmail : null
-      // Il prefetch partito al montaggio vale solo per l'elenco NON filtrato:
-      // per un collaboratore si rifa' la query e quello si butta.
-      const pronto = !soloDi && prefetchRef.current ? prefetchRef.current : null
-      prefetchRef.current = null
-      const righe = pronto ? await pronto : await queryPreventivi(soloDi)
-
-      const now = new Date()
-      // 2026-08-24: ogni business vede SOLO i suoi preventivi. Questo secondo
-      // passaggio resta anche ora che il server pre-filtra: e' qui che vive la
-      // regola (`toBusiness`), il filtro SQL e' solo per non trasferire righe
-      // che verrebbero buttate. Nota: da qui la colonna `service_type` e'
-      // obbligatoria (migrazione 20260824_preventivi_service_type.sql) —
-      // compare sia in COLONNE_LISTA sia nel filtro.
-      const soloBusiness = righe.filter(p => toBusiness((p as { service_type?: string }).service_type) === biz)
-      const daScadere: string[] = []
-      const updated: Preventivo[] = soloBusiness.map(p => {
-        if (p.status === 'inviato' && p.expires_at && new Date(p.expires_at) < now) {
-          daScadere.push(p.id)
-          return { ...p, status: 'scaduto' }
-        }
-        return p
-      })
-      // Una sola UPDATE per tutti gli scaduti, non una per riga: con una
-      // giornata di preventivi non spediti erano decine di PATCH in fila
-      // mentre la lista si stava ancora disegnando.
-      if (daScadere.length > 0) {
-        void supabase.from('preventivi').update({ status: 'scaduto' }).in('id', daScadere)
+      const f: FiltriLista = {
+        soloDi,
+        stato: statusFilter,
+        giorno: dateFilter,
+        da: dateRange.from,
+        a: dateRange.to,
+        cerca: ricerca,
+        ordine: sortField,
+        verso: sortDir,
+        pagina: listPage,
       }
-      setPreventivi(updated)
+      // Il prefetch partito al montaggio vale solo per la prima pagina senza
+      // filtri: per un collaboratore, o se si e' gia' cercato qualcosa, si
+      // rifa' la query e quello si butta.
+      const usaPrefetch = !soloDi && prefetchRef.current
+        && f.stato === 'all' && !f.giorno && !f.da && !f.a && !f.cerca
+        && f.ordine === 'created_at' && f.verso === 'desc' && f.pagina === 1
+      const pronto = usaPrefetch ? prefetchRef.current : null
+      prefetchRef.current = null
+      const { righe, totale } = pronto ? await pronto : await queryPreventivi(f)
+      if (mia !== richiestaRef.current) return
+      setPreventivi(righe)
+      setTotalePreventivi(totale)
+      // I riquadri in cima non dipendono dai filtri, ma dopo ogni scrittura
+      // devono essere giusti: 20 KB, si rileggono insieme alla pagina.
+      void caricaConteggi(soloDi).catch(() => {})
     } catch (error) {
+      if (mia !== richiestaRef.current) return
       console.error('Failed to load preventivi:', error)
       toast.error('Errore caricamento preventivi')
     } finally {
-      setLoading(false)
+      if (mia === richiestaRef.current) setLoading(false)
     }
   }
 
@@ -2281,6 +2496,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           km_packages: form.km_packages,
           km_packages_total: pricing.kmPackagesTotal,
           experience_cost: pricing.experienceCost,
+          // Itinerario completo (tappe con coordinate, tratte, km, minuti,
+          // tariffa e costo): serve al re-load esatto del preventivo e a
+          // ricostruire il percorso in conversione a prenotazione.
+          itinerario: form.itinerario,
+          itinerario_km: pricing.itinerarioKm,
+          itinerario_minuti: pricing.itinerarioMinuti,
+          itinerario_cost: pricing.itinerarioCost,
         },
         status: 'bozza',
         created_by: adminEmail || (await supabase.auth.getUser()).data.user?.email || null,
@@ -2421,6 +2643,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       pickup_km: Number(extras.pickup_km) || 0,
       experience_services: extras.experience_services || {},
       experience_km_quotes: (extras.experience_km_quotes || {}) as KmQuoteMap,
+      // Preventivi salvati prima dell'itinerario non hanno la chiave: si
+      // riparte da vuoto invece di rompere il form.
+      itinerario: (extras.itinerario && typeof extras.itinerario === 'object'
+        ? { ...itinerarioVuoto(), ...(extras.itinerario as ItinerarioValore) }
+        : itinerarioVuoto()),
       sconto: p.sconto > 0 ? String(p.total_final) : '',
       sconto_note: p.sconto_note || 'valido solo 24h',
       model_year: p.vehicle_model_year ? String(p.vehicle_model_year) : '',
@@ -2461,6 +2688,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       pickup_km: 0,
       experience_services: {},
       experience_km_quotes: {},
+      itinerario: itinerarioVuoto(),
       sconto: '',
       sconto_note: 'valido solo 24h',
       model_year: '',
@@ -2575,6 +2803,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         )
         const extras = p.extras_detail as Record<string, unknown> | null
         const pickedUnlimitedKm = !!extras?.include_unlimited_km || p.unlimited_km_total > 0
+        // Itinerario a tappe salvato sul preventivo (vuoto sui preventivi
+        // creati prima del 02/09/2026).
+        const itinerarioSalvato = (extras?.itinerario && typeof extras.itinerario === 'object'
+          ? extras.itinerario
+          : {}) as Partial<ItinerarioValore>
         // Resolve full customer record (email + phone) by customer_id when present.
         // Falls back to whatever is denormalized on the preventivo row.
         const pCustomer = p.customer_id
@@ -2913,6 +3146,27 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
             }
             return lines.join('\n')
           })(),
+          // {itinerario} -> il percorso a tappe, una riga per tappa piu' la
+          // riga finale con km, tempo e costo. Vuoto se il preventivo non ha
+          // un itinerario: la riga del template collassa da sola.
+          itinerario: (() => {
+            const it = itinerarioSalvato
+            const tappe = Array.isArray(it.tappe) ? it.tappe.filter(t => (t?.indirizzo || '').trim()) : []
+            if (tappe.length < 2) return ''
+            const righe = tappe.map((t, i) => `${i + 1}. ${t.indirizzo}`)
+            const km = Number(it.km) || 0
+            const minuti = Number(it.minuti) || 0
+            const costo = Number(it.costo) || 0
+            const coda: string[] = []
+            if (km > 0) coda.push(`${km} km`)
+            if (minuti > 0) coda.push(formattaDurata(minuti))
+            if (costo > 0) coda.push(formatEur(costo))
+            if (coda.length > 0) righe.push(`Totale: ${coda.join(' · ')}`)
+            return righe.join('\n')
+          })(),
+          itinerario_km: Number(itinerarioSalvato.km) > 0 ? `${Number(itinerarioSalvato.km)} km` : '',
+          itinerario_tempo: Number(itinerarioSalvato.minuti) > 0 ? formattaDurata(Number(itinerarioSalvato.minuti)) : '',
+          itinerario_costo: Number(itinerarioSalvato.costo) > 0 ? formatEur(Number(itinerarioSalvato.costo)) : '',
           // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,
           // altrimenti usa la label dell'ufficio/aeroporto.
           // pickup_location  → dove il cliente ritira (consegna a casa = delivery_address)
@@ -3404,6 +3658,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         unlimited_km: preventivoUnlimited,
         // Preserva i pacchetti km eventualmente selezionati al quote
         km_packages: (p.extras_detail as { km_packages?: Record<string, number> } | null)?.km_packages || undefined,
+        // Itinerario a tappe quotato: segue la prenotazione, cosi' il percorso
+        // (tappe, km, tempo, costo) non si perde alla conversione.
+        itinerario: (pExtras.itinerario && typeof pExtras.itinerario === 'object') ? pExtras.itinerario : undefined,
         no_cauzione: (p.no_cauzione_total || 0) > 0,
         include_lavaggio: (p.lavaggio_fee || 0) > 0,
         driver_tier: p.driver_tier,
@@ -3716,66 +3973,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   }
   const sortArrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
 
-  const filtered = useMemo(() => {
-    let list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
-    // Filtro data esatta — confronta YYYY-MM-DD di created_at convertito
-    // a Europe/Rome con quello selezionato dall'admin. Cosi' "26/04" matcha
-    // tutti i preventivi creati quel giorno indipendentemente dall'ora.
-    if (dateFilter) {
-      list = list.filter(p => {
-        if (!p.created_at) return false
-        const romeDay = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-        return romeDay === dateFilter
-      })
-    }
-    // 2026-06-01: filtro periodo Da/A (inclusivo) — confronta created_at
-    // convertito a Europe/Rome con il range scelto. Coexiste con dateFilter.
-    if (dateRange.from || dateRange.to) {
-      list = list.filter(p => {
-        if (!p.created_at) return false
-        const romeDay = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-        if (dateRange.from && romeDay < dateRange.from) return false
-        if (dateRange.to && romeDay > dateRange.to) return false
-        return true
-      })
-    }
-    // Search multi-token: nome cliente, telefono, modello veicolo,
-    // marca/categoria, targa, motivo, sconto note. Tokenizza per spazi
-    // e richiede CHE OGNI TOKEN compaia in almeno un campo (AND fra i
-    // token, OR fra i campi). Cosi' "matteo huracan" trova solo le
-    // righe dove cliente=Matteo* E veicolo=*huracan*.
-    const tokens = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    if (tokens.length > 0) {
-      list = list.filter(p => {
-        const haystack = [
-          p.customer_name,
-          p.customer_phone,
-          p.vehicle_name,
-          p.vehicle_plate,
-          p.vehicle_category,
-          p.insurance_option,
-          p.driver_tier,
-          p.sconto_note,
-          p.motivo_rifiuto,
-          p.motivo_rifiuto_note,
-          p.status,
-        ]
-          .map(v => (v ?? '').toString().toLowerCase())
-          .join(' ')
-        return tokens.every(t => haystack.includes(t))
-      })
-    }
-    return [...list].sort((a, b) => {
-      let va: any, vb: any
-      if (sortField === 'created_at' || sortField === 'pickup_date') {
-        va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
-      } else {
-        va = a[sortField] || 0; vb = b[sortField] || 0
-      }
-      return sortDir === 'asc' ? va - vb : vb - va
-    })
-  }, [preventivi, statusFilter, searchQuery, dateFilter, dateRange, sortField, sortDir]
-  )
+  // Il filtro non sta piu' qui: stato, giorno, periodo, ricerca e
+  // ordinamento li applica il database (`queryPreventivi`). Quello che c'e'
+  // in `preventivi` E' gia' la pagina da disegnare.
 
   // ─── Eliminazione: selezione, conferma, esecuzione ──────────────────────
   const ELIM_OTP_CODE = 'preventivo_elimina'
@@ -3783,14 +3983,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // La selezione vive sulle righe visibili. Se l'admin cambia filtro o
   // ricerca, le spunte rimaste fuori schermo verrebbero cancellate senza che
   // nessuno le veda piu': si purgano.
+  // Cambiare filtro o ricerca cambia l'insieme sotto le spunte: si azzerano,
+  // senno' si cancellerebbero righe che nessuno vede piu'. Cambiare PAGINA
+  // invece le conserva: la selezione attraversa le pagine.
   useEffect(() => {
-    setSelezionatiElim(prev => {
-      if (prev.size === 0) return prev
-      const visibili = new Set(filtered.map(p => p.id))
-      const next = new Set([...prev].filter(id => visibili.has(id)))
-      return next.size === prev.size ? prev : next
-    })
-  }, [filtered])
+    setSelezionatiElim(prev => (prev.size === 0 ? prev : new Set()))
+  }, [ricerca, statusFilter, dateFilter, dateRange.from, dateRange.to])
 
   const toggleSelezioneElim = (id: string) => {
     setSelezionatiElim(prev => {
@@ -3907,11 +4105,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
    * ridisegnavano l'elenco INTERO: nascoste dal CSS, presenti nel DOM. Ora le
    * due viste mostrano le stesse dieci righe.
    */
-  const paginaSicura = Math.min(listPage, Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE)))
-  const righePagina = useMemo(
-    () => filtered.slice((paginaSicura - 1) * LIST_PAGE_SIZE, paginaSicura * LIST_PAGE_SIZE),
-    [filtered, paginaSicura],
-  )
+  const totalePagine = Math.max(1, Math.ceil(totalePreventivi / LIST_PAGE_SIZE))
+  const paginaSicura = Math.min(listPage, totalePagine)
+  const righePagina = preventivi
+
+  // Cancellando righe le pagine possono diventare meno: se si resta su una
+  // pagina che non esiste piu' il server risponde vuoto e la lista sembra
+  // sparita. Si torna sull'ultima pagina buona.
+  useEffect(() => {
+    if (listPage > totalePagine) setListPage(totalePagine)
+  }, [listPage, totalePagine])
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
 
@@ -3987,7 +4190,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           return (
             <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-0.5">
               <button onClick={() => setStatusFilter('all')} className={`flex-1 py-1.5 px-3 rounded-md text-[12px] font-semibold transition-colors ${statusFilter !== '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
-                Preventivi <span className="opacity-70 font-mono ml-0.5">({preventivi.length})</span>
+                Preventivi <span className="opacity-70 font-mono ml-0.5">({totalePreventivi})</span>
               </button>
               <button onClick={() => setStatusFilter('__no_cauzione__')} className={`flex-1 py-1.5 px-3 rounded-md text-[12px] font-semibold transition-colors relative ${statusFilter === '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
                 Richieste No Cauzione
@@ -4391,12 +4594,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
 
         {/* ─── Panoramica Preventivi: section title + 6 KPI cards ─── */}
         {(() => {
-          const total = preventivi.length
-          const bozzaCount = preventivi.filter(p => p.status === 'bozza').length
-          const inviatoCount = preventivi.filter(p => p.status === 'inviato').length
-          const accettatoCount = preventivi.filter(p => p.status === 'accettato').length
-          const rifiutatoCount = preventivi.filter(p => p.status === 'rifiutato').length
-          const scadutoCount = preventivi.filter(p => p.status === 'scaduto').length
+          // Conteggi dell'INTERO business, letti dal server (`caricaConteggi`):
+          // la pagina a schermo ne ha dieci, i riquadri contano tutto.
+          const total = Object.values(conteggiStato).reduce((a, b) => a + b, 0)
+          const bozzaCount = conteggiStato.bozza || 0
+          const inviatoCount = conteggiStato.inviato || 0
+          const accettatoCount = conteggiStato.accettato || 0
+          const rifiutatoCount = conteggiStato.rifiutato || 0
+          const scadutoCount = conteggiStato.scaduto || 0
           const pct = (n: number) => total > 0 ? `${(n / total * 100).toFixed(1).replace('.', ',')}% del totale` : '—'
           type KpiKey = 'all' | 'bozza' | 'inviato' | 'accettato' | 'rifiutato' | 'scaduto'
           const cards: { key: KpiKey; label: string; value: number; sub: string; tone: string; iconBg: string; iconColor: string; ring: string; svg: React.ReactNode }[] = [
@@ -4468,23 +4673,28 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           <div className="ml-auto flex items-center gap-2">
             {/* Pulizia in blocco: cancella esattamente quello che il filtro
                 sta mostrando (stato + ricerca + periodo), non "tutti". */}
-            {puoEliminare && filtered.length > 0 && (() => {
+            {puoEliminare && totalePreventivi > 0 && (() => {
               const etichettaStato = statusFilter !== 'all' ? (STATUS_LABELS[statusFilter] || statusFilter).toLowerCase() : null
               return (
                 <button
                   type="button"
-                  onClick={() => chiediEliminazione(
-                    filtered.map(p => p.id),
-                    etichettaStato ? `Elimina i preventivi in stato "${STATUS_LABELS[statusFilter] || statusFilter}"` : 'Elimina i preventivi filtrati',
-                    etichettaStato
-                      ? `Vengono eliminati i ${filtered.length} preventivi attualmente visibili in stato "${STATUS_LABELS[statusFilter] || statusFilter}" (filtri di ricerca e periodo inclusi).`
-                      : `Vengono eliminati i ${filtered.length} preventivi attualmente visibili con i filtri applicati.`
-                  )}
+                  onClick={async () => {
+                    // Gli id di TUTTI i risultati, non della sola pagina: si
+                    // leggono ora, al clic, non tenendo l'archivio in memoria.
+                    const tutti = await queryTuttiFiltrati()
+                    chiediEliminazione(
+                      tutti.map(p => p.id),
+                      etichettaStato ? `Elimina i preventivi in stato "${STATUS_LABELS[statusFilter] || statusFilter}"` : 'Elimina i preventivi filtrati',
+                      etichettaStato
+                        ? `Vengono eliminati i ${tutti.length} preventivi attualmente visibili in stato "${STATUS_LABELS[statusFilter] || statusFilter}" (filtri di ricerca e periodo inclusi).`
+                        : `Vengono eliminati i ${tutti.length} preventivi attualmente visibili con i filtri applicati.`,
+                    )
+                  }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-rose-200 bg-rose-500/10 ring-1 ring-rose-500/30 hover:bg-rose-500/20 transition-colors"
                   title="Elimina tutti i preventivi mostrati dai filtri correnti"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                  {etichettaStato ? `Elimina ${etichettaStato}` : 'Elimina risultati'} <span className="opacity-70 font-mono">({filtered.length})</span>
+                  {etichettaStato ? `Elimina ${etichettaStato}` : 'Elimina risultati'} <span className="opacity-70 font-mono">({totalePreventivi})</span>
                 </button>
               )
             })()}
@@ -4497,10 +4707,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
             </button>
             <button
               type="button"
-              onClick={() => {
-                // Lightweight CSV export of the filtered preventivi.
+              onClick={async () => {
+                // Esportazione dei risultati filtrati: le righe si leggono al
+                // clic (la lista a schermo e' solo la pagina corrente).
+                const daEsportare = await queryTuttiFiltrati()
                 const rows = [['Veicolo', 'Targa', 'Cliente', 'Telefono', 'Pickup', 'Dropoff', 'Giorni', 'Subtotale', 'Totale', 'Stato']]
-                filtered.forEach(p => rows.push([
+                daEsportare.forEach(p => rows.push([
                   p.vehicle_name, p.vehicle_plate || '',
                   p.customer_name || '', p.customer_phone || '',
                   p.pickup_date, p.dropoff_date, String(p.rental_days),
@@ -4525,10 +4737,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div>
-          </div>
-        ) : filtered.length === 0 ? (
+          <ScheletroTabella righe={LIST_PAGE_SIZE} colonne={7} />
+        ) : preventivi.length === 0 ? (
           <p className="text-theme-text-muted text-center py-8">Nessun preventivo</p>
         ) : (
           <div className={selectedRowId ? 'lg:flex lg:gap-3 lg:items-start' : ''}>
@@ -4842,7 +5052,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
 
             {/* Pagination slice */}
             {(() => {
-              const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE))
+              const totalPages = totalePagine
               const safePage = paginaSicura
               const pageRows = righePagina
               const vehicleById = new Map(vehicles.map(v => [v.id, v]))
@@ -5089,7 +5299,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                   {/* Pagination footer */}
                   <div className="flex items-center justify-between px-4 py-3 border-t border-theme-border text-[11px] text-theme-text-muted">
                     <div className="flex items-center gap-2">
-                      <span>Mostra <strong className="text-theme-text-primary font-mono">{pageRows.length}</strong> di <strong className="text-theme-text-primary font-mono">{filtered.length}</strong> risultati per pagina</span>
+                      <span>Mostra <strong className="text-theme-text-primary font-mono">{pageRows.length}</strong> di <strong className="text-theme-text-primary font-mono">{totalePreventivi}</strong> risultati</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
@@ -5158,7 +5368,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
             the desktop Azioni column exposes is mirrored as a pill button in
             the card footer so admins can Modifica / Invia / Converti /
             Rifiutato without a desktop. */}
-        {!loading && filtered.length > 0 && (
+        {!loading && preventivi.length > 0 && (
           <div className="sm:hidden space-y-2">
             {righePagina.map(p => {
               const statusTone: Record<string, string> = {
@@ -5848,6 +6058,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         </div>
       </div>
 
+      {/* Itinerario a tappe (02/09/2026) — indipendente da consegna/ritiro:
+          serve quando il preventivo copre un percorso a piu' punti. */}
+      <ItinerarioTappe
+        valore={form.itinerario}
+        onChange={(v) => setForm(prev => ({ ...prev, itinerario: v }))}
+        tariffaCentralina={deliveryRateForVehicle}
+      />
+
       {/* Revenue Pricing Info */}
       {revenueLoading && (
         <p className="text-sm text-theme-text-muted animate-pulse">Calcolo prezzo revenue management...</p>
@@ -6283,6 +6501,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           <div className="flex justify-between text-sm text-theme-text-muted">
             <span>Servizi Experience</span>
             <span>{formatEur(pricing.experienceCost)}</span>
+          </div>
+        )}
+        {pricing.itinerarioCost > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>
+              Itinerario ({pricing.itinerarioKm} km
+              {pricing.itinerarioMinuti > 0 ? ` · ${formattaDurata(pricing.itinerarioMinuti)}` : ''})
+            </span>
+            <span>{formatEur(pricing.itinerarioCost)}</span>
           </div>
         )}
         {(pricing.kmPackagesTotal ?? 0) > 0 && (

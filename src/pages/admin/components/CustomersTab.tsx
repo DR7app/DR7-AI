@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroLista, ScheletroPagina } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import NumeroTelefono from '../../../components/NumeroTelefono'
@@ -7,6 +9,8 @@ import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import { invalidateCustomersCache } from '../../../utils/customersCache'
+import { loadCached } from '../../../utils/dataCache'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import ReportClienteModal from './ReportClienteModal'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -161,7 +165,9 @@ export default function CustomersTab() {
     label.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '—'
   const statusName = (key: string) => clientTierMetaCfg(key).label
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading] = useState(true)
+  // Se la tab e' gia' stata aperta di recente si riparte dalle righe che
+  // aveva: niente segnaposto, la lista e' a schermo al primo disegno.
+  const [loading, setLoading] = useState(() => !statoPronto('clienti:anagrafica'))
 
   const [viewingDocuments, setViewingDocuments] = useState<Customer | null>(null)
   const [documentsUrls, setDocumentsUrls] = useState<{
@@ -217,7 +223,7 @@ export default function CustomersTab() {
   const [totalCustomers, setTotalCustomers] = useState(0)
   const CUSTOMERS_PER_PAGE = 30
 
-  const [allCustomers, setAllCustomers] = useState<Customer[]>([])
+  const [allCustomers, setAllCustomers] = useStatoTab<Customer[]>('clienti:anagrafica', [])
 
   // Sorting
   type SortField = 'name' | 'email' | 'phone' | 'date' | 'wallet' | 'tipo'
@@ -563,7 +569,7 @@ export default function CustomersTab() {
 
       if (imported > 0) {
         toast.success(`${imported} clienti importati!${skipped > 0 ? ` (${skipped} saltati)` : ''}`)
-        loadCustomers()
+        loadCustomers({ fresh: true })
       } else {
         toast.error(`Nessun cliente importato. ${skipped} righe saltate.`)
       }
@@ -585,7 +591,12 @@ export default function CustomersTab() {
   // (AutistiConfigSection): aggiunta/rimozione lì. Rimossi dalla sezione Lead —
   // niente badge/bottone "Autista" per riga (restano filtrati fuori dalla lista).
 
-  async function loadCustomers() {
+  /**
+   * `fresh: true` salta la cache: si usa dopo ogni scrittura (salvataggio,
+   * unione doppioni, import) perche' a video deve comparire il dato appena
+   * scritto, non quello di dieci secondi fa.
+   */
+  async function loadCustomers(opts: { fresh?: boolean } = {}) {
     setLoading(true)
     try {
       logger.log('[CustomersTab] Loading customers from DB...')
@@ -632,19 +643,41 @@ export default function CustomersTab() {
         // ?fields=anagrafica: la tab scaricava la riga INTERA (88 colonne,
         // 5,13 MB misurati su 2059 clienti) e poi ne ricopiava a mano un
         // sottoinsieme in un oggetto nuovo, buttando via tutto il resto
-        // subito dopo averlo scaricato. Ora chiede solo quel sottoinsieme.
-        // Stessi clienti, tutti, e ogni campo che la tab mostra o salva
-        // continua ad arrivare. Se il server rifiutasse l'elenco ridotto
-        // risponde con la riga intera, come prima.
-        const response = await authFetch('/.netlify/functions/list-customers?fields=anagrafica')
-        const result = await response.json()
-        if (!response.ok) {
-          customersExtendedError = { code: result.code, message: result.error }
-          console.error('[CustomersTab] ❌ ERROR loading customers_extended:', customersExtendedError)
-        } else {
-          customersExtendedData = result.customers
-          logger.log('[CustomersTab] ✅ Successfully loaded customers_extended:', customersExtendedData?.length)
-        }
+        // subito dopo averlo scaricato. Ora chiede solo i campi che la LISTA
+        // mostra, cerca, ordina e usa per unire i doppioni: 0,64 MB per 1000
+        // clienti contro 2,46 MB.
+        //
+        // Indirizzo, patente e dati di fatturazione NON sono piu' in questa
+        // risposta, e non servono: "Modifica", "Dettagli Completi" e
+        // l'esportazione CSV rileggono comunque la riga intera dal database
+        // prima di aprirsi. La mappatura qui sotto li tiene lo stesso, cosi'
+        // se il server dovesse ripiegare sulla riga intera continuano ad
+        // arrivare senza toccare altro.
+        //
+        // Tutti i clienti ci sono, sempre: quello che cambia e' solo quante
+        // colonne viaggiano.
+        // 02/09/2026 - il gestionale smonta la tab a ogni cambio schermata:
+        // tornare su Clienti riscaricava l'anagrafica intera anche a pochi
+        // secondi di distanza. Ora la risposta resta in memoria per la
+        // finestra breve di dataCache, e ogni scrittura la invalida
+        // (`invalidateCustomersCache`) prima di ricaricare: il numero a video
+        // e' sempre quello appena salvato.
+        const result = await loadCached<{ customers: Record<string, unknown>[] }>(
+          'reservations:customers_anagrafica',
+          async () => {
+            const response = await authFetch('/.netlify/functions/list-customers?fields=anagrafica')
+            const json = await response.json()
+            if (!response.ok) {
+              const err: Error & { code?: string } = new Error(json.error || 'list-customers failed')
+              err.code = json.code
+              throw err
+            }
+            return json
+          },
+          { bypass: opts.fresh }
+        )
+        customersExtendedData = result.customers
+        logger.log('[CustomersTab] ✅ Successfully loaded customers_extended:', customersExtendedData?.length)
       } catch (e: unknown) {
         const _errMsg = e instanceof Error ? e.message : String(e)
         customersExtendedError = { code: 'FETCH_ERROR', message: _errMsg }
@@ -686,6 +719,13 @@ export default function CustomersTab() {
           const extendedData = {
             // We map the DB fields to our Customer interface
             id: customer.id,
+            // 02/09/2026 - `user_id` NON veniva ricopiato qui: la lista aveva
+            // duemila clienti tutti senza account collegato. Conseguenze in
+            // tre punti diversi, tutte silenziose: la colonna Wallet mostrava
+            // "-" per chiunque, l'ordinamento per wallet non ordinava niente e
+            // il badge DR7 Club non compariva mai. La colonna arriva dal
+            // database da sempre, mancava solo la riga che la ricopia.
+            user_id: customer.user_id,
             full_name: fullName,
             email: customer.email,
             phone: customer.telefono,
@@ -854,19 +894,33 @@ export default function CustomersTab() {
       setAllCustomers(customersArray)
 
       // Load wallet balances (non-blocking)
-      const userIds = customersArray.map(c => c.user_id).filter(Boolean)
-      if (userIds.length > 0) {
-        supabase.from('user_credit_balance').select('user_id, balance').in('user_id', userIds)
-          .then(({ data }) => {
-            if (data) {
-              const map = new Map<string, number>()
-              data.forEach(row => {
-                const cust = customersArray.find(c => c.user_id === row.user_id)
-                if (cust) map.set(cust.id, parseFloat(row.balance) || 0)
-              })
-              setWalletBalances(map)
+      //
+      // 02/09/2026 - con `user_id` finalmente presente, `.in('user_id', [...])`
+      // avrebbe infilato duemila UUID nell'URL (~80 KB): richiesta rifiutata
+      // prima ancora di arrivare al database. Si legge la tabella dei saldi
+      // per intero - ha meno righe dell'anagrafica - e si abbina con una
+      // mappa invece che con un `find` dentro il ciclo (era O(n²)).
+      const userIds = new Set(
+        customersArray.map(c => c.user_id).filter(Boolean) as string[]
+      )
+      if (userIds.size > 0) {
+        void fetchAllRows<{ user_id: string; balance: string | number }>((from, to) =>
+          supabase.from('user_credit_balance').select('user_id, balance').range(from, to)
+        ).then(({ data }) => {
+          if (!data.length) return
+          const saldoPerAccount = new Map<string, number>()
+          for (const row of data) {
+            if (row.user_id && userIds.has(row.user_id)) {
+              saldoPerAccount.set(row.user_id, parseFloat(String(row.balance)) || 0)
             }
-          })
+          }
+          const map = new Map<string, number>()
+          for (const c of customersArray) {
+            const uid = c.user_id
+            if (uid && saldoPerAccount.has(uid)) map.set(c.id, saldoPerAccount.get(uid)!)
+          }
+          setWalletBalances(map)
+        })
       }
 
     } catch (error) {
@@ -967,7 +1021,7 @@ export default function CustomersTab() {
 
     setMergingDuplicates(false)
     toast.success(`${totalToRemove} duplicati rimossi (${merged} gruppi unificati)${failed > 0 ? ` — ${failed} errori` : ''}`)
-    loadCustomers()
+    loadCustomers({ fresh: true })
   }
 
   // Count non-null fields to determine completeness
@@ -985,8 +1039,39 @@ export default function CustomersTab() {
   }
 
   async function mergeDuplicateGroup(group: Customer[]) {
+    // 02/09/2026 - la LISTA non porta piu' indirizzo, patente, PEC e dati di
+    // fatturazione: li rilegge chi apre la scheda, non servono per disegnare
+    // la tabella. L'unione dei doppioni pero' li deve avere TUTTI, perche'
+    // decide quale scheda tenere e travasa sul vincitore i campi che gli
+    // mancano prima di cancellare gli altri: con la riga ridotta avrebbe
+    // buttato via indirizzi e patenti delle schede eliminate.
+    //
+    // Le righe di un gruppo sono due o tre: si rileggono intere. In piu' sono
+    // fresche, non la copia in memoria di quando la tab e' stata aperta.
+    let completi = group
+    const { data: righeIntere, error: erroreRighe } = await supabase
+      .from('customers_extended')
+      .select('*')
+      .in('id', group.map(c => c.id))
+    if (erroreRighe || !righeIntere || righeIntere.length !== group.length) {
+      // Se anche una sola riga non torna si annulla: unire su dati parziali
+      // significa cancellare schede senza averne travasato il contenuto.
+      console.error('[mergeDuplicateGroup] righe intere non rilette, unione annullata:', erroreRighe)
+      toast.error('Unione annullata: non ho potuto rileggere le schede complete')
+      return false
+    }
+    // Stessi alias che la lista costruisce (`phone`, `notes`): il calcolo
+    // della completezza e il travaso leggono quei nomi.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    completi = righeIntere.map((r: any) => ({
+      ...r,
+      phone: r.telefono,
+      notes: r.note,
+      full_name: group.find(c => c.id === r.id)?.full_name,
+    })) as Customer[]
+
     // Sort by completeness — most complete first
-    const sorted = [...group].sort((a, b) => getCompleteness(b) - getCompleteness(a))
+    const sorted = [...completi].sort((a, b) => getCompleteness(b) - getCompleteness(a))
     const keeper = sorted[0]
     const toDelete = sorted.slice(1)
 
@@ -1068,6 +1153,11 @@ export default function CustomersTab() {
       }
 
       logger.log('[handleDelete] Success! Removing from state. Current allCustomers count:', allCustomers.length)
+
+      // La lista in cache non sa niente di questa scrittura: senza
+      // invalidarla, uscire dalla tab e rientrarci entro la finestra breve
+      // rimetterebbe a video il dato vecchio.
+      invalidateCustomersCache()
 
       // Remove from allCustomers - the useEffect will update customers automatically
       setAllCustomers(prevAll => {
@@ -1739,6 +1829,11 @@ export default function CustomersTab() {
         throw new Error(result.error || 'Errore durante l\'aggiornamento')
       }
 
+      // La lista in cache non sa niente di questa scrittura: senza
+      // invalidarla, uscire dalla tab e rientrarci entro la finestra breve
+      // rimetterebbe a video il dato vecchio.
+      invalidateCustomersCache()
+
       // Update local state
       setCustomers(customers.map(c =>
         c.id === customerId ? { ...c, status: newStatus } : c
@@ -1814,6 +1909,11 @@ export default function CustomersTab() {
         throw new Error(result.error || 'Errore durante l\'aggiornamento')
       }
 
+      // La lista in cache non sa niente di questa scrittura: senza
+      // invalidarla, uscire dalla tab e rientrarci entro la finestra breve
+      // rimetterebbe a video il dato vecchio.
+      invalidateCustomersCache()
+
       // Update local state
       setCustomers(customers.map(c =>
         selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
@@ -1877,6 +1977,11 @@ export default function CustomersTab() {
         throw new Error(result.error || 'Errore durante l\'eliminazione')
       }
 
+      // La lista in cache non sa niente di questa scrittura: senza
+      // invalidarla, uscire dalla tab e rientrarci entro la finestra breve
+      // rimetterebbe a video i clienti appena eliminati.
+      invalidateCustomersCache()
+
       // Remove deleted customers from local state
       setAllCustomers(prev => prev.filter(c => !selectedCustomerIds.has(c.id)))
       setSelectedCustomerIds(new Set())
@@ -1893,7 +1998,7 @@ export default function CustomersTab() {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
+    return <ScheletroPagina card={4} righe={8} colonne={6} />
   }
 
   return (
@@ -2484,9 +2589,7 @@ export default function CustomersTab() {
                 <div className="bg-theme-bg-tertiary rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Documenti Caricati</h4>
                   {loadingDocuments ? (
-                    <div className="text-center py-4">
-                      <p className="text-theme-text-muted">Caricamento documenti...</p>
-                    </div>
+                    <ScheletroLista righe={3} className="py-2" />
                   ) : (
                     <div className="space-y-4">
                       {/* Driver's License */}
@@ -2554,7 +2657,7 @@ export default function CustomersTab() {
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
-                                {uploadingLicense ? 'Caricamento...' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
+                                {uploadingLicense ? 'Invio…' : documentsUrls.licenses.length === 0 ? '📤 Carica Fronte Patente' : documentsUrls.licenses.length === 1 ? '📤 Carica Retro Patente' : '📤 Carica Altro Documento'}
                               </span>
                             </label>
                             {documentsUrls.licenses.length < 2 && (
@@ -2631,7 +2734,7 @@ export default function CustomersTab() {
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
-                                {uploadingId ? 'Caricamento...' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
+                                {uploadingId ? 'Invio…' : documentsUrls.ids.length === 0 ? '📤 Carica Fronte Documento' : documentsUrls.ids.length === 1 ? '📤 Carica Retro Documento' : '📤 Carica Altro Documento'}
                               </span>
                             </label>
                             {documentsUrls.ids.length < 2 && (
@@ -2708,7 +2811,7 @@ export default function CustomersTab() {
                                 ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                                 : 'bg-dr7-gold text-white hover:bg-dr7-gold/90'
                                 }`}>
-                                {uploadingCodiceFiscale ? 'Caricamento...' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
+                                {uploadingCodiceFiscale ? 'Invio…' : documentsUrls.codiceFiscale.length === 0 ? '📤 Carica Fronte Codice Fiscale' : documentsUrls.codiceFiscale.length === 1 ? '📤 Carica Retro Codice Fiscale' : '📤 Carica Altro Documento'}
                               </span>
                             </label>
                             {documentsUrls.codiceFiscale.length < 2 && (
@@ -3403,7 +3506,7 @@ export default function CustomersTab() {
           setShowNewClientModal(false)
           setSelectedCustomer(null)
           // Don't update state manually — just reload from DB for consistency
-          loadCustomers()
+          loadCustomers({ fresh: true })
         }}
         initialData={selectedCustomer}
       />

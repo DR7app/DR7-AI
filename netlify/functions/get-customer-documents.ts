@@ -10,11 +10,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' }
+    }
 
-    // Require authentication
+    // 02/09/2026: queste due righe stavano DENTRO l'if qui sopra, dopo il
+    // `return`. Su una POST non venivano mai eseguite: la funzione serviva
+    // patenti, carte d'identita' e codici fiscali (URL firmati validi 24 h) a
+    // chiunque conoscesse un userId. Il controllo va prima di leggere il body.
     const { error: authErr } = await requireAuth(event)
     if (authErr) return authErr
-    }
 
     try {
         const { userId } = JSON.parse(event.body || '{}')
