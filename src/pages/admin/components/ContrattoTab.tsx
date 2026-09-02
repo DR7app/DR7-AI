@@ -347,20 +347,53 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
       const SIG_COLS = 'id, contract_id, booking_id, signer_name, signer_phone, status, signed_at, created_at'
       // Batch dell'IN: con molte righe la lista di id supererebbe la lunghezza
       // max dell'URL e la query fallirebbe (di nuovo tutti "Non inviato").
-      const fetchByColumn = async (column: string, ids: string[]) => {
-        for (let i = 0; i < ids.length; i += 80) {
-          const chunk = ids.slice(i, i + 80)
-          const { data: rows } = await supabase.from('signature_requests').select(SIG_COLS).in(column, chunk)
-          collect(rows)
+      // 02/09/2026: i blocchi partono INSIEME.
+      //
+      // Prima si aspettava un blocco alla volta, prima tutti quelli per
+      // booking_id e poi tutti quelli per contract_id: con mille contratti
+      // erano ventiquattro viaggi in fila, uno dietro l'altro. Stesse righe,
+      // stesso raggruppamento: cambia solo che partono in parallelo.
+      const fetchByColumn = (column: string, ids: string[]) => {
+        const blocchi: string[][] = []
+        for (let i = 0; i < ids.length; i += 80) blocchi.push(ids.slice(i, i + 80))
+        return Promise.all(blocchi.map(chunk => supabase
+          .from('signature_requests').select(SIG_COLS).in(column, chunk)
+          .then(r => collect(r.data))))
+      }
+      await Promise.all([
+        bookingIds.length > 0 ? fetchByColumn('booking_id', bookingIds) : null,
+        contractIds.length > 0 ? fetchByColumn('contract_id', contractIds) : null,
+      ])
+      const allSigs = Array.from(sigById.values())
+      // Indice per contratto e per prenotazione: prima ogni contratto
+      // ripercorreva TUTTE le firme (mille contratti per mille firme = un
+      // milione di confronti a ogni caricamento).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const perContratto = new Map<string, any[]>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const perPrenotazione = new Map<string, any[]>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const s of allSigs as any[]) {
+        if (s.contract_id) {
+          const l = perContratto.get(s.contract_id) || []; l.push(s); perContratto.set(s.contract_id, l)
+        }
+        if (s.booking_id) {
+          const l = perPrenotazione.get(s.booking_id) || []; l.push(s); perPrenotazione.set(s.booking_id, l)
         }
       }
-      if (bookingIds.length > 0) await fetchByColumn('booking_id', bookingIds)
-      if (contractIds.length > 0) await fetchByColumn('contract_id', contractIds)
-      const allSigs = Array.from(sigById.values())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sigsForContract = (c: any) =>
+      const sigsForContract = (c: any) => {
+        const perId = c.id ? (perContratto.get(c.id) || []) : []
+        const perBk = c.booking_id ? (perPrenotazione.get(c.booking_id) || []) : []
+        if (perBk.length === 0) return perId
+        if (perId.length === 0) return perBk
+        // Una firma puo' essere raggiunta da entrambe le strade: si tiene una
+        // volta sola, come faceva il filtro con l'OR.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        allSigs.filter((s: any) => (c.id && s.contract_id === c.id) || (c.booking_id && s.booking_id === c.booking_id))
+        const viste = new Set(perId.map((s: any) => s.id))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return [...perId, ...perBk.filter((s: any) => !viste.has(s.id))]
+      }
 
       // Resolve customer_name from booking if contract's customer_name is empty
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

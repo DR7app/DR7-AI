@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
@@ -137,7 +137,12 @@ export default function ReviewManagementTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 02/09/2026 — all'apertura questa lettura partiva DUE volte: una qui e una
+  // dentro loadAll, tre chiamate a testa (un gruppo per stato). Al primo giro
+  // la fa loadAll; questo effetto serve ai cambi di filtro successivi.
+  const primoGiro = useRef(true)
   useEffect(() => {
+    if (primoGiro.current) { primoGiro.current = false; return }
     fetchCandidates()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterServiceType])
@@ -150,16 +155,21 @@ export default function ReviewManagementTab() {
     // demote anyone with penali/danni/cauzione aperta to Esclusi. Both run
     // silently — the user shouldn't have to click anything.
     ;(async () => {
-      await autoEvaluateAll()
-      await autoFixEligibility()
-      await Promise.all([fetchCandidates(), fetchStats()])
+      const nuovi = await autoEvaluateAll()
+      const spostati = await autoFixEligibility()
+      // Si rilegge solo se qualcosa e' davvero cambiato: nel caso normale
+      // (niente di nuovo da valutare, nessuno da spostare) l'elenco a schermo
+      // e' gia' quello giusto e altre sei chiamate non aggiungono nulla.
+      if (nuovi > 0 || spostati > 0) {
+        await Promise.all([fetchCandidates(), fetchStats()])
+      }
     })()
   }
 
   // Silent sweep: scan ELIGIBLE candidates and demote those with penali / danni /
   // fattura penale o danno / cauzione ancora aperta to TO_REVIEW so they appear
   // in the Esclusi section with a clear motivo. Runs on every page load.
-  async function autoFixEligibility() {
+  async function autoFixEligibility(): Promise<number> {
     try {
       // 2026-08-22: esclude i blocchi manuali (send_status='BLOCKED' oppure
       // motivo ALREADY_REVIEWED, incluso lo storico salvato come 'SENT').
@@ -171,7 +181,7 @@ export default function ReviewManagementTab() {
         .eq('eligibility_status', 'ELIGIBLE')
         .neq('send_status', 'BLOCKED')
 
-      if (!eligible || eligible.length === 0) return
+      if (!eligible || eligible.length === 0) return 0
 
       // 01/09/2026 - TRE LETTURE IN BLOCCO, non tre per candidato.
       //
@@ -183,7 +193,7 @@ export default function ReviewManagementTab() {
       // confronto avviene in memoria. Stessi candidati, stessi motivi di
       // esclusione, stesse scritture: cambia solo il numero di viaggi.
       const daValutare = eligible.filter(c => c.exclusion_reason_code !== 'ALREADY_REVIEWED')
-      if (daValutare.length === 0) return
+      if (daValutare.length === 0) return 0
 
       const recordIds = [...new Set(daValutare.map(c => c.source_record_id).filter(Boolean))] as string[]
       // `.in()` con troppi id fa una URL troppo lunga: si chiede a blocchi,
@@ -276,12 +286,14 @@ export default function ReviewManagementTab() {
           updated_at: new Date().toISOString(),
         })
         .in('id', gruppo.ids)))
+      return [...daEscludere.values()].reduce((n, g) => n + g.ids.length, 0)
     } catch (err) {
       console.error('autoFixEligibility error:', err)
+      return 0
     }
   }
 
-  async function autoEvaluateAll() {
+  async function autoEvaluateAll(): Promise<number> {
     const toastId = toast.loading('Caricamento prenotazioni e lavaggi...')
     try {
       const thirtyDaysAgo = new Date()
@@ -341,7 +353,7 @@ export default function ReviewManagementTab() {
 
       if (nuovi.length === 0) {
         toast.dismiss(toastId)
-        return
+        return 0
       }
 
       // I nuovi partono a gruppi di sei: il database non viene sommerso e non
@@ -364,9 +376,10 @@ export default function ReviewManagementTab() {
 
       toast.dismiss(toastId)
       toast.success(`${done} prenotazioni valutate`)
-      await Promise.all([fetchCandidates(), fetchStats()])
+      return done
     } catch {
       toast.dismiss(toastId)
+      return 0
     }
   }
 
