@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -277,7 +278,7 @@ export default function ContrattiOperatoreView() {
                 )}
 
                 {selected && loading && (
-                    <p className="text-sm text-theme-text-muted text-center py-12">Caricamento contratto…</p>
+                    <ScheletroTesto righe={6} className="py-6" />
                 )}
 
                 {selected && !loading && contratto && (

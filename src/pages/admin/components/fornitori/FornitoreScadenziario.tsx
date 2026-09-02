@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroRigheTabella } from '../../../../components/Scheletro'
 import { supabase } from '../../../../supabaseClient'
 import {
     DOCUMENT_STATO_LABELS,
@@ -122,7 +123,7 @@ export default function FornitoreScadenziario({ fornitore }: Props) {
                     </thead>
                     <tbody className="divide-y divide-theme-border">
                         {loading && (
-                            <tr><td colSpan={fornitore ? 7 : 8} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
+                            <ScheletroRigheTabella righe={5} colonne={fornitore ? 7 : 8} />
                         )}
                         {!loading && filtered.length === 0 && (
                             <tr><td colSpan={fornitore ? 7 : 8} className="text-center py-6 text-theme-text-muted">Nessuna scadenza</td></tr>

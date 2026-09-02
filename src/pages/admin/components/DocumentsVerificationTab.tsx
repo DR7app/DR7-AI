@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
@@ -491,10 +492,7 @@ export default function DocumentsVerificationTab() {
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento documenti...</p>
-      </div>
+      <ScheletroPagina righe={6} colonne={5} />
     )
   }
 

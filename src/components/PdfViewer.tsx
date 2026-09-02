@@ -164,7 +164,7 @@ export default function PdfViewer({ url, className }: PdfViewerProps) {
                 <div className="flex items-center justify-center py-12">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mx-auto mb-3"></div>
-                        <p className="text-gray-500 text-sm">Caricamento PDF...</p>
+                        <p className="text-gray-500 text-sm">Apertura del PDF…</p>
                     </div>
                 </div>
             )}

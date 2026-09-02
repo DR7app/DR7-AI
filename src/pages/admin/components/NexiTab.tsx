@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR } from '../../../utils/moneyUtils'
@@ -120,8 +122,8 @@ function serviceLabel(serviceType: string): string {
 }
 
 export default function NexiTab() {
-    const [transactions, setTransactions] = useState<NexiTransaction[]>([])
-    const [loading, setLoading] = useState(true)
+    const [transactions, setTransactions] = useStatoTab<NexiTransaction[]>('nexi:transazioni', [])
+    const [loading, setLoading] = useState(() => !statoPronto('nexi:transazioni'))
     const [error, setError] = useState('')
 
     // Tokenized cards
@@ -393,11 +395,9 @@ export default function NexiTab() {
     // digitato non aggancia la pre-autorizzazione a nessuna scheda cliente.
     const [preauthLinkCustomerId, setPreauthLinkCustomerId] = useState('')
     const [preauthLinkCustomers, setPreauthLinkCustomers] = useState<PreauthCustomerLite[]>([])
-    const [preauthLinkCustomersLoading, setPreauthLinkCustomersLoading] = useState(false)
     const [showPreauthNewClient, setShowPreauthNewClient] = useState(false)
 
     async function loadPreauthLinkCustomers(selectId?: string) {
-        setPreauthLinkCustomersLoading(true)
         try {
             // ?fields=picker: qui l'anagrafica serve solo a scegliere il
             // cliente, la riga intera pesa ~8x. Se il parametro viene
@@ -432,7 +432,6 @@ export default function NexiTab() {
             console.error('[NexiTab] loadPreauthLinkCustomers error:', e)
             toast.error('Caricamento clienti fallito')
         } finally {
-            setPreauthLinkCustomersLoading(false)
         }
     }
 
@@ -1577,10 +1576,7 @@ export default function NexiTab() {
             )}
 
             {loading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold mx-auto mb-4"></div>
-                    <p className="text-theme-text-muted">Caricamento transazioni...</p>
-                </div>
+                <ScheletroTabella righe={8} colonne={6} />
             ) : filteredTransactions.length === 0 ? (
                 <div className="text-center py-12 bg-theme-text-primary/5 rounded-xl border border-theme-border/50">
                     <p className="text-theme-text-muted">
@@ -1740,7 +1736,7 @@ export default function NexiTab() {
                     </div>
                 </div>
                 {cardsLoading ? (
-                    <div className="px-6 py-8 text-center text-theme-text-muted text-sm">Caricamento...</div>
+                    <div className="px-6 py-4"><ScheletroTabella righe={6} colonne={6} /></div>
                 ) : filteredCards.length === 0 ? (
                     <div className="px-6 py-8 text-center text-theme-text-muted text-sm">
                         {search ? `Nessuna carta corrisponde a "${search}"` : 'Nessuna carta tokenizzata'}
@@ -2367,7 +2363,7 @@ export default function NexiTab() {
                                                     setPreauthLinkCustomerName('')
                                                 }
                                             }}
-                                            placeholder={preauthLinkCustomersLoading ? 'Caricamento clienti...' : 'Cerca cliente per nome, email o telefono...'}
+                                            placeholder="Cerca cliente per nome, email o telefono..."
                                             required={false}
                                         />
                                     </div>

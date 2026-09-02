@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroRigheTabella } from '../../../../components/Scheletro'
 import { authFetch } from '../../../../utils/authFetch'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
@@ -207,7 +208,7 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
                     </thead>
                     <tbody className="divide-y divide-theme-border">
                         {loading && (
-                            <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
+                            <ScheletroRigheTabella righe={5} colonne={8} />
                         )}
                         {!loading && docs.length === 0 && (
                             <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">Nessun documento</td></tr>

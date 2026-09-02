@@ -1,5 +1,6 @@
 // System Control — INTEGRATION HEALTH.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroLista } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import type { IntegrazioneRiga, Diagnosi, GruppoProblema, Operazione } from '../../../../utils/systemControl'
@@ -49,7 +50,7 @@ export default function IntegrazioniView() {
         <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
       </div>
 
-      {caricamento ? <p className="text-sm text-theme-text-muted">Caricamento...</p> : Object.entries(perCategoria).map(([categoria, lista]) => (
+      {caricamento ? <ScheletroLista righe={4} /> : Object.entries(perCategoria).map(([categoria, lista]) => (
         <Scheda key={categoria} titolo={categoria.charAt(0).toUpperCase() + categoria.slice(1)}>
           <div className="divide-y divide-theme-border">
             {lista.map(r => (

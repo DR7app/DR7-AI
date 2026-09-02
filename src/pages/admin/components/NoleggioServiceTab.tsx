@@ -6,6 +6,7 @@
 // Prenotazioni + Calendario: tabella `bookings`.
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { ScheletroBarra, ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
@@ -206,7 +207,7 @@ function TourCalendarSection({ serviceType, year, month }: { serviceType: Nolegg
     return () => { cancelled = true }
   }, [serviceType])
 
-  if (loading) return <div className="text-theme-text-muted text-sm">Caricamento tour…</div>
+  if (loading) return <ScheletroTabella righe={5} colonne={5} />
   if (rows.length === 0) return null
   return (
     <div className="space-y-2">
@@ -366,7 +367,7 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
               <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
                 onChange={e => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); e.target.value = '' } }} />
               <button type="button" onClick={() => imageInputRef.current?.click()} disabled={uploadingImage} className={BTN_GHOST}>
-                {uploadingImage ? 'Caricamento…' : (form.image_url ? 'Cambia immagine' : 'Carica immagine')}
+                {uploadingImage ? 'Invio…' : (form.image_url ? 'Cambia immagine' : 'Carica immagine')}
               </button>
               {form.image_url && (
                 <>
@@ -388,7 +389,7 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
         </div>
       )}
 
-      {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
+      {loading && <ScheletroTabella righe={6} colonne={5} />}
       {!loading && items.length === 0 && !error && <EmptyBox msg={`Nessun elemento nel catalogo ${labels.assetPlural.toLowerCase()}.`} />}
       {items.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -681,7 +682,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
         </div>
       )}
 
-      {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
+      {loading && <ScheletroTabella righe={6} colonne={5} />}
       {!loading && rows.length === 0 && !error && <EmptyBox msg="Nessun preventivo." />}
       {rows.length > 0 && (
         <div className="overflow-x-auto border border-theme-border rounded-lg">
@@ -1281,7 +1282,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
         </div>
       )}
 
-      {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
+      {loading && <ScheletroTabella righe={6} colonne={5} />}
 
       {!loading && assetId && departures.length === 0 && !error && (
         <EmptyBox msg={`Nessuna partenza per ${selectedAsset?.name || 'questo tour'}. Crea la prima con "+ Nuova partenza".`} />
@@ -1327,7 +1328,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                     </button>
                   </div>
 
-                  {!seats[dep.id] && <div className="text-theme-text-muted text-sm">Caricamento posti…</div>}
+                  {!seats[dep.id] && <ScheletroBarra className="h-10 w-full" />}
                   {seats[dep.id] && serviceType === 'heli_rental' && (
                     <HeliSeatMap seats={seats[dep.id]} dep={dep} cartDep={cartDep} cartSeats={cartSeats} pay={pay} onSeatClick={onSeatClick} />
                   )}

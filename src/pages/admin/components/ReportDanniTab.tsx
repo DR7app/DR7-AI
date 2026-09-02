@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
@@ -212,7 +213,7 @@ export default function ReportDanniTab() {
               </div>
 
               {loading && (
-                <div className="px-5 py-12 text-center text-theme-text-muted text-sm">Caricamento…</div>
+                <div className="px-5 py-6"><ScheletroTabella righe={6} colonne={5} /></div>
               )}
 
               {!loading && sorted.length === 0 && (
@@ -337,7 +338,7 @@ export default function ReportDanniTab() {
 
       {!data && !loading && !error && (
         <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-12 text-center">
-          <p className="text-theme-text-muted text-sm">Caricamento report danni…</p>
+          <ScheletroTabella righe={6} colonne={5} />
         </div>
       )}
       {editRow && (

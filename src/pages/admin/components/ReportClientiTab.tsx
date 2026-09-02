@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
@@ -440,7 +441,7 @@ export default function ReportClientiTab() {
       </div>
 
       {loading && (
-        <div className="text-sm text-theme-text-muted">Caricamento report...</div>
+        <ScheletroTabella righe={6} colonne={5} />
       )}
 
       {error && (

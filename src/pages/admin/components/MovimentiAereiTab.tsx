@@ -31,6 +31,7 @@
 // La colonna e' aggiunta dalla migration 20260825_movimenti_aerei_catalog_id:
 // finche' non e' eseguita il salvataggio riprova senza id, non si blocca.
 import { useState, useEffect, useCallback } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 
@@ -373,7 +374,7 @@ export default function MovimentiAereiTab() {
 
       {/* Storico */}
       {loading ? (
-        <div className="py-8 text-center text-theme-text-muted text-sm">Caricamento…</div>
+        <ScheletroTabella righe={6} colonne={5} />
       ) : visibili.length === 0 ? (
         <div className="py-8 text-center text-theme-text-muted text-sm">Nessun movimento.</div>
       ) : (

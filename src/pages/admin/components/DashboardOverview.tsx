@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
@@ -198,9 +199,7 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-theme-text-muted">
-        Caricamento dashboard…
-      </div>
+      <ScheletroPagina card={4} righe={6} colonne={4} />
     )
   }
 

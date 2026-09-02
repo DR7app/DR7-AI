@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { CATEGORY_KEYS } from './scadenze/scadenzeConfig'
 import type { Scadenza } from './scadenze/scadenzeConfig'
 import { useScadenze } from './scadenze/useScadenze'
@@ -27,7 +28,7 @@ export default function ScadenzeTab() {
   } = useScadenze()
 
   if (loading) {
-    return <div className="text-theme-text-muted">Caricamento scadenze...</div>
+    return <ScheletroPagina righe={8} colonne={5} />
   }
 
   // Get the category to preselect in the add modal

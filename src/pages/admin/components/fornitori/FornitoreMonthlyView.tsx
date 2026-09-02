@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroRigheTabella } from '../../../../components/Scheletro'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
 import FornitoreDocumentUpload from './FornitoreDocumentUpload'
@@ -214,7 +215,7 @@ export default function FornitoreMonthlyView({ fornitore }: Props) {
                     </thead>
                     <tbody className="divide-y divide-theme-border">
                         {loading && (
-                            <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
+                            <ScheletroRigheTabella righe={5} colonne={9} />
                         )}
                         {!loading && docs.length === 0 && (
                             <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">

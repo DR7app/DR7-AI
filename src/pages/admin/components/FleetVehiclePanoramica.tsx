@@ -20,6 +20,7 @@
  *     and margine % use real numbers)
  */
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
@@ -564,7 +565,7 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
                                 <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">{recentBookings.length}</span>
                             </div>
                             {loading ? (
-                                <p className="text-xs text-theme-text-muted">Caricamento…</p>
+                                <ScheletroTesto righe={3} />
                             ) : recentBookings.length === 0 ? (
                                 <p className="text-xs text-theme-text-muted">Nessun noleggio recente.</p>
                             ) : (

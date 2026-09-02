@@ -11,6 +11,7 @@
  * ecc.) leggono via getMarketingConfig() o lettura diretta.
  */
 import { useEffect, useState } from 'react'
+import { ScheletroLista } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
@@ -119,7 +120,7 @@ export default function SocialLinksTab() {
     }
 
     if (loading) {
-        return <div className="text-theme-text-muted text-sm py-8 text-center">Caricamento...</div>
+        return <ScheletroLista righe={5} className="py-4" />
     }
 
     return (

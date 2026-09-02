@@ -21,6 +21,7 @@ import { errorePassword, regolePassword, PASSWORD_MIN } from '../../utils/passwo
 import lazyWithRetry from '../../utils/lazyWithRetry'
 import SedePicker from '../../components/SedePicker'
 import { risorsa } from '../../utils/basePath'
+import { ScheletroPagina } from '../../components/Scheletro'
 
 // Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
 // 25/08/2026 - questi erano import statici, quindi finivano nel chunk
@@ -92,13 +93,126 @@ const DocumentsVerificationTab = lazyWithRetry(() => import('./components/Docume
 const EMTNTab = lazyWithRetry(() => import('./components/EMTNTab'))
 const GpsKeylessTab = lazyWithRetry(() => import('./components/GpsKeylessTab'))
 
-const TabLoader = () => (
-  <div className="flex items-center justify-center py-12">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div>
-  </div>
-)
+// Segnaposto mentre il chunk della tab arriva: la forma della pagina, non
+// una rotella. Con il precarico al passaggio del mouse quasi non si vede.
+const TabLoader = () => <ScheletroPagina card={4} righe={8} />
 
 type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control'
+
+/**
+ * Chunk di ogni tab, per poterlo scaricare PRIMA del clic.
+ *
+ * 02/09/2026 — passando il mouse su una voce di menu il gestionale scarica
+ * gia' il codice della tab: al clic la pagina si disegna subito, senza
+ * segnaposto di attesa. Se una tab manca da questa mappa non succede niente
+ * di male: si comporta come prima.
+ */
+const CHUNK_TAB: Partial<Record<TabType, { preload: () => void }>> = {
+  'reservations': RentalTabs,
+  'calendar': CalendarTab,
+  'carwash': CarWashBookingsTab,
+  'carwash-calendar': CarWashCalendarTab,
+  'report-preventivi': ReportPreventiviTab,
+  'unpaid': UnpaidBookingsTab,
+  'customers': CustomersTab,
+  'customer-wallet': CustomerWalletTab,
+  'site-users': SiteUsersTab,
+  'vehicles': VehiclesTab,
+  'terra-catalog': TerraCatalogTab,
+  'terra-tours': NoleggioServiceTab,
+  'carwash-catalog': CarWashCatalogTab,
+  'mare-bookings': NoleggioServiceTab,
+  'mare-calendar': NoleggioServiceTab,
+  'mare-catalog': NoleggioServiceTab,
+  'mare-tours': NoleggioServiceTab,
+  'mare-preventivi': PreventiviTab,
+  'mare-uscite': ReservationsTab,
+  'aria-uscite': ReservationsTab,
+  'stay-uscite': ReservationsTab,
+  'lavaggio-uscite': ReservationsTab,
+  'lavaggio-preventivi': NoleggioServiceTab,
+  'mare-contratti': ContrattoTab,
+  'aria-contratti': ContrattoTab,
+  'stay-contratti': ContrattoTab,
+  'aria-bookings': NoleggioServiceTab,
+  'aria-calendar': NoleggioServiceTab,
+  'aria-catalog': NoleggioServiceTab,
+  'aria-tours': NoleggioServiceTab,
+  'aria-preventivi': PreventiviTab,
+  'aria-movimenti': MovimentiAereiTab,
+  'stay-bookings': NoleggioServiceTab,
+  'stay-calendar': NoleggioServiceTab,
+  'stay-catalog': NoleggioServiceTab,
+  'stay-tours': NoleggioServiceTab,
+  'stay-preventivi': PreventiviTab,
+  'fattura': FatturaTab,
+  'contratto': ContrattoTab,
+  'cauzioni': CauzioniTab,
+  'birthdays': BirthdaysTab,
+  'reviews': ReviewManagementTab,
+  'marketing-pro': MessaggiSistemaProTab,
+  'campagna-marketing': CampagnaMarketingTab,
+  'social-links': SocialLinksTab,
+  'magazzino': FleetInventory,
+  'magazzino-generale': InventarioMagazzino,
+  'magazzino-terra': InventarioMagazzino,
+  'magazzino-mare': InventarioMagazzino,
+  'magazzino-aria': InventarioMagazzino,
+  'magazzino-stay': InventarioMagazzino,
+  'magazzino-lavaggio': InventarioMagazzino,
+  'nexi': NexiTab,
+  'scadenze': ScadenzeTab,
+  'reports': ReportsTab,
+  'report-noleggio': ReportsTab,
+  'report-mare': ReportsTab,
+  'report-aria': ReportsTab,
+  'report-stay': ReportsTab,
+  'referral': ReferralProgramTab,
+  'gestione-danni': GestioneDanniTab,
+  'gestione-multe': GestioneMulteTab,
+  'multe-terra': GestioneMulteTab,
+  'multe-lavaggio': GestioneMulteTab,
+  'mare-danni': GestioneDanniTab,
+  'mare-multe': GestioneMulteTab,
+  'mare-gps': GpsKeylessTab,
+  'aria-danni': GestioneDanniTab,
+  'aria-multe': GestioneMulteTab,
+  'aria-gps': GpsKeylessTab,
+  'stay-danni': GestioneDanniTab,
+  'stay-multe': GestioneMulteTab,
+  'stay-gps': GpsKeylessTab,
+  'cargos': CargosTab,
+  'trustera': TrusteraTab,
+  'emtn': EMTNTab,
+  'gps-keyless': GpsKeylessTab,
+  'codice-sconto': CodiciScontoTab,
+  'report-lavaggio': ReportLavaggioTab,
+  'report-clienti': ReportClientiTab,
+  'report-autisti': ReportAutistiTab,
+  'report-traffic': ReportTrafficTab,
+  'report-gmb': ReportGoogleBusinessTab,
+  'report-penali-danni': ReportPenaliDanniTab,
+  'operatori': OperatoriTab,
+  'rilevazione-orari': RilevazioneOrariTab,
+  'dashboard-kpi': DashboardTab,
+  'centralina-pro': CentralinaProTab,
+  'interruttori': InterruttoriTab,
+  'system-control': SystemControlTab,
+  'acconti': AccontiTab,
+  'sito': SitoTab,
+  'gestione-otp': GestioneOtpTab,
+  'verifica-documenti': DocumentsVerificationTab,
+  'fornitori': FornitoriTab,
+  'immondizia': ImmondiziaTab,
+  'ticket': TicketTab,
+}
+
+let ultimaPrecaricata: string | null = null
+const precaricaTab = (tab: TabType) => {
+  if (ultimaPrecaricata === tab) return
+  ultimaPrecaricata = tab
+  CHUNK_TAB[tab]?.preload()
+}
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -834,6 +948,8 @@ export default function AdminDashboard() {
                   return (
                     <button
                       key={section.name}
+                      onPointerEnter={() => precaricaTab(firstTab)}
+                      onFocus={() => precaricaTab(firstTab)}
                       onClick={() => {
                         if (!sectionActive) {
                           setActiveTab(firstTab)
@@ -1213,7 +1329,7 @@ export default function AdminDashboard() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                      {avatarSaving ? 'Caricamento foto...' : 'Cambia Foto'}
+                      {avatarSaving ? 'Invio foto…' : 'Cambia Foto'}
                     </button>
                     <button
                       onClick={() => { setUserMenuOpen(false); setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); setPasswordVisible(false); }}
@@ -1309,6 +1425,10 @@ export default function AdminDashboard() {
                   return (
                     <button
                       key={`${t.tab}-${t.subView || 'main'}-${idx}`}
+                      /* Il codice della tab parte gia' col passaggio del
+                         mouse: al clic non c'e' niente da aspettare. */
+                      onPointerEnter={() => precaricaTab(t.tab)}
+                      onFocus={() => precaricaTab(t.tab)}
                       onClick={() => {
                         setActiveTab(t.tab)
                         if (t.subView) setRentalSubView(t.subView)

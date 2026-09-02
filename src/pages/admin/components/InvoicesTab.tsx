@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import AddressAutocomplete from './AddressAutocomplete'
@@ -294,7 +295,7 @@ export default function InvoicesTab() {
   const { subtotal, vatAmount, exemptAmount, total } = calculateTotals()
 
   if (loading) {
-    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
+    return <ScheletroPagina righe={8} colonne={6} />
   }
 
   return (

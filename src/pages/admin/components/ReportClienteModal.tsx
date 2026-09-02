@@ -3,6 +3,7 @@
  * Shows KPIs, booking history, wallet, documents, risk score, economic chart
  */
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
@@ -584,9 +585,8 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   if (loading) {
     return (
       <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center">
-        <div className="bg-theme-bg-primary rounded-2xl p-8 text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-dr7-gold border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-theme-text-muted">Caricamento Report Cliente...</p>
+        <div className="bg-theme-bg-primary rounded-2xl p-6 w-[min(90vw,520px)]">
+          <ScheletroTesto righe={7} />
         </div>
       </div>
     )
@@ -624,7 +624,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
                 {/* Upload foto direttamente dalla scheda (roadmap 21) */}
                 <label
-                  title={uploadingFoto ? 'Caricamento…' : 'Carica/cambia foto cliente'}
+                  title={uploadingFoto ? 'Invio…' : 'Carica/cambia foto cliente'}
                   className="absolute -bottom-1.5 -left-1.5 w-7 h-7 rounded-full bg-cyan-600 hover:bg-cyan-700 border-2 border-theme-bg-primary flex items-center justify-center cursor-pointer"
                 >
                   {uploadingFoto ? (

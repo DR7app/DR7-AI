@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ScheletroPagina } from './components/Scheletro'
 import { Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { VehicleAlarmProvider } from './contexts/VehicleAlarmContext'
@@ -50,12 +51,12 @@ function App() {
             },
           }}
         />
+        {/* Nessuna scritta di attesa: si disegna la forma della pagina e
+            basta, cosi' il passaggio da una schermata all'altra non ha mai
+            un fotogramma con "Caricamento...". */}
         <Suspense fallback={
-          <div className="bg-theme-bg-primary text-theme-text-primary min-h-screen flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-600 mx-auto mb-3"></div>
-              <p className="text-sm opacity-60">Caricamento...</p>
-            </div>
+          <div className="bg-theme-bg-primary text-theme-text-primary min-h-screen p-6">
+            <ScheletroPagina card={4} righe={8} />
           </div>
         }>
           <Routes>

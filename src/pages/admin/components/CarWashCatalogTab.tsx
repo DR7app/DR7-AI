@@ -466,7 +466,7 @@ export default function CarWashCatalogTab() {
                 }} />
               <button type="button" onClick={() => newImageRef.current?.click()} disabled={uploadingImage}
                 className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
-                {uploadingImage ? 'Caricamento...' : 'Carica PNG'}
+                {uploadingImage ? 'Invio…' : 'Carica PNG'}
               </button>
               {newService.image_url && (
                 <div className="flex items-center gap-2">
@@ -708,7 +708,7 @@ function ServiceCard({
               }} />
             <button type="button" onClick={() => editImgRef.current?.click()} disabled={imgUploading}
               className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
-              {imgUploading ? 'Caricamento...' : 'Carica PNG'}
+              {imgUploading ? 'Invio…' : 'Carica PNG'}
             </button>
             {editImageUrl && (
               <div className="flex items-center gap-2">

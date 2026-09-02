@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroRiquadro } from '../../../components/Scheletro'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts'
 import { supabase } from '../../../supabaseClient'
 
@@ -113,7 +114,7 @@ export default function WalletAnalytics({ totalBalanceCents, activeCount, inacti
         </div>
 
         {loading ? (
-          <div className="h-[220px] flex items-center justify-center text-theme-text-muted text-sm">Caricamento…</div>
+          <ScheletroRiquadro className="h-[220px] w-full" />
         ) : series.length === 0 ? (
           <div className="h-[220px] flex items-center justify-center text-theme-text-muted text-sm">
             Nessuna transazione negli ultimi 180 giorni

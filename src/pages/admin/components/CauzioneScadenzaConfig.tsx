@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 
@@ -219,7 +220,7 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
   const anteprimaVenerdi = giorniValidi ? calcolaScadenza(venerdi, Number(giorni), modalita) : null
 
   if (loading) {
-    return <div className="text-sm text-theme-text-muted py-4">Caricamento configurazione scadenza...</div>
+    return <ScheletroTesto righe={4} className="py-4" />
   }
 
   return (

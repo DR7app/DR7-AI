@@ -2,6 +2,7 @@
 // (ricorrenti settimanali o date specifiche) + promemoria serale (cron
 // immondizia-reminder-cron). Coordinato col calendario dell'operatore.
 import { useState, useEffect } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -154,7 +155,7 @@ export default function ImmondiziaTab() {
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-theme-text-muted text-sm">Caricamento…</div>
+        <ScheletroTabella righe={6} colonne={4} />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>

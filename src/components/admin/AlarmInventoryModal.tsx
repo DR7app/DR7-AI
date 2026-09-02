@@ -19,6 +19,7 @@
  * sembra acceso ma non guarda niente e' peggio di un interruttore mancante.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTesto } from '../Scheletro'
 import { ALARM_SOUNDS, ascoltaAnteprima, type AlarmSoundKey } from '../../utils/alarmSounds'
 import {
     ALARM_GROUPS,
@@ -353,7 +354,7 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
             {/* Gruppi */}
             <div className="px-5 py-4 space-y-3">
                 {loading ? (
-                    <p className="text-sm text-theme-text-muted">Caricamento...</p>
+                    <ScheletroTesto righe={3} />
                 ) : alarms.length === 0 ? (
                     <p className="text-sm text-amber-600 dark:text-amber-400">
                         Nessuna riga in <code>system_alarms</code>. Esegui la migration{' '}

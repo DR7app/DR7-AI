@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
@@ -703,7 +704,7 @@ export default function CustomerWalletTab() {
       <div className="lg:flex lg:gap-4 lg:items-start">
       <div className="lg:flex-1 lg:min-w-0">
       {loadingAll ? (
-        <div className="text-center py-16 text-theme-text-muted">Caricamento wallet...</div>
+        <ScheletroTabella righe={8} colonne={6} />
       ) : sorted.length === 0 ? (
         <div className="text-center py-16 text-theme-text-muted">Nessun cliente con wallet trovato</div>
       ) : (
@@ -856,7 +857,7 @@ export default function CustomerWalletTab() {
                 {expandedCustomerId === customer.id && (
                   <div className="col-span-6 mt-2 bg-theme-bg-primary/50 rounded-lg border border-theme-border/50 p-3">
                     {loadingTransactions ? (
-                      <p className="text-xs text-theme-text-muted text-center py-2">Caricamento...</p>
+                      <ScheletroTesto righe={2} className="py-2" />
                     ) : expandedTransactions.length === 0 ? (
                       <p className="text-xs text-theme-text-muted text-center py-2">Nessuna transazione</p>
                     ) : (

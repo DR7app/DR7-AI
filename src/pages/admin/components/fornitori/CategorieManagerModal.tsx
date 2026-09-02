@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroLista } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../../supabaseClient'
 
@@ -126,7 +127,7 @@ export default function CategorieManagerModal({ onClose, onChanged }: Props) {
         </div>
 
         {loading ? (
-          <div className="text-center py-6 text-theme-text-muted text-sm">Caricamento...</div>
+          <ScheletroLista righe={4} />
         ) : list.length === 0 ? (
           <div className="text-center py-6 text-theme-text-muted text-sm">Nessuna categoria</div>
         ) : (

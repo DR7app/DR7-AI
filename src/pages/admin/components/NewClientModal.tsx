@@ -1108,7 +1108,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="text-sm font-semibold text-theme-text-primary mb-1">Foto cliente</div>
               <div className="flex items-center gap-2 flex-wrap">
                 <label className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold cursor-pointer">
-                  {uploadingFoto ? 'Caricamento…' : (formData.foto_url ? 'Cambia foto' : 'Carica foto')}
+                  {uploadingFoto ? 'Invio…' : (formData.foto_url ? 'Cambia foto' : 'Carica foto')}
                   <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.currentTarget.value = '' }} />
                 </label>

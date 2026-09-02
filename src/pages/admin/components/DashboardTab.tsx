@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { ScheletroPagina, ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { ReportCard, ReportTable, ReportRow, ReportTotalRow } from './ReportUI'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
@@ -440,12 +441,7 @@ export default function DashboardTab() {
   // When cache is present, render it immediately + show the "Aggiorno…" badge.
   if (loading && !data) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full border-4 border-theme-border animate-spin" style={{ borderTopColor: '#19C2D6' }} />
-        </div>
-        <p className="text-theme-text-muted text-sm">Caricamento dashboard...</p>
-      </div>
+      <ScheletroPagina card={4} righe={6} colonne={4} />
     )
   }
 
@@ -1546,7 +1542,7 @@ export default function DashboardTab() {
                   </button>
                 </div>
                 {alertDetailsLoading && (
-                  <p className="text-xs text-theme-text-muted">Caricamento alert…</p>
+                  <ScheletroTesto righe={2} />
                 )}
                 {!alertDetailsLoading && alertDetails && alertDetails.length === 0 && (
                   <p className="text-xs text-theme-text-muted">Nessun alert aperto al momento.</p>
@@ -1618,9 +1614,7 @@ export default function DashboardTab() {
         <SectionHeader title="Fatture SDI Ricevute" subtitle="Fatture passive ricevute via Aruba SDI (riconciliazione)" />
 
         {supplierLoading && (
-          <div className="bg-theme-bg-secondary/60 rounded-xl p-6 border border-theme-border text-center">
-            <p className="text-theme-text-muted text-sm">Caricamento fatture fornitori...</p>
-          </div>
+          <ScheletroTabella righe={5} colonne={5} />
         )}
 
         {!supplierLoading && supplierData && (

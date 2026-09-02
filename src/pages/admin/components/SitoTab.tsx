@@ -29,6 +29,7 @@
  *     `gestione_sito_write` (salvataggio)
  */import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
+import { ScheletroPagina, ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -859,7 +860,7 @@ export default function SitoTab() {
 
     // ─── Render ──────────────────────────────────────────────────────────────
     if (roleLoading) {
-        return <p className="text-sm text-theme-text-muted p-6">Caricamento…</p>
+        return <div className="p-6"><ScheletroPagina righe={6} colonne={4} /></div>
     }
 
     if (!tabUnlocked) {
@@ -938,7 +939,7 @@ export default function SitoTab() {
                     <main className="bg-theme-bg-primary rounded-2xl p-6 border border-theme-border shadow-sm min-h-[400px]">
                         <ScreenHeader screen={screen} />
                         {!hydrated && (
-                            <p className="text-sm text-theme-text-secondary">Caricamento dati…</p>
+                            <ScheletroTesto righe={6} />
                         )}
                         {hydrated && !section && (
                             <ScreenNotManaged screen={screen} />
@@ -5550,7 +5551,7 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                     <FieldText label='"Tax Code / Health Card" (EN)' value={copy.docs_label_codice_fiscale_en} onChange={v => update('docs_label_codice_fiscale_en', v)} />
                     <FieldText label="Chip caricato (IT)" value={copy.docs_chip_uploaded_it} onChange={v => update('docs_chip_uploaded_it', v)} />
                     <FieldText label="Uploaded chip (EN)" value={copy.docs_chip_uploaded_en} onChange={v => update('docs_chip_uploaded_en', v)} />
-                    <FieldText label="Chip caricamento... (IT)" value={copy.docs_chip_uploading_it} onChange={v => update('docs_chip_uploading_it', v)} />
+                    <FieldText label="Chip invio documento (IT)" value={copy.docs_chip_uploading_it} onChange={v => update('docs_chip_uploading_it', v)} />
                     <FieldText label="Uploading chip (EN)" value={copy.docs_chip_uploading_en} onChange={v => update('docs_chip_uploading_en', v)} />
                     <FieldText label="Link rimuovi (IT)" value={copy.docs_chip_remove_it} onChange={v => update('docs_chip_remove_it', v)} />
                     <FieldText label="Remove link (EN)" value={copy.docs_chip_remove_en} onChange={v => update('docs_chip_remove_en', v)} />

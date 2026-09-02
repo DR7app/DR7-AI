@@ -13,20 +13,42 @@
  * This eliminates the opaque "text/html is not a valid JavaScript MIME type"
  * error for end users.
  */
-import { lazy, type ComponentType } from 'react'
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 
 const REFRESH_KEY = 'chunk_load_refresh'
+
+/** Componente pigro che sa anche scaricarsi in anticipo. */
+export type LazyPrecaricabile<T extends ComponentType<any>> = LazyExoticComponent<T> & {
+  /** Scarica subito il chunk senza disegnare niente. Non lancia mai. */
+  preload: () => void
+}
 
 /**
  * Wraps a dynamic import with retry logic.
  * Usage: `const MyComponent = lazyWithRetry(() => import('./MyComponent'))`
+ *
+ * 02/09/2026 — `preload()`: il gestionale lo chiama quando il mouse passa
+ * sopra la voce di menu, cosi' al clic il chunk e' gia' in memoria e non
+ * compare nessun segnaposto di attesa.
  */
 export default function lazyWithRetry<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
   retries = 2,
   retryDelay = 1000
-) {
-  return lazy(() => retryImport(importFn, retries, retryDelay))
+): LazyPrecaricabile<T> {
+  let inCorso: Promise<{ default: T }> | null = null
+  const carica = () => {
+    if (!inCorso) {
+      inCorso = retryImport(importFn, retries, retryDelay)
+      // Un import fallito non deve restare inchiodato: al render successivo
+      // React deve poter riprovare da capo.
+      inCorso.catch(() => { inCorso = null })
+    }
+    return inCorso
+  }
+  const componente = lazy(carica) as LazyPrecaricabile<T>
+  componente.preload = () => { carica().catch(() => {}) }
+  return componente
 }
 
 async function retryImport<T extends ComponentType<any>>(

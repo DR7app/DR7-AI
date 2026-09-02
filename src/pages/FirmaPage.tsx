@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { ScheletroTesto } from '../components/Scheletro'
 import { useParams } from 'react-router-dom'
 import PdfViewer from '../components/PdfViewer'
 import { fetchWithTimeout } from '../utils/fetchUtils'
@@ -203,10 +204,7 @@ export default function FirmaPage() {
     if (status === 'loading') {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#19C2D6] mx-auto mb-4"></div>
-                    <p className="text-gray-600">Caricamento contratto...</p>
-                </div>
+                <div className="w-full max-w-2xl px-6"><ScheletroTesto righe={8} /></div>
             </div>
         )
     }

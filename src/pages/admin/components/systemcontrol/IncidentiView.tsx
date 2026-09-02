@@ -1,6 +1,7 @@
 // System Control — CATEGORIA 3: i rapporti tecnici da consegnare allo
 // sviluppatore, con tutto dentro e nessuna credenziale.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroTabella } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import { Scheda, Vuoto, Bottone } from './ui'
@@ -47,7 +48,7 @@ export default function IncidentiView() {
       </div>
 
       <Scheda>
-        {caricamento ? <Vuoto testo="Caricamento..." />
+        {caricamento ? <ScheletroTabella righe={5} colonne={4} />
           : righe.length === 0 ? <Vuoto testo="Nessun rapporto tecnico creato. Si crea dalla scheda di un problema." />
           : (
             <div className="divide-y divide-theme-border">

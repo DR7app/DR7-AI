@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
@@ -1100,9 +1101,7 @@ export default function ReviewManagementTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-xl text-theme-text-primary">Caricamento...</div>
-      </div>
+      <ScheletroPagina card={4} righe={8} colonne={6} />
     )
   }
 

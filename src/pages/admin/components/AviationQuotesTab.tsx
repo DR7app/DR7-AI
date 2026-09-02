@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
@@ -229,7 +230,7 @@ export default function AviationQuotesTab() {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
+    return <ScheletroPagina righe={6} colonne={5} />
   }
 
   return (

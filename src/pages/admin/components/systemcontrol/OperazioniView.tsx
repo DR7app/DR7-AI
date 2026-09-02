@@ -1,6 +1,7 @@
 // System Control — FAILED OPERATIONS: cosa non e' andato a buon fine e ripresa
 // protetta dai doppioni.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroTabella } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import type { Operazione } from '../../../../utils/systemControl'
@@ -70,7 +71,7 @@ export default function OperazioniView() {
       </div>
 
       <Scheda>
-        {caricamento ? <Vuoto testo="Caricamento..." />
+        {caricamento ? <ScheletroTabella righe={5} colonne={4} />
           : righe.length === 0 ? <Vuoto testo="Nessuna operazione in sospeso." />
           : (
             <div className="divide-y divide-theme-border">

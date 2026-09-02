@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { CONTRATTO_VOCI as VOCI, CONTRATTO_DEFAULT as VOCI_DEFAULT, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -4990,9 +4991,7 @@ function PrezzoDinamicoSection({
               <span className="text-right">Max €/g</span>
             </div>
             {vehiclesLoading && (
-              <p className="text-center text-[13px] text-theme-text-secondary py-4">
-                Caricamento flotta…
-              </p>
+              <ScheletroTabella righe={6} colonne={4} className="my-3" />
             )}
             {!vehiclesLoading && vehicles.length === 0 && (
               <p className="text-center text-[13px] text-theme-text-secondary py-4">

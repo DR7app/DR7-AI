@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroPagina } from './Scheletro'
 import { Navigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
@@ -70,9 +71,11 @@ export default function AdminRoute({ children }: AdminRouteProps) {
   }
 
   if (loading) {
+    // Controllo permessi: dura poche centinaia di millisecondi. Si disegna la
+    // forma del gestionale, mai la parola "Loading".
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-dr7-gold text-xl">Loading...</div>
+      <div className="min-h-screen p-6">
+        <ScheletroPagina card={4} righe={8} />
       </div>
     )
   }

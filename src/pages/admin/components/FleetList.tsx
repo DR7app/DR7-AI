@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import { getVehicleStatus } from '../../../utils/fleetUtils'
@@ -271,7 +272,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
         return found?.label || catId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     }
 
-    if (loading) return <div className="text-theme-text-muted py-12 text-center">Caricamento flotta...</div>
+    if (loading) return <ScheletroTabella righe={8} colonne={6} />
 
     return (
         <div className="space-y-4 lg:space-y-6">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina, ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
@@ -564,7 +565,7 @@ export default function FleetInventory() {
         return sum + (Number.isFinite(km) ? km : 0)
     }, 0)
 
-    if (loading) return <div className="text-theme-text-muted">Caricamento magazzino...</div>
+    if (loading) return <ScheletroPagina card={4} righe={8} colonne={5} />
 
     return (
         <div>
@@ -1861,7 +1862,7 @@ function MagazzinoOrdiniPanel() {
         g.totItems += Number(o.items_count || 0)
     }
 
-    if (loading) return <div className="py-8 text-center text-theme-text-muted text-sm">Caricamento ordini…</div>
+    if (loading) return <ScheletroTabella righe={6} colonne={5} />
     if (errorMsg) return (
         <div className="py-6 px-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-sm">
             Storico ordini non disponibile: {errorMsg}.<br />

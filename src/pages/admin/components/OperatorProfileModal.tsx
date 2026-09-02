@@ -12,6 +12,7 @@
  * already used in the team dashboard.
  */
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { ScheletroRiquadro, ScheletroTesto } from '../../../components/Scheletro'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -458,7 +459,7 @@ export default function OperatorProfileModal({
                             <span className="text-[10px] text-theme-text-muted">minuti per giorno</span>
                         </div>
                         {loading ? (
-                            <p className="text-xs text-theme-text-muted py-8 text-center">Caricamento…</p>
+                            <ScheletroRiquadro className="h-40 w-full" />
                         ) : trendData.every(d => d.minutes === 0) ? (
                             <p className="text-xs text-theme-text-muted py-8 text-center italic">Nessuna giornata lavorata nel periodo.</p>
                         ) : (
@@ -518,7 +519,7 @@ export default function OperatorProfileModal({
                         </button>
                     </div>
                     {loading ? (
-                        <p className="text-xs text-theme-text-muted py-8 text-center">Caricamento…</p>
+                        <ScheletroRiquadro className="h-40 w-full" />
                     ) : days.filter(d => d.entrata || d.uscita || d.pauseWindows.length > 0).length === 0 ? (
                         <p className="text-xs text-theme-text-muted italic py-8 text-center">
                             Nessuna attività registrata nel periodo. Usa "+ Aggiungi giornata" per inserire manualmente.
@@ -753,7 +754,7 @@ function AccountSection({ email }: { email: string }) {
     }, [account?.contatto_interno, paesi])
 
     if (loading) {
-        return <div className="rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3 text-xs text-theme-text-muted">Caricamento account…</div>
+        return <div className="rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3"><ScheletroTesto righe={3} /></div>
     }
 
     if (!account) {
@@ -991,7 +992,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                 )}
             </div>
 
-            {loading && <p className="text-xs text-theme-text-muted">Caricamento…</p>}
+            {loading && <ScheletroTesto righe={2} />}
             {loadError && <p className="text-xs text-red-400">Errore: {loadError}{loadError.includes('relation') ? ' — esegui la migrazione 20260511_operatore_contratto.sql' : ''}</p>}
 
             {!loading && !loadError && !editMode && !contratto && (
@@ -1378,7 +1379,7 @@ function ContrattoPdfArea({ contratto, onChange }: { contratto: Contratto; onCha
                 <label className="flex items-center gap-3 bg-theme-bg-primary border border-dashed border-theme-border rounded p-3 cursor-pointer hover:border-dr7-gold/50">
                     <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                     <div className="flex-1 text-xs">
-                        <div className="font-medium text-theme-text-primary">{uploading ? 'Caricamento…' : 'Carica PDF contratto'}</div>
+                        <div className="font-medium text-theme-text-primary">{uploading ? 'Invio…' : 'Carica PDF contratto'}</div>
                         <div className="text-[10px] text-theme-text-muted">Solo PDF · max 10 MB · visibile solo a direzione</div>
                     </div>
                     <input
@@ -1655,7 +1656,7 @@ function CalcolaPagaSection({
     }
 
     if (!isDirezione) return null
-    if (loading) return <p className="text-[11px] text-theme-text-muted py-2">Caricamento Calcola Paga…</p>
+    if (loading) return <ScheletroTesto righe={3} className="py-2" />
 
     // Niente contratto = niente paga_oraria esplicita E niente stipendio
     // (ne mensile ne settimanale). Con stipendio + ore target, riusciamo

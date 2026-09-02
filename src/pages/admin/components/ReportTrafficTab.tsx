@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -397,7 +398,7 @@ export default function ReportTrafficTab() {
           </div>
         </div>
         {accessiLoading ? (
-          <p className="text-sm text-theme-text-muted">Caricamento…</p>
+          <ScheletroTesto righe={3} />
         ) : accessiErrore ? (
           <p className="text-sm text-amber-500">{accessiErrore}</p>
         ) : accessiFiltrati.length === 0 ? (
@@ -460,7 +461,7 @@ export default function ReportTrafficTab() {
 
       {/* Loading */}
       {loading && (
-        <div className="text-xs text-theme-text-muted/70 italic">Caricamento dati Google Analytics…</div>
+        <ScheletroTesto righe={3} />
       )}
 
       {/* KPI strip — uses ONLY real numbers from GA */}
@@ -548,7 +549,7 @@ export default function ReportTrafficTab() {
               </ReportTable>
             </div>
           ) : (
-            <ReportEmpty message={loading ? 'Caricamento...' : 'Nessuna visita nel periodo selezionato'} />
+            loading ? <ScheletroTabella righe={5} colonne={4} /> : <ReportEmpty message="Nessuna visita nel periodo selezionato" />
           )}
         </ReportCard>
 
@@ -581,7 +582,7 @@ export default function ReportTrafficTab() {
               ))}
             </ReportTable>
           ) : (
-            <ReportEmpty message={loading ? 'Caricamento...' : 'Nessun canale rilevato'} />
+            loading ? <ScheletroTabella righe={5} colonne={3} /> : <ReportEmpty message="Nessun canale rilevato" />
           )}
         </ReportCard>
 
@@ -616,7 +617,7 @@ export default function ReportTrafficTab() {
               ))}
             </ReportTable>
           ) : (
-            <ReportEmpty message={loading ? 'Caricamento...' : 'Dati insufficienti'} />
+            loading ? <ScheletroTabella righe={5} colonne={3} /> : <ReportEmpty message="Dati insufficienti" />
           )}
         </ReportCard>
       </div>
@@ -642,7 +643,7 @@ export default function ReportTrafficTab() {
             ))}
           </ReportTable>
         ) : (
-          <ReportEmpty message={loading ? 'Caricamento...' : 'Nessuna pagina visitata nel periodo'} />
+          loading ? <ScheletroTabella righe={5} colonne={3} /> : <ReportEmpty message="Nessuna pagina visitata nel periodo" />
         )}
       </ReportCard>
 

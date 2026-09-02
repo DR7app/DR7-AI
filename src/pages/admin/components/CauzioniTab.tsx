@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroPagina, ScheletroTesto } from '../../../components/Scheletro'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -51,7 +53,7 @@ export default function CauzioniTab() {
     // diretta — nessun blocco duro, mai.
     const override = useLimitationOverride()
     const pendingSbloccoRef = useRef<Cauzione | null>(null)
-    const [cauzioni, setCauzioni] = useState<Cauzione[]>([])
+    const [cauzioni, setCauzioni] = useStatoTab<Cauzione[]>('cauzioni:righe', [])
     // 2026-08-31: il menu azioni della riga era un <details> 'absolute' dentro
     // la card, che ha overflow-hidden: le ultime voci (BLOCCA, SBLOCCA
     // PRE-AUTH, ELIMINA) restavano TAGLIATE dal bordo. Stessa cura di Fatture
@@ -62,7 +64,7 @@ export default function CauzioniTab() {
     const actionsMenuRef = useRef<HTMLDivElement | null>(null)
     const actionsBaseRef = useRef<{ w: number; h: number } | null>(null)
     const [actionsCoords, setActionsCoords] = useState<Coords | null>(null)
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(() => !statoPronto('cauzioni:righe'))
     const [showModal, setShowModal] = useState(false)
     const [selectedCauzione, setSelectedCauzione] = useState<Cauzione | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
@@ -1397,9 +1399,7 @@ export default function CauzioniTab() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-xl text-theme-text-primary">Caricamento...</div>
-            </div>
+            <ScheletroPagina card={4} righe={8} colonne={6} />
         )
     }
 
@@ -2036,7 +2036,7 @@ function NumeriAmministrazione() {
                         </div>
 
                         {loading ? (
-                            <p className="text-sm text-theme-text-muted">Caricamento…</p>
+                            <ScheletroTesto righe={3} />
                         ) : (
                             <div className="space-y-2">
                                 {numbers.map((n, i) => (

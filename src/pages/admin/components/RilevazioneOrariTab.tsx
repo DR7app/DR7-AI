@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -601,7 +602,7 @@ export default function RilevazioneOrariTab() {
                 )}
             </div>
 
-            {loading && <p className="text-theme-text-muted text-sm">Caricamento…</p>}
+            {loading && <ScheletroTabella righe={6} colonne={6} />}
 
             {!loading && view === 'giornaliera' && (() => {
                 const presentiCount = dailyRows.filter(r => r.stato !== 'fuori').length
@@ -1669,7 +1670,7 @@ export function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
                 <p className="text-xs text-theme-text-muted mb-4">{new Date(data).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long' })}</p>
 
                 {loading ? (
-                    <p className="text-theme-text-muted">Caricamento…</p>
+                    <ScheletroTesto righe={4} />
                 ) : (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">

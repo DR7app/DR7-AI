@@ -8,6 +8,7 @@
 // 20260721_inventario_magazzino.sql + _seed.sql.
 // =============================================================================
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../../utils/businessScope'
 import { authFetch } from '../../../utils/authFetch'
@@ -842,7 +843,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
       </div>
 
       {loading ? (
-        <div className="py-16 text-center text-theme-text-muted">Caricamento…</div>
+        <ScheletroTabella righe={8} colonne={5} />
       ) : (
         <div className="space-y-2.5">
           {categorieInScope.map(cat => {

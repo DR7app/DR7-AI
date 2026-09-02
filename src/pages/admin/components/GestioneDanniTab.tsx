@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
@@ -910,7 +911,7 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           disabled={loading}
           className="px-4 py-2 bg-theme-bg-secondary border border-theme-border rounded-full text-theme-text-primary text-sm hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
         >
-          {loading ? 'Caricamento...' : 'Aggiorna'}
+          Aggiorna
         </button>
       </div>
 
@@ -921,9 +922,7 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
 
       {/* Loading */}
       {loading && (
-        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-8 text-center">
-          <p className="text-theme-text-muted">Caricamento...</p>
-        </div>
+        <ScheletroTabella righe={6} colonne={6} />
       )}
 
       {!loading && !error && (

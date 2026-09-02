@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { ScheletroRigheTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
@@ -494,7 +495,7 @@ export default function ReportAutistiTab() {
                     <tr><td colSpan={6} className="px-4 py-6 text-center text-theme-text-muted">Nessun movimento nel periodo selezionato.</td></tr>
                   )}
                   {loading && (
-                    <tr><td colSpan={6} className="px-4 py-6 text-center text-theme-text-muted">Caricamento…</td></tr>
+                    <ScheletroRigheTabella righe={5} colonne={6} />
                   )}
                 </tbody>
               </table>

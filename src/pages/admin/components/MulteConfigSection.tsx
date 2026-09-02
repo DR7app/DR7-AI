@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 
@@ -113,7 +114,7 @@ export default function MulteConfigSection({ readOnly = false, rowId = 'main' }:
     }
   }
 
-  if (loading) return <div className="text-sm text-theme-text-muted py-4">Caricamento dati multe...</div>
+  if (loading) return <ScheletroTesto righe={4} className="py-4" />
 
   return (
     <div className="space-y-4">

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
@@ -1259,7 +1260,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 </div>
             </div>
 
-            {loading && <div className="text-center text-theme-text-muted text-xs py-2">Caricamento dati...</div>}
+            {loading && <ScheletroTesto righe={2} className="py-2" />}
 
             {/* Modale profilo operatore — stesso component usato dal
                 Dashboard classico. Si apre cliccando su un operatore

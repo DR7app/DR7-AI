@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroPagina, ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
@@ -640,12 +642,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // `main` per chi non ha configurato nulla.
   const paymentMethods = usePaymentMethods(serviceType)
   const [reservations, setReservations] = useState<Reservation[]>([])
-  const [bookings, setBookings] = useState<Booking[]>([])
+  const chiaveStato = `prenotazioni:${serviceType}:${viewMode}`
+  const [bookings, setBookings] = useStatoTab<Booking[]>(`${chiaveStato}:righe`, [])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [carWashBookings, setCarWashBookings] = useState<Booking[]>([]) // Car wash & mechanical bookings for availability checking
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !statoPronto(`prenotazioni:${serviceType}:${viewMode}:righe`))
   const [showForm, setShowForm] = useState(false)
   const [showUscita, setShowUscita] = useState(false)
   // group_id dell'uscita in modifica (null = nuova uscita).
@@ -8627,7 +8630,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-theme-text-muted">Loading...</div>
+    return <ScheletroPagina card={4} righe={8} colonne={7} />
   }
 
   return (
@@ -9554,7 +9557,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     <p className="text-[11px] text-theme-text-muted">Assegna UNO O PIU' autisti per ogni tratto fuori sede (le due liste sono indipendenti). Con almeno un autista la prenotazione si conferma SENZA contratto e OGNI autista assegnato riceve il suo incarico.</p>
                   </div>
 
-                  {autistiLoading && <p className="text-xs text-theme-text-muted">Caricamento autisti...</p>}
+                  {autistiLoading && <ScheletroTesto righe={2} />}
                   {!autistiLoading && autisti.length === 0 && (
                     <p className="text-[11px] text-amber-400">Nessun autista. Taggane uno in Clienti con "+ Autista".</p>
                   )}

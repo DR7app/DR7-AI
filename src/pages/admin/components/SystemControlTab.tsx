@@ -8,6 +8,7 @@
 // non un errore.
 // ═══════════════════════════════════════════════════════════════════════════
 import { useState } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import PanoramicaView from './systemcontrol/PanoramicaView'
 import ProblemiView from './systemcontrol/ProblemiView'
@@ -38,7 +39,7 @@ export default function SystemControlTab() {
   const [vista, setVista] = useState<Vista>('panoramica')
   const [problemaDaAprire, setProblemaDaAprire] = useState<string | null>(null)
 
-  if (loading) return <p className="text-sm text-theme-text-muted">Caricamento...</p>
+  if (loading) return <ScheletroPagina righe={6} colonne={4} />
 
   if (!hasRole('direzione') && !hasRole('developer')) {
     return (

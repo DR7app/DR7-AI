@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
@@ -542,7 +543,7 @@ export default function FornitoriTab() {
 
             <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-hidden">
                 {loading && (
-                    <div className="px-4 py-6 text-center text-theme-text-muted text-sm">Caricamento…</div>
+                    <div className="px-4 py-4"><ScheletroTabella righe={6} colonne={5} /></div>
                 )}
                 {!loading && filtered.length === 0 && (
                     <div className="px-4 py-6 text-center text-theme-text-muted text-sm">

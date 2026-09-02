@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import Button from './Button'
@@ -311,7 +312,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
         return alerts
     }
 
-    if (loading) return <div className="text-theme-text-muted">Caricamento scheda...</div>
+    if (loading) return <ScheletroPagina card={4} righe={6} colonne={4} />
     if (!vehicle) return <div className="text-red-400">Veicolo non trovato</div>
 
     const alerts = calculateAlerts()

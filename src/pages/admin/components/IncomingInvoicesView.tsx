@@ -8,6 +8,7 @@
  * the presentation is new.
  */
 import { useEffect, useState, useMemo, useCallback, type ReactElement } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import {
@@ -535,7 +536,7 @@ export default function IncomingInvoicesView() {
             disabled={loading}
             className="px-4 py-2 rounded-full bg-dr7-gold text-black font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {loading ? 'Caricamento...' : 'Aggiorna'}
+            Aggiorna
           </button>
           <button
             onClick={importToAnagrafica}
@@ -560,9 +561,7 @@ export default function IncomingInvoicesView() {
           {/* Main column */}
           <div className="xl:col-span-9 space-y-4 min-w-0">
             {loading ? (
-              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-12 text-center text-theme-text-muted text-sm">
-                Caricamento da Aruba...
-              </div>
+              <ScheletroTabella righe={8} colonne={6} />
             ) : filtered.length === 0 ? (
               <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-12 text-center text-theme-text-muted text-sm">
                 Nessuna fattura ricevuta nel periodo {mode === 'tracked' ? 'per i fornitori in anagrafica' : ''}.

@@ -67,6 +67,34 @@ export async function loadCached<T>(
   }
 }
 
+/**
+ * Lettura SINCRONA della cache: serve a non far mai comparire "Caricamento...".
+ *
+ * `loadCached` e' asincrono, quindi anche quando la risposta e' gia' in cache
+ * il componente parte con `loading = true` e disegna un segnaposto per un
+ * fotogramma. Con `peekCached` la tab puo' inizializzare lo stato con i dati
+ * che ha gia' e partire con `loading = false`: chi torna su una tab la ritrova
+ * piena com'era, e l'aggiornamento vero arriva subito dopo in sottofondo.
+ *
+ * Restituisce `undefined` se non c'e' niente o se e' piu' vecchio di maxAgeMs.
+ */
+export function peekCached<T>(key: string, maxAgeMs: number = DEFAULT_MAX_AGE_MS): T | undefined {
+  const existing = store.get(key)
+  if (!existing || existing.value === undefined) return undefined
+  if (Date.now() - existing.at >= maxAgeMs) return undefined
+  return existing.value as T
+}
+
+/** Vero se `peekCached` restituirebbe qualcosa: comodo per decidere lo stato iniziale. */
+export function hasCached(key: string, maxAgeMs: number = DEFAULT_MAX_AGE_MS): boolean {
+  return peekCached(key, maxAgeMs) !== undefined
+}
+
+/** Mette in cache un valore arrivato per altra strada (es. dati passati da un'altra tab). */
+export function primeCache<T>(key: string, value: T): void {
+  store.set(key, { at: Date.now(), value })
+}
+
 /** Svuota la cache: tutto, oppure le sole chiavi che iniziano per `prefix`. */
 export function invalidateCache(prefix?: string): void {
   if (!prefix) { store.clear(); return }

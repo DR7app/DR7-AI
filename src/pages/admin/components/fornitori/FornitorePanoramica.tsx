@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { ScheletroBarra } from '../../../../components/Scheletro'
 import { supabase } from '../../../../supabaseClient'
 import {
     DOCUMENT_STATO_LABELS,
@@ -147,7 +148,7 @@ export default function FornitorePanoramica({ fornitore }: Props) {
                         className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
                         {annoOptions.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
-                    {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
+                    {loading && <ScheletroBarra className="h-3 w-20" />}
                 </div>
                 <div className="flex items-center gap-2">
                     <button

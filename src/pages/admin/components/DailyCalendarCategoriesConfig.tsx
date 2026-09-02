@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import {
@@ -196,7 +197,7 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
     }
   }
 
-  if (loading) return <div className="text-sm text-theme-text-muted py-4">Caricamento corsie...</div>
+  if (loading) return <ScheletroTesto righe={4} className="py-4" />
 
   const attive = rows.filter(r => r.enabled).length
 

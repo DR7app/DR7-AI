@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { ScheletroLista, ScheletroTabella } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -1191,7 +1192,7 @@ export default function CampagnaMarketingTab() {
                     />
 
                     {loadingCustomers ? (
-                        <div className="text-center py-6 text-dr7-gold text-sm">Caricamento clienti...</div>
+                        <ScheletroLista righe={5} className="my-4" />
                     ) : (
                         <>
                             <div className="max-h-96 overflow-y-auto border border-theme-border rounded">
@@ -1261,7 +1262,7 @@ export default function CampagnaMarketingTab() {
                     <Button variant="secondary" onClick={loadCampaigns}>Aggiorna</Button>
                 </div>
                 {loadingCampaigns ? (
-                    <div className="text-center py-6 text-dr7-gold text-sm">Caricamento...</div>
+                    <ScheletroTabella righe={6} colonne={5} className="my-4" />
                 ) : (
                     <table className="w-full text-sm">
                         <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase text-xs">

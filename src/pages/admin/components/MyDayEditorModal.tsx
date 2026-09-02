@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -379,7 +380,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                     {new Date(dataRef).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
 
-                {loading && <p className="text-theme-text-muted">Caricamento…</p>}
+                {loading && <ScheletroTesto righe={3} />}
 
                 {!loading && unregistered && (
                     <div className="space-y-3">

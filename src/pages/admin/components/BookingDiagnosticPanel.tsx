@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 
 interface ConsistencyIssue {
@@ -146,10 +147,7 @@ export default function BookingDiagnosticPanel() {
 
     if (loading) {
         return (
-            <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dr7-gold mx-auto mb-4"></div>
-                <p className="text-theme-text-primary">Caricamento report di consistenza...</p>
-            </div>
+            <ScheletroTabella righe={6} colonne={5} />
         )
     }
 

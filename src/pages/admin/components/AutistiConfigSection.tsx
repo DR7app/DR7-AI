@@ -2,6 +2,7 @@
 // non piu' dalla sezione Lead (dove sono ora filtrati). Backend: /autisti
 // (list/create/set_role) — customers_extended tagged metadata.role='autista'.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroLista } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -94,7 +95,7 @@ export default function AutistiConfigSection() {
       <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-5">
         <div className="text-[15px] font-semibold text-theme-text-primary mb-3">Autisti ({autisti.length})</div>
         {loading ? (
-          <p className="text-theme-text-muted text-sm py-4 text-center">Caricamento…</p>
+          <ScheletroLista righe={3} />
         ) : autisti.length === 0 ? (
           <p className="text-theme-text-muted text-sm py-4 text-center">Nessun autista. Aggiungine uno qui sopra.</p>
         ) : (

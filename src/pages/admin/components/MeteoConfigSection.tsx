@@ -13,6 +13,7 @@
 // anche il bottone Allerta Meteo in Prenotazioni). Le stesse regole le applica
 // il cron orario: `netlify/functions/weather-alert-cron.ts`.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -292,7 +293,7 @@ export default function MeteoConfigSection({
 
   const templateScelto = templates.find(t => t.message_key === cfg.template_key)
 
-  if (loading) return <div className="text-sm text-theme-text-muted py-4">Caricamento allerta meteo...</div>
+  if (loading) return <ScheletroTesto righe={4} className="py-4" />
 
   const card = 'rounded-2xl border border-theme-border bg-theme-bg-secondary p-4'
   const etichetta = 'block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1'

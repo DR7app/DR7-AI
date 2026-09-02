@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, etichetteServizi } from '../../../utils/messaggioCodiceSconto'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -588,7 +589,7 @@ export default function CodiciScontoTab() {
 
             {/* Codes Table */}
             {discountCodesLoading ? (
-                <div className="text-center py-10 text-dr7-gold">Caricamento codici...</div>
+                <ScheletroTabella righe={6} colonne={5} />
             ) : (
                 <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden border border-theme-border">
                     <div className="overflow-x-auto">
@@ -981,7 +982,7 @@ export default function CodiciScontoTab() {
                                     Storico utilizzi ({detailUsages.length})
                                 </h4>
                                 {detailLoading ? (
-                                    <p className="text-sm text-theme-text-muted">Caricamento...</p>
+                                    <ScheletroTesto righe={3} />
                                 ) : detailUsages.length === 0 ? (
                                     <p className="text-sm text-theme-text-muted">Il codice non è ancora stato utilizzato.</p>
                                 ) : (

@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { createPortal } from 'react-dom'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
@@ -138,10 +140,10 @@ function priorityFromDays(days: number | null): { label: string; classes: string
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function UnpaidBookingsTab() {
-  const [bookings, setBookings] = useState<UnpaidBooking[]>([])
+  const [bookings, setBookings] = useStatoTab<UnpaidBooking[]>('da-saldare:righe', [])
   const [fatturaItemsMap, setFatturaItemsMap] = useState<Record<string, FatturaItem[]>>({})
   const [mitChargedMap, setMitChargedMap] = useState<Record<string, number>>({})
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !statoPronto('da-saldare:righe'))
   const [filterService, setFilterService] = useState<'all' | 'rental' | 'prime_wash'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A — su pickup_date dei booking
@@ -3492,10 +3494,7 @@ export default function UnpaidBookingsTab() {
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento prenotazioni da saldare...</p>
-      </div>
+      <ScheletroPagina card={4} righe={8} colonne={6} />
     )
   }
 

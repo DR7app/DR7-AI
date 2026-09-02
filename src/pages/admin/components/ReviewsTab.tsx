@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroRigheTabella } from '../../../components/Scheletro'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -498,11 +499,7 @@ export default function ReviewsTab() {
                         </thead>
                         <tbody className="divide-y divide-theme-border">
                             {loading ? (
-                                <tr>
-                                    <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-theme-text-muted">
-                                        Caricamento completati...
-                                    </td>
-                                </tr>
+                                <ScheletroRigheTabella righe={5} colonne={multiSelectMode ? 7 : 6} />
                             ) : filteredBookings.length === 0 ? (
                                 <tr>
                                     <td colSpan={multiSelectMode ? 7 : 6} className="p-8 text-center text-theme-text-muted">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { validateIban, formatIbanGroups, maskIban } from '../../../utils/ibanValidation'
@@ -222,10 +223,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     {loadingData ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-dr7-gold mx-auto mb-4"></div>
-                            <p className="text-theme-text-secondary">Caricamento dati...</p>
-                        </div>
+                        <ScheletroTesto righe={6} />
                     ) : (
                         <>
                             {/* Cliente */}

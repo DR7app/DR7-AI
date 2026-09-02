@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { listCardsFromMetadata, type NexiCardView } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
@@ -179,7 +180,7 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
 
                 <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
                     {loading && (
-                        <div className="text-theme-text-muted text-sm">Caricamento...</div>
+                        <ScheletroTesto righe={5} />
                     )}
 
                     {error && (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
 import toast from 'react-hot-toast'
@@ -669,7 +670,7 @@ export default function ReportPenaliDanniTab() {
           }
         >
           {loading ? (
-            <div className="py-12 text-center text-sm text-theme-text-muted">Caricamento…</div>
+            <ScheletroTabella righe={6} colonne={5} className="my-4" />
           ) : detailEntries.length === 0 ? (
             <div className="py-12 text-center text-sm text-theme-text-muted">Nessuna voce nel periodo selezionato.</div>
           ) : (

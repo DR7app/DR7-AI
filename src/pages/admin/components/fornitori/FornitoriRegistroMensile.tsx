@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroRigheTabella } from '../../../../components/Scheletro'
 import { supabase } from '../../../../supabaseClient'
 import {
     DOCUMENT_STATO_LABELS,
@@ -228,7 +229,7 @@ export default function FornitoriRegistroMensile({ onOpenFornitore }: Props) {
                     </thead>
                     <tbody className="divide-y divide-theme-border">
                         {loading && (
-                            <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
+                            <ScheletroRigheTabella righe={5} colonne={8} />
                         )}
                         {!loading && filtered.length === 0 && (
                             <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">

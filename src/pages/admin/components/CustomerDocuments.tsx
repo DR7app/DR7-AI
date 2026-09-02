@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
@@ -456,7 +457,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             onClick={() => handleUpload(type)}
             disabled={!selectedFile || isUploading}
           >
-            {isUploading ? 'Caricamento...' : doc ? 'Sostituisci' : 'Carica'}
+            {isUploading ? 'Invio…' : doc ? 'Sostituisci' : 'Carica'}
           </Button>
         </div>
       </div>
@@ -466,9 +467,8 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   if (loading) {
     return (
       <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50">
-        <div className="bg-theme-bg-secondary border border-theme-border rounded-full p-8 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto mb-2"></div>
-          <p className="text-theme-text-primary">Caricamento documenti...</p>
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-6 w-80 max-w-[90vw]">
+          <ScheletroTesto righe={4} />
         </div>
       </div>
     )

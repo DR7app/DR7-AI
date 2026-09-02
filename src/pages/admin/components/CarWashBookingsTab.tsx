@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import Paginazione from './Paginazione'
 import { flushSync } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
@@ -152,7 +154,7 @@ interface CarWashBookingsTabProps {
 
 export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarWashBookingsTabProps = {}) {
   const paymentMethods = usePaymentMethods()
-  const [bookings, setBookings] = useState<CarWashBooking[]>([])
+  const [bookings, setBookings] = useStatoTab<CarWashBooking[]>('lavaggi:righe', [])
   // Scheda di dettaglio aperta dalla lista: teniamo solo l'id, la
   // prenotazione la rileggiamo da `bookings` cosi' dopo una modifica la
   // scheda mostra i dati aggiornati invece di una copia congelata.
@@ -170,7 +172,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     service_name: string | null
     duration_minutes: number | null
   }[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !statoPronto('lavaggi:righe'))
   const [submitting, setSubmitting] = useState(false)
   // Synchronous re-entry guard: React state updates are async, so a rapid
   // double-click lands in handleSubmit before submitting flips. The ref is
@@ -3418,7 +3420,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   ])
 
   if (loading) {
-    return <div className="text-center py-8 text-theme-text-muted">Loading...</div>
+    return <ScheletroPagina card={4} righe={8} colonne={6} />
   }
 
   return (

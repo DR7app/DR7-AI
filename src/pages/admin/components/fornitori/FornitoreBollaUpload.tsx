@@ -314,7 +314,7 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
                                         className="text-theme-text-muted hover:text-red-400 disabled:opacity-50">×</button>
                                 )}
                                 {it.status === 'uploading' && (
-                                    <span className="text-xs text-blue-300">Caricamento…</span>
+                                    <span className="text-xs text-blue-300">Invio…</span>
                                 )}
                                 {it.status === 'done' && (
                                     <span className="text-xs text-emerald-300">Caricato</span>
@@ -344,10 +344,10 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
                         {hasPending && (
                             <>
                                 <Button variant="secondary" onClick={() => handleUploadAll(false)} disabled={uploading}>
-                                    {uploading ? 'Caricamento…' : 'Carica'}
+                                    {uploading ? 'Invio…' : 'Carica'}
                                 </Button>
                                 <Button onClick={() => handleUploadAll(true)} disabled={uploading}>
-                                    {uploading ? 'Caricamento…' : 'Carica e confronta'}
+                                    {uploading ? 'Invio…' : 'Carica e confronta'}
                                 </Button>
                             </>
                         )}

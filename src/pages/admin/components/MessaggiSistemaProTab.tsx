@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { ScheletroLista, ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import SocialLinksTab from './SocialLinksTab'
@@ -3994,7 +3995,7 @@ export default function MessaggiSistemaProTab() {
     }
 
     if (loading) {
-        return <div className="text-center py-10 text-dr7-gold">Caricamento messaggi...</div>
+        return <ScheletroLista righe={8} />
     }
 
     // Canonical sort order: follow PRO_MESSAGE_CATEGORIES declaration, then any custom pro_custom_*
@@ -5946,7 +5947,7 @@ export default function MessaggiSistemaProTab() {
                                                                     }}
                                                                     className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
                                                                 >
-                                                                    <option value="">{recentBookingsLoading ? 'Caricamento prenotazioni…' : 'Seleziona una prenotazione reale…'}</option>
+                                                                    <option value="">Seleziona una prenotazione reale…</option>
                                                                     {recentBookings.map(b => {
                                                                         const date = b.pickup_date || b.appointment_date || b.created_at
                                                                         const when = date ? new Date(date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
@@ -5999,7 +6000,7 @@ export default function MessaggiSistemaProTab() {
                                                                     </button>
                                                                 </div>
                                                                 {templateSendLogs[template.id] == null || loadingLogsFor === template.id ? (
-                                                                    <div className="text-[11px] text-theme-text-muted italic">Caricamento…</div>
+                                                                    <ScheletroTesto righe={2} />
                                                                 ) : templateSendLogs[template.id].length === 0 ? (
                                                                     <div className="text-[11px] text-theme-text-muted italic">
                                                                         Nessun invio registrato. Possibili cause: il template non ha mai matchato una prenotazione, oppure il cron non è ancora partito da quando hai salvato.
@@ -6278,7 +6279,7 @@ export default function MessaggiSistemaProTab() {
                 </div>
 
                 {logsLoading ? (
-                    <div className="text-center py-6 text-dr7-gold">Caricamento storico...</div>
+                    <ScheletroTabella righe={5} colonne={4} className="my-4" />
                 ) : sentLogs.length === 0 ? (
                     <div className="text-center py-8 text-theme-text-muted border border-theme-border rounded-lg">
                         Nessun messaggio inviato ancora

@@ -4,6 +4,7 @@
 // aggiungere un nuovo veicolo (insert minimale su `vehicles`); la modifica di
 // dettaglio resta nella scheda Veicoli.
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroLista } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
@@ -224,7 +225,7 @@ export default function TerraCatalogTab() {
       </div>
 
       {loading ? (
-        <p className="text-theme-text-muted text-center py-12">Caricamento catalogo...</p>
+        <ScheletroLista righe={6} className="py-6" />
       ) : grouped.length === 0 ? (
         <p className="text-theme-text-muted text-center py-12">Nessun veicolo trovato.</p>
       ) : (
@@ -318,7 +319,7 @@ export default function TerraCatalogTab() {
                     {form.image_url ? <img src={form.image_url} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] text-theme-text-muted">nessuna</span>}
                   </div>
                   <label className="px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-sm cursor-pointer">
-                    {uploadingImg ? 'Caricamento…' : 'Carica foto'}
+                    {uploadingImg ? 'Invio…' : 'Carica foto'}
                     <input type="file" accept="image/*" className="hidden" disabled={uploadingImg} onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.currentTarget.value = '' }} />
                   </label>
                 </div>

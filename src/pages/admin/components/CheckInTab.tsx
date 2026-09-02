@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 
@@ -213,10 +214,7 @@ export default function CheckInTab() {
 
     if (loading) {
         return (
-            <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-                <p className="text-theme-text-primary">Caricamento check-in di oggi...</p>
-            </div>
+            <ScheletroPagina righe={6} colonne={5} />
         )
     }
 

@@ -1,6 +1,7 @@
 // System Control — STORICO: audit degli interventi, configurazioni cambiate
 // (con ripristino), avvisi, rilasci, backup e problemi chiusi.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroTabella } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import type { GruppoProblema } from '../../../../utils/systemControl'
@@ -56,7 +57,7 @@ export default function StoricoView() {
         <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
       </div>
 
-      {caricamento ? <p className="text-sm text-theme-text-muted">Caricamento...</p> : (
+      {caricamento ? <ScheletroTabella righe={5} colonne={4} /> : (
         <>
           {sezione === 'audit' && (
             <Scheda titolo="Ogni intervento del System Control">

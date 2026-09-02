@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { ScheletroRigheTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
@@ -467,7 +468,7 @@ export default function PayrollPeriodoView() {
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={10} className="text-center py-4 text-theme-text-muted">Caricamento…</td></tr>
+                            <ScheletroRigheTabella righe={5} colonne={10} />
                         )}
                         {!loading && sortedRows.length === 0 && (
                             <tr><td colSpan={10} className="text-center py-4 text-theme-text-muted">Nessun operatore</td></tr>

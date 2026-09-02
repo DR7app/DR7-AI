@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroBarra, ScheletroPagina } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -163,8 +165,8 @@ function fileModello(serviceType?: string): string {
  */
 export default function ContrattoTab({ serviceType }: { serviceType?: string } = {}) {
   const NOME_MODELLO = fileModello(serviceType)
-  const [contracts, setContracts] = useState<Contract[]>([])
-  const [loading, setLoading] = useState(true)
+  const [contracts, setContracts] = useStatoTab<Contract[]>(`contratti:${serviceType || 'rental'}`, [])
+  const [loading, setLoading] = useState(() => !statoPronto(`contratti:${serviceType || 'rental'}`))
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -639,10 +641,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   // scrivendo nella ricerca l'elenco resta a schermo.
   if (loading && contracts.length === 0) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento contratti...</p>
-      </div>
+      <ScheletroPagina righe={8} colonne={6} />
     )
   }
 
@@ -889,7 +888,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
             <div className="text-[11px] text-theme-text-muted mt-2 flex flex-wrap gap-x-4 gap-y-1">
               <span>Bucket: <span className="font-mono text-theme-text-secondary">templates/{NOME_MODELLO}</span></span>
               {tmplLoading ? (
-                <span>Caricamento info...</span>
+                <ScheletroBarra className="h-3 w-24" />
               ) : tmplInfo ? (
                 <>
                   <span>Dimensione: <span className="text-theme-text-secondary">{fmtSize(tmplInfo.size)}</span></span>
@@ -907,7 +906,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12"/>
               </svg>
-              {tmplUploading ? 'Caricamento...' : 'Carica nuova versione'}
+              {tmplUploading ? 'Invio…' : 'Carica nuova versione'}
               <input
                 type="file"
                 accept="application/pdf,.pdf"

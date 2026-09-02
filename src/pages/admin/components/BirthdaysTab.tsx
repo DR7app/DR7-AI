@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import { logger } from '../../../utils/logger'
@@ -533,10 +534,7 @@ export default function BirthdaysTab() {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dr7-gold mx-auto mb-4"></div>
-                    <p className="text-theme-text-muted">Caricamento compleanni...</p>
-                </div>
+                <ScheletroTabella righe={8} colonne={5} className="w-full" />
             </div>
         )
     }
@@ -908,7 +906,7 @@ export default function BirthdaysTab() {
                             {messageTemplate.slice(0, 240)}{messageTemplate.length > 240 ? '…' : ''}
                         </p>
                     ) : (
-                        <p className="text-xs text-theme-text-muted">Caricamento template…</p>
+                        <ScheletroTesto righe={2} />
                     )}
                     <p className="mt-3 text-[10px] text-theme-text-muted">
                         Modifica in <span className="text-dr7-gold">Messaggi di Sistema Pro → Messaggio Compleanno</span>.

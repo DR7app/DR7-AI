@@ -17,6 +17,7 @@
 // Password PEC -> service_secrets, scritta dalla funzione save-pec-password.
 //           Non torna mai indietro al browser: si puo' solo sostituire.
 import { useEffect, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -232,7 +233,7 @@ export default function GestioneMailPecSection({ readOnly = false, rowId = 'main
     } finally { setSavingPec(false) }
   }
 
-  if (loading) return <div className="py-4 text-sm text-theme-text-muted">Caricamento…</div>
+  if (loading) return <ScheletroTesto righe={4} className="py-4" />
 
   return (
     <div className="space-y-6">

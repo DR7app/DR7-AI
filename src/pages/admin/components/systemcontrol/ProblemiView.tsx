@@ -1,6 +1,7 @@
 // System Control — PROBLEMI: elenco raggruppato e scheda di dettaglio con la
 // diagnostica automatica, le azioni sicure e l assistente.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroTabella } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import type { GruppoProblema, Diagnosi, Operazione, Severita } from '../../../../utils/systemControl'
@@ -68,7 +69,7 @@ export default function ProblemiView({ idIniziale, onApertoCambiato }: {
       </div>
 
       <Scheda>
-        {caricamento ? <Vuoto testo="Caricamento..." />
+        {caricamento ? <ScheletroTabella righe={5} colonne={4} />
           : gruppi.length === 0 ? <Vuoto testo="Nessun problema con questi filtri." />
           : (
             <div className="divide-y divide-theme-border">

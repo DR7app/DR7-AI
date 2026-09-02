@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 
 type TabType = 'overview' | 'rentals' | 'customers' | 'fleet' | 'admins' | 'verify' | 'unpaid' | 'contratti' | 'payments' | 'tickets' | 'marketing' | 'mechanical_bookings' | 'mechanical_calendar' | 'car_wash_bookings' | 'car_wash_calendar' | 'reviews'
@@ -94,9 +95,7 @@ export default function OverviewTab({ onTabChange }: OverviewTabProps) {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-theme-text-primary text-lg">Caricamento...</div>
-            </div>
+            <ScheletroPagina card={4} righe={6} colonne={4} />
         )
     }
 

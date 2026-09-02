@@ -7,6 +7,7 @@
 // Legge/scrive direttamente centralina_pro_config (una riga per business),
 // facendo read-modify-write dell'INTERA config cosi' non sovrascrive il resto.
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { SECTIONS, BUSINESSES, type BusinessId } from './CentralinaProTab'
@@ -153,7 +154,7 @@ export default function InterruttoriTab() {
       </div>
 
       {loading ? (
-        <p className="text-theme-text-muted text-sm">Caricamento...</p>
+        <ScheletroTabella righe={6} colonne={3} />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {businessList.map(b => {

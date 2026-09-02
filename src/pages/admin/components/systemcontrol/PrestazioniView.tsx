@@ -1,5 +1,6 @@
 // System Control — PERFORMANCE: cosa e' lento e cosa sbaglia piu' spesso.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroTabella } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import { Scheda, Vuoto, Bottone } from './ui'
@@ -65,7 +66,7 @@ export default function PrestazioniView() {
         <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
       </div>
 
-      {caricamento ? <p className="text-sm text-theme-text-muted">Caricamento...</p> : (
+      {caricamento ? <ScheletroTabella righe={5} colonne={3} /> : (
         <>
           <Scheda titolo="Le funzioni piu lente"><Tabella righe={dati?.piuLente || []} colonna="lento" /></Scheda>
           <Scheda titolo="Dove si sbaglia di piu"><Tabella righe={dati?.piuErrori || []} colonna="errori" /></Scheda>

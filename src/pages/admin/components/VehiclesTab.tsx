@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
@@ -107,9 +109,9 @@ function pickVehicleImage(v: Vehicle): string | undefined {
 // entrambi i tab.
 
 export default function VehiclesTab() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [vehicles, setVehicles] = useStatoTab<Vehicle[]>('veicoli:righe', [])
   const [categories, setCategories] = useState<ProCategory[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !statoPronto('veicoli:righe'))
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   // Quando l'admin clicca "Apri Scheda" su una riga, mostriamo
@@ -697,7 +699,7 @@ export default function VehiclesTab() {
   const allSections = orphanSection ? [...sections, orphanSection] : sections
 
   if (loading) {
-    return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
+    return <ScheletroPagina card={4} righe={8} colonne={6} />
   }
 
   // Scheda Veicolo full-screen: l'utente ha cliccato "Apri Scheda" su una riga.
@@ -1104,7 +1106,7 @@ export default function VehiclesTab() {
                   disabled={uploadingImage}
                   className="text-xs"
                 >
-                  {uploadingImage ? 'Caricamento…' : (formData.image_url ? 'Sostituisci foto' : 'Carica foto')}
+                  {uploadingImage ? 'Invio…' : (formData.image_url ? 'Sostituisci foto' : 'Carica foto')}
                 </Button>
                 <p className="text-xs text-theme-text-muted mt-2">
                   JPG / PNG / WEBP. Max 10 MB. Consigliato 1200×800 px o superiore, formato orizzontale.

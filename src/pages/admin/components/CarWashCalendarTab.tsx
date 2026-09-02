@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { motion } from 'framer-motion'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
@@ -779,10 +780,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento calendario lavaggi...</p>
-      </div>
+      <ScheletroPagina filtri righe={8} colonne={6} />
     )
   }
 

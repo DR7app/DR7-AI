@@ -230,7 +230,7 @@ export default function AllarmiApertiPanel() {
                 <div>
                     <h2 className="text-base font-semibold text-theme-text-primary">Allarmi aperti</h2>
                     <p className="text-xs text-theme-text-muted">
-                        {loading ? 'Caricamento...' : `${eventi.length} da gestire · aggiornamento ogni 60 secondi`}
+                        {loading ? 'Aggiornamento ogni 60 secondi' : `${eventi.length} da gestire · aggiornamento ogni 60 secondi`}
                     </p>
                 </div>
                 <button

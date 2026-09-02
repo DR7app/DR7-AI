@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ScheletroLista } from '../../../components/Scheletro'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -569,7 +570,7 @@ export default function GpsKeylessTab({ business = 'rental' }: { business?: Busi
             </div>
           </div>
           <div className="flex-1 overflow-y-auto sf-scrollbar divide-y divide-zinc-200 dark:divide-zinc-800/40 min-h-0">
-            {loading && <div className="p-3 text-xs text-zinc-500">Caricamento...</div>}
+            {loading && <div className="p-3"><ScheletroLista righe={4} /></div>}
             {!loading && filteredVehicles.length === 0 && (
               <div className="p-3 text-xs text-zinc-500">Nessun veicolo trovato</div>
             )}

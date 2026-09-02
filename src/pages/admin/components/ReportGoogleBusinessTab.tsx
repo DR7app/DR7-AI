@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTesto } from '../../../components/Scheletro'
 
 // Tab dedicata al Profilo Google Business (mybusinessbusinessinformation +
 // businessprofileperformance). Estratta da ReportTrafficTab a maggio 2026
@@ -325,7 +326,7 @@ export default function ReportGoogleBusinessTab() {
         </div>
 
         {loading ? (
-          <div className="text-xs text-theme-text-muted py-3">Caricamento…</div>
+          <ScheletroTesto righe={3} className="py-3" />
         ) : gbp?.needsReauth ? (
           <div className="bg-amber-500/15 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-900 dark:text-amber-100">
             Per vedere i dati del profilo Google Business serve una nuova autorizzazione (scope <code>business.manage</code>).{' '}

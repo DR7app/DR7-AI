@@ -145,7 +145,7 @@ export default function ResetPassword() {
                   </div>
                 ) : (
                   <p className="text-theme-text-muted text-sm">
-                    Caricamento in corso... Se non vieni reindirizzato, il link potrebbe essere scaduto.
+                    Un attimo. Se non vieni reindirizzato, il link potrebbe essere scaduto.
                   </p>
                 )}
                 <button

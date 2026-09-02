@@ -13,6 +13,7 @@
  * preservare il flusso server.
  */
 import { useEffect, useState } from 'react'
+import { ScheletroLista } from '../../../components/Scheletro'
 import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
 import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
@@ -1364,7 +1365,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                     Lista dei clienti che hanno almeno un danno o una penale nei record DR7. Clicca un cliente per aprirlo nella rete EMTN.
                 </p>
                 {loading && (
-                    <p className="text-[11px] text-theme-text-muted italic py-2">Caricamento clienti…</p>
+                    <ScheletroLista righe={4} className="py-2" />
                 )}
                 {error && (
                     <div className="px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/5 text-[11px] text-red-400">{error}</div>

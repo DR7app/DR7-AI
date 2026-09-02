@@ -9,6 +9,7 @@
 //
 // Le CHIAVI restano fisse: le usano filtri campagne, report e logica interna.
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroLista } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import {
@@ -103,7 +104,7 @@ export default function ClientStatusConfigSection() {
   if (loading) {
     return (
       <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-5">
-        <p className="text-theme-text-muted py-6 text-center text-sm">Caricamento…</p>
+        <ScheletroLista righe={3} />
       </div>
     )
   }

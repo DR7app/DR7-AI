@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { bookingBelongsTo } from '../../../utils/businessScope'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
@@ -980,7 +981,7 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     )
   }
 
-  if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
+  if (loading) return <div className="p-6"><ScheletroPagina filtri righe={8} colonne={6} /></div>
 
   return (
     <div className="flex flex-col h-[calc(100vh-104px)] bg-transparent overflow-hidden">

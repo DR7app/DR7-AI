@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
@@ -256,10 +257,7 @@ export default function DailyCalendarTab() {
 
     if (loading) {
         return (
-            <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-                <p className="text-theme-text-primary">Caricamento calendario giornaliero...</p>
-            </div>
+            <ScheletroPagina filtri righe={8} colonne={6} />
         )
     }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 
@@ -77,9 +78,7 @@ export default function AdminManagementTab() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-theme-text-primary text-lg">Caricamento...</div>
-            </div>
+            <ScheletroPagina card={0} filtri={false} righe={6} colonne={4} />
         )
     }
 

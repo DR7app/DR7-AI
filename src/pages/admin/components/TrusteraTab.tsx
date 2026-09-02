@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -413,10 +414,7 @@ function DocumentiSubTab() {
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento...</p>
-      </div>
+      <ScheletroPagina righe={6} colonne={5} />
     )
   }
 
@@ -448,7 +446,7 @@ function DocumentiSubTab() {
               onChange={handleFileUpload}
               className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:bg-dr7-gold file:text-white file:font-bold file:cursor-pointer"
             />
-            {uploading && <p className="text-sm text-theme-text-muted mt-1">Caricamento in corso...</p>}
+            {uploading && <p className="text-sm text-theme-text-muted mt-1">Invio in corso…</p>}
             {uploadedFileName && !uploading && (
               <p className="text-sm text-green-400 mt-1">Caricato: {uploadedFileName}</p>
             )}
@@ -798,10 +796,7 @@ function MarketingConsentSubTab() {
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento...</p>
-      </div>
+      <ScheletroPagina righe={6} colonne={5} />
     )
   }
 

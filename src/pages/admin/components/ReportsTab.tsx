@@ -1565,7 +1565,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             disabled={loading}
             className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
           >
-            {loading ? 'Caricamento...' : 'Aggiorna'}
+            Aggiorna
           </button>
 
           {/* Spese del business: ricorrenti + una tantum, sul periodo mostrato */}

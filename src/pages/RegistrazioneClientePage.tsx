@@ -283,7 +283,7 @@ export default function RegistrazioneClientePage() {
                                         <span className="font-mono text-xs px-2 py-0.5 rounded bg-gray-100">{d.kind.replace('_', ' ')}</span>
                                         <span className="flex-1 truncate">{d.file.name}</span>
                                         {d.uploaded ? <span className="text-emerald-600">caricato</span>
-                                            : d.uploading ? <span className="text-blue-600">caricamento…</span>
+                                            : d.uploading ? <span className="text-blue-600">invio…</span>
                                                 : d.error ? <span className="text-red-600 text-xs">{d.error}</span>
                                                     : <button type="button" onClick={() => removeDoc(i)} className="text-red-600 text-xs">rimuovi</button>}
                                     </li>

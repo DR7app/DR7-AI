@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTabella } from '../../../../components/Scheletro'
 import { supabase } from '../../../../supabaseClient'
 import type { Fornitore, FornitoreDocument } from './types'
 
@@ -197,7 +198,7 @@ export default function FornitoreCrossCheck({ fornitore }: Props) {
       </div>
 
       {loading ? (
-        <div className="text-center py-10 text-theme-text-muted">Caricamento...</div>
+        <ScheletroTabella righe={6} colonne={5} />
       ) : rows.length === 0 ? (
         <div className="bg-theme-bg-secondary border border-theme-border rounded p-10 text-center text-theme-text-muted">
           Nessuna fattura ne' bolla in {monthLabel(year, month)}.

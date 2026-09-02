@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 
@@ -130,7 +131,7 @@ export default function ReferralProgramTab() {
           </div>
 
           {siteLoading ? (
-            <div className="text-center py-10 text-theme-text-muted">Caricamento...</div>
+            <ScheletroTabella righe={5} colonne={5} className="my-4" />
           ) : siteReferrals.length === 0 ? (
             <div className="text-center py-10 text-theme-text-muted">Nessun referral dal sito</div>
           ) : (
@@ -200,7 +201,7 @@ export default function ReferralProgramTab() {
           />
 
           {referrersLoading ? (
-            <div className="text-center py-10 text-theme-text-muted">Caricamento...</div>
+            <ScheletroTabella righe={5} colonne={5} className="my-4" />
           ) : filteredReferrers.length === 0 ? (
             <div className="text-center py-10 text-theme-text-muted">Nessun partecipante trovato</div>
           ) : (

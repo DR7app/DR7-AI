@@ -2,6 +2,7 @@
 // Spegnere una funzione per una sola azienda, per tutte, oppure metterla in
 // manutenzione con un messaggio per gli utenti. Sempre reversibile.
 import { useCallback, useEffect, useState } from 'react'
+import { ScheletroLista } from '../../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { systemControl } from '../../../../utils/systemControl'
 import { BUSINESSES } from '../CentralinaProTab'
@@ -64,7 +65,7 @@ export default function InterruttoriView() {
       </p>
 
       <Scheda titolo="Funzioni">
-        {caricamento ? <p className="px-4 py-6 text-sm text-theme-text-muted">Caricamento...</p> : (
+        {caricamento ? <ScheletroLista righe={5} className="px-4 py-4" /> : (
           <div className="divide-y divide-theme-border">
             {funzioni.map(f => {
               const flag = flagDi(f.chiave)

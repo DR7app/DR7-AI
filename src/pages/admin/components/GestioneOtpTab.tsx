@@ -11,6 +11,7 @@
  * as the original list view — only the visual layout changed.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ScheletroPagina, ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { reloadOtpConfig } from '../../../utils/otpConfigCache'
@@ -320,7 +321,7 @@ export default function GestioneOtpTab() {
     }, [rows, search, filter])
 
     if (roleLoading) {
-        return <p className="text-sm text-theme-text-muted p-6">Caricamento…</p>
+        return <div className="p-6"><ScheletroPagina filtri={false} righe={6} colonne={4} /></div>
     }
 
     if (!tabUnlocked) {
@@ -604,9 +605,7 @@ export default function GestioneOtpTab() {
                     </div>
 
                     {loading ? (
-                        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-8 text-center text-sm text-theme-text-muted">
-                            Caricamento regole OTP…
-                        </div>
+                        <ScheletroTabella righe={8} colonne={4} />
                     ) : rows.length === 0 ? (
                         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-sm text-amber-300">
                             Nessuna riga in <code>system_otp_overrides</code>. Esegui la migration{' '}
@@ -1022,7 +1021,7 @@ function OtpRecipientField() {
                                     type="email"
                                     value={val}
                                     onChange={e => setEmails(prev => prev.map((x, j) => j === i ? e.target.value : x))}
-                                    placeholder={loading ? 'Caricamento…' : (i === 0 ? 'es. direzione@dr7.app' : 'altro destinatario')}
+                                    placeholder={i === 0 ? 'es. direzione@dr7.app' : 'altro destinatario'}
                                     disabled={loading}
                                     className={`flex-1 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] ${emailErrors[i] ? 'border-red-500' : 'border-theme-border'}`}
                                 />
@@ -1071,7 +1070,7 @@ function OtpRecipientField() {
                     value={adminPhone ? `+${adminPhone}` : ''}
                     onChange={v => setAdminPhone(v.replace(/\D/g, ''))}
                     disabled={loading}
-                    placeholder={loading ? 'Caricamento…' : 'es. 3457905205'}
+                    placeholder="es. 3457905205"
                     className={`flex-1 min-w-0 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validAdminPhone && adminPhone ? 'border-red-500' : 'border-theme-border'}`}
                     selectClassName="w-[104px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-2 text-[13px]"
                 />
@@ -1090,7 +1089,7 @@ function OtpRecipientField() {
                     value={bossPhone ? `+${bossPhone}` : ''}
                     onChange={v => setBossPhone(v.replace(/\D/g, ''))}
                     disabled={loading}
-                    placeholder={loading ? 'Caricamento…' : 'es. 3472817258'}
+                    placeholder="es. 3472817258"
                     className={`flex-1 min-w-0 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validBossPhone && bossPhone ? 'border-red-500' : 'border-theme-border'}`}
                     selectClassName="w-[104px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-2 text-[13px]"
                 />
@@ -1432,7 +1431,7 @@ function ActiveOtpsSection() {
             </div>
 
             {loading ? (
-                <div className="text-center py-6 text-sm text-theme-text-muted">Caricamento OTP attivi…</div>
+                <ScheletroTabella righe={5} colonne={4} className="my-4" />
             ) : visible.length === 0 ? (
                 <div className="text-center py-6 text-sm text-theme-text-muted">
                     {showExpired ? 'Nessun OTP nelle ultime 24 ore.' : 'Nessun OTP attivo in questo momento.'}
@@ -1643,7 +1642,7 @@ function StoricoOtpSection() {
                     <div className="flex items-center justify-between gap-2">
                         <button onClick={loadHistory} disabled={loading}
                             className="px-3 py-1.5 rounded-lg bg-dr7-gold/15 text-dr7-gold text-xs font-semibold hover:bg-dr7-gold/25 disabled:opacity-50">
-                            {loading ? 'Caricamento…' : 'Aggiorna'}
+                            Aggiorna
                         </button>
                         <span className="text-[11px] text-theme-text-muted">
                             {filtered.length} risultati · pag {page + 1}/{totalPages}

@@ -15,6 +15,7 @@
 //  2. Vista Storico: gli acconti non spariscono piu' cambiando giornata, si
 //     rileggono per periodo, raggruppati per giorno con il totale del giorno.
 import { useEffect, useMemo, useState } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -369,7 +370,7 @@ export default function AccontiTab() {
           </h2>
         </div>
         {loading ? (
-          <p className="p-4 text-sm text-theme-text-muted">Caricamento…</p>
+          <div className="p-4"><ScheletroTabella righe={6} colonne={5} /></div>
         ) : rows.length === 0 ? (
           <p className="p-4 text-sm text-theme-text-muted">
             {vista === 'storico'

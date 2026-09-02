@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScheletroTesto } from '../../../../components/Scheletro'
 import { supabase } from '../../../../supabaseClient'
 import {
     ALERT_TIPO_LABELS,
@@ -74,7 +75,7 @@ export default function FornitoreAlertsPanel({ fornitore }: Props) {
                 <span className="ml-auto text-sm text-theme-text-secondary">{rows.length} alert</span>
             </div>
 
-            {loading && <p className="text-theme-text-muted text-sm">Caricamento…</p>}
+            {loading && <ScheletroTesto righe={3} />}
             {!loading && rows.length === 0 && (
                 <p className="text-theme-text-muted text-sm">Nessun alert.</p>
             )}

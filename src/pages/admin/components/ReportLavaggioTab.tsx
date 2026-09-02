@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
 import toast from 'react-hot-toast'
@@ -100,7 +101,6 @@ export default function ReportLavaggioTab() {
   const { hasRole } = useAdminRole()
   const canEditStipendio = hasRole('stipendio-editor')
   const [spesaMerce, setSpesaMerce] = useState<number>(0)
-  const [costsLoading, setCostsLoading] = useState(false)
   // 2026-08-20 (richiesta direzione): modificabili TUTTE le voci di Costi &
   // Margine, non solo lo stipendio. Ricavo e Spesa Merce restano calcolati dai
   // dati reali (prenotazioni e fatture fornitori); quando la direzione scrive un
@@ -120,7 +120,6 @@ export default function ReportLavaggioTab() {
   const [stipendioSaving, setStipendioSaving] = useState(false)
 
   const loadCosts = useCallback(async () => {
-    setCostsLoading(true)
     try {
       const [year, month] = selectedMonth.split('-').map(Number)
       const monthStart = `${selectedMonth}-01`
@@ -164,7 +163,6 @@ export default function ReportLavaggioTab() {
     } catch (err) {
       console.error('[ReportLavaggio] loadCosts error:', err)
     } finally {
-      setCostsLoading(false)
     }
   }, [selectedMonth])
 
@@ -357,7 +355,7 @@ export default function ReportLavaggioTab() {
           />
         </ReportField>
         <ReportButton onClick={() => { fetchReport(); fetchTrend(); loadCosts() }} disabled={loading}>
-          {loading ? 'Caricamento...' : 'Aggiorna'}
+          Aggiorna
         </ReportButton>
         <button
           onClick={() => setEditReport(v => !v)}
@@ -391,7 +389,7 @@ export default function ReportLavaggioTab() {
         <ReportKpi
           label="Spesa Merce"
           value={formatCurrency(spesaEffettiva)}
-          sub={costsLoading ? 'caricamento...' : 'prodotti / consumabili'}
+          sub="prodotti / consumabili"
           tone="red"
         />
         <ReportKpi
@@ -414,7 +412,7 @@ export default function ReportLavaggioTab() {
         right={`${byTypeRows.length} servizi`}
       >
         {byTypeRows.length === 0 ? (
-          <ReportEmpty message={loading ? 'Caricamento...' : 'Nessun dato per il mese selezionato'} />
+          loading ? <ScheletroTabella righe={5} colonne={4} /> : <ReportEmpty message="Nessun dato per il mese selezionato" />
         ) : (
           <ReportTable
             head={
@@ -560,9 +558,9 @@ export default function ReportLavaggioTab() {
       </ReportCard>
 
       {/* Andamento ultimi 6 mesi */}
-      <ReportCard title="Andamento Ultimi 6 Mesi" right={trendLoading ? 'caricamento...' : `${trend.length} mesi`}>
+      <ReportCard title="Andamento Ultimi 6 Mesi" right={trendLoading ? '' : `${trend.length} mesi`}>
         {trend.length === 0 ? (
-          <ReportEmpty message="Caricamento..." />
+          trendLoading ? <ScheletroTabella righe={6} colonne={4} /> : <ReportEmpty message="Nessun dato negli ultimi 6 mesi" />
         ) : (
           <ReportTable
             head={

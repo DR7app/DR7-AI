@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { ScheletroPagina, ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../../utils/avatarImage'
@@ -327,7 +328,7 @@ export default function OperatoriTab() {
     return (
       <div className="space-y-3">
         <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
-        <Suspense fallback={<div className="p-6 text-center text-theme-text-muted">Caricamento Rilevazione Orari...</div>}>
+        <Suspense fallback={<ScheletroPagina righe={8} colonne={6} />}>
           <RilevazioneOrariTab />
         </Suspense>
       </div>
@@ -947,7 +948,7 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
-  if (loading) return <div className="text-theme-text-muted p-8 text-center">Caricamento...</div>
+  if (loading) return <ScheletroPagina righe={8} colonne={5} />
 
   return (
     <div className="space-y-6">
@@ -1463,7 +1464,7 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
                   </select>
                 </div>
               </div>
-              {logsLoading ? <div className="text-theme-text-muted text-center py-8">Caricamento log...</div> :
+              {logsLoading ? <ScheletroTabella righe={6} colonne={5} /> :
                 logs.length === 0 ? <div className="text-theme-text-muted text-center py-8">Nessuna attività trovata.</div> :
                 <>
                   <div className="overflow-x-auto">

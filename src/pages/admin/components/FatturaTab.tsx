@@ -1,4 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
+import { useStatoTab, statoPronto } from '../../../utils/statoTab'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -312,8 +314,8 @@ function daysOverdue(inv: { data_emissione: string; data_scadenza?: string | nul
 
 export default function FatturaTab() {
   const [view, setView] = useState<'emesse' | 'ricevute'>('emesse')
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [loading, setLoading] = useState(true)
+  const [invoices, setInvoices] = useStatoTab<Invoice[]>('fatture:righe', [])
+  const [loading, setLoading] = useState(() => !statoPronto('fatture:righe'))
   // Vero mentre le pagine successive alla prima stanno ancora arrivando: la
   // tabella e' gia' usabile ma i totali in alto non sono ancora definitivi.
   const [caricandoStorico, setCaricandoStorico] = useState(false)
@@ -1234,10 +1236,7 @@ export default function FatturaTab() {
 
   if (loading) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
-        <p className="text-theme-text-primary">Caricamento fatture...</p>
-      </div>
+      <ScheletroPagina card={4} righe={8} colonne={6} />
     )
   }
 

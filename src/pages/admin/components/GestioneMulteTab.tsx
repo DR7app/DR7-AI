@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -424,7 +425,7 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                             <button onClick={loadPecHistory} className="text-xs text-dr7-gold hover:underline">Aggiorna</button>
                         </div>
                         {loadingHistory ? (
-                            <div className="p-8 text-center text-sm text-theme-text-muted">Caricamento storico...</div>
+                            <div className="p-4"><ScheletroTabella righe={5} colonne={4} /></div>
                         ) : pecHistory.length === 0 ? (
                             <div className="p-8 text-center">
                                 <svg className="w-12 h-12 mx-auto mb-3 text-theme-text-muted opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
