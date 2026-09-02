@@ -62,8 +62,44 @@ export const handler: Handler = async (event) => {
             'data_nascita', 'scadenza_patente',
             'data_rilascio_patente', 'metadata',
         ].join(',');
+        // ?fields=anagrafica -> le colonne che la tab Clienti tiene davvero.
+        //
+        // 02/09/2026: la tab chiedeva la riga INTERA (88 colonne, 5,13 MB
+        // misurati su 2059 clienti) e poi, riga per riga, ne copiava a mano un
+        // sottoinsieme in un oggetto nuovo. Tutto il resto veniva buttato via
+        // subito dopo essere stato scaricato. Questo elenco e' esattamente
+        // quel sottoinsieme, letto dal codice della tab: chiedere il resto era
+        // banda pagata per niente.
+        //
+        // `user_id` non e' letto oggi dalla tab (vedi il bug del wallet), ma
+        // viaggia qui perche' e' una colonna sola e serve al collegamento
+        // wallet / DR7 Club.
+        //
+        // Se una di queste colonne non esistesse, PostgREST rifiuta TUTTA la
+        // query: sotto c'e' la rete di sicurezza che rilegge la riga intera.
+        // Peggio che va, si torna esattamente al comportamento di prima.
+        const ANAGRAFICA_FIELDS = [
+            'id', 'user_id', 'tipo_cliente', 'nome', 'cognome',
+            'denominazione', 'ragione_sociale', 'ente_ufficio',
+            'email', 'telefono', 'pec', 'note', 'source', 'status',
+            'created_at', 'updated_at', 'metadata',
+            'codice_fiscale', 'partita_iva', 'codice_destinatario',
+            'codice_univoco', 'contatti_cliente',
+            'indirizzo', 'numero_civico', 'cap', 'codice_postale',
+            'citta', 'citta_residenza', 'provincia_residenza', 'nazione',
+            'indirizzo_azienda', 'indirizzo_ddt', 'sede_legale',
+            'data_nascita', 'luogo_nascita', 'provincia_nascita', 'sesso',
+            'numero_patente', 'tipo_patente', 'patente',
+            'scadenza_patente', 'data_rilascio_patente', 'data_rilascio',
+            'emessa_da', 'rilasciata_da',
+            'membership_tier', 'membership_expires_at',
+        ].join(',');
+
         const wantsPicker = event.queryStringParameters?.fields === 'picker';
-        const columns = wantsPicker ? PICKER_FIELDS : '*';
+        const wantsAnagrafica = event.queryStringParameters?.fields === 'anagrafica';
+        const columns = wantsPicker ? PICKER_FIELDS
+            : wantsAnagrafica ? ANAGRAFICA_FIELDS
+            : '*';
 
         // `id` come secondo criterio NON e' un dettaglio estetico: le pagine
         // sono richieste in parallelo, quindi sono query separate. Con il solo
@@ -87,8 +123,8 @@ export const handler: Handler = async (event) => {
         // rinominata o rimossa), si rilegge la riga intera invece di lasciare
         // le tab senza anagrafica. Meglio una risposta piu' pesante che un
         // gestionale che non trova i clienti.
-        if (firstPage.error && wantsPicker) {
-            console.error('[list-customers] fields=picker rifiutato, ripiego su *:', firstPage.error);
+        if (firstPage.error && columnsInUse !== '*') {
+            console.error(`[list-customers] elenco ridotto rifiutato, ripiego su *:`, firstPage.error);
             columnsInUse = '*';
             firstPage = await page(0, true);
         }

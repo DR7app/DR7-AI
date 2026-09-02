@@ -1292,36 +1292,59 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   async function loadData() {
     setLoading(true)
     try {
-      // Load bookings (exclude cancelled) - sorted by creation time (newest first)
-      const { data: bookingsData, error: bookingsError } = await supabase
+      // 02/09/2026 - queste tre letture erano IN FILA, quindi il tempo di
+      // apertura del tab era la loro somma. Nessuna dipende dalle altre:
+      // partono insieme e si aspetta la piu' lenta. Stesse tre query, stesso
+      // ordine di controllo degli errori piu' sotto.
+      //
+      // `.then(r => r)` fa partire davvero la query: senza, supabase-js la
+      // tiene ferma fino all'await e le letture tornerebbero in fila.
+      const bookingsPromise = supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
-
-      if (bookingsError) throw bookingsError
+        .then(r => r)
 
       // Load customers via Netlify function (bypasses RLS, paginates beyond 1000 limit)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let customersData: any[] = []
-      try {
-        const custResponse = await authFetch('/.netlify/functions/list-customers')
-        const custResult = await custResponse.json()
-        if (custResponse.ok && custResult.customers) {
-          customersData = custResult.customers
+      //
+      // ?fields=picker: di ogni cliente questo tab tiene id, nome, email e
+      // telefono - quattro campi, ricavati da nove colonne. Chiedeva la riga
+      // intera: 5,13 MB misurati in produzione su 2059 clienti contro 0,65 MB.
+      // Le nove colonne che servono sono TUTTE nell'elenco ridotto, quindi
+      // non cambia un solo nome a video: cambia solo quanto pesa la risposta.
+      const customersPromise = (async () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let rows: any[] = []
+        try {
+          const custResponse = await authFetch('/.netlify/functions/list-customers?fields=picker')
+          const custResult = await custResponse.json()
+          if (custResponse.ok && custResult.customers) {
+            rows = custResult.customers
+          }
+        } catch (custErr) {
+          console.error('Failed to load customers via function:', custErr)
         }
-      } catch (custErr) {
-        console.error('Failed to load customers via function:', custErr)
-      }
+        return rows
+      })()
 
       // Load car wash services from database
-      const { data: servicesData, error: servicesError } = await supabase
+      const servicesPromise = supabase
         .from('car_wash_services')
         .select('*')
         .eq('is_active', true)
         .order('display_order', { ascending: true })
+        .then(r => r)
 
+      const [bookingsRes, customersData, servicesRes] = await Promise.all([
+        bookingsPromise, customersPromise, servicesPromise,
+      ])
+
+      const { data: bookingsData, error: bookingsError } = bookingsRes
+      if (bookingsError) throw bookingsError
+
+      const { data: servicesData, error: servicesError } = servicesRes
       if (servicesError) throw servicesError
 
       // Map services with computed fields

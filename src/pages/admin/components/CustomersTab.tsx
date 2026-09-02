@@ -591,8 +591,12 @@ export default function CustomersTab() {
       logger.log('[CustomersTab] Loading customers from DB...')
 
       // Check current user
-      const { data: { user } } = await supabase.auth.getUser()
-      logger.log('[CustomersTab] Current user:', user?.email)
+      // 02/09/2026 - questa riga serviva SOLO al log qui sotto, ma essendo
+      // `await` teneva fermo tutto il caricamento per un giro di rete verso
+      // il server di autenticazione. Il log resta, l'attesa no.
+      void supabase.auth.getUser().then(({ data }) => {
+        logger.log('[CustomersTab] Current user:', data.user?.email)
+      })
 
       // Use customers_extended as the SINGLE source of truth (no more bookings merge = no duplicates)
       const customerMap = new Map<string, Customer>()
@@ -600,13 +604,39 @@ export default function CustomersTab() {
       // Get customers from customers_extended table via Netlify function (bypasses RLS)
       logger.log('[CustomersTab] Fetching customers_extended via Netlify function...')
 
+      // 02/09/2026 - anagrafica, abbonamenti e DR7 Club erano letti UNO DOPO
+      // L'ALTRO, quindi il tempo di apertura era la SOMMA dei tre giri. Non
+      // dipendono l'uno dall'altro: partono insieme e si aspetta il massimo.
+      // Le due letture restano identiche - stessa tabella, stesse colonne,
+      // stesso filtro - e vengono usate esattamente dove erano prima.
+      // `.then(r => r)` NON e' decorativo: la query di supabase-js parte solo
+      // quando qualcuno la "risolve". Senza, resterebbe ferma fino all'await
+      // piu' in basso e le tre letture tornerebbero in fila come prima.
+      const membershipsPromise = supabase
+        .from('customer_memberships')
+        .select('*')
+        .eq('status', 'active')
+        .then(r => r)
+      const clubPromise = supabase
+        .from('dr7_club_subscriptions')
+        .select('user_id, plan, status, expires_at')
+        .eq('status', 'active')
+        .then(r => r)
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let customersExtendedData: any[] | null = null
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let customersExtendedError: any = null
 
       try {
-        const response = await authFetch('/.netlify/functions/list-customers')
+        // ?fields=anagrafica: la tab scaricava la riga INTERA (88 colonne,
+        // 5,13 MB misurati su 2059 clienti) e poi ne ricopiava a mano un
+        // sottoinsieme in un oggetto nuovo, buttando via tutto il resto
+        // subito dopo averlo scaricato. Ora chiede solo quel sottoinsieme.
+        // Stessi clienti, tutti, e ogni campo che la tab mostra o salva
+        // continua ad arrivare. Se il server rifiutasse l'elenco ridotto
+        // risponde con la riga intera, come prima.
+        const response = await authFetch('/.netlify/functions/list-customers?fields=anagrafica')
         const result = await response.json()
         if (!response.ok) {
           customersExtendedError = { code: result.code, message: result.error }
@@ -752,10 +782,7 @@ export default function CustomersTab() {
 
       // [NEW] Fetch Customer Memberships
       logger.log('[CustomersTab] Fetching customer_memberships...')
-      const { data: membershipsData, error: membershipsError } = await supabase
-        .from('customer_memberships')
-        .select('*')
-        .eq('status', 'active')
+      const { data: membershipsData, error: membershipsError } = await membershipsPromise
       // Let's fetch all active ones to show current package.
       // Ideally we fetch all and sort by date, but specifically we want the *active* one.
 
@@ -798,10 +825,7 @@ export default function CustomersTab() {
 
       // [NEW] Fetch DR7 Club subscriptions
       try {
-        const { data: clubSubs } = await supabase
-          .from('dr7_club_subscriptions')
-          .select('user_id, plan, status, expires_at')
-          .eq('status', 'active')
+        const { data: clubSubs } = await clubPromise
 
         if (clubSubs && clubSubs.length > 0) {
           // Map user_id → club subscription
