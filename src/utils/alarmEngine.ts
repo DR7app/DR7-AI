@@ -122,14 +122,20 @@ export async function caricaContesto(now: Date): Promise<DetectorContext> {
     // Firme: una sola query per tutte le prenotazioni della finestra.
     const firme = new Map<string, Record<string, unknown>>()
     const ids = bookings.filter(b => b.id).map(b => String(b.id))
-    for (let i = 0; i < ids.length; i += 200) {
-        const chunk = ids.slice(i, i + 200)
-        const { data } = await supabase
-            .from('signature_requests')
-            .select('booking_id, signed_at, signature_image, signature_image_2, status, created_at')
-            .in('booking_id', chunk)
-            .order('created_at', { ascending: true })
-        for (const r of data || []) {
+    // 02/09/2026: i blocchi partivano uno dopo l'altro e il giro allarmi
+    // finiva secondi dopo l'apertura, tenendo occupata la rete mentre la tab
+    // caricava i suoi dati. Ora partono insieme; l'ordine di scrittura nella
+    // mappa resta quello dei blocchi, che sono disgiunti per booking_id.
+    const blocchi: string[][] = []
+    for (let i = 0; i < ids.length; i += 200) blocchi.push(ids.slice(i, i + 200))
+    const risposte = await Promise.all(blocchi.map(chunk => supabase
+        .from('signature_requests')
+        .select('booking_id, signed_at, signature_image, signature_image_2, status, created_at')
+        .in('booking_id', chunk)
+        .order('created_at', { ascending: true })
+        .then(r => r.data || [])))
+    for (const data of risposte) {
+        for (const r of data) {
             // L'ultima richiesta vince: e' quella che conta per "firmato o no".
             firme.set(String(r.booking_id), r)
         }

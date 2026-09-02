@@ -37,6 +37,7 @@ import {
   isWithinOfficeHoursForDate,
 } from '../../../utils/noleggioHours'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import Miniatura from '../../../components/Miniatura'
 
 // ─── Time slots ─────────────────────────────────────────────────────────────
 //
@@ -3958,7 +3959,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className="relative shrink-0">
                                 {img ? (
-                                  <img src={img} alt={b.vehicle_name} className="w-14 h-10 rounded-md object-cover ring-1 ring-theme-border bg-theme-bg-tertiary" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
+                                  <Miniatura src={img} alt={b.vehicle_name} larghezza={112} className="w-14 h-10 rounded-md object-cover ring-1 ring-theme-border bg-theme-bg-tertiary"/>
                                 ) : (
                                   <div className="w-14 h-10 rounded-md ring-1 ring-theme-border bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary grid place-items-center text-theme-text-muted">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
@@ -4543,10 +4544,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
                               {img ? (
-                                <img
-                                  src={img} alt={p.vehicle_name}
+                                <Miniatura
+                                  src={img} alt={p.vehicle_name} larghezza={112}
                                   className="w-14 h-10 rounded-md object-cover ring-1 ring-theme-border bg-theme-bg-tertiary"
-                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                                 />
                               ) : (
                                 <div className="w-14 h-10 rounded-md ring-1 ring-theme-border bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary grid place-items-center text-theme-text-muted">

@@ -7,6 +7,7 @@ import FleetVehicleDetail from './FleetVehicleDetail'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { logger } from '../../../utils/logger'
 import { ORPHAN_PALETTE, getPaletteForCategory } from '../../../utils/categoryPalettes'
+import Miniatura from '../../../components/Miniatura'
 
 // Estrae un messaggio leggibile da qualunque shape di errore (Error,
 // PostgrestError di Supabase, oggetto generico). Senza questa logica
@@ -1279,7 +1280,7 @@ export default function VehiclesTab() {
                           <input type="checkbox" checked={selectedVehicles.has(vehicle.id)} onChange={() => toggleVehicleSelection(vehicle.id)} className="w-5 h-5 mt-1 flex-shrink-0"/>
                         )}
                         <div className="w-14 h-10 rounded-md bg-theme-bg-tertiary overflow-hidden flex-shrink-0 flex items-center justify-center">
-                          {img ? <img src={img} alt={vehicle.display_name} className="w-full h-full object-cover"/> : <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4z"/></svg>}
+                          {img ? <Miniatura src={img} alt={vehicle.display_name} larghezza={112} className="w-full h-full object-cover"/> : <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4z"/></svg>}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
@@ -1364,7 +1365,7 @@ export default function VehiclesTab() {
                             <div className="flex items-center gap-2">
                               <div className="w-10 h-7 rounded-md bg-theme-bg-tertiary overflow-hidden flex-shrink-0 flex items-center justify-center">
                                 {img ? (
-                                  <img src={img} alt={vehicle.display_name} className="w-full h-full object-cover"/>
+                                  <Miniatura src={img} alt={vehicle.display_name} larghezza={80} className="w-full h-full object-cover"/>
                                 ) : (
                                   <svg className="w-3.5 h-3.5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4z"/>
