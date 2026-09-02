@@ -25,31 +25,48 @@ async function handleGet(event: any) {
   const limit = Math.min(parseInt(params.limit || '50', 10), 1000);
   const offset = parseInt(params.offset || '0', 10);
 
-  // Build main query
-  let query = supabase
+  // 02/09/2026 — la tab Recensioni chiede solo le righe.
+  //
+  // Prima ogni chiamata faceva TRE lavori: le righe della pagina, un
+  // `count: 'exact'` sull'intera tabella e — la parte cara — una seconda
+  // lettura di `review_candidates` senza filtri per contare gli stati a mano.
+  // Quella lettura era pure sbagliata: PostgREST ne restituisce al massimo
+  // 1000, quindi i conteggi si fermavano li'. Il client scartava entrambi i
+  // valori (usa `review-dashboard-stats`), ma li pagava sei volte per
+  // apertura: la tab ci metteva 17 secondi.
+  //
+  // Ora `total` e `stats` arrivano solo con `?stats=1`, e i conteggi sono
+  // fatti dal database (`head: true`), non scaricando le righe.
+  const conStats = params.stats === '1';
+
+  // Le colonne che la tab legge davvero. Con `*` viaggiavano anche i campi
+  // interni (customer_id, is_duplicate_source, auto_created) su migliaia di
+  // righe.
+  const COLONNE = 'id, source_record_id, customer_name, customer_email, customer_phone, ' +
+    'service_type, eligibility_status, review_risk, send_status, exclusion_reason_code, ' +
+    'exclusion_reason_text, contact_available_email, contact_available_whatsapp, ' +
+    'is_internal_record, recipient_role, created_at, updated_at';
+
+  // I filtri valgono sia per le righe sia per i conteggi: una funzione sola.
+  const applicaFiltri = <T extends { eq: any; or: any }>(q: T): T => {
+    let out: any = q;
+    if (serviceType !== 'ALL') out = out.eq('service_type', serviceType);
+    if (eligibilityStatus !== 'ALL') out = out.eq('eligibility_status', eligibilityStatus);
+    if (sendStatus !== 'ALL') out = out.eq('send_status', sendStatus);
+    if (reviewRisk !== 'ALL') out = out.eq('review_risk', reviewRisk);
+    if (search && search.trim() !== '') {
+      const searchTerm = `%${search.trim()}%`;
+      out = out.or(
+        `customer_name.ilike.${searchTerm},customer_email.ilike.${searchTerm},customer_phone.ilike.${searchTerm}`
+      );
+    }
+    return out as T;
+  };
+
+  let query: any = supabase
     .from('review_candidates')
-    .select('*', { count: 'exact' });
-
-  if (serviceType !== 'ALL') {
-    query = query.eq('service_type', serviceType);
-  }
-  if (eligibilityStatus !== 'ALL') {
-    query = query.eq('eligibility_status', eligibilityStatus);
-  }
-  if (sendStatus !== 'ALL') {
-    query = query.eq('send_status', sendStatus);
-  }
-  if (reviewRisk !== 'ALL') {
-    query = query.eq('review_risk', reviewRisk);
-  }
-
-  if (search && search.trim() !== '') {
-    const searchTerm = `%${search.trim()}%`;
-    query = query.or(
-      `customer_name.ilike.${searchTerm},customer_email.ilike.${searchTerm},customer_phone.ilike.${searchTerm}`
-    );
-  }
-
+    .select(COLONNE, conStats ? { count: 'exact' } : undefined);
+  query = applicaFiltri(query);
   query = query.order('created_at', { ascending: false });
   query = query.range(offset, offset + limit - 1);
 
@@ -57,35 +74,30 @@ async function handleGet(event: any) {
 
   if (error) throw new Error(`Query failed: ${error.message}`);
 
-  // Build stats query (unfiltered except service_type for consistency)
-  let statsBaseQuery = supabase.from('review_candidates').select('eligibility_status, send_status');
-  if (serviceType !== 'ALL') {
-    statsBaseQuery = statsBaseQuery.eq('service_type', serviceType);
-  }
+  let stats: Record<string, number> | undefined;
 
-  const { data: statsData, error: statsError } = await statsBaseQuery;
-
-  let stats = {
-    eligible: 0,
-    to_review: 0,
-    excluded: 0,
-    to_send: 0,
-    sent: 0,
-    failed: 0,
-  };
-
-  if (!statsError && statsData) {
-    statsData.forEach((row: any) => {
-      // Eligibility stats
-      if (row.eligibility_status === 'ELIGIBLE') stats.eligible++;
-      else if (row.eligibility_status === 'TO_REVIEW') stats.to_review++;
-      else if (row.eligibility_status === 'EXCLUDED') stats.excluded++;
-
-      // Send status stats
-      if (row.send_status === 'TO_SEND') stats.to_send++;
-      else if (row.send_status === 'SENT') stats.sent++;
-      else if (row.send_status === 'FAILED') stats.failed++;
-    });
+  if (conStats) {
+    // Un conteggio per stato, calcolato dal database. Il filtro service_type
+    // resta (come prima); gli altri no, perche' queste cifre descrivono
+    // l'insieme, non la pagina.
+    const conta = async (colonna: string, valore: string) => {
+      let q: any = supabase
+        .from('review_candidates')
+        .select('id', { count: 'exact', head: true })
+        .eq(colonna, valore);
+      if (serviceType !== 'ALL') q = q.eq('service_type', serviceType);
+      const { count: n } = await q;
+      return n || 0;
+    };
+    const [eligible, to_review, excluded, to_send, sent, failed] = await Promise.all([
+      conta('eligibility_status', 'ELIGIBLE'),
+      conta('eligibility_status', 'TO_REVIEW'),
+      conta('eligibility_status', 'EXCLUDED'),
+      conta('send_status', 'TO_SEND'),
+      conta('send_status', 'SENT'),
+      conta('send_status', 'FAILED'),
+    ]);
+    stats = { eligible, to_review, excluded, to_send, sent, failed };
   }
 
   return {
@@ -93,8 +105,7 @@ async function handleGet(event: any) {
     headers: getHeaders(event.headers?.origin),
     body: JSON.stringify({
       candidates: candidates || [],
-      total: count || 0,
-      stats,
+      ...(conStats ? { total: count || 0, stats } : {}),
     }),
   };
 }

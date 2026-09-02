@@ -37,7 +37,6 @@ import {
   isWithinOfficeHoursForDate,
 } from '../../../utils/noleggioHours'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import NumeroTelefono from '../../../components/NumeroTelefono'
 
 // ─── Time slots ─────────────────────────────────────────────────────────────
 //
@@ -400,14 +399,6 @@ const STATUS_LABELS: Record<string, string> = {
   accettato: 'Accettato',
   rifiutato: 'Rifiutato',
   scaduto: 'Scaduto',
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  bozza: 'bg-gray-600 text-gray-100',
-  inviato: 'bg-blue-600 text-blue-100',
-  accettato: 'bg-green-600 text-green-100',
-  rifiutato: 'bg-red-600 text-red-100',
-  scaduto: 'bg-yellow-700 text-yellow-100',
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -1517,9 +1508,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // del role hook).
   useEffect(() => {
     if (adminRoleLoading) return
-    loadPreventivi()
+    // 02/09/2026 — l'elenco prima, l'anagrafica dopo.
+    //
+    // `loadCustomers` scaricava l'anagrafica INTERA (5 MB: 88 colonne per
+    // ogni cliente) insieme ai preventivi, e il browser doveva leggerla tutta
+    // prima di poter disegnare qualsiasi cosa. Ma quei clienti servono solo
+    // al form "Nuovo preventivo", non alla lista. Ora partono i preventivi, e
+    // l'anagrafica ridotta (`fields=picker`) parte quando la lista e' gia' a
+    // schermo: il form la trova pronta molto prima che qualcuno lo apra.
+    loadPreventivi().finally(() => { void loadCustomers() })
     loadVehicles()
-    loadCustomers()
     loadNoCauzioneRequests()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminRoleLoading, isPreventivoOnly, adminEmail])
@@ -1527,7 +1525,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   async function loadCustomers() {
     try {
       // Use Netlify function (service role, bypasses RLS)
-      const res = await authFetch('/.netlify/functions/list-customers')
+      // `fields=picker`: le 17 colonne che servono a scegliere un cliente.
+      // La riga intera ne ha 88 e pesava 5 MB.
+      const res = await authFetch('/.netlify/functions/list-customers?fields=picker')
       if (!res.ok) {
         console.error('[PreventiviTab] list-customers failed:', res.status)
         return
@@ -3592,6 +3592,19 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   }, [preventivi, statusFilter, searchQuery, dateFilter, dateRange, sortField, sortDir]
   )
 
+  /**
+   * La pagina che va davvero a schermo (02/09/2026).
+   *
+   * La tabella grande era gia' paginata, ma le card per telefono (`sm:hidden`)
+   * ridisegnavano l'elenco INTERO: nascoste dal CSS, presenti nel DOM. Ora le
+   * due viste mostrano le stesse dieci righe.
+   */
+  const paginaSicura = Math.min(listPage, Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE)))
+  const righePagina = useMemo(
+    () => filtered.slice((paginaSicura - 1) * LIST_PAGE_SIZE, paginaSicura * LIST_PAGE_SIZE),
+    [filtered, paginaSicura],
+  )
+
   // ─── RENDER ─────────────────────────────────────────────────────────────
 
   // ═══ LIST VIEW ═══
@@ -4452,8 +4465,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
             {/* Pagination slice */}
             {(() => {
               const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE))
-              const safePage = Math.min(listPage, totalPages)
-              const pageRows = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE)
+              const safePage = paginaSicura
+              const pageRows = righePagina
               const vehicleById = new Map(vehicles.map(v => [v.id, v]))
 
               const initials = (name?: string | null) => {
@@ -4725,201 +4738,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
               )
             })()}
 
-            {/* Hidden legacy table below — kept for accessibility / fallback */}
-            <table className="hidden">
-              <thead>
-                <tr><th /></tr>
-              </thead>
-              <tbody>
-                {filtered.map(p => (
-                  <tr key={p.id} className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30">
-                    <td className="py-2 px-3">
-                      <div className="font-medium text-theme-text-primary">
-                        {p.vehicle_name}
-                        {p.source === 'website_no_cauzione' && (
-                          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-600 text-white uppercase">No Cauzione</span>
-                        )}
-                        {p.source === 'website' && (
-                          <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded bg-blue-500/20 text-blue-400">SITO</span>
-                        )}
-                      </div>
-                      {p.customer_name && (
-                        <div className="text-xs text-theme-text-muted flex items-center gap-1.5 flex-wrap">
-                          <span>{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</span>
-                          <ClientStatusBadge phone={p.customer_phone} />
-                        </div>
-                      )}
-                      {!p.customer_name && p.customer_phone && (
-                        <div className="text-xs text-theme-text-muted flex items-center gap-1.5 flex-wrap">
-                          <span><NumeroTelefono valore={p.customer_phone} /></span>
-                          <ClientStatusBadge phone={p.customer_phone} />
-                        </div>
-                      )}
-                      {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
-                      <div className="text-[10px] mt-1 space-y-0.5">
-                        {p.created_by && (
-                          <div className="text-theme-text-muted/60">Creato da: <span className="text-theme-text-muted">{p.created_by}</span> · {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
-                        )}
-                        {!p.created_by && (
-                          <div className="text-theme-text-muted/60">Creato il: {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
-                        )}
-                        {p.whatsapp_sent_at && (
-                          <div className="text-green-400/80">Inviato{p.sent_by ? ` da ${p.sent_by}` : ''} → {p.customer_name ? `${p.customer_name}${p.customer_phone ? ` (${p.customer_phone})` : ''}` : p.customer_phone || 'N/A'} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
-                        )}
-                      </div>
-                      <div className="mt-1 text-[11px] text-theme-text-muted font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs space-y-0.5">
-                        <div>{p.vehicle_name}{p.vehicle_model_year ? ` · my ${p.vehicle_model_year}` : ''}</div>
-                        <div>{p.rental_days}gg × {formatEur(p.base_daily_rate)}/g</div>
-                        {(() => {
-                          const isUnlimited = !!p.unlimited_km || (p.unlimited_km_total || 0) > 0
-                          if (isUnlimited) {
-                            return <div>Km inclusi: <span className="text-theme-text-primary">Illimitati</span></div>
-                          }
-                          const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
-                          if (km === 'unlimited') {
-                            return <div>Km inclusi: <span className="text-theme-text-primary">Illimitati</span></div>
-                          }
-                          if (typeof km === 'number' && km > 0) {
-                            return <div>Km inclusi: <span className="text-theme-text-primary">{km.toLocaleString('it-IT')} km</span></div>
-                          }
-                          return null
-                        })()}
-                        <div>Totale: <span className="text-theme-text-primary">{formatEur(p.total_final || p.subtotal)}</span></div>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3 text-theme-text-muted text-xs">
-                      {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
-                    </td>
-                    <td className="py-2 px-3 text-theme-text-muted">
-                      {new Date(p.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
-                      {' - '}
-                      {new Date(p.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
-                    </td>
-                    <td className="py-2 px-3 text-theme-text-muted">{p.rental_days}gg</td>
-                    <td className="py-2 px-3 text-right text-theme-text-muted">{formatEur(p.subtotal)}</td>
-                    <td className="py-2 px-3 text-right font-bold text-theme-text-primary">{p.sconto > 0 ? formatEur(p.total_final) : '-'}</td>
-                    <td className="py-2 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status] || 'bg-gray-600'}`}>
-                        {STATUS_LABELS[p.status] || p.status}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-1 flex-wrap">
-                        {/* Preventivi site-created: Modifica e Invia disponibili come per
-                            quelli creati da admin (direzione vuole poter correggere il
-                            preventivo del sito prima di inviarlo al cliente). Accetta /
-                            Rifiuta restano in primo piano. */}
-                        {p.source?.startsWith('website') && p.status !== 'rifiutato' ? (
-                          <>
-                            <button
-                              onClick={() => openAcceptModal(p)}
-                              className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded font-bold"
-                            >
-                              Accetta
-                            </button>
-                            {p.source === 'website_no_cauzione' ? (
-                              <button
-                                onClick={() => handleRejectNoCauzionePreventivo(p)}
-                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                              >
-                                Rifiuta + Sconto 5%
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => openRejectModal(p)}
-                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                              >
-                                Rifiuta
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleEdit(p)}
-                              className="px-2 py-1 text-xs bg-blue-700 hover:bg-blue-600 text-white rounded"
-                            >
-                              Modifica
-                            </button>
-                            <button
-                              onClick={async () => {
-                                setSelectedPreventivo(p);
-                                setWhatsappPhone(p.customer_phone || '');
-                                setPreviewMessage('');
-                                setIncludeCoefficienti(false);
-                                const preview = await formatWhatsAppMessage(p, { includeCoefficienti: false })
-                                if (!preview) {
-                                  const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
-                                  toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
-                                  return
-                                }
-                                setPreviewMessage(preview)
-                                setShowPhoneModal(true);
-                              }}
-                              className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
-                            >
-                              {p.status === 'bozza' ? 'Invia' : 'Reinvia'}
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            {(p.status === 'bozza' || p.status === 'inviato' || p.status === 'accettato') && (
-                              <button
-                                onClick={() => handleEdit(p)}
-                                className="px-2 py-1 text-xs bg-blue-700 hover:bg-blue-600 text-white rounded"
-                              >
-                                Modifica
-                              </button>
-                            )}
-                            {/* Invia / Reinvia disponibile per QUALSIASI status
-                                tranne rifiutato. Direzione vuole poter rimandare il
-                                preventivo al cliente anche dopo "accettato" o
-                                "scaduto" (rinegoziazione, recupero, ecc.). */}
-                            {p.status !== 'rifiutato' && (
-                              <button
-                                onClick={async () => {
-                                  setSelectedPreventivo(p);
-                                  setWhatsappPhone(p.customer_phone || '');
-                                  setPreviewMessage('');
-                                  setIncludeCoefficienti(false);
-                                  const preview = await formatWhatsAppMessage(p, { includeCoefficienti: false })
-                                  if (!preview) {
-                                    const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
-                                    toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
-                                    return
-                                  }
-                                  setPreviewMessage(preview)
-                                  setShowPhoneModal(true);
-                                }}
-                                className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
-                              >
-                                {p.status === 'bozza' ? 'Invia' : 'Reinvia'}
-                              </button>
-                            )}
-                            {/* 2026-05-20: bottone "Invia coefficienti" rimosso
-                                completamente — direzione lo voleva via per
-                                tutti gli operatori (non solo Nicola Frongia). */}
-                            {(p.status === 'inviato' || p.status === 'bozza') && (
-                              <button
-                                onClick={() => openAcceptModal(p)}
-                                className="px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded"
-                              >
-                                Accetta
-                              </button>
-                            )}
-                            {p.status === 'inviato' && (
-                              <button
-                                onClick={() => openRejectModal(p)}
-                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                              >
-                                Rifiutato
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* 02/09/2026 — qui c'era una SECONDA tabella, `className="hidden"`,
+                che ridisegnava tutti i preventivi filtrati. Non si vedeva mai
+                (display:none la toglie anche ai lettori di schermo) ma il
+                browser la costruiva per intero: con 1.400 preventivi erano
+                decine di migliaia di nodi a ogni apertura della tab. */}
           </div>
           </div>
         )}
@@ -4931,7 +4754,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
             Rifiutato without a desktop. */}
         {!loading && filtered.length > 0 && (
           <div className="sm:hidden space-y-2">
-            {filtered.map(p => {
+            {righePagina.map(p => {
               const statusTone: Record<string, string> = {
                 bozza: 'bg-gray-500/15 text-gray-400',
                 inviato: 'bg-blue-500/15 text-blue-400',

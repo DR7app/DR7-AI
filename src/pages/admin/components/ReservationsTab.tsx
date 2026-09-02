@@ -14,6 +14,7 @@ import {
   LIVELLO_LABELS as METEO_LIVELLO_LABELS, METEO_BUSINESS_LABELS,
 } from '../../../utils/meteoConfig'
 import { mareFormSectionsOff } from './mareFormSections'
+import Paginazione from './Paginazione'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import { romeDateFromParts } from '../../../utils/timezoneUtils'
@@ -2207,6 +2208,31 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     })
   }, [bookings, bookingSearchQuery, bookingDateRange])
 
+  /**
+   * Elenco a pagine (01/09/2026).
+   *
+   * `bookingsVisibili` resta l'elenco COMPLETO: statistiche, disponibilita' e
+   * conteggi continuano a leggerlo tutto. A schermo pero' finisce solo una
+   * pagina: prima si costruivano 2600 righe tabella PIU' 2600 card mobile
+   * (nascoste con `lg:hidden`, ma comunque nel DOM) a ogni apertura della tab,
+   * ed e' li' che si perdevano i secondi al cambio tab.
+   */
+  const BOOKINGS_PER_PAGINA = 25
+  const [bookingsPagina, setBookingsPagina] = useState(1)
+  // Cambiare ricerca o periodo riporta alla prima pagina: restare a pagina 7
+  // su un risultato da 3 righe mostrerebbe una lista vuota.
+  useEffect(() => { setBookingsPagina(1) }, [bookingSearchQuery, bookingDateRange.from, bookingDateRange.to, viewMode])
+  const bookingsPaginati = useMemo(() => {
+    const start = (bookingsPagina - 1) * BOOKINGS_PER_PAGINA
+    return bookingsVisibili.slice(start, start + BOOKINGS_PER_PAGINA)
+  }, [bookingsVisibili, bookingsPagina])
+  // Se un salvataggio accorcia la lista la pagina corrente puo' finire oltre
+  // la fine: si rientra sull'ultima pagina esistente invece di mostrare vuoto.
+  useEffect(() => {
+    const pagine = Math.max(1, Math.ceil(bookingsVisibili.length / BOOKINGS_PER_PAGINA))
+    if (bookingsPagina > pagine) setBookingsPagina(pagine)
+  }, [bookingsVisibili.length, bookingsPagina])
+
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2824,6 +2850,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       }
 
       setBookings(filteredBookings)
+
+      // 01/09/2026 - primo disegno appena ci sono le prenotazioni.
+      //
+      // Lo spinner copriva TUTTA la tab fino all'ultima delle sei letture:
+      // l'elenco era gia' pronto ma restava nascosto mentre arrivavano
+      // anagrafica clienti, flotta e API reservations. Ora l'elenco compare
+      // subito; le altre letture proseguono e riempiono form e dropdown
+      // qualche decimo di secondo dopo, senza cambiare nulla di cio' che si
+      // vede in tabella.
+      setLoading(false)
 
       // I clienti "derivati" dalle prenotazioni. Prima erano una SECONDA
       // lettura completa di `bookings` (stesse righe, sei colonne) e per di
@@ -11414,7 +11450,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               )}
 
             {/* Display bookings as cards on mobile */}
-            {bookingsVisibili.map((booking) => {
+            {bookingsPaginati.map((booking) => {
               const isCarWash = booking.service_type === 'car_wash'
               // 2026-06-04: riga "auto di cortesia" (shadow rental del Prime Wash).
               // Non è un noleggio pagato: badge dedicato, niente "Pagato".
@@ -11594,7 +11630,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </thead>
                 <tbody>
                   {/* Display bookings from bookings table (single source of truth) */}
-                  {bookingsVisibili.map((booking) => {
+                  {bookingsPaginati.map((booking) => {
                     const isCarWash = booking.service_type === 'car_wash'
                     const isCancelled = booking.status === 'cancelled' || booking.status === 'annullata'
                     const isCourtesy = booking.booking_details?.is_courtesy_block === true
@@ -11817,6 +11853,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               </table>
             </div>
           </div>
+
+          {/* Barra pagine: vale sia per le card mobile sia per la tabella. */}
+          <Paginazione
+            pagina={bookingsPagina}
+            totale={bookingsVisibili.length}
+            perPagina={BOOKINGS_PER_PAGINA}
+            onChange={(p) => { setBookingsPagina(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            etichetta={viewMode === 'uscite' ? 'uscite' : 'prenotazioni'}
+          />
 
           </>
         )}

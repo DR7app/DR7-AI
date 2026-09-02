@@ -107,9 +107,22 @@ const handler: Handler = async (event) => {
   const valutazione = valutaMeteo(config, reading.forecast)
   const oraRoma = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date()))
 
+  // 02/09/2026 — il meteo passa dalla cache della CDN.
+  //
+  // Ogni apertura di Prenotazioni (e di Uscite Straordinarie) aspettava una
+  // chiamata a Open-Meteo: da uno a tre secondi, per un dato che cambia ogni
+  // ora. Ora la prima richiesta lo va a prendere e le successive lo trovano
+  // gia' pronto sul bordo, per dieci minuti. Nella mezz'ora successiva la
+  // copia scaduta viene servita subito mentre il ricalcolo gira dietro, quindi
+  // nessuno aspetta mai Open-Meteo.
+  const intestazioniCache = {
+    ...headers,
+    'Netlify-CDN-Cache-Control': 'public, durable, s-maxage=600, stale-while-revalidate=1800',
+  }
+
   return {
     statusCode: 200,
-    headers,
+    headers: intestazioniCache,
     body: JSON.stringify({
       available: true,
       business,

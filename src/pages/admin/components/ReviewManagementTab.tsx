@@ -346,41 +346,65 @@ export default function ReviewManagementTab() {
       // pagina a blocchi di 1000 (tetto PostgREST) finche' il bucket e' esaurito.
       const PAGE_SIZE = 1000
       const MAX_PAGES = 10
-      const fetchBucket = async (b: TabKey) => {
-        const rows: ReviewCandidate[] = []
-        for (let page = 0; page < MAX_PAGES; page++) {
-          const qs = new URLSearchParams({
-            eligibility_status: b,
-            service_type: filterServiceType,
-            limit: String(PAGE_SIZE),
-            offset: String(page * PAGE_SIZE),
-          })
-          const d = await fetch(`${NETLIFY_BASE}/review-candidates?${qs}`)
-            .then(r => r.ok ? r.json() : { candidates: [] })
-            .catch(() => ({ candidates: [] }))
-          const batch: ReviewCandidate[] = d.candidates || d || []
-          rows.push(...batch)
-          if (batch.length < PAGE_SIZE) break
-        }
-        return { candidates: rows }
-      }
-      const results = await Promise.all(buckets.map(fetchBucket))
-      const merged = results.flatMap(d => d.candidates || d || [])
+
       // Dedupe by id — a row can briefly appear in two buckets while the
       // background autoFixEligibility sweep is moving it ELIGIBLE→TO_REVIEW,
       // and we don't want the same person rendered twice. Keep the most
       // recently updated copy when there's a conflict.
       const byId = new Map<string, ReviewCandidate>()
-      for (const c of merged) {
-        const existing = byId.get(c.id)
-        if (!existing || (c.updated_at || '') > (existing.updated_at || '')) {
-          byId.set(c.id, c)
+      const raccogli = (righe: ReviewCandidate[]) => {
+        for (const c of righe) {
+          const existing = byId.get(c.id)
+          if (!existing || (c.updated_at || '') > (existing.updated_at || '')) {
+            byId.set(c.id, c)
+          }
         }
+        setCandidates(Array.from(byId.values()))
       }
-      setCandidates(Array.from(byId.values()))
+
+      const leggi = async (b: TabKey, page: number): Promise<ReviewCandidate[]> => {
+        const qs = new URLSearchParams({
+          eligibility_status: b,
+          service_type: filterServiceType,
+          limit: String(PAGE_SIZE),
+          offset: String(page * PAGE_SIZE),
+        })
+        const d = await fetch(`${NETLIFY_BASE}/review-candidates?${qs}`)
+          .then(r => r.ok ? r.json() : { candidates: [] })
+          .catch(() => ({ candidates: [] }))
+        return (d.candidates || d || []) as ReviewCandidate[]
+      }
+
+      // 02/09/2026 — prima pagina di ogni bucket, insieme.
+      //
+      // Prima ogni bucket sfogliava le sue pagine IN SERIE e si disegnava
+      // qualcosa solo quando l'ultima delle tre catene aveva finito: la tab
+      // restava su "Caricamento..." per una quindicina di secondi. Ora i primi
+      // mille di ogni bucket arrivano in parallelo e vanno subito a schermo;
+      // il resto (raro: serve oltre mille righe in un solo bucket) continua
+      // dietro e si aggiunge da solo.
+      const prime = await Promise.all(buckets.map(b => leggi(b, 0)))
+      raccogli(prime.flat())
+
+      const restanti = buckets
+        .map((b, i) => ({ b, pieno: prime[i].length >= PAGE_SIZE }))
+        .filter(x => x.pieno)
+      if (restanti.length > 0) {
+        void (async () => {
+          for (const { b } of restanti) {
+            for (let page = 1; page < MAX_PAGES; page++) {
+              const batch = await leggi(b, page)
+              if (batch.length > 0) raccogli(batch)
+              if (batch.length < PAGE_SIZE) break
+            }
+          }
+        })()
+      }
     } catch (err: unknown) {
       console.error('fetchCandidates error:', err)
       toast.error('Errore nel caricamento dei candidati recensione')
+    } finally {
+      setLoading(false)
     }
   }
 

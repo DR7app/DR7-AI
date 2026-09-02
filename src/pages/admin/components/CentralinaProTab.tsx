@@ -7,6 +7,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { invalidatePaymentMethodsCache } from '../../../hooks/usePaymentMethods'
 import { reloadAutoInvoiceConfig } from '../../../utils/paymentMethodAutoInvoice'
+import { svuotaCacheBusinessConfig } from '../../../utils/businessConfigClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // Cataloghi per business (roadmap 15): riuso dei componenti catalogo esistenti,
 // nessuna duplicazione. Renderizzati nella sezione "Catalogo" della Centralina
@@ -1500,6 +1501,10 @@ async function savePersisted(snap: PersistedSnapshot, rowId: string = 'main') {
     console.error('[CentralinaPro] failed to save to Supabase:', error)
     toast.error(`Salvataggio DB fallito: ${error.message}`)
   }
+  // La config e' tenuta un minuto in memoria dalle altre tab: dopo un
+  // salvataggio la si butta, altrimenti chi cambia pagina subito vedrebbe
+  // ancora i valori vecchi.
+  svuotaCacheBusinessConfig()
 }
 
 // Accept both the legacy single-tier shape ({ min_revenue, coeff }) and the new

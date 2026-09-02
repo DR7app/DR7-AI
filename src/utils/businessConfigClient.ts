@@ -34,11 +34,41 @@ export function businessRowForServiceType(serviceType?: string | null): string {
 }
 
 /**
+ * Cache di processo (02/09/2026).
+ *
+ * La riga `main` della Centralina pesa 204 KB e la stessa apertura di tab la
+ * chiedeva tre o quattro volte: la leggono il calcolo prezzi, gli orari, i
+ * metodi di pagamento, il meteo... ognuno per conto suo. Erano 800 KB e mezzo
+ * secondo buttati a ogni cambio pagina.
+ *
+ * Qui la risposta viene tenuta per un minuto e le chiamate che partono insieme
+ * condividono la stessa promessa. Chi salva dalla Centralina chiama
+ * `svuotaCacheBusinessConfig()` e la prossima lettura torna al database.
+ */
+const CACHE_MS = 60_000
+type VoceCache = { quando: number; attesa: Promise<{ business: ProConfig; main: ProConfig }> }
+const cache = new Map<string, VoceCache>()
+
+export function svuotaCacheBusinessConfig() {
+    cache.clear()
+}
+
+/**
  * Config del business + config di `main`. Il chiamante cerca prima nella
  * prima, poi nella seconda. Una sola query quando il business E' main.
  */
 export async function loadBusinessConfig(serviceType?: string | null): Promise<{ business: ProConfig; main: ProConfig }> {
     const rowId = businessRowForServiceType(serviceType)
+    const inCache = cache.get(rowId)
+    if (inCache && Date.now() - inCache.quando < CACHE_MS) return inCache.attesa
+    const attesa = leggiBusinessConfig(rowId)
+    cache.set(rowId, { quando: Date.now(), attesa })
+    // Un errore non deve restare in cache per un minuto.
+    attesa.catch(() => cache.delete(rowId))
+    return attesa
+}
+
+async function leggiBusinessConfig(rowId: string): Promise<{ business: ProConfig; main: ProConfig }> {
     try {
         const ids = rowId === 'main' ? ['main'] : [rowId, 'main']
         const { data } = await supabase

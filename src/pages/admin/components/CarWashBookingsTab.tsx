@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import Paginazione from './Paginazione'
 import { flushSync } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import { romeDateFromParts, romeIsoFromParts } from '../../../utils/timezoneUtils'
@@ -418,6 +419,51 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (bookingDateRange.to && d > bookingDateRange.to) return false
     return true
   }
+
+  /**
+   * Elenco lavaggi filtrato e a pagine (01/09/2026).
+   *
+   * Lo stesso filtro (periodo + ricerca) era scritto DUE volte dentro il JSX,
+   * una per la tabella desktop e una per le card mobile: veniva rifatto su
+   * tutte le 1500 prenotazioni a ogni render, anche solo digitando nel form.
+   * E soprattutto entrambe le liste finivano nel DOM per intero, perche' le
+   * card mobile sono nascoste con `lg:hidden` ma restano disegnate.
+   *
+   * Qui il filtro si calcola una volta sola e a schermo va una pagina: le
+   * regole di selezione sono identiche a prima.
+   */
+  const lavaggiVisibili = useMemo(() => {
+    const norm = (x: string) => x.replace(/[\s\-\+\(\)]/g, '')
+    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
+    return bookings.filter(booking => {
+      if (!bookingPassesDate(booking)) return false
+      if (words.length === 0) return true
+      const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
+      const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+      const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
+      const vehicleName = (booking.vehicle_name || '').toLowerCase()
+      const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
+      const bookingId = String(booking.id || '').toLowerCase()
+      const bookingCode = bookingId.substring(0, 8)
+      // Normalise the SAME way the query is normalised — strip spaces,
+      // hyphens, plus, parentheses so "DR7-2A37CACB" matches "dr72a37cacb".
+      const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
+      return words.every(word => searchText.includes(word))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookings, bookingSearchQuery, bookingDateRange.from, bookingDateRange.to])
+
+  const LAVAGGI_PER_PAGINA = 25
+  const [lavaggiPagina, setLavaggiPagina] = useState(1)
+  useEffect(() => { setLavaggiPagina(1) }, [bookingSearchQuery, bookingDateRange.from, bookingDateRange.to])
+  const lavaggiPaginati = useMemo(() => {
+    const start = (lavaggiPagina - 1) * LAVAGGI_PER_PAGINA
+    return lavaggiVisibili.slice(start, start + LAVAGGI_PER_PAGINA)
+  }, [lavaggiVisibili, lavaggiPagina])
+  useEffect(() => {
+    const pagine = Math.max(1, Math.ceil(lavaggiVisibili.length / LAVAGGI_PER_PAGINA))
+    if (lavaggiPagina > pagine) setLavaggiPagina(pagine)
+  }, [lavaggiVisibili.length, lavaggiPagina])
 
   // Manual price override
   const [manualPrice, setManualPrice] = useState<string | null>(null)
@@ -5332,24 +5378,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.filter(booking => {
-                    if (!bookingPassesDate(booking)) return false
-                    if (!bookingSearchQuery) return true
-                    const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-                    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
-                    const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
-                    const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-                    const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
-                    const vehicleName = (booking.vehicle_name || '').toLowerCase()
-                    const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-                    const bookingId = String(booking.id || '').toLowerCase()
-                    const bookingCode = bookingId.substring(0, 8)
-                    // Normalise the SAME way the query is normalised — strip
-                    // spaces, hyphens, plus, parentheses from every field so
-                    // "DR7-2A37CACB" matches "dr72a37cacb" in the haystack.
-                    const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-                    return words.every(word => searchText.includes(word))
-                  }).map((booking) => (
+                  {lavaggiPaginati.map((booking) => (
                     <tr
                       key={booking.id}
                       onClick={() => setDettaglioBookingId(booking.id)}
@@ -5518,21 +5547,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
             {/* Mobile cards — Apple style */}
             <div className="lg:hidden space-y-3">
-              {bookings.filter(booking => {
-                if (!bookingPassesDate(booking)) return false
-                if (!bookingSearchQuery) return true
-                const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-                const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
-                const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
-                const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-                const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
-                const vehicleName = (booking.vehicle_name || '').toLowerCase()
-                const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-                const bookingId = String(booking.id || '').toLowerCase()
-                const bookingCode = bookingId.substring(0, 8)
-                const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-                return words.every(word => searchText.includes(word))
-              }).map((booking) => {
+              {lavaggiPaginati.map((booking) => {
                 const bPaid = booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
                 const bPending = booking.payment_status === 'pending'
                 const isRientro = booking.customer_name === 'Lavaggio Rientro'
@@ -5684,6 +5699,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 )
               })}
             </div>
+
+            {/* Barra pagine: vale sia per la tabella sia per le card mobile. */}
+            <Paginazione
+              pagina={lavaggiPagina}
+              totale={lavaggiVisibili.length}
+              perPagina={LAVAGGI_PER_PAGINA}
+              onChange={(p) => { setLavaggiPagina(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              etichetta="prenotazioni"
+            />
           </div>
         )
       }
