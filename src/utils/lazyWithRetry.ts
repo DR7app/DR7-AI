@@ -16,6 +16,48 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 
 const REFRESH_KEY = 'chunk_load_refresh'
+// Quante ricariche automatiche si concedono, e dopo quanto il conto riparte.
+const RICARICHE_MAX = 3
+const CONTO_SCADE_MS = 10 * 60 * 1000
+
+/**
+ * Si puo' ricaricare la pagina? (02/09/2026)
+ *
+ * Prima era un si'/no: una sola ricarica per sessione. Bastavano DUE
+ * pubblicazioni di seguito mentre la scheda era aperta -- e succede, quando
+ * si lavora sul gestionale -- perche' la seconda trovasse il segno gia'
+ * messo dalla prima: niente ricarica, l'import falliva e la tab restava
+ * vuota. Ophelie, 02/09/2026: «ca ne charge plus rien du tout».
+ *
+ * Ora si contano: fino a `RICARICHE_MAX`, e il conto riparte da zero dopo
+ * `CONTO_SCADE_MS` (o al primo import riuscito). Il tetto resta perche' se
+ * il chunk manca davvero la pagina non deve ricaricarsi all'infinito.
+ */
+export function decidiRicarica(
+  grezzo: string | null,
+  adesso: number = Date.now()
+): { ricarica: boolean; nuovoValore: string } {
+  let n = 0
+  let quando = 0
+  if (grezzo) {
+    let letto: unknown = null
+    try { letto = JSON.parse(grezzo) } catch { letto = null }
+    if (letto && typeof letto === 'object') {
+      const o = letto as { n?: unknown; t?: unknown }
+      n = Number(o.n) || 0
+      quando = Number(o.t) || 0
+    } else {
+      // Il vecchio formato era la stringa '1' (che JSON legge come numero):
+      // vale come una ricarica gia' fatta.
+      n = 1
+      quando = adesso
+    }
+  }
+  // Passato abbastanza tempo, e' un'altra storia: si riparte da zero.
+  if (quando && adesso - quando > CONTO_SCADE_MS) n = 0
+  const ricarica = n < RICARICHE_MAX
+  return { ricarica, nuovoValore: JSON.stringify({ n: n + 1, t: adesso }) }
+}
 
 /** Componente pigro che sa anche scaricarsi in anticipo. */
 export type LazyPrecaricabile<T extends ComponentType<any>> = LazyExoticComponent<T> & {
@@ -79,16 +121,19 @@ async function retryImport<T extends ComponentType<any>>(
         continue
       }
 
-      // All retries exhausted — try ONE hard refresh
-      if (isChunkError && !sessionStorage.getItem(REFRESH_KEY)) {
-        console.warn('[lazyWithRetry] All retries failed. Performing hard refresh...')
-        sessionStorage.setItem(REFRESH_KEY, '1')
-        window.location.reload()
-        // Return a never-resolving promise while the page reloads
-        return new Promise(() => {})
+      // Finiti i tentativi: si ricarica la pagina, se il conto lo permette.
+      if (isChunkError) {
+        const { ricarica, nuovoValore } = decidiRicarica(sessionStorage.getItem(REFRESH_KEY))
+        if (ricarica) {
+          console.warn('[lazyWithRetry] All retries failed. Performing hard refresh...')
+          sessionStorage.setItem(REFRESH_KEY, nuovoValore)
+          window.location.reload()
+          // Return a never-resolving promise while the page reloads
+          return new Promise(() => {})
+        }
       }
 
-      // Already refreshed once, or not a chunk error — propagate
+      // Troppe ricariche di fila, o non e' un errore di chunk — si propaga
       throw error
     }
   }

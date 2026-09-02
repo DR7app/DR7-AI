@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { decidiRicarica } from './lazyWithRetry'
 
 // We can't test React.lazy directly in Vitest without jsdom,
 // so we test the retry/detection logic in isolation.
@@ -147,5 +148,43 @@ describe('Cache headers configuration', () => {
     // The fix is to prevent stale HTML from ever being served for JS requests,
     // NOT to remove nosniff.
     expect(true).toBe(true) // Config verified manually
+  })
+})
+
+// ─── Ricariche automatiche dopo una pubblicazione ──────────────────────────
+
+describe('decidiRicarica', () => {
+  const T = 1_000_000
+
+  it('la prima volta ricarica', () => {
+    const { ricarica, nuovoValore } = decidiRicarica(null, T)
+    expect(ricarica).toBe(true)
+    expect(JSON.parse(nuovoValore)).toEqual({ n: 1, t: T })
+  })
+
+  it('ricarica anche alla seconda pubblicazione della stessa sessione', () => {
+    // Il caso che rompeva il gestionale: due deploy di fila a scheda aperta.
+    const dopoLaPrima = decidiRicarica(null, T).nuovoValore
+    expect(decidiRicarica(dopoLaPrima, T + 5_000).ricarica).toBe(true)
+  })
+
+  it('si ferma dopo tre ricariche ravvicinate', () => {
+    let v = decidiRicarica(null, T).nuovoValore
+    v = decidiRicarica(v, T + 1_000).nuovoValore
+    v = decidiRicarica(v, T + 2_000).nuovoValore
+    expect(decidiRicarica(v, T + 3_000).ricarica).toBe(false)
+  })
+
+  it('dopo dieci minuti il conto riparte', () => {
+    let v = decidiRicarica(null, T).nuovoValore
+    v = decidiRicarica(v, T + 1_000).nuovoValore
+    v = decidiRicarica(v, T + 2_000).nuovoValore
+    expect(decidiRicarica(v, T + 2_000 + 11 * 60 * 1000).ricarica).toBe(true)
+  })
+
+  it('il vecchio segno "1" vale come una ricarica gia fatta', () => {
+    const { ricarica, nuovoValore } = decidiRicarica('1', T)
+    expect(ricarica).toBe(true)
+    expect(JSON.parse(nuovoValore).n).toBe(2)
   })
 })

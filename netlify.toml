@@ -175,13 +175,24 @@
 # fattura risulta pagata. La function dr7-privilege-cron resta
 # disponibile come catch-all manuale.
 
+# Un chunk che non c'e' piu' deve rispondere 404, non la home (02/09/2026).
+#
+# Dopo una pubblicazione i nomi dei file in /assets cambiano tutti. Una scheda
+# rimasta aperta chiede ancora quelli vecchi: senza questa regola il catch-all
+# qui sotto rispondeva index.html con stato 200, e il browser si trovava una
+# pagina HTML al posto di un modulo JavaScript. Le regole di redirect valgono
+# solo quando il file NON esiste, quindi i chunk buoni continuano a uscire
+# come prima; spariscono solo i 300 KB di HTML spacciati per JavaScript.
+[[redirects]]
+  from = "/assets/*"
+  to = "/index.html"
+  status = 404
+
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.
-# When a fingerprinted chunk is missing (stale HTML after deploy),
-# this redirect serves index.html with 200 — causing the MIME error.
-# The fix is NOT in the redirect (Netlify doesn't support conditions here),
-# but in the cache headers above: index.html is never cached, so the browser
-# always gets the latest HTML with correct chunk references.
+# Un chunk mancante non passa di qui: lo intercetta la regola /assets/* sopra.
+# E index.html non viene mai messo in cache (headers piu' su), cosi' la
+# ricarica prende sempre l'HTML nuovo, con i nomi dei chunk giusti.
 [[redirects]]
   from = "/*"
   to = "/index.html"
