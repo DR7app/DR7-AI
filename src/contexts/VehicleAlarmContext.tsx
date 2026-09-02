@@ -500,16 +500,87 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             const tenMinutesFuture = new Date(now.getTime() + futureLeadMinReturn * 60000)
             const tenMinutesFutureISO = tenMinutesFuture.toISOString()
 
+
+            // 02/09/2026 - i cinque controlli leggevano `bookings` UNO DOPO
+            // L'ALTRO: cinque giri di rete in fila a ogni apertura di pagina
+            // del gestionale, per ogni operatore collegato. Sono indipendenti
+            // fra loro - filtri diversi sulla stessa tabella - quindi ora
+            // partono insieme e si aspetta il piu' lento.
+            //
+            // Le query sono le stesse, carattere per carattere, e l'ordine in
+            // cui gli allarmi vengono valutati e suonati NON cambia: ogni
+            // blocco resta dov'era e aspetta la sua risposta al suo turno.
+            //
+            // Il controllo spento non parte, come prima: se `is_enabled` e'
+            // falso non si legge niente.
+            const nessunaRiga = () => Promise.resolve({ data: null, error: null })
+            const todayISO = now.toISOString().split('T')[0]
+            const depositFutureISO = new Date(now.getTime() + futureLeadMinDeposit * 60000).toISOString()
+            const unpaidFutureISO = new Date(now.getTime() + futureLeadMinUnpaid * 60000).toISOString()
+
+            const pCarWash = cfgCarWash.is_enabled
+                ? supabase
+                    .from('bookings')
+                    .select('id, customer_name, vehicle_name, service_name, appointment_date, appointment_time, status, booking_details, booking_source, price_total')
+                    .eq('service_type', 'car_wash')
+                    .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                    .eq('appointment_date', todayISO)
+                    .then(r => r)
+                : nessunaRiga()
+
+            const pReturnsBefore = cfgReturnBefore.is_enabled
+                ? supabase
+                    .from('bookings')
+                    .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
+                    .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                    .not('service_type', 'eq', 'car_wash')
+                    .not('customer_name', 'eq', 'Lavaggio Rientro')
+                    .not('vehicle_name', 'ilike', 'test%')
+                    .is('alarm_triggered_at', null)
+                    .gte('dropoff_date', now.toISOString())
+                    .lte('dropoff_date', tenMinutesFutureISO)
+                    .then(r => r)
+                : nessunaRiga()
+
+            const pReturnsAfter = cfgReturnAfter.is_enabled
+                ? supabase
+                    .from('bookings')
+                    .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
+                    .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                    .not('service_type', 'eq', 'car_wash')
+                    .not('customer_name', 'eq', 'Lavaggio Rientro')
+                    .not('vehicle_name', 'ilike', 'test%')
+                    .is('alarm_triggered_at', null)
+                    .lte('dropoff_date', tenMinutesAgoISO)
+                    .then(r => r)
+                : nessunaRiga()
+
+            const pPickups = cfgDeposit.is_enabled
+                ? supabase
+                    .from('bookings')
+                    .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type, deposit_amount')
+                    .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                    .not('service_type', 'eq', 'car_wash')
+                    .gte('pickup_date', now.toISOString())
+                    .lte('pickup_date', depositFutureISO)
+                    .then(r => r)
+                : nessunaRiga()
+
+            const pUnpaid = cfgUnpaidPickup.is_enabled
+                ? supabase
+                    .from('bookings')
+                    .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details, service_type')
+                    .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
+                    .not('payment_status', 'in', '("paid","completed","succeeded")')
+                    .not('service_type', 'eq', 'car_wash')
+                    .lte('pickup_date', unpaidFutureISO)
+                    .then(r => r)
+                : nessunaRiga()
+
             // --- 0. CHECK CAR WASH (lead-time mins BEFORE appointment) ---
             // ONLY for external client washes, NOT rientro/internal washes
             if (!cfgCarWash.is_enabled) { /* skip */ } else {
-            const todayISO = now.toISOString().split('T')[0]
-            const { data: carWash, error: carWashError } = await supabase
-                .from('bookings')
-                .select('id, customer_name, vehicle_name, service_name, appointment_date, appointment_time, status, booking_details, booking_source, price_total')
-                .eq('service_type', 'car_wash')
-                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
-                .eq('appointment_date', todayISO)
+            const { data: carWash, error: carWashError } = await pCarWash
 
             if (!carWashError && carWash && carWash.length > 0) {
                 for (const booking of carWash) {
@@ -570,16 +641,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (!cfgReturnBefore.is_enabled) { /* skip */ } else {
             // Level detection: any active rental whose dropoff is within the
             // next `futureLeadMinReturn` minutes and hasn't been alarmed yet.
-            const { data: returnsBefore, error: returnsBeforeError } = await supabase
-                .from('bookings')
-                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
-                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
-                .not('service_type', 'eq', 'car_wash')
-                .not('customer_name', 'eq', 'Lavaggio Rientro')
-                .not('vehicle_name', 'ilike', 'test%')
-                .is('alarm_triggered_at', null)
-                .gte('dropoff_date', now.toISOString())
-                .lte('dropoff_date', tenMinutesFutureISO)
+            const { data: returnsBefore, error: returnsBeforeError } = await pReturnsBefore
 
             if (!returnsBeforeError && returnsBefore && returnsBefore.length > 0) {
                 for (const booking of returnsBefore) {
@@ -617,15 +679,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // on the very next polling tick — edge detection silently lost
             // those because the tick had to land exactly on the threshold
             // minute.
-            const { data: returnsAfter, error: returnsAfterError } = await supabase
-                .from('bookings')
-                .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
-                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
-                .not('service_type', 'eq', 'car_wash')
-                .not('customer_name', 'eq', 'Lavaggio Rientro')
-                .not('vehicle_name', 'ilike', 'test%')
-                .is('alarm_triggered_at', null)
-                .lte('dropoff_date', tenMinutesAgoISO)
+            const { data: returnsAfter, error: returnsAfterError } = await pReturnsAfter
 
             if (!returnsAfterError && returnsAfter && returnsAfter.length > 0) {
                 for (const booking of returnsAfter) {
@@ -655,16 +709,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (!cfgDeposit.is_enabled) { /* skip */ } else {
             // Level detection: any pickup within the next `futureLeadMinDeposit`
             // minutes that has a non-zero deposit and hasn't been alarmed.
-            const depositFuture = new Date(now.getTime() + futureLeadMinDeposit * 60000)
-            const depositFutureISO = depositFuture.toISOString()
-
-            const { data: pickups, error: pickupsError } = await supabase
-                .from('bookings')
-                .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type, deposit_amount')
-                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
-                .not('service_type', 'eq', 'car_wash')
-                .gte('pickup_date', now.toISOString())
-                .lte('pickup_date', depositFutureISO)
+            const { data: pickups, error: pickupsError } = await pPickups
 
             if (!pickupsError && pickups && pickups.length > 0) {
                 for (const booking of pickups) {
@@ -709,16 +754,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // `futureLeadMinUnpaid` minutes (or already past) that hasn't
             // been alarmed yet. Three payment values count as paid:
             // paid, completed, succeeded (project rule).
-            const unpaidFuture = new Date(now.getTime() + futureLeadMinUnpaid * 60000)
-            const unpaidFutureISO = unpaidFuture.toISOString()
-
-            const { data: unpaidPickups, error: unpaidError } = await supabase
-                .from('bookings')
-                .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details, service_type')
-                .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
-                .not('payment_status', 'in', '("paid","completed","succeeded")')
-                .not('service_type', 'eq', 'car_wash')
-                .lte('pickup_date', unpaidFutureISO)
+            const { data: unpaidPickups, error: unpaidError } = await pUnpaid
 
             if (!unpaidError && unpaidPickups && unpaidPickups.length > 0) {
                 for (const booking of unpaidPickups) {

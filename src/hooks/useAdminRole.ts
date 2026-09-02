@@ -125,24 +125,38 @@ export function useAdminRole(): AdminRole {
           // Fallback su email se user_id non e' ancora settato.
           // Tabella separata da admins: l'upload avviene da OperatorProfileModal
           // / RilevazioneOrariTab e scrive su operatori_persone.avatar_url.
-          try {
-            let opRow: { avatar_url?: string | null } | null = null
-            const { data: byUser } = await supabase
-              .from('operatori_persone')
-              .select('avatar_url')
-              .eq('user_id', user.id)
-              .maybeSingle()
-            opRow = byUser
-            if (!opRow && user.email) {
-              const { data: byEmail } = await supabase
-                .from('operatori_persone')
-                .select('avatar_url')
-                .eq('email', user.email)
-                .maybeSingle()
-              opRow = byEmail
-            }
-            if (opRow?.avatar_url) setAdminAvatar(opRow.avatar_url)
-          } catch { /* avatar opzionale, niente blocco se fallisce */ }
+          //
+          // 02/09/2026 - questo blocco era `await`, dentro il try che finisce
+          // con `setLoading(false)`: il gestionale teneva ferma la barra
+          // laterale, e quindi la prima schermata, per aspettare una FOTO.
+          // Due giri di rete in fila, per giunta, perche' la ricerca per email
+          // partiva solo dopo quella per user_id.
+          //
+          // Ora parte per conto suo: il ruolo e i permessi non lo aspettano
+          // piu' e l'avatar compare quando arriva. Le due ricerche partono
+          // insieme e vince comunque quella per user_id, esattamente come
+          // prima (l'email era solo il ripiego).
+          void (async () => {
+            try {
+              const [perUserId, perEmail] = await Promise.all([
+                supabase
+                  .from('operatori_persone')
+                  .select('avatar_url')
+                  .eq('user_id', user.id)
+                  .maybeSingle(),
+                user.email
+                  ? supabase
+                      .from('operatori_persone')
+                      .select('avatar_url')
+                      .eq('email', user.email)
+                      .maybeSingle()
+                  : Promise.resolve({ data: null }),
+              ])
+              const opRow: { avatar_url?: string | null } | null =
+                perUserId.data ?? perEmail.data
+              if (opRow?.avatar_url) setAdminAvatar(opRow.avatar_url)
+            } catch { /* avatar opzionale, niente blocco se fallisce */ }
+          })()
         }
       } catch (err) {
         console.error('Failed to load admin role:', err)
