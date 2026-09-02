@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { authFetch } from '../utils/authFetch'
 import { supabase } from '../supabaseClient'
 import { fetchAllRows } from '../utils/fetchAllRows'
@@ -96,12 +96,25 @@ interface ClientStatusContextValue {
   statusDefs: ClientStatusDef[]
   /** Ricarica la configurazione dopo un salvataggio in Centralina Pro. */
   refreshStatusConfig: () => Promise<void>
+  /**
+   * Chiede l'anagrafica, una volta sola. La chiama `useClientStatus`: paga
+   * la lettura solo chi gli status li usa davvero.
+   */
+  richiediAnagrafica: () => void
 }
 
 const Ctx = createContext<ClientStatusContextValue | undefined>(undefined)
 
 export function useClientStatus() {
   const v = useContext(Ctx)
+  // La richiesta parte da qui, non dal provider: il provider avvolge TUTTA la
+  // dashboard, quindi caricava l'anagrafica anche nelle 90 e passa schermate
+  // che gli status non li mostrano nemmeno. Ora la paga chi la usa.
+  //
+  // L'hook sta PRIMA del throw di proposito: l'ordine degli hook non deve
+  // dipendere da una condizione.
+  const richiedi = v?.richiediAnagrafica
+  useEffect(() => { richiedi?.() }, [richiedi])
   if (!v) throw new Error('useClientStatus must be used within ClientStatusProvider')
   return v
 }
@@ -220,8 +233,19 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
-    load()
+  // 02/09/2026 - qui c'era `useEffect(() => { load() }, [load])`: l'anagrafica
+  // completa partiva a OGNI apertura di pagina, per ogni operatore, anche
+  // quando a schermo non c'era un solo badge status. La leggono in quattro
+  // (Prenotazioni, Lavaggi, Preventivi, Clienti) su quasi cento schermate.
+  //
+  // Ora la prima chiamata a `useClientStatus` la chiede, e le successive si
+  // attaccano alla stessa. Stessa lettura, stesse righe, stessi badge: cambia
+  // solo QUANDO parte, e su quali schermate.
+  const richiestaRef = useRef(false)
+  const richiediAnagrafica = useCallback(() => {
+    if (richiestaRef.current) return
+    richiestaRef.current = true
+    void load()
   }, [load])
 
   // Configurazione status (nomi, colori, avvertenze) da Centralina Pro.
@@ -263,6 +287,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ClientStatusContextValue>(() => ({
     loading,
+    richiediAnagrafica,
     refresh: load,
     setTier,
     tierMeta,
@@ -290,7 +315,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       }
       return null
     },
-  }), [loading, load, setTier, tierMeta, statusDefs, refreshStatusConfig, byCustomerId, byUserId, byEmail, byPhone])
+  }), [loading, load, richiediAnagrafica, setTier, tierMeta, statusDefs, refreshStatusConfig, byCustomerId, byUserId, byEmail, byPhone])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
