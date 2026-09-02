@@ -434,6 +434,29 @@ export default function UnpaidBookingsTab() {
         .order('created_at', { ascending: false })
         .range(from, to))
 
+      // 02/09/2026 - fatture e addebiti erano letti DOPO le prenotazioni, in
+      // fondo alla funzione, quindi il tempo di apertura era la somma di tre
+      // giri: prenotazioni, poi fatture, poi addebiti. Non dipendono dalle
+      // prenotazioni - nessun filtro qui sotto usa gli id appena letti -
+      // quindi partono insieme e si aspetta la piu' lenta.
+      //
+      // Le due query restano identiche, carattere per carattere: stessa
+      // tabella, stesse colonne, stesso filtro. Vengono usate esattamente
+      // dove erano prima, quindi ogni importo a video e' lo stesso di prima.
+      //
+      // `.then(r => r)` fa partire davvero la query: senza, supabase-js la
+      // tiene ferma fino all'await e tornerebbe in fila come prima.
+      const fatturePromise = supabase
+        .from('fatture')
+        .select('id, booking_id, numero_fattura, items')
+        .then(r => r)
+
+      const addebitiPromise = supabase
+        .from('pending_addebiti')
+        .select('customer_email, charged_amount_cents, amount_cents, status')
+        .eq('status', 'charged')
+        .then(r => r)
+
       const [activeRes, terminalWithItemsRes, terminalUnpaidRes] = await Promise.all([
         activePromise, terminalWithItemsPromise, terminalUnpaidPromise,
       ])
@@ -485,9 +508,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
 
-      const { data: fatture } = await supabase
-        .from('fatture')
-        .select('id, booking_id, numero_fattura, items')
+      const { data: fatture } = await fatturePromise
 
       const fItemsMap: Record<string, FatturaItem[]> = {}
       const bookingIdsWithFatturaItems = new Set<string>()
@@ -544,11 +565,8 @@ export default function UnpaidBookingsTab() {
 
       setFatturaItemsMap(fItemsMap)
 
-      // Fetch charged amounts from pending_addebiti
-      const { data: addebiti } = await supabase
-        .from('pending_addebiti')
-        .select('customer_email, charged_amount_cents, amount_cents, status')
-        .eq('status', 'charged')
+      // Fetch charged amounts from pending_addebiti (partita piu' sopra)
+      const { data: addebiti } = await addebitiPromise
 
       const mitMap: Record<string, number> = {}
       for (const a of (addebiti || [])) {
