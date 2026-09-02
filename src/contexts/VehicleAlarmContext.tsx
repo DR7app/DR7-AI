@@ -1152,7 +1152,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         // agganciato in tempo reale ad `alarm_events` (postgres_changes).
         // Resta invece il polling a 30 s di LateReturnAlarm - e' la sirena
         // dei rientri in ritardo, query stretta su poche righe.
-        runChecks()
+        // 02/09/2026 - il giro parte quando la pagina ha finito di caricare la
+        // SUA roba. E' un controllo di sottofondo (nessuno lo aspetta a
+        // schermo) ma legge duemila prenotazioni: partendo insieme alla tab si
+        // contendeva la rete con i dati che l'operatore sta guardando. Un paio
+        // di secondi dopo cambia nulla per gli allarmi e libera l'apertura.
+        const avvio = window.setTimeout(runChecks, 2000)
+        return () => window.clearTimeout(avvio)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, alarmsDisabledForUser])
 
