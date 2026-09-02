@@ -4,6 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
 import { rispostaJson } from './utils/rispostaCompressa'
 
+/**
+ * Colonne realmente presenti su `customers_extended`, scoperte al primo
+ * rifiuto e riusate per tutta la vita dell'istanza della function. Sta fuori
+ * dall'handler apposta: la scoperta si paga una volta, non a ogni richiesta.
+ */
+let colonneReali: Set<string> | null = null;
+
 export const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
@@ -61,44 +68,68 @@ export const handler: Handler = async (event) => {
             'numero_patente', 'note', 'created_at', 'updated_at',
             'data_nascita', 'scadenza_patente',
             'data_rilascio_patente', 'metadata',
-        ].join(',');
+        ];
         // ?fields=anagrafica -> le colonne che la tab Clienti tiene davvero.
         //
         // 02/09/2026: la tab chiedeva la riga INTERA (88 colonne, 5,13 MB
         // misurati su 2059 clienti) e poi, riga per riga, ne copiava a mano un
         // sottoinsieme in un oggetto nuovo. Tutto il resto veniva buttato via
-        // subito dopo essere stato scaricato. Questo elenco e' esattamente
-        // quel sottoinsieme, letto dal codice della tab: chiedere il resto era
-        // banda pagata per niente.
+        // subito dopo essere stato scaricato.
         //
-        // `user_id` non e' letto oggi dalla tab (vedi il bug del wallet), ma
-        // viaggia qui perche' e' una colonna sola e serve al collegamento
-        // wallet / DR7 Club.
+        // 02/09/2026 (secondo giro): l'elenco conteneva `indirizzo_azienda`,
+        // `data_rilascio` e `rilasciata_da`, che su `customers_extended` NON
+        // ESISTONO. PostgREST rifiuta l'INTERA query con 42703, quindi la rete
+        // di sicurezza qui sotto ripiegava sulla riga intera: la tab Clienti
+        // continuava a scaricare 5,13 MB a ogni apertura e l'ottimizzazione
+        // non era mai entrata in funzione. Stesso identico inciampo di
+        // `?fields=picker` una settimana prima: ora, invece di ripiegare sul
+        // `*`, si scoprono le colonne vere e si tiene solo l'intersezione.
         //
-        // Se una di queste colonne non esistesse, PostgREST rifiuta TUTTA la
-        // query: sotto c'e' la rete di sicurezza che rilegge la riga intera.
-        // Peggio che va, si torna esattamente al comportamento di prima.
+        // L'elenco e' anche piu' corto: qui restano i campi che la LISTA
+        // mostra, cerca, ordina e usa per unire i doppioni. Indirizzo, patente
+        // e dati di fatturazione non compaiono in lista - la scheda, la
+        // modifica e l'esportazione CSV rileggono comunque la riga intera dal
+        // database prima di aprirsi. Misurato: 0,64 MB per 1000 clienti contro
+        // 2,46 MB della riga intera.
         const ANAGRAFICA_FIELDS = [
             'id', 'user_id', 'tipo_cliente', 'nome', 'cognome',
             'denominazione', 'ragione_sociale', 'ente_ufficio',
-            'email', 'telefono', 'pec', 'note', 'source', 'status',
+            'email', 'telefono', 'note', 'status',
             'created_at', 'updated_at', 'metadata',
-            'codice_fiscale', 'partita_iva', 'codice_destinatario',
-            'codice_univoco', 'contatti_cliente',
-            'indirizzo', 'numero_civico', 'cap', 'codice_postale',
-            'citta', 'citta_residenza', 'provincia_residenza', 'nazione',
-            'indirizzo_azienda', 'indirizzo_ddt', 'sede_legale',
-            'data_nascita', 'luogo_nascita', 'provincia_nascita', 'sesso',
-            'numero_patente', 'tipo_patente', 'patente',
-            'scadenza_patente', 'data_rilascio_patente', 'data_rilascio',
-            'emessa_da', 'rilasciata_da',
+            'codice_fiscale', 'partita_iva',
             'membership_tier', 'membership_expires_at',
-        ].join(',');
+        ];
 
         const wantsPicker = event.queryStringParameters?.fields === 'picker';
         const wantsAnagrafica = event.queryStringParameters?.fields === 'anagrafica';
-        const columns = wantsPicker ? PICKER_FIELDS
+        const richiesti = wantsPicker ? PICKER_FIELDS
             : wantsAnagrafica ? ANAGRAFICA_FIELDS
+            : null;
+
+        // Colonne davvero presenti sulla tabella, scoperte UNA volta per
+        // istanza della function e riusate dalle richieste successive: cosi'
+        // una colonna rinominata costa un giro a vuoto la prima volta e mai
+        // piu', invece di far tornare per sempre la riga intera.
+        const filtraSuColonneNote = (elenco: string[]): string | null => {
+            if (!colonneReali) return null;
+            const presenti = elenco.filter(c => colonneReali!.has(c));
+            const mancanti = elenco.filter(c => !colonneReali!.has(c));
+            if (mancanti.length) {
+                console.warn('[list-customers] colonne inesistenti ignorate:', mancanti.join(', '));
+            }
+            return presenti.length ? presenti.join(',') : null;
+        };
+
+        const scopriColonne = async (): Promise<void> => {
+            if (colonneReali) return;
+            const { data, error } = await supabase
+                .from('customers_extended').select('*').limit(1);
+            if (error || !data || !data.length) return;
+            colonneReali = new Set(Object.keys(data[0] as Record<string, unknown>));
+        };
+
+        const columns = richiesti
+            ? (filtraSuColonneNote(richiesti) ?? richiesti.join(','))
             : '*';
 
         // `id` come secondo criterio NON e' un dettaglio estetico: le pagine
@@ -119,12 +150,24 @@ export const handler: Handler = async (event) => {
 
         let firstPage = await page(0, true);
 
-        // Rete di sicurezza: se l'elenco ridotto viene rifiutato (una colonna
-        // rinominata o rimossa), si rilegge la riga intera invece di lasciare
-        // le tab senza anagrafica. Meglio una risposta piu' pesante che un
-        // gestionale che non trova i clienti.
+        // Elenco ridotto rifiutato (una colonna rinominata o rimossa): si
+        // guarda quali colonne esistono davvero e si riprova con quelle. Solo
+        // se anche questo fallisce si rilegge la riga intera - meglio una
+        // risposta piu' pesante che un gestionale senza anagrafica.
+        if (firstPage.error && richiesti && columnsInUse !== '*') {
+            console.error('[list-customers] elenco ridotto rifiutato:', firstPage.error);
+            await scopriColonne();
+            const ridotto = filtraSuColonneNote(richiesti);
+            // Se l'elenco corretto e' identico a quello appena rifiutato il
+            // problema non sono le colonne: inutile rifare la stessa query.
+            if (ridotto && ridotto !== columnsInUse) {
+                columnsInUse = ridotto;
+                firstPage = await page(0, true);
+            }
+        }
+
         if (firstPage.error && columnsInUse !== '*') {
-            console.error(`[list-customers] elenco ridotto rifiutato, ripiego su *:`, firstPage.error);
+            console.error('[list-customers] anche l\'elenco corretto e\' stato rifiutato, ripiego su *:', firstPage.error);
             columnsInUse = '*';
             firstPage = await page(0, true);
         }
