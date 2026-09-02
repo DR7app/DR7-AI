@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -8,6 +8,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 
 interface Contract {
   id: string
@@ -171,40 +172,31 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
 
   /**
-   * Elenco filtrato e a pagine (02/09/2026).
+   * Elenco a pagine, chiesto al server (02/09/2026).
    *
-   * Il filtro stava dentro il JSX e veniva rifatto a ogni render; soprattutto
-   * la lista finiva a schermo INTERA, una scheda alta per ogni contratto:
-   * 36.000 nodi all'apertura della tab. Le regole di selezione sono le stesse.
+   * Prima si scaricavano TUTTI i contratti con dentro il `booking_details`
+   * della prenotazione (3,2 KB a riga: 2,9 MB per 900 contratti) e si
+   * filtrava nel browser. Oltre all'attesa c'era un buco vero: PostgREST
+   * manda al massimo 1000 righe, quindi con 5.856 contratti i piu' vecchi
+   * non comparivano affatto.
+   *
+   * Ora business, ricerca e periodo li applica il server e arrivano 25 righe
+   * per volta; il `booking_details`, che serve per l'elenco dei firmatari,
+   * si chiede solo per le righe che finiscono a schermo. Le regole di
+   * selezione sono le stesse di prima, spostate dentro la query.
    */
   const CONTRATTI_PER_PAGINA = 25
   const [contrattiPagina, setContrattiPagina] = useState(1)
-  const contrattiVisibili = useMemo(() => contracts.filter(contract => {
-    // 2026-06-01: filtro periodo Da/A su created_at (Europe/Rome)
-    if (dateRange.from || dateRange.to) {
-      if (!contract.created_at) return false
-      const day = new Date(contract.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-      if (dateRange.from && day < dateRange.from) return false
-      if (dateRange.to && day > dateRange.to) return false
-    }
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      contract.customer_name.toLowerCase().includes(query) ||
-      contract.contract_number.toLowerCase().includes(query) ||
-      contract.customer_email.toLowerCase().includes(query)
-    )
-  }), [contracts, searchQuery, dateRange.from, dateRange.to])
-  // Cambiare ricerca o periodo riporta alla prima pagina.
-  useEffect(() => { setContrattiPagina(1) }, [searchQuery, dateRange.from, dateRange.to])
-  const contrattiPaginati = useMemo(() => {
-    const inizio = (contrattiPagina - 1) * CONTRATTI_PER_PAGINA
-    return contrattiVisibili.slice(inizio, inizio + CONTRATTI_PER_PAGINA)
-  }, [contrattiVisibili, contrattiPagina])
+  const [totaleContratti, setTotaleContratti] = useState(0)
+  // La ricerca aspetta che si smetta di digitare: una query per parola cercata,
+  // non una per tasto premuto.
+  const [ricerca, setRicerca] = useState('')
   useEffect(() => {
-    const pagine = Math.max(1, Math.ceil(contrattiVisibili.length / CONTRATTI_PER_PAGINA))
-    if (contrattiPagina > pagine) setContrattiPagina(pagine)
-  }, [contrattiVisibili.length, contrattiPagina])
+    const attesa = setTimeout(() => setRicerca(searchQuery.trim()), 300)
+    return () => clearTimeout(attesa)
+  }, [searchQuery])
+  // Cambiare ricerca o periodo riporta alla prima pagina.
+  useEffect(() => { setContrattiPagina(1) }, [ricerca, dateRange.from, dateRange.to])
 
   // Master contract template — Supabase Storage bucket 'templates' /
   // file 'master_contract.pdf'. Generate-contract.ts lo scarica con
@@ -300,35 +292,102 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   useEffect(() => {
     loadContracts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceType])
+  }, [serviceType, contrattiPagina, ricerca, dateRange.from, dateRange.to])
+
+  // Ogni caricamento ha un numero: se nel frattempo si e' cambiata pagina o
+  // ricerca, la risposta vecchia che arriva dopo viene buttata.
+  const richiestaRef = useRef(0)
+
+  // Estremi UTC della giornata Europe/Rome: il filtro periodo e' su created_at,
+  // che e' salvato in UTC. `romeIsoFromParts` tiene conto dell'ora legale.
+  function inizioGiornoRoma(giorno: string): string {
+    return romeIsoFromParts(giorno, '00:00')
+  }
+  function inizioGiornoDopoRoma(giorno: string): string {
+    const d = new Date(`${giorno}T12:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 1)
+    return romeIsoFromParts(d.toISOString().slice(0, 10), '00:00')
+  }
 
   async function loadContracts() {
+    const richiesta = ++richiestaRef.current
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('contracts')
-        .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details, service_type)')
-        .order('updated_at', { ascending: false })
-
-      if (error) throw error
+      // Ricerca e periodo: identici a quelli che prima giravano nel browser,
+      // solo chiesti al server. La ricerca guarda nome, numero contratto ed
+      // email, il periodo il created_at del contratto.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const filtriComuni = (q: any) => {
+        if (ricerca) {
+          // Virgole e parentesi separano le condizioni di PostgREST: vanno
+          // tolte, altrimenti la query fallisce e l'elenco resta vuoto.
+          const testo = ricerca.replace(/[(),%*]/g, ' ').trim()
+          if (testo) {
+            q = q.or(`customer_name.ilike.%${testo}%,contract_number.ilike.%${testo}%,customer_email.ilike.%${testo}%`)
+          }
+        }
+        if (dateRange.from) q = q.gte('created_at', inizioGiornoRoma(dateRange.from))
+        if (dateRange.to) q = q.lt('created_at', inizioGiornoDopoRoma(dateRange.to))
+        return q.order('updated_at', { ascending: false })
+      }
 
       // 2026-08-14: la tab e' condivisa fra Terra/Mare/Aria/Soggiorni. Senza
       // questo filtro OGNI business vedeva TUTTI i contratti, quindi i
       // contratti auto comparivano dentro Mare e Aria. Si filtra sul
       // service_type della prenotazione collegata (il contratto non ha una
-      // colonna propria). Terra = tutto cio' che non e' un altro business,
-      // cosi' i contratti legacy senza booking restano dove sono sempre stati.
-      const ALTRI_BUSINESS = ['boat_rental', 'heli_rental', 'stay_rental']
+      // colonna propria), con dentro booking_details come riserva quando la
+      // colonna e' vuota: e' lo stesso ordine di priorita' di prima.
+      // Terra = tutto cio' che non e' un altro business.
+      const ALTRI_BUSINESS = 'boat_rental,heli_rental,stay_rental'
       const businessCorrente = String(serviceType || '').toLowerCase()
+      const filtroBusiness = businessCorrente
+        ? `service_type.eq.${businessCorrente},and(service_type.is.null,booking_details->>service_type.eq.${businessCorrente})`
+        : `service_type.not.in.(${ALTRI_BUSINESS}),and(service_type.is.null,or(booking_details->>service_type.is.null,booking_details->>service_type.not.in.(${ALTRI_BUSINESS})))`
+
+      // Prima lettura: solo id e data, per sapere QUALI 25 contratti mostrare
+      // e quanti sono in tutto. Sono due elenchi perche' i contratti scritti
+      // a mano da questa tab non hanno prenotazione collegata: restano su
+      // Terra, dove sono sempre stati, e il join li lascerebbe fuori.
+      const fine = contrattiPagina * CONTRATTI_PER_PAGINA
+      const [conPrenotazione, senzaPrenotazione] = await Promise.all([
+        filtriComuni(supabase
+          .from('contracts')
+          .select('id, updated_at, bookings!inner(service_type)', { count: 'exact' })
+          .or(filtroBusiness, { referencedTable: 'bookings' })
+        ).range(0, fine - 1),
+        businessCorrente ? null : filtriComuni(supabase
+          .from('contracts')
+          .select('id, updated_at', { count: 'exact' })
+          .is('booking_id', null)
+        ).range(0, fine - 1),
+      ])
+      if (conPrenotazione.error) throw conPrenotazione.error
+      if (senzaPrenotazione?.error) throw senzaPrenotazione.error
+
+      // I due elenchi arrivano gia' ordinati: si rimescolano per data e si
+      // taglia la pagina richiesta.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows = (data || []).filter((c: any) => {
-        const st = String(
-          c?.bookings?.service_type || c?.bookings?.booking_details?.service_type || ''
-        ).trim().toLowerCase()
-        return businessCorrente
-          ? st === businessCorrente
-          : !ALTRI_BUSINESS.includes(st)
-      })
+      const indice = [...(conPrenotazione.data || []), ...(senzaPrenotazione?.data || [])] as any[]
+      indice.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+      const idsPagina = indice
+        .slice((contrattiPagina - 1) * CONTRATTI_PER_PAGINA, fine)
+        .map(r => r.id)
+      const totale = (conPrenotazione.count || 0) + (senzaPrenotazione?.count || 0)
+
+      // Seconda lettura: le righe intere, con il booking_details, SOLO per i
+      // 25 contratti della pagina.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let rows: any[] = []
+      if (idsPagina.length > 0) {
+        const { data, error } = await supabase
+          .from('contracts')
+          .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details, service_type)')
+          .in('id', idsPagina)
+        if (error) throw error
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const perId = new Map((data || []).map((c: any) => [c.id, c]))
+        rows = idsPagina.map(id => perId.get(id)).filter(Boolean)
+      }
 
       // Stato firma: matchiamo per BOOKING_ID (oltre che per contract_id).
       // Con righe contratto duplicate per una prenotazione, le firme possono
@@ -411,11 +470,15 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         c.signers = buildContractSigners(c, sigsForContract(c))
         return c
       })
+      // Se nel frattempo e' partito un altro caricamento (pagina o ricerca
+      // cambiata), questa risposta e' vecchia e non deve toccare lo schermo.
+      if (richiesta !== richiestaRef.current) return
       setContracts(resolved)
+      setTotaleContratti(totale)
     } catch (error) {
       console.error('Failed to load contracts:', error)
     } finally {
-      setLoading(false)
+      if (richiesta === richiestaRef.current) setLoading(false)
     }
   }
 
@@ -572,7 +635,9 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   }
 
 
-  if (loading) {
+  // Lo spinner a tutta pagina solo al primo caricamento: cambiando pagina o
+  // scrivendo nella ricerca l'elenco resta a schermo.
+  if (loading && contracts.length === 0) {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
@@ -1078,7 +1143,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {contrattiPaginati.map((contract) => (
+          {contracts.map((contract) => (
             <div key={contract.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -1260,7 +1325,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
           ))}
           <Paginazione
             pagina={contrattiPagina}
-            totale={contrattiVisibili.length}
+            totale={totaleContratti}
             perPagina={CONTRATTI_PER_PAGINA}
             onChange={(p) => { setContrattiPagina(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
             etichetta="contratti"
