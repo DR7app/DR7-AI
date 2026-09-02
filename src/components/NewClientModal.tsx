@@ -9,6 +9,7 @@ import { invalidateCustomersCache } from '../utils/customersCache'
 import CalcolaCFButton from './CalcolaCFButton'
 import EuropeanDateInput from './EuropeanDateInput'
 import TelefonoConPrefisso from '../components/TelefonoConPrefisso'
+import { svuotaCacheClienti } from '../utils/authFetch'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -494,6 +495,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       const saveJson = await saveRes.json()
       result = saveJson.customer || saveJson.data || saveJson
       invalidateCustomersCache()
+      // Il cliente appena salvato deve comparire subito nelle ricerche.
+      svuotaCacheClienti()
       toast.success(editingId ? 'Cliente aggiornato con successo!' : 'Cliente creato con successo!')
 
       if (onClientCreated && result) {

@@ -13,6 +13,7 @@ import CampoIndirizzo from '../../../components/CampoIndirizzo'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { svuotaCacheClienti } from '../../../utils/authFetch'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -657,6 +658,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           logger.log('✅ Basic customers table updated successfully')
         }
 
+        svuotaCacheClienti()
         toast.success('Cliente aggiornato con successo!')
 
         if (onClientCreated && resultData) {
@@ -712,6 +714,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           logger.warn('Silent error saving to legacy customers table:', legacyError)
         }
 
+        svuotaCacheClienti()
         toast.success('Cliente creato con successo!')
       }
 
