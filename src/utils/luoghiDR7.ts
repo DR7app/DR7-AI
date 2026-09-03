@@ -56,6 +56,8 @@ export interface Luogo {
         cap: string
         comune: string
         provincia: string
+        /** Sigla ISO minuscola del paese ("it", "fr"): decide residente/non residente. */
+        paese?: string
     }
     /** L'indirizzo per esteso secondo Google, senza il nome dell'attivita'. */
     indirizzoCompleto?: string

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import { leggiRigaAdmin } from '../utils/rigaAdmin'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
 import { AlarmSoundPlayer, type AlarmSoundKey } from '../utils/alarmSounds'
@@ -180,13 +181,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         if (!session?.user?.id) { setAlarmsDisabledForUser(null); return }
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase
-                .from('admins')
-                .select('permissions')
-                .eq('user_id', session.user.id)
-                .maybeSingle()
+            // 03/09/2026: stessa riga gia' letta da AdminRoute/useAdminRole
+            // all'avvio — qui si riusa invece di richiederla.
+            const { riga } = await leggiRigaAdmin(session.user.id)
             if (cancelled) return
-            const perms = (data as { permissions?: unknown } | null)?.permissions
+            const perms = (riga as { permissions?: unknown } | null)?.permissions
             const list = Array.isArray(perms) ? perms.map(String) : []
             setAlarmsDisabledForUser(list.includes('hide:allarmi'))
         })()

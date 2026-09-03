@@ -19,6 +19,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '../supabaseClient'
+import { leggiRigaAdmin } from '../utils/rigaAdmin'
 
 export interface Brand {
   id: string
@@ -95,26 +96,10 @@ export function BrandSedeProvider({ children }: { children: ReactNode }) {
         role?: string | null
         permissions?: unknown
       }
-      let admin: AdminRow | null = null
-      {
-        const { data, error } = await supabase
-          .from('admins')
-          .select('id, brand_id, sede_id, role, permissions')
-          .eq('user_id', user.id)
-          .maybeSingle()
-        if (error) {
-          // Probabile: colonne brand_id/sede_id non ancora presenti.
-          // Riprova con i soli campi che esistono di sicuro.
-          const fallback = await supabase
-            .from('admins')
-            .select('id, role, permissions')
-            .eq('user_id', user.id)
-            .maybeSingle()
-          admin = (fallback.data as AdminRow) || null
-        } else {
-          admin = (data as AdminRow) || null
-        }
-      }
+      // 03/09/2026: lettura condivisa (una riga `admins` per avvio invece di
+      // quattro). Il ripiego senza brand_id/sede_id sta in `leggiRigaAdmin`.
+      const { riga } = await leggiRigaAdmin(user.id)
+      const admin: AdminRow | null = (riga as AdminRow) || null
 
       const brandId = (admin?.brand_id as string) || 'dr7_empire'
       const sedeId = (admin?.sede_id as string) || null

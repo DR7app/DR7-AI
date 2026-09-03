@@ -14,7 +14,7 @@
 
 import { createRomeDate, getRomeDateComponents } from './timezoneUtils'
 import { logger } from '../utils/logger'
-import { supabase } from '../supabaseClient'
+import { loadBusinessConfig } from './businessConfigClient'
 
 // Configuration constants
 //
@@ -38,12 +38,13 @@ let LATE_RETURN_GRACE_MINUTES = 90
 
 ;(async () => {
     try {
-        const { data } = await supabase
-            .from('centralina_pro_config')
-            .select('config')
-            .eq('id', 'main')
-            .maybeSingle()
-        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        // 03/09/2026: stessa riga `main` che legge tutto il resto del
+        // gestionale, ma qui la query era scritta in un altro modo
+        // (`select=config&id=eq.main` invece di `select=id,config&id=in.(main)`):
+        // due forme = due chiavi di cache = la Centralina (204 KB) scaricata
+        // due volte per pagina. Ora passa dal lettore condiviso.
+        const { main } = await loadBusinessConfig('rental')
+        const cfg = (main ?? null) as Record<string, unknown> | null
         const automations = cfg?.automations as Record<string, unknown> | undefined
         if (automations) {
             const a = automations.rental_buffer_minutes

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ScheletroPagina } from './Scheletro'
 import { Navigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { leggiRigaAdmin } from '../utils/rigaAdmin'
 
 interface AdminRouteProps {
   children: React.ReactNode
@@ -39,22 +40,12 @@ export default function AdminRoute({ children }: AdminRouteProps) {
       // admin = null → tutti fuori dal gestionale, direzione compresa.
       // Ora la colonna nuova e' un DI PIU', non una condizione per entrare:
       // se non c'e' ancora, si rilegge senza e si entra come prima.
-      let admin: { role?: string; archived_at?: string | null } | null = null
-      const { data: withArchive, error: archErr } = await supabase
-        .from('admins')
-        .select('role, archived_at')
-        .eq('user_id', session.user.id)
-        .single()
-      if (archErr) {
-        const { data: legacy } = await supabase
-          .from('admins')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single()
-        admin = legacy
-      } else {
-        admin = withArchive
-      }
+      //
+      // 03/09/2026: la riga arriva da `leggiRigaAdmin`, che la legge una
+      // volta sola per tutto l'avvio (prima la chiedevano in quattro). Il
+      // ripiego senza `archived_at` e' dentro quella funzione: qui il
+      // comportamento non cambia.
+      const { riga: admin } = await leggiRigaAdmin(session.user.id)
 
       // 2026-08-18 (richiesta direzione): un operatore ARCHIVIATO non entra.
       // Prima bastava esistere in `admins` — il campo "Stato" della scheda non

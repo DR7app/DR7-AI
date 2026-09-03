@@ -79,6 +79,9 @@ function partiIndirizzo(p: PlaceGoogle) {
         comune: pezzo('locality') || pezzo('administrative_area_level_3'),
         // La provincia serve in sigla (CA, SU): e' lo shortText.
         provincia: pezzo('administrative_area_level_2', true),
+        // Il paese in sigla ISO minuscola ("it", "fr"): sul sito decide
+        // residente/non residente, e quindi la cauzione.
+        paese: pezzo('country', true).toLowerCase(),
     }
 }
 

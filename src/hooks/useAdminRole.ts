@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
+import { leggiRigaAdmin } from '../utils/rigaAdmin'
 
 // Role tags stored in admins.permissions[] with the `role:` prefix. Replaces
 // the hardcoded `[valerio, ilenia, ophe]` email allowlists that used to sit
@@ -85,23 +86,28 @@ export function useAdminRole(): AdminRole {
         // 2026-08-18 INCIDENTE: vedi AdminRoute. Se `archived_at` non esiste
         // ancora (migrazione non eseguita) la query fallisce e l'operatore
         // resta senza ruolo e senza permessi. Si ripiega sulla select storica.
-        let { data, error } = await supabase
-          .from('admins')
-          .select('id, role, can_view_financials, nome, permissions, archived_at')
-          .eq('user_id', user.id)
-          .single()
-        if (error) {
-          const retry = await supabase
-            .from('admins')
-            .select('id, role, can_view_financials, nome, permissions')
-            .eq('user_id', user.id)
-            .single()
-          data = retry.data as typeof data
-          error = retry.error
-        }
+        // 03/09/2026: lettura condivisa con AdminRoute, BrandSedeContext e
+        // VehicleAlarmContext — una sola riga per avvio invece di quattro.
+        // Il ripiego senza `archived_at` vive dentro `leggiRigaAdmin`.
+        const letturaAdmin = await leggiRigaAdmin(user.id)
+        const data = letturaAdmin.riga as {
+          id?: string
+          role?: string
+          can_view_financials?: boolean
+          nome?: string
+          permissions?: unknown
+          archived_at?: string | null
+        } | null
+        const error = letturaAdmin.errore ? { message: letturaAdmin.errore } : null
 
-        if (error) {
-          console.error('Error loading admin role:', error)
+        // 03/09/2026: `.single()` su una riga inesistente restituiva un
+        // ERRORE, e l'utente finiva qui sotto con ruolo minimo e zero
+        // permessi. La lettura condivisa usa `maybeSingle`, che per la
+        // stessa situazione restituisce riga nulla SENZA errore: se non si
+        // trattassero i due casi insieme, un utente senza riga `admins`
+        // resterebbe con lo stato iniziale invece che senza permessi.
+        if (error || !data) {
+          if (error) console.error('Error loading admin role:', error)
           setRole('admin')
           setCanViewFinancials(false)
           setPermissions([])
