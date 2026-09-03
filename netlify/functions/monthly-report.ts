@@ -378,6 +378,23 @@ async function generateVehicleReport(
       .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
       .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
       .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
+      // 03/09/2026: si scaricava TUTTA la tabella (2.609 righe, JSONB
+      // booking_details compreso) per poi tenerne quelle di un mese — 2
+      // secondi, e questa lettura sta sul percorso critico di Prenotazioni e
+      // Calendario, che la richiamano al preriscaldamento.
+      //
+      // Il filtro qui sotto e' l'UNICA condizione che il filtro JS applica
+      // senza eccezioni: "un noleggio chiuso prima dell'inizio del periodo
+      // non c'entra" (riga `if (dropoffDate < monthStartISO) return false`).
+      // Le anticipate — pagate nel periodo per un ritiro futuro — restano
+      // dentro: se il ritiro e' dopo la fine del periodo, a maggior ragione
+      // la riconsegna e' dopo l'inizio. Nessuna riga sparisce dal report,
+      // cambia solo quante ne viaggiano sul filo.
+      //
+      // Le righe senza `dropoff_date` erano gia' scartate dal filtro JS
+      // (`if (!b.pickup_date || !b.dropoff_date) return false`), e `gte` le
+      // esclude allo stesso modo.
+      .gte('dropoff_date', monthStartISO)
     if (business !== 'rental') query = query.eq('service_type', business)
     const { data: page, error: bookingsError } = await query
       .order('created_at', { ascending: false })
