@@ -53,6 +53,33 @@ interface PlaceGoogle {
     shortFormattedAddress?: string
     primaryTypeDisplayName?: { text?: string }
     location?: { latitude?: number; longitude?: number }
+    addressComponents?: {
+        longText?: string
+        shortText?: string
+        types?: string[]
+    }[]
+}
+
+/**
+ * Via, civico, CAP, comune e provincia dal dettaglio Google. Servono ai campi
+ * indirizzo del gestionale (fattura, anagrafica, contratto), che non vogliono
+ * una riga di testo ma i pezzi separati.
+ */
+function partiIndirizzo(p: PlaceGoogle) {
+    const pezzo = (tipo: string, corto = false) => {
+        const c = (p.addressComponents || []).find(x => (x.types || []).includes(tipo))
+        return (corto ? c?.shortText : c?.longText) || ''
+    }
+    return {
+        via: pezzo('route'),
+        civico: pezzo('street_number'),
+        cap: pezzo('postal_code'),
+        // `locality` e' il comune; nei paesi piccoli Google usa
+        // administrative_area_level_3 e la locality resta vuota.
+        comune: pezzo('locality') || pezzo('administrative_area_level_3'),
+        // La provincia serve in sigla (CA, SU): e' lo shortText.
+        provincia: pezzo('administrative_area_level_2', true),
+    }
 }
 
 interface SuggerimentoGoogle {
@@ -117,7 +144,7 @@ async function dettaglioPosto(placeId: string, sessione: string) {
     const res = await fetch(url, {
         headers: {
             'X-Goog-Api-Key': API_KEY,
-            'X-Goog-FieldMask': 'id,displayName,formattedAddress,shortFormattedAddress,location,primaryTypeDisplayName',
+            'X-Goog-FieldMask': 'id,displayName,formattedAddress,shortFormattedAddress,location,primaryTypeDisplayName,addressComponents',
         },
     })
     if (!res.ok) {
@@ -138,6 +165,10 @@ async function dettaglioPosto(placeId: string, sessione: string) {
         categoria: p.primaryTypeDisplayName?.text || '',
         lat: lat as number,
         lon: lon as number,
+        parti: partiIndirizzo(p),
+        // L'indirizzo per esteso: e' quello che finisce nei campi del
+        // gestionale quando non serve il nome dell'attivita'.
+        indirizzoCompleto: p.formattedAddress || indirizzo,
     }
 }
 

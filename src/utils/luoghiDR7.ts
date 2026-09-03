@@ -45,6 +45,20 @@ export interface Luogo {
     lon: number | null
     /** true = sede DR7 dalla rubrica interna: nella tendina va in cima con il badge. */
     dr7?: boolean
+    /**
+     * I pezzi separati dell'indirizzo (via, civico, CAP, comune, provincia).
+     * Li porta solo il dettaglio Google: servono ai campi del gestionale che
+     * non vogliono una riga di testo ma le colonne (fattura, anagrafica).
+     */
+    parti?: {
+        via: string
+        civico: string
+        cap: string
+        comune: string
+        provincia: string
+    }
+    /** L'indirizzo per esteso secondo Google, senza il nome dell'attivita'. */
+    indirizzoCompleto?: string
 }
 
 /**
@@ -60,6 +74,9 @@ export const LUOGHI_DR7: (Luogo & { alias: string[] })[] = [
         lat: DR7_OFFICE_COORDS.lat,
         lon: DR7_OFFICE_COORDS.lon,
         dr7: true,
+        // I pezzi separati servono ai campi che riempiono CAP, comune e
+        // provincia (fattura, anagrafica, contratto).
+        parti: { via: 'Viale Guglielmo Marconi', civico: '229', cap: '09131', comune: 'Cagliari', provincia: 'CA' },
         alias: ['dr7', 'dr 7', 'ufficio', 'sede', 'marconi', 'dubai rent'],
     },
 ]
