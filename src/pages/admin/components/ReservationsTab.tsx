@@ -2048,7 +2048,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         const booking = bookings.find(b => b.id === bookingId)
         if (booking) {
           logger.log('📝 Opening booking in edit mode:', bookingId)
-          handleEditBooking(booking)
+          void apriModificaPrenotazione(booking)
           // Notify parent to clear data
           if (onDataConsumed) onDataConsumed()
           return
@@ -4067,6 +4067,47 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
 
 
+  /**
+   * Apre una prenotazione in modifica RILEGGENDOLA dal database.
+   *
+   * 03/09/2026 — perche' esiste questa funzione. Il dettaglio non rileggeva
+   * niente: prendeva la riga cosi' com'era arrivata nell'elenco, la copiava
+   * in `formData`, e il salvataggio riscriveva da `formData`. Finche'
+   * l'elenco chiede tutte le colonne funziona; il giorno in cui l'elenco ne
+   * chiede meno — ed e' proprio quello che serve per alleggerire la tab —
+   * aprire e salvare una prenotazione AZZEREREBBE su database consegna,
+   * ritiro, cauzione, assicurazione e note, semplicemente perche' non erano
+   * nella riga copiata.
+   *
+   * Quindi prima questo, poi (in un altro deploy) le colonne dell'elenco.
+   * Mai il contrario.
+   *
+   * Se la rilettura non riesce si apre con la riga dell'elenco, come prima:
+   * un problema di rete non deve impedire di aprire una prenotazione.
+   */
+  async function apriModificaPrenotazione(booking: Booking) {
+    // Le uscite straordinarie e i lavaggi non aprono il form noleggio:
+    // quella scelta la fa handleEditBooking, che va chiamata comunque.
+    if (booking.service_type === 'uscita_straordinaria' || booking.service_type === 'car_wash') {
+      handleEditBooking(booking)
+      return
+    }
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('id', booking.id)
+        .maybeSingle()
+      if (error || !data) {
+        handleEditBooking(booking)
+        return
+      }
+      handleEditBooking(data as Booking)
+    } catch {
+      handleEditBooking(booking)
+    }
+  }
+
   function handleEditBooking(booking: Booking) {
     // Corse/uscite straordinarie: NON aprire il form noleggio (salvandolo
     // diventerebbero prenotazioni normali). Apri la modale dedicata in MODIFICA.
@@ -4308,7 +4349,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // Ora total_amount in form = price_total intero; nessuna sottrazione,
       // altrimenti modificare+salvare ridurrebbe il totale di ogni fee.
       total_amount: centsToEurStr(Math.round(booking.price_total)),
-      currency: booking.currency.toUpperCase(),
+      // 03/09/2026: senza guardia, una riga priva di `currency` faceva
+      // esplodere l'apertura del dettaglio con un TypeError.
+      currency: (booking.currency || 'EUR').toUpperCase(),
       source: 'admin',
       // 2nd Driver
       has_second_driver: !!booking.booking_details?.second_driver,
@@ -11541,7 +11584,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         {
                           title: 'Gestione',
                           actions: [
-                            { label: 'Modifica', onClick: () => handleEditBooking(booking) },
+                            { label: 'Modifica', onClick: () => void apriModificaPrenotazione(booking) },
                             { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: !isCarWash },
                             { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking') },
                           ],
@@ -11762,7 +11805,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               {
                                 title: 'Gestione',
                                 actions: [
-                                  { label: 'Modifica', onClick: () => handleEditBooking(booking), visible: booking.status !== 'cancelled' },
+                                  { label: 'Modifica', onClick: () => void apriModificaPrenotazione(booking), visible: booking.status !== 'cancelled' },
                                   { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: booking.status !== 'cancelled' && !isCarWash },
                                   { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking'), visible: booking.status !== 'cancelled' },
                                 ],
