@@ -182,9 +182,26 @@ function ordinaPerVicinanza(luoghi: (Luogo & { italia?: boolean })[]): Luogo[] {
  */
 let googleAttivo: boolean | null = null
 
+/**
+ * L'ultimo motivo per cui Google non ha risposto, da mostrare nel campo.
+ *
+ * 03/09/2026: prima l'errore veniva inghiottito e si ripiegava su Photon
+ * senza dire niente — a video sembrava che "Google non funzionasse", ma
+ * nessuno poteva sapere se mancava la fatturazione, se l'API non era
+ * abilitata o se la chiave era ristretta male. Un errore muto costa piu'
+ * tempo di un errore scritto.
+ */
+let erroreGoogle: string | null = null
+
+/** Il motivo dell'ultimo fallimento Google, o null se e' andata bene. */
+export function ultimoErroreGoogle(): string | null {
+    return erroreGoogle
+}
+
 /** Ricerca su Google Places (via la funzione Netlify che custodisce la chiave). */
 async function cercaGoogle(testo: string, sessione: string): Promise<Luogo[] | null> {
     if (googleAttivo === false) return null
+    erroreGoogle = null
     try {
         const res = await authFetch('/.netlify/functions/google-luoghi', {
             method: 'POST',
@@ -192,7 +209,13 @@ async function cercaGoogle(testo: string, sessione: string): Promise<Luogo[] | n
             body: JSON.stringify({ azione: 'cerca', testo, sessione }),
         })
         if (res.status === 503) { googleAttivo = false; return null }
-        if (!res.ok) return null
+        if (!res.ok) {
+            // Il messaggio di Google arriva dentro `error`: e' quello che
+            // dice se manca la fatturazione o l'API non e' abilitata.
+            const dettaglio = await res.json().catch(() => null) as { error?: string } | null
+            erroreGoogle = dettaglio?.error || `Google ha risposto ${res.status}`
+            return null
+        }
         const dati = await res.json() as { configurato?: boolean; luoghi?: Luogo[] }
         if (dati.configurato === false) { googleAttivo = false; return null }
         googleAttivo = true
@@ -201,7 +224,8 @@ async function cercaGoogle(testo: string, sessione: string): Promise<Luogo[] | n
         // pertinenza e prossimita', quindi l'ordine non si tocca.
         const luoghi = (dati.luoghi || []).filter(l => l.placeId)
         return luoghi.length > 0 ? luoghi : null
-    } catch {
+    } catch (e) {
+        erroreGoogle = e instanceof Error ? e.message : 'Google non raggiungibile'
         return null
     }
 }

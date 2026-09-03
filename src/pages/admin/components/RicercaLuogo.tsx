@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cercaLuoghi, risolviLuogo, testoLuogo, type Luogo } from '../../../utils/luoghiDR7'
+import { cercaLuoghi, risolviLuogo, testoLuogo, ultimoErroreGoogle, type Luogo } from '../../../utils/luoghiDR7'
 
 interface Props {
     value: string
@@ -41,6 +41,9 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
     const sessioneRef = useRef<string>(crypto.randomUUID())
     // Il dettaglio del posto scelto e' una chiamata di rete: il campo lo dice.
     const [risolvo, setRisolvo] = useState(false)
+    // Quando Google rifiuta si cerca lo stesso (Photon), ma il motivo va
+    // scritto: un errore muto fa perdere piu' tempo di un errore visibile.
+    const [avvisoGoogle, setAvvisoGoogle] = useState<string | null>(null)
 
     const cerca = useCallback(async (q: string) => {
         if (q.trim().length < 2) {
@@ -57,6 +60,7 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
         setRisultati(trovati)
         setStato(trovati.length === 0 ? 'vuoto' : 'fermo')
         setEvidenziato(-1)
+        setAvvisoGoogle(ultimoErroreGoogle())
     }, [])
 
     useEffect(() => {
@@ -129,6 +133,12 @@ export default function RicercaLuogo({ value, onChange, onSelect, label, placeho
                 autoComplete="off"
                 className="w-full px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors disabled:opacity-50"
             />
+
+            {avvisoGoogle && (
+                <div className="mt-1 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                    Google non risponde ({avvisoGoogle}). Risultati dalla ricerca di riserva.
+                </div>
+            )}
 
             {aperto && (
                 <div className="absolute z-50 left-0 right-0 mt-1 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-xl overflow-hidden max-h-80 overflow-y-auto">
