@@ -6,6 +6,7 @@ import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/special
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { loadCached } from '../../../utils/dataCache'
 import { customerDisplayName } from '../../../utils/customerName'
+import { risolviTelefonoCliente } from '../../../utils/telefonoCliente'
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
@@ -3596,7 +3597,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     const bd: any = booking.booking_details || {}
     const firstNameOf = (full?: string) => (String(full || '').trim().split(/\s+/)[0] || 'Cliente')
     const drivers: { phone: string; firstName: string }[] = []
-    const mainPhone = booking.customer_phone || bd.customer?.phone
+    // Il lucchetto si chiude PRIMA della lettura in anagrafica: da qui in giu'
+    // c'e' un'attesa, e senza lucchetto un doppio clic partirebbe due volte.
+    autoProntaLockRef.current.add(booking.id)
+    // 03/09/2026: il numero puo' stare SOLO nella scheda cliente (prenotazione
+    // creata scegliendo un cliente gia' in anagrafica, senza ridigitare il
+    // telefono). Prima si guardava solo la prenotazione e il bottone diceva
+    // "nessun numero" con il numero registrato. Vedi utils/telefonoCliente.ts.
+    const mainPhone = await risolviTelefonoCliente(booking).catch(() => null)
     if (mainPhone) drivers.push({ phone: String(mainPhone), firstName: firstNameOf(booking.customer_name || bd.customer?.fullName) })
     const sd = bd.second_driver
     if (sd?.phone) {
@@ -3611,9 +3619,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       if (!key || seen.has(key)) return false
       seen.add(key); return true
     })
-    if (recipients.length === 0) { toast.error('Nessun numero guidatore disponibile — impossibile inviare WhatsApp'); return }
+    if (recipients.length === 0) {
+      autoProntaLockRef.current.delete(booking.id)
+      toast.error('Nessun numero guidatore disponibile — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { duration: 8000 })
+      return
+    }
 
-    autoProntaLockRef.current.add(booking.id)
     const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svcType = (booking as any).service_type || 'car_rental'

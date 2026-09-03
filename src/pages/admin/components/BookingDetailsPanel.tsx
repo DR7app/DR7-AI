@@ -9,6 +9,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import { risolviTelefonoCliente } from '../../../utils/telefonoCliente'
 
 interface BookingDetailsPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,8 +46,22 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   async function handleAutoPronta() {
     if (autoProntaLock.current || autoProntaSending || autoProntaSent) return
     autoProntaLock.current = true
-    const custPhone = booking.customer_phone || resolvedCustomer?.phone || booking.booking_details?.customer?.phone
-    if (!custPhone) { toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp'); return }
+    // 03/09/2026: se il numero non e' sulla prenotazione si legge dalla scheda
+    // cliente (utils/telefonoCliente.ts: user_id, id, email). Prima il
+    // ripiego era la sola riga gia' caricata qui, che manca finche'
+    // l'anagrafica non e' arrivata o quando il cliente e' agganciato per
+    // `user_id`: il bottone diceva "numero mancante" con il numero registrato.
+    const custPhone = booking.customer_phone
+      || resolvedCustomer?.phone
+      || booking.booking_details?.customer?.phone
+      || await risolviTelefonoCliente(booking).catch(() => null)
+    if (!custPhone) {
+      // Il lucchetto va riaperto: lasciandolo chiuso il bottone restava morto
+      // per tutta la vita del pannello, anche dopo aver messo il numero.
+      autoProntaLock.current = false
+      toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { duration: 8000 })
+      return
+    }
     const custName = booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || 'Cliente'
     const firstName = String(custName).split(' ')[0] || 'Cliente'
     const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
