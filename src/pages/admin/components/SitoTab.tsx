@@ -91,6 +91,8 @@ import type {
     HeaderCopy,
     HomeCategoryOverride,
     HomeCopy,
+    HomeExperience,
+    HomeMetric,
     HomeSlide,
     InvestitoriCopy,
     InvestitoriInfoItem,
@@ -2032,6 +2034,54 @@ function HomeEditor({
             hero_slides: [...copy.hero_slides, { id: `slide-${Date.now().toString(36)}`, video_src: '/' }],
         })
     }
+    // Righe di testo dello statement e del blocco marca: una riga per riga
+    // dell'area di testo. E' il modo piu' diretto per far decidere
+    // all'operatore DOVE va a capo una frase che sullo schermo e' enorme.
+    const setLines = (key: 'statement_lines_it' | 'statement_lines_en' | 'brand_lines_it' | 'brand_lines_en', text: string) => {
+        setCopy({ ...copy, [key]: text.split('\n').map(r => r.trim()).filter(Boolean) })
+    }
+    // Esperienze
+    const updateExp = (idx: number, patch: Partial<HomeExperience>) => {
+        const next = [...copy.experiences]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, experiences: next })
+    }
+    const moveExp = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.experiences.length) return
+        const next = [...copy.experiences]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, experiences: next })
+    }
+    const removeExp = (idx: number) => {
+        if (!confirm('Rimuovere questa esperienza dalla homepage? Il servizio resta online, sparisce solo la card.')) return
+        setCopy({ ...copy, experiences: copy.experiences.filter((_, i) => i !== idx) })
+    }
+    const addExp = () => {
+        setCopy({
+            ...copy,
+            experiences: [...copy.experiences, {
+                id: `exp-${Date.now().toString(36)}`, to: '/', image_src: '/',
+                title_it: '', title_en: '', copy_it: '', copy_en: '', cta_it: 'Scopri', cta_en: 'Discover',
+            }],
+        })
+    }
+    // Metriche: restano vuote finche' non ci sono numeri verificati.
+    const updateMetric = (idx: number, patch: Partial<HomeMetric>) => {
+        const next = [...copy.metrics]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, metrics: next })
+    }
+    const removeMetric = (idx: number) => setCopy({ ...copy, metrics: copy.metrics.filter((_, i) => i !== idx) })
+    const addMetric = () => setCopy({ ...copy, metrics: [...copy.metrics, { id: `m-${Date.now().toString(36)}`, value: '', label_it: '', label_en: '' }] })
+    // Paragrafi del blocco marca
+    const updatePar = (idx: number, patch: Partial<{ text_it: string; text_en: string }>) => {
+        const next = [...copy.brand_paragraphs]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, brand_paragraphs: next })
+    }
+    const removePar = (idx: number) => setCopy({ ...copy, brand_paragraphs: copy.brand_paragraphs.filter((_, i) => i !== idx) })
+    const addPar = () => setCopy({ ...copy, brand_paragraphs: [...copy.brand_paragraphs, { text_it: '', text_en: '' }] })
     // Categories
     const updateCategory = (idx: number, patch: Partial<HomeCategoryOverride>) => {
         const next = [...copy.categories]
@@ -2077,6 +2127,38 @@ function HomeEditor({
                 </div>
             </section>
 
+            {/* Atto 01 — Arrivo */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Schermo d'apertura</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Il primo schermo: un occhiello, un titolo, una riga, una CTA. Nel titolo
+                    l'<strong>a capo</strong> si scrive andando a capo davvero: ogni riga diventa una riga
+                    grande sullo schermo.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Occhiello (IT) — es. "Cagliari · Sardegna"' value={copy.hero_kicker_it} onChange={v => updateField('hero_kicker_it', v)} />
+                    <FieldText label="Occhiello (EN)" value={copy.hero_kicker_en} onChange={v => updateField('hero_kicker_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Titolo (IT) — una riga per riga" value={copy.hero_headline_it} onChange={v => updateField('hero_headline_it', v)} />
+                    <FieldTextArea label="Titolo (EN)" value={copy.hero_headline_en} onChange={v => updateField('hero_headline_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Riga sotto il titolo (IT)" value={copy.hero_microcopy_it} onChange={v => updateField('hero_microcopy_it', v)} />
+                    <FieldText label="Riga sotto il titolo (EN)" value={copy.hero_microcopy_en} onChange={v => updateField('hero_microcopy_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FieldText label="CTA principale (IT)" value={copy.hero_cta_label_it} onChange={v => updateField('hero_cta_label_it', v)} />
+                    <FieldText label="CTA principale (EN)" value={copy.hero_cta_label_en} onChange={v => updateField('hero_cta_label_en', v)} />
+                    <FieldText label="Destinazione — es. /flotta" value={copy.hero_cta_to} onChange={v => updateField('hero_cta_to', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FieldText label="CTA secondaria (IT)" value={copy.hero_cta2_label_it} onChange={v => updateField('hero_cta2_label_it', v)} />
+                    <FieldText label="CTA secondaria (EN)" value={copy.hero_cta2_label_en} onChange={v => updateField('hero_cta2_label_en', v)} />
+                    <FieldText label="Destinazione — es. #esperienze" value={copy.hero_cta2_to} onChange={v => updateField('hero_cta2_to', v)} />
+                </div>
+            </section>
+
             {/* Hero slides */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <div className="flex items-start justify-between gap-4">
@@ -2104,13 +2186,29 @@ function HomeEditor({
                     {copy.hero_slides.map((s, i) => (
                         <li key={s.id} className="grid grid-cols-1 md:grid-cols-[24px_1fr_auto] gap-2 items-center bg-[#fafafa] border border-theme-border rounded-xl p-3">
                             <span className="text-[11px] font-mono text-theme-text-secondary text-center">{i + 1}</span>
-                            <input
-                                type="text"
-                                value={s.video_src}
-                                onChange={(e) => updateSlide(i, { video_src: e.target.value })}
-                                placeholder="/main.mp4"
-                                className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <input
+                                    type="text"
+                                    value={s.video_src}
+                                    onChange={(e) => updateSlide(i, { video_src: e.target.value })}
+                                    placeholder="/film/cars1.mp4"
+                                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                />
+                                <input
+                                    type="text"
+                                    value={s.mobile_src || ''}
+                                    onChange={(e) => updateSlide(i, { mobile_src: e.target.value })}
+                                    placeholder="telefono (opzionale)"
+                                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                />
+                                <input
+                                    type="text"
+                                    value={s.poster_src || ''}
+                                    onChange={(e) => updateSlide(i, { poster_src: e.target.value })}
+                                    placeholder="poster (opzionale)"
+                                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                />
+                            </div>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
                                 <button onClick={() => moveSlide(i, 1)} disabled={i === copy.hero_slides.length - 1} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
@@ -2126,6 +2224,173 @@ function HomeEditor({
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi video
                 </button>
+            </section>
+
+            {/* Atto 02 — Silenzio */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Frase grande (silenzio)</h3>
+                <p className="text-[12px] text-theme-text-secondary">La frase enorme dopo il primo schermo. Una riga per riga: sono le righe che si vedono.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Frase (IT)" value={copy.statement_lines_it.join('\n')} onChange={v => setLines('statement_lines_it', v)} />
+                    <FieldTextArea label="Frase (EN)" value={copy.statement_lines_en.join('\n')} onChange={v => setLines('statement_lines_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Nota sotto la frase (IT)" value={copy.statement_note_it} onChange={v => updateField('statement_note_it', v)} />
+                    <FieldText label="Nota sotto la frase (EN)" value={copy.statement_note_en} onChange={v => updateField('statement_note_en', v)} />
+                </div>
+            </section>
+
+            {/* Atto 03 — Collezione */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">La Collezione</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    I veicoli in evidenza arrivano dal gestionale. Lasciando vuoto l'elenco degli id si prendono
+                    i primi delle categorie visibili in Flotta; scrivendo degli id si mostrano quelli, in
+                    quell'ordine. Nessun veicolo viene inventato: se il gestionale non ne restituisce, la
+                    sezione non compare.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Occhiello (IT)" value={copy.collection_eyebrow_it} onChange={v => updateField('collection_eyebrow_it', v)} />
+                    <FieldText label="Occhiello (EN)" value={copy.collection_eyebrow_en} onChange={v => updateField('collection_eyebrow_en', v)} />
+                    <FieldText label="Titolo (IT)" value={copy.collection_title_it} onChange={v => updateField('collection_title_it', v)} />
+                    <FieldText label="Titolo (EN)" value={copy.collection_title_en} onChange={v => updateField('collection_title_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Introduzione (IT)" value={copy.collection_intro_it} onChange={v => updateField('collection_intro_it', v)} />
+                    <FieldTextArea label="Introduzione (EN)" value={copy.collection_intro_en} onChange={v => updateField('collection_intro_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FieldText label="Quanti veicoli in evidenza" value={String(copy.collection_featured_count)} onChange={v => updateField('collection_featured_count', Math.max(1, Math.min(8, Number(v) || 3)))} />
+                    <FieldText label="CTA sotto ogni veicolo (IT)" value={copy.collection_item_cta_it} onChange={v => updateField('collection_item_cta_it', v)} />
+                    <FieldText label="CTA sotto ogni veicolo (EN)" value={copy.collection_item_cta_en} onChange={v => updateField('collection_item_cta_en', v)} />
+                </div>
+                <FieldTextArea
+                    label="Id dei veicoli in evidenza — uno per riga, vuoto = automatico"
+                    value={copy.collection_featured_ids.join('\n')}
+                    onChange={v => updateField('collection_featured_ids', v.split('\n').map(r => r.trim()).filter(Boolean))}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FieldText label="CTA finale (IT)" value={copy.collection_cta_label_it} onChange={v => updateField('collection_cta_label_it', v)} />
+                    <FieldText label="CTA finale (EN)" value={copy.collection_cta_label_en} onChange={v => updateField('collection_cta_label_en', v)} />
+                    <FieldText label="Destinazione" value={copy.collection_cta_to} onChange={v => updateField('collection_cta_to', v)} />
+                </div>
+            </section>
+
+            {/* Atto 04 — Esperienze */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Esperienze ({copy.experiences.length})</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Le card dei servizi. Mettere qui solo servizi che esistono davvero: la destinazione deve
+                    essere una pagina viva del sito.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Occhiello (IT)" value={copy.experiences_eyebrow_it} onChange={v => updateField('experiences_eyebrow_it', v)} />
+                    <FieldText label="Occhiello (EN)" value={copy.experiences_eyebrow_en} onChange={v => updateField('experiences_eyebrow_en', v)} />
+                    <FieldText label="Titolo (IT)" value={copy.experiences_title_it} onChange={v => updateField('experiences_title_it', v)} />
+                    <FieldText label="Titolo (EN)" value={copy.experiences_title_en} onChange={v => updateField('experiences_title_en', v)} />
+                </div>
+                <ul className="space-y-3">
+                    {copy.experiences.map((e, i) => (
+                        <li key={e.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-mono text-theme-text-secondary">{i + 1}</span>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => moveExp(i, -1)} disabled={i === 0} className="text-[11px] text-theme-text-secondary disabled:opacity-30">su</button>
+                                    <button onClick={() => moveExp(i, 1)} disabled={i === copy.experiences.length - 1} className="text-[11px] text-theme-text-secondary disabled:opacity-30">giu'</button>
+                                    <button onClick={() => removeExp(i)} className="text-[11px] text-[#ff3b30] hover:underline">elimina</button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FieldText label="Titolo (IT)" value={e.title_it} onChange={v => updateExp(i, { title_it: v })} />
+                                <FieldText label="Titolo (EN)" value={e.title_en} onChange={v => updateExp(i, { title_en: v })} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FieldText label="Riga sotto (IT)" value={e.copy_it} onChange={v => updateExp(i, { copy_it: v })} />
+                                <FieldText label="Riga sotto (EN)" value={e.copy_en} onChange={v => updateExp(i, { copy_en: v })} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <FieldText label="Immagine — es. /menu-mare.jpeg" value={e.image_src} onChange={v => updateExp(i, { image_src: v })} />
+                                <FieldText label="Video (opzionale)" value={e.video_src || ''} onChange={v => updateExp(i, { video_src: v })} />
+                                <FieldText label="Destinazione — es. /noleggio-mare" value={e.to} onChange={v => updateExp(i, { to: v })} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FieldText label="CTA (IT)" value={e.cta_it} onChange={v => updateExp(i, { cta_it: v })} />
+                                <FieldText label="CTA (EN)" value={e.cta_en} onChange={v => updateExp(i, { cta_en: v })} />
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <button onClick={addExp} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">Aggiungi esperienza</button>
+            </section>
+
+            {/* Atto 05 — Marca */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Momento di marca</h3>
+                <p className="text-[12px] text-theme-text-secondary">La frase grande su fondo chiaro, piu' due o tre blocchi di testo.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Frase (IT) — una riga per riga" value={copy.brand_lines_it.join('\n')} onChange={v => setLines('brand_lines_it', v)} />
+                    <FieldTextArea label="Frase (EN)" value={copy.brand_lines_en.join('\n')} onChange={v => setLines('brand_lines_en', v)} />
+                </div>
+                <ul className="space-y-3">
+                    {copy.brand_paragraphs.map((par, i) => (
+                        <li key={i} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-mono text-theme-text-secondary">Blocco {i + 1}</span>
+                                <button onClick={() => removePar(i)} className="text-[11px] text-[#ff3b30] hover:underline">elimina</button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FieldTextArea label="Testo (IT)" value={par.text_it} onChange={v => updatePar(i, { text_it: v })} />
+                                <FieldTextArea label="Testo (EN)" value={par.text_en} onChange={v => updatePar(i, { text_en: v })} />
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <button onClick={addPar} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">Aggiungi blocco</button>
+
+                <div className="pt-2">
+                    <h4 className="text-[13px] font-semibold text-theme-text-primary">Numeri ({copy.metrics.length})</h4>
+                    <p className="text-[12px] text-theme-text-secondary">
+                        Finche' la lista e' vuota la sezione non compare. Scrivere qui solo numeri verificati:
+                        un dato inventato in homepage e' peggio di nessun dato.
+                    </p>
+                </div>
+                <ul className="space-y-3">
+                    {copy.metrics.map((m, i) => (
+                        <li key={m.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-mono text-theme-text-secondary">{i + 1}</span>
+                                <button onClick={() => removeMetric(i)} className="text-[11px] text-[#ff3b30] hover:underline">elimina</button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <FieldText label='Numero — es. "2.000+"' value={m.value} onChange={v => updateMetric(i, { value: v })} />
+                                <FieldText label="Etichetta (IT)" value={m.label_it} onChange={v => updateMetric(i, { label_it: v })} />
+                                <FieldText label="Etichetta (EN)" value={m.label_en} onChange={v => updateMetric(i, { label_en: v })} />
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <button onClick={addMetric} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">Aggiungi numero</button>
+            </section>
+
+            {/* Atto 06 — Accesso */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Chiusura</h3>
+                <p className="text-[12px] text-theme-text-secondary">L'ultimo schermo: una frase, una CTA, e il filmato o l'immagine di sfondo.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.access_title_it} onChange={v => updateField('access_title_it', v)} />
+                    <FieldText label="Titolo (EN)" value={copy.access_title_en} onChange={v => updateField('access_title_en', v)} />
+                    <FieldText label="Riga sotto (IT)" value={copy.access_copy_it} onChange={v => updateField('access_copy_it', v)} />
+                    <FieldText label="Riga sotto (EN)" value={copy.access_copy_en} onChange={v => updateField('access_copy_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FieldText label="CTA (IT)" value={copy.access_cta_label_it} onChange={v => updateField('access_cta_label_it', v)} />
+                    <FieldText label="CTA (EN)" value={copy.access_cta_label_en} onChange={v => updateField('access_cta_label_en', v)} />
+                    <FieldText label="Destinazione" value={copy.access_cta_to} onChange={v => updateField('access_cta_to', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Video di sfondo" value={copy.access_video_src} onChange={v => updateField('access_video_src', v)} />
+                    <FieldText label="Immagine di ripiego (poster)" value={copy.access_media_src} onChange={v => updateField('access_media_src', v)} />
+                </div>
             </section>
 
             {/* Categories */}
@@ -4333,9 +4598,10 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Menu principale — voci (nuovo design)</h3>
                 <p className="text-[12px] text-theme-text-secondary">
-                    Le 9 voci del menu mobile (immagine + icona oro + titolo + sottotitolo). Modifica titolo e
-                    sottotitolo in IT/EN. <strong>Lascia vuoto per usare il testo predefinito</strong> indicato tra
-                    parentesi. Le immagini e le destinazioni delle voci restano gestite nel sito.
+                    Le 10 voci del menu del sito. Nel menu a schermo intero l'immagine e' il visual che
+                    compare accanto alla voce sotto il puntatore: non e' decorazione, si cambia da qui.
+                    <strong> Lascia vuoto per usare il valore predefinito</strong> indicato tra parentesi.
+                    Le destinazioni delle voci restano fisse nel sito, perche' sono rotte reali.
                 </p>
                 <div className="space-y-5">
                     {MENU_ITEM_FIELDS.map(f => (
@@ -4346,6 +4612,7 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                                 <FieldText label={`Titolo EN (def: ${f.titleEn})`} value={menuVal(`menu_${f.key}_title_en`)} onChange={v => setMenu(`menu_${f.key}_title_en`, v)} />
                                 <FieldText label={`Sottotitolo IT (def: ${f.subIt})`} value={menuVal(`menu_${f.key}_sub_it`)} onChange={v => setMenu(`menu_${f.key}_sub_it`, v)} />
                                 <FieldText label={`Sottotitolo EN (def: ${f.subEn})`} value={menuVal(`menu_${f.key}_sub_en`)} onChange={v => setMenu(`menu_${f.key}_sub_en`, v)} />
+                                <FieldText label={`Immagine (def: ${f.img})`} value={menuVal(`menu_${f.key}_img`)} onChange={v => setMenu(`menu_${f.key}_img`, v)} />
                             </div>
                         </div>
                     ))}
@@ -4368,16 +4635,17 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
 // Voci del menu principale del sito (nuovo design) editabili da Header.
 // I default mostrati qui combaciano con i fallback hardcoded nel sito
 // (components/layout/Header.tsx). key -> prefisso chiavi menu_<key>_*.
-const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: string; subIt: string; subEn: string }[] = [
-    { key: 'mobilita', name: 'Mobilità', titleIt: 'Mobilità', titleEn: 'Mobility', subIt: 'Auto esclusive per ogni esperienza su strada', subEn: 'Exclusive cars for every experience on the road' },
-    { key: 'mare', name: 'Mare', titleIt: 'Mare', titleEn: 'Sea', subIt: 'Yacht, barche e esperienze esclusive in mare', subEn: 'Yachts, boats and exclusive experiences at sea' },
-    { key: 'aria', name: 'Aria', titleIt: 'Aria', titleEn: 'Air', subIt: 'Voli privati ed elicotteri per viaggiare senza confini', subEn: 'Private jets and helicopters to travel without limits' },
-    { key: 'property', name: 'Property', titleIt: 'Property', titleEn: 'Property', subIt: 'Ville, appartamenti e residenze selezionate in tutto il mondo', subEn: 'Villas, apartments and residences selected worldwide' },
-    { key: 'servizi', name: 'Servizi', titleIt: 'Servizi', titleEn: 'Services', subIt: 'Servizi su misura per uno stile di vita esclusivo', subEn: 'Tailored services for an exclusive lifestyle' },
-    { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits' },
-    { key: 'business', name: 'Business', titleIt: 'Business', titleEn: 'Business', subIt: 'Soluzioni corporate e noleggi a lungo termine', subEn: 'Corporate solutions and long-term rentals' },
-    { key: 'digital', name: 'Digital Innovation', titleIt: 'Digital Innovation', titleEn: 'Digital Innovation', subIt: 'Digital Asset & Token Creation', subEn: 'Digital Asset & Token Creation' },
-    { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service' },
+const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: string; subIt: string; subEn: string; img: string }[] = [
+    { key: 'mobilita', name: 'Mobilità', titleIt: 'Mobilità', titleEn: 'Mobility', subIt: 'Auto esclusive per ogni esperienza su strada', subEn: 'Exclusive cars for every experience on the road', img: '/menu-mobilita.jpeg' },
+    { key: 'mare', name: 'Mare', titleIt: 'Mare', titleEn: 'Sea', subIt: 'Yacht, barche e esperienze esclusive in mare', subEn: 'Yachts, boats and exclusive experiences at sea', img: '/menu-mare.jpeg' },
+    { key: 'aria', name: 'Aria', titleIt: 'Aria', titleEn: 'Air', subIt: 'Voli privati ed elicotteri per viaggiare senza confini', subEn: 'Private jets and helicopters to travel without limits', img: '/menu-aria.jpeg' },
+    { key: 'property', name: 'Property', titleIt: 'Property', titleEn: 'Property', subIt: 'Ville, appartamenti e residenze selezionate in tutto il mondo', subEn: 'Villas, apartments and residences selected worldwide', img: '/menu-property.jpeg' },
+    { key: 'servizi', name: 'Lavaggio & Meccanica', titleIt: 'Lavaggio & Meccanica', titleEn: 'Car Wash & Mechanics', subIt: 'Lavaggio auto premium e officina meccanica', subEn: 'Premium car wash and mechanical workshop', img: '/servizi-lavaggio.jpeg' },
+    { key: 'wallet', name: 'Credit Wallet', titleIt: 'Credit Wallet', titleEn: 'Credit Wallet', subIt: 'Il tuo credito DR7 Wallet per prenotare e ricaricare', subEn: 'Your DR7 Wallet credit to book and top up', img: '/menu-club.jpeg' },
+    { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits', img: '/menu-club.jpeg' },
+    { key: 'business', name: 'Business', titleIt: 'Business', titleEn: 'Business', subIt: 'Soluzioni corporate e noleggi a lungo termine', subEn: 'Corporate solutions and long-term rentals', img: '/menu-business.jpeg' },
+    { key: 'digital', name: 'Innovazione Digitale', titleIt: 'Innovazione Digitale', titleEn: 'Digital Innovation', subIt: 'Creazione di asset digitali e token', subEn: 'Digital Asset & Token Creation', img: '/menu-digital.jpeg' },
+    { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service', img: '/menu-contatti.jpeg' },
 ]
 
 // ─── SignUp editor (registrazione cliente — Azienda / Persona Fisica / PA) ─

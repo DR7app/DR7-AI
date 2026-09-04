@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 34 — interfacce: 69
+ * Sezioni generate: 34 — interfacce: 71
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -185,6 +185,10 @@ export interface MembershipPlaceholderValues {
 export interface HomeSlide {
   id: string;
   video_src: string;       // path under /public, e.g. "/main.mp4"
+  /** Fotogramma mostrato prima che il video parta e se il video non arriva. */
+  poster_src?: string;
+  /** Sorgente verticale dedicata al telefono, se la scena 16:9 non regge il taglio. */
+  mobile_src?: string;
 }
 
 /**
@@ -199,12 +203,75 @@ export interface HomeCategoryOverride {
   image_src: string;       // path under /public, e.g. "/car.jpeg"
 }
 
+/** Un'esperienza in homepage: servizio reale, immagine, testo, destinazione. */
+export interface HomeExperience {
+  id: string;
+  to: string;                 // rotta interna esistente, es. "/noleggio-mare"
+  image_src: string;          // path under /public
+  video_src?: string;         // opzionale: se c'e', sostituisce l'immagine
+  title_it: string; title_en: string;
+  copy_it: string; copy_en: string;
+  cta_it: string; cta_en: string;
+}
+
+/**
+ * Numero monumentale in homepage.
+ *
+ * Vuoto di proposito nei default: un numero va mostrato solo se verificato.
+ * Finche' l'array e' vuoto la sezione non viene renderizzata.
+ */
+export interface HomeMetric {
+  id: string;
+  value: string;              // es. "2.000+"
+  label_it: string; label_en: string;
+}
+
 export interface HomeCopy {
   seo_h1_it: string;
   seo_h1_en: string;
   hero_autoplay_seconds: number;     // default 8
   hero_slides: HomeSlide[];
   categories: HomeCategoryOverride[];
+
+  // ── Atto 01 — Arrivo ─────────────────────────────────────────────────────
+  hero_kicker_it: string; hero_kicker_en: string;
+  hero_headline_it: string; hero_headline_en: string;
+  hero_microcopy_it: string; hero_microcopy_en: string;
+  hero_cta_label_it: string; hero_cta_label_en: string; hero_cta_to: string;
+  hero_cta2_label_it: string; hero_cta2_label_en: string; hero_cta2_to: string;
+
+  // ── Atto 02 — Silenzio ───────────────────────────────────────────────────
+  statement_lines_it: string[]; statement_lines_en: string[];
+  statement_note_it: string; statement_note_en: string;
+
+  // ── Atto 03 — La Collezione ──────────────────────────────────────────────
+  collection_eyebrow_it: string; collection_eyebrow_en: string;
+  collection_title_it: string; collection_title_en: string;
+  collection_intro_it: string; collection_intro_en: string;
+  /** Id veicolo da mettere in evidenza. Vuoto = i primi disponibili. */
+  collection_featured_ids: string[];
+  collection_featured_count: number;
+  collection_cta_label_it: string; collection_cta_label_en: string;
+  collection_cta_to: string;
+  /** Etichetta della CTA sotto ogni veicolo in evidenza. */
+  collection_item_cta_it: string; collection_item_cta_en: string;
+
+  // ── Atto 04 — Esperienze ─────────────────────────────────────────────────
+  experiences_eyebrow_it: string; experiences_eyebrow_en: string;
+  experiences_title_it: string; experiences_title_en: string;
+  experiences: HomeExperience[];
+
+  // ── Atto 05 — Marca ──────────────────────────────────────────────────────
+  brand_lines_it: string[]; brand_lines_en: string[];
+  brand_paragraphs: BilingualParagraph[];
+  metrics: HomeMetric[];
+
+  // ── Atto 06 — Accesso ────────────────────────────────────────────────────
+  access_title_it: string; access_title_en: string;
+  access_copy_it: string; access_copy_en: string;
+  access_cta_label_it: string; access_cta_label_en: string; access_cta_to: string;
+  access_media_src: string;
+  access_video_src: string;
 }
 
 // ─── Chi Siamo (About) ──────────────────────────────────────────────────────
@@ -910,6 +977,11 @@ export interface HeaderCopy {
   menu_property_sub_it?: string; menu_property_sub_en?: string;
   menu_servizi_title_it?: string; menu_servizi_title_en?: string;
   menu_servizi_sub_it?: string; menu_servizi_sub_en?: string;
+  // Credit Wallet: la voce esiste nel menu del sito da tempo ma le sue chiavi
+  // non erano mai state dichiarate, quindi il pannello non la mostrava e il
+  // titolo restava quello di fabbrica. Ora e' modificabile come le altre.
+  menu_wallet_title_it?: string; menu_wallet_title_en?: string;
+  menu_wallet_sub_it?: string; menu_wallet_sub_en?: string;
   menu_club_title_it?: string; menu_club_title_en?: string;
   menu_club_sub_it?: string; menu_club_sub_en?: string;
   menu_business_title_it?: string; menu_business_title_en?: string;
@@ -918,6 +990,20 @@ export interface HeaderCopy {
   menu_digital_sub_it?: string; menu_digital_sub_en?: string;
   menu_contatti_title_it?: string; menu_contatti_title_en?: string;
   menu_contatti_sub_it?: string; menu_contatti_sub_en?: string;
+  // Immagine di ogni voce. Nel menu a schermo intero e' il visual che compare
+  // accanto alla voce sotto il puntatore: e' contenuto, non decorazione, e
+  // deve poterla cambiare l'operatore. Se la chiave manca vale l'immagine di
+  // fabbrica dichiarata in Header.tsx.
+  menu_mobilita_img?: string;
+  menu_mare_img?: string;
+  menu_aria_img?: string;
+  menu_property_img?: string;
+  menu_servizi_img?: string;
+  menu_wallet_img?: string;
+  menu_club_img?: string;
+  menu_business_img?: string;
+  menu_digital_img?: string;
+  menu_contatti_img?: string;
   // Booking popup chrome (form itself = BookingSearchBox)
   popup_title_it: string; popup_title_en: string;               // "Prenota Ora"
   popup_subtitle_it: string; popup_subtitle_en: string;         // "Seleziona date e orari"
@@ -2746,13 +2832,21 @@ export const INITIAL_HOME: HomeCopy = {
   seo_h1_it: 'DR7 — Noleggio Auto di Lusso, Supercar e Servizi Premium in Sardegna',
   seo_h1_en: 'DR7 — Luxury Car Rental, Supercars & Premium Services in Sardinia',
   hero_autoplay_seconds: 8,
+  // I quattro film DR7: 1920x1080, marchiati, lenti. Uno per divisione —
+  // terra, mare, aria, soggiorni — che e' esattamente cio' che dice il
+  // microcopy dello hero. Ricodificati da 10-12 MB a 1,4-3,1 MB e affiancati
+  // da una variante 720 per il telefono e da un poster.
+  //
+  // NON usare qui i vecchi main.mp4 / video2..6: sono 576x1024, cioe' clip
+  // verticali da telefono larghe 576 pixel. In uno schermo intero orizzontale
+  // vengono ingrandite tre volte e tagliate a fascia: e' il motivo per cui lo
+  // hero sembrava sfocato e inquadrato a caso. Restano nella cartella public,
+  // utilizzabili dove il formato verticale ha senso.
   hero_slides: [
-    { id: 'slide-1', video_src: '/main.mp4' },
-    { id: 'slide-2', video_src: '/video2.mp4' },
-    { id: 'slide-3', video_src: '/video3.mp4' },
-    { id: 'slide-4', video_src: '/video4.mp4' },
-    { id: 'slide-5', video_src: '/video5.mp4' },
-    { id: 'slide-6', video_src: '/video6.mp4' },
+    { id: 'film-terra',     video_src: '/film/cars1.mp4',       mobile_src: '/film/cars1-720.mp4',       poster_src: '/poster/film-cars1.jpg' },
+    { id: 'film-mare',      video_src: '/film/yacht.mp4',       mobile_src: '/film/yacht-720.mp4',       poster_src: '/poster/film-yacht.jpg' },
+    { id: 'film-aria',      video_src: '/film/helicopter1.mp4', mobile_src: '/film/helicopter1-720.mp4', poster_src: '/poster/film-helicopter1.jpg' },
+    { id: 'film-soggiorni', video_src: '/film/villa1.mp4',      mobile_src: '/film/villa1-720.mp4',      poster_src: '/poster/film-villa1.jpg' },
   ],
   categories: [
     { id: 'cars',                 display_title_it: 'DR7 Supercar & Luxury Division',         display_title_en: 'DR7 Supercar & Luxury Division',         image_src: '/car.jpeg' },
@@ -2765,6 +2859,96 @@ export const INITIAL_HOME: HomeCopy = {
     { id: 'membership',           display_title_it: 'DR7 Exclusive Members Club',             display_title_en: 'DR7 Exclusive Members Club',             image_src: '/exclusivemc.jpeg' },
     { id: 'credit-wallet',        display_title_it: 'DR7 Credit Wallet',                      display_title_en: 'DR7 Credit Wallet',                      image_src: '/cwallet.jpeg' },
   ],
+
+  // ── Atto 01 — Arrivo ───────────────────────────────────────────────────
+  hero_kicker_it: 'Cagliari · Sardegna',
+  hero_kicker_en: 'Cagliari · Sardinia',
+  hero_headline_it: 'Sardegna,\na un\u2019altra velocit\u00e0.',
+  hero_headline_en: 'Sardinia,\nat another speed.',
+  hero_microcopy_it: 'Terra, mare, aria. Una sola collezione, un solo accesso.',
+  hero_microcopy_en: 'Land, sea, air. One collection, one access.',
+  hero_cta_label_it: 'La Collezione',
+  hero_cta_label_en: 'The Collection',
+  hero_cta_to: '/flotta',
+  hero_cta2_label_it: 'Esperienze',
+  hero_cta2_label_en: 'Experiences',
+  hero_cta2_to: '#esperienze',
+
+  // ── Atto 02 — Silenzio ─────────────────────────────────────────────────
+  statement_lines_it: ['Scegliere un mezzo', '\u00e8 scegliere', 'come arrivare.'],
+  statement_lines_en: ['Choosing how you move', 'is choosing', 'how you arrive.'],
+  statement_note_it: 'Terra · Mare · Aria',
+  statement_note_en: 'Land · Sea · Air',
+
+  // ── Atto 03 — La Collezione ────────────────────────────────────────────
+  collection_eyebrow_it: '01 \u2014 La Collezione',
+  collection_eyebrow_en: '01 \u2014 The Collection',
+  collection_title_it: 'La Collezione',
+  collection_title_en: 'The Collection',
+  collection_intro_it: 'Una selezione ristretta. Il catalogo completo \u00e8 a un passo.',
+  collection_intro_en: 'A short selection. The full catalogue is one step away.',
+  collection_featured_ids: [],
+  collection_featured_count: 3,
+  collection_cta_label_it: 'Esplora la collezione',
+  collection_cta_label_en: 'Explore the collection',
+  collection_cta_to: '/flotta',
+  collection_item_cta_it: 'Scopri',
+  collection_item_cta_en: 'Discover',
+
+  // ── Atto 04 — Esperienze ───────────────────────────────────────────────
+  // Solo servizi realmente attivi sul sito, con le stesse destinazioni del menu.
+  experiences_eyebrow_it: '02 \u2014 Esperienze',
+  experiences_eyebrow_en: '02 \u2014 Experiences',
+  experiences_title_it: 'Ci\u00f2 che rendono possibile',
+  experiences_title_en: 'What they make possible',
+  experiences: [
+    { id: 'mare', to: '/noleggio-mare', image_src: '/menu-mare.jpeg',
+      title_it: 'Mare', title_en: 'Sea',
+      copy_it: 'Yacht, barche ed esperienze esclusive lungo la costa.',
+      copy_en: 'Yachts, boats and exclusive experiences along the coast.',
+      cta_it: 'Scopri', cta_en: 'Discover' },
+    { id: 'aria', to: '/noleggio-aria', image_src: '/menu-aria.jpeg',
+      title_it: 'Aria', title_en: 'Air',
+      copy_it: 'Voli privati ed elicotteri per viaggiare senza confini.',
+      copy_en: 'Private flights and helicopters to travel without limits.',
+      cta_it: 'Scopri', cta_en: 'Discover' },
+    { id: 'soggiorni', to: '/soggiorni', image_src: '/menu-property.jpeg',
+      title_it: 'Soggiorni', title_en: 'Stays',
+      copy_it: 'Ville, appartamenti e residenze selezionate.',
+      copy_en: 'Villas, apartments and selected residences.',
+      cta_it: 'Scopri', cta_en: 'Discover' },
+    // Il nome del servizio e' quello che usa il menu: "Lavaggio & Meccanica".
+    // L'immagine e' quella del lavaggio, non la mano guantata sulla portiera
+    // (menu-servizi.jpeg), che racconta tutt'altro servizio.
+    { id: 'lavaggio-meccanica', to: '/prime-wash', image_src: '/servizi-lavaggio.jpeg',
+      title_it: 'Lavaggio & Meccanica', title_en: 'Car Wash & Mechanics',
+      copy_it: 'Lavaggio premium, detailing e officina meccanica.',
+      copy_en: 'Premium wash, detailing and mechanical workshop.',
+      cta_it: 'Scopri', cta_en: 'Discover' },
+  ],
+
+  // ── Atto 05 — Marca ────────────────────────────────────────────────────
+  brand_lines_it: ['Una flotta', 'non \u00e8 un parcheggio.', '\u00c8 una collezione.'],
+  brand_lines_en: ['A fleet', 'is not a car park.', 'It is a collection.'],
+  brand_paragraphs: [
+    { text_it: 'Selezione, servizio, tecnologia. Ogni veicolo viene preparato, consegnato e riconsegnato secondo lo stesso standard, a Cagliari e in tutta la Sardegna.',
+      text_en: 'Selection, service, technology. Every vehicle is prepared, delivered and returned to the same standard, in Cagliari and across Sardinia.' },
+    { text_it: 'Una sola piattaforma per prenotare, firmare, pagare e gestire il noleggio, con il credito DR7 Wallet e i vantaggi DR7 Club.',
+      text_en: 'One platform to book, sign, pay and manage your rental, with DR7 Wallet credit and DR7 Club benefits.' },
+  ],
+  // Vuoto di proposito: un numero si pubblica solo se verificato nei dati.
+  metrics: [],
+
+  // ── Atto 06 — Accesso ──────────────────────────────────────────────────
+  access_title_it: 'Il prossimo arrivo \u00e8 il tuo.',
+  access_title_en: 'The next arrival is yours.',
+  access_copy_it: 'Scegli il mezzo, la data, il luogo.',
+  access_copy_en: 'Choose the vehicle, the date, the place.',
+  access_cta_label_it: 'Prenota',
+  access_cta_label_en: 'Book now',
+  access_cta_to: '/flotta',
+  access_media_src: '/poster/video5.jpg',
+  access_video_src: '/video5.mp4',
 };
 
 // ─── Default Membership seed ────────────────────────────────────────────────
