@@ -83,6 +83,7 @@ export const SITO_AREAS: SitoArea[] = [
 
 export const SITO_SCREENS: SitoScreen[] = [
     // ─── Struttura ───────────────────────────────────────────────────────
+    { id: 'aspetto',           path: '(ogni pagina)',            label: 'Aspetto & Funzionalita',   area: 'struttura', editor: 'aspetto',           file: 'components/layout/Header.tsx', note: 'Posizione e dimensione del logo, e i widget presenti su ogni pagina (chat AI, popup).' },
     { id: 'header',            path: '(ogni pagina)',            label: 'Menu ESPLORA / Header',    area: 'struttura', editor: 'header',            file: 'components/layout/Header.tsx' },
     { id: 'footer',            path: '(ogni pagina)',            label: 'Footer',                   area: 'struttura', editor: 'footer',            file: 'components/layout/Footer.tsx' },
     { id: 'booking-search-box',path: '(ogni pagina)',            label: 'Popup "Prenota Ora"',      area: 'struttura', editor: 'booking-search-box',file: 'components/ui/BookingSearchBox.tsx' },

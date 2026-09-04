@@ -52,6 +52,8 @@ import type {
     AboutCopy,
     AboutFounder,
     AirportItem,
+    AspettoCopy,
+    LogoAlignment,
     AviationMarineCopy,
     AviationMarineItem,
     AviationMarineSpec,
@@ -132,6 +134,7 @@ import {
     INITIAL_FIRMA,
     INITIAL_FOOTER,
     INITIAL_FRANCHISING,
+    INITIAL_ASPETTO,
     INITIAL_HEADER,
     INITIAL_HOME,
     INITIAL_INVESTITORI,
@@ -243,6 +246,7 @@ interface CurrentState {
     locations: LocationsCopy
     aviationMarine: AviationMarineCopy
     dr7ClubPlan: Dr7ClubPlanCopy
+    aspetto: Required<AspettoCopy>
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -561,6 +565,8 @@ export default function SitoTab() {
     const [savedAviationMarine, setSavedAviationMarine] = useState<AviationMarineCopy>(INITIAL_AVIATION_MARINE)
     const [dr7ClubPlan, setDr7ClubPlan] = useState<Dr7ClubPlanCopy>(INITIAL_DR7_CLUB_PLAN)
     const [savedDr7ClubPlan, setSavedDr7ClubPlan] = useState<Dr7ClubPlanCopy>(INITIAL_DR7_CLUB_PLAN)
+    const [aspetto, setAspetto] = useState<Required<AspettoCopy>>(INITIAL_ASPETTO)
+    const [savedAspetto, setSavedAspetto] = useState<Required<AspettoCopy>>(INITIAL_ASPETTO)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -726,6 +732,21 @@ export default function SitoTab() {
                     setDr7ClubPlan(remote.dr7ClubPlan)
                     setSavedDr7ClubPlan(remote.dr7ClubPlan)
                 }
+                // Aspetto: fusione sopra il seed, non sostituzione. Le altre
+                // sezioni riconoscono una riga salvata da un campo di testo
+                // pieno; qui i campi sono booleani e numeri, e `false` e' una
+                // scelta legittima. Un campo aggiunto dopo deve ereditare il
+                // valore di fabbrica, non arrivare `undefined` nel form.
+                if (remote?.aspetto && typeof remote.aspetto === 'object') {
+                    const merged: Required<AspettoCopy> = { ...INITIAL_ASPETTO }
+                    for (const [k, v] of Object.entries(remote.aspetto)) {
+                        if (v === undefined || v === null || v === '') continue
+                        if (typeof v === 'number' && (!isFinite(v) || v <= 0)) continue
+                        ;(merged as Record<string, unknown>)[k] = v
+                    }
+                    setAspetto(merged)
+                    setSavedAspetto(merged)
+                }
                 if (remote?.token && remote.token.hero_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -742,10 +763,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan },
-            { flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine, dr7ClubPlan: savedDr7ClubPlan }
+            { flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan, aspetto },
+            { flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine, dr7ClubPlan: savedDr7ClubPlan, aspetto: savedAspetto }
         ),
-        [flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine, dr7ClubPlan, savedDr7ClubPlan]
+        [flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine, dr7ClubPlan, savedDr7ClubPlan, aspetto, savedAspetto]
     )
     const dirty = changes.length > 0
 
@@ -759,7 +780,7 @@ export default function SitoTab() {
             // Un pacchetto senza id il sito non lo mostra: l'id si completa qui.
             const creditWalletToSave = normalizeCreditPackagesForSave(creditWallet)
             if (JSON.stringify(creditWalletToSave) !== JSON.stringify(creditWallet)) setCreditWallet(creditWalletToSave)
-            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet: creditWalletToSave, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan })
+            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet: creditWalletToSave, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan, aspetto })
             setSavedFlotta(flotta)
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
@@ -793,6 +814,7 @@ export default function SitoTab() {
             setSavedLocations(locations)
             setSavedAviationMarine(aviationMarine)
             setSavedDr7ClubPlan(dr7ClubPlan)
+            setSavedAspetto(aspetto)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -856,6 +878,7 @@ export default function SitoTab() {
         setLocations(savedLocations)
         setAviationMarine(savedAviationMarine)
         setDr7ClubPlan(savedDr7ClubPlan)
+        setAspetto(savedAspetto)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1043,6 +1066,9 @@ export default function SitoTab() {
                         {hydrated && section === 'dr7-club-plan' && (
                             <Dr7ClubPlanEditor copy={dr7ClubPlan} setCopy={setDr7ClubPlan} />
                         )}
+                        {hydrated && section === 'aspetto' && (
+                            <AspettoEditor copy={aspetto} setCopy={setAspetto} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1224,6 +1250,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.dr7ClubPlan) !== JSON.stringify(saved.dr7ClubPlan)) {
         out.push('DR7 Club — Piano & Benefit: modificato')
+    }
+    if (JSON.stringify(current.aspetto) !== JSON.stringify(saved.aspetto)) {
+        out.push('Aspetto & Funzionalita: logo o widget modificati')
     }
     return out
 }
@@ -5806,6 +5835,163 @@ function PaymentCancelEditor({ copy, setCopy }: { copy: PaymentCancelCopy; setCo
                     <FieldText label="CTA Riprova (IT)" value={copy.cta_retry_it} onChange={v => update('cta_retry_it', v)} />
                     <FieldText label="CTA Retry (EN)" value={copy.cta_retry_en} onChange={v => update('cta_retry_en', v)} />
                 </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Aspetto & Funzionalita del sito ──────────────────────────────────────
+// L'unica sezione dell'onglet che non modifica testi: qui si sposta il logo
+// e si accendono/spengono i widget che compaiono su OGNI pagina. Prima
+// vivevano nel codice del sito, quindi spostare il logo o spegnere la chat
+// voleva dire un deploy.
+const LOGO_ALIGNMENTS: { value: LogoAlignment; label: string; hint: string }[] = [
+    { value: 'left', label: 'A sinistra', hint: 'Logo prima del menu ESPLORA.' },
+    { value: 'center', label: 'Al centro', hint: 'Come oggi su dr7.app.' },
+    { value: 'right', label: 'A destra', hint: 'Logo in coda ai controlli utente.' },
+]
+
+function ToggleRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+    return (
+        <label className="flex items-start justify-between gap-4 py-3 cursor-pointer border-b border-theme-border last:border-b-0">
+            <span className="min-w-0">
+                <span className="block text-[13px] font-medium text-theme-text-primary">{label}</span>
+                <span className="block text-[11px] text-theme-text-secondary mt-0.5">{hint}</span>
+            </span>
+            <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
+            <span className="relative inline-block shrink-0 mt-0.5 w-9 h-5 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+            </span>
+        </label>
+    )
+}
+
+/** Campo px. Mai type="number": si scrive la cifra, si valida qui. */
+function FieldPx({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+    return (
+        <label className="block">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">{label}</span>
+            <div className="mt-1 flex items-center gap-2">
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    value={String(value)}
+                    onChange={(e) => {
+                        const n = parseInt(e.target.value.replace(/[^0-9]/g, ''), 10)
+                        onChange(isFinite(n) && n > 0 ? n : 0)
+                    }}
+                    className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+                <span className="text-[12px] text-theme-text-secondary">px</span>
+            </div>
+        </label>
+    )
+}
+
+function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy: (next: Required<AspettoCopy>) => void }) {
+    const update = <K extends keyof AspettoCopy>(key: K, value: Required<AspettoCopy>[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-theme-text-secondary">
+                Layout del logo e interruttori dei widget presenti su ogni pagina di dr7.app.
+                Le modifiche si vedono al primo ricaricamento del sito.
+            </p>
+
+            {/* Logo */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Logo</h3>
+
+                <div>
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Posizione nella barra in alto</span>
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {LOGO_ALIGNMENTS.map(opt => (
+                            <button
+                                key={opt.value}
+                                onClick={() => update('logo_alignment', opt.value)}
+                                className={`text-left px-3 py-2.5 rounded-xl border transition-colors ${copy.logo_alignment === opt.value
+                                    ? 'border-blue-500 bg-blue-500/10'
+                                    : 'border-theme-border bg-theme-bg-secondary hover:bg-theme-bg-tertiary'}`}
+                            >
+                                <span className="block text-[13px] font-medium text-theme-text-primary">{opt.label}</span>
+                                <span className="block text-[11px] text-theme-text-secondary mt-0.5">{opt.hint}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <FieldText
+                    label="Immagine del logo (percorso o URL)"
+                    value={copy.logo_url}
+                    onChange={v => update('logo_url', v)}
+                />
+                <p className="text-[11px] text-theme-text-secondary -mt-2">
+                    Usata nella barra in alto, nel menu ESPLORA e nel footer. Un percorso come
+                    <b> /DR7logo1.png</b> punta a un file gia' caricato sul sito.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FieldPx label="Altezza — schermo grande" value={copy.logo_height_desktop} onChange={v => update('logo_height_desktop', v)} />
+                    <FieldPx label="Altezza — telefono" value={copy.logo_height_mobile} onChange={v => update('logo_height_mobile', v)} />
+                    <FieldPx label="Altezza — footer" value={copy.footer_logo_height} onChange={v => update('footer_logo_height', v)} />
+                </div>
+
+                {/* Anteprima: la barra vista dall'alto, non i valori scritti. */}
+                <div className="rounded-xl border border-theme-border bg-black p-3">
+                    <span className="block text-[11px] text-gray-500 mb-2">Anteprima barra in alto</span>
+                    <div className="relative flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[#0b0b0b]">
+                        <div className="flex items-center gap-3">
+                            {copy.logo_alignment === 'left' && copy.logo_url && (
+                                <img src={copy.logo_url} alt="" className="w-auto" style={{ height: Math.min(copy.logo_height_desktop || 1, 40) }} />
+                            )}
+                            <span className="text-[11px] tracking-wider text-white">ESPLORA</span>
+                        </div>
+                        {copy.logo_alignment === 'center' && copy.logo_url && (
+                            <img src={copy.logo_url} alt="" className="absolute left-1/2 -translate-x-1/2 w-auto" style={{ height: Math.min(copy.logo_height_desktop || 1, 40) }} />
+                        )}
+                        <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-gray-400">IT / EN</span>
+                            {copy.logo_alignment === 'right' && copy.logo_url && (
+                                <img src={copy.logo_url} alt="" className="w-auto" style={{ height: Math.min(copy.logo_height_desktop || 1, 40) }} />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Widget di ogni pagina */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Widget su ogni pagina</h3>
+                <p className="text-[11px] text-theme-text-secondary mt-1 mb-2">
+                    Spento = il visitatore non lo vede piu' su nessuna pagina. Il banner cookie non e'
+                    qui: e' obbligatorio e resta sempre attivo.
+                </p>
+                <ToggleRow
+                    label="Chat DR7 AI"
+                    hint="Bottone rotondo in basso a destra e finestra di chat."
+                    checked={copy.chatbot_enabled}
+                    onChange={v => update('chatbot_enabled', v)}
+                />
+                <ToggleRow
+                    label="Popup prenotazione automatico"
+                    hint="Si apre da solo dopo qualche secondo di navigazione."
+                    checked={copy.auto_booking_popup_enabled}
+                    onChange={v => update('auto_booking_popup_enabled', v)}
+                />
+                <ToggleRow
+                    label="Popup tour in elicottero"
+                    hint="Promozione del tour in elicottero."
+                    checked={copy.heli_tour_popup_enabled}
+                    onChange={v => update('heli_tour_popup_enabled', v)}
+                />
+                {copy.chatbot_enabled && (
+                    <div className="pt-4">
+                        <FieldText
+                            label="Immagine del bottone chat"
+                            value={copy.chatbot_avatar_url}
+                            onChange={v => update('chatbot_avatar_url', v)}
+                        />
+                    </div>
+                )}
             </section>
         </div>
     )
