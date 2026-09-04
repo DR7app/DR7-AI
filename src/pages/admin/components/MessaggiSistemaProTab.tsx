@@ -5339,6 +5339,34 @@ export default function MessaggiSistemaProTab() {
                                                             </p>
                                                         </div>
 
+                                                        {/* 04/09/2026: la riga qui sotto e' la programmazione del CRON.
+                                                            Ogni template nasce con "Prima della riconsegna" come valore
+                                                            predefinito, quindi anche un messaggio che parte da un bottone
+                                                            (Pronta, richiesta firma, link pagamento) sembrava programmato
+                                                            24 ore prima della riconsegna. Qui si dice a chiare lettere
+                                                            cosa fa davvero partire questo messaggio. */}
+                                                        {(() => {
+                                                            const eventi = Array.isArray(template.handled_events) ? template.handled_events : []
+                                                            if (eventi.length > 0) {
+                                                                return (
+                                                                    <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-[11px] text-theme-text-secondary">
+                                                                        <span className="font-semibold text-emerald-500 dark:text-emerald-400">Parte da solo quando: </span>
+                                                                        {eventi.map(ev => EVENT_LABELS_IT[ev as keyof typeof EVENT_LABELS_IT] || ev).join(' · ')}
+                                                                        <div className="mt-1 text-theme-text-muted">
+                                                                            L'evento decide il momento dell'invio: l'anticipo e l'orario qui sotto valgono solo per i messaggi mandati dal cron.
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                            if (template.is_automatic) return null
+                                                            return (
+                                                                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] text-theme-text-secondary">
+                                                                    <span className="font-semibold text-amber-600 dark:text-amber-400">Questo messaggio non parte da solo. </span>
+                                                                    Per collegarlo a un bottone del gestionale (Pronta, richiesta firma, link pagamento...) aprilo in "EVENTI GESTITI DA QUESTO TEMPLATE" qui sotto e scegli l'evento. Per farlo partire a orario, accendi "Automatico" e usa la programmazione qui sotto.
+                                                                </div>
+                                                            )
+                                                        })()}
+
                                                         <div className="flex flex-wrap items-center gap-3">
                                                             <div className="flex items-center gap-2">
                                                                 <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
