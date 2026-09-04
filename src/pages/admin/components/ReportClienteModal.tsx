@@ -7,7 +7,7 @@ import { ScheletroTesto } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
-import { effectivePenaltyAmount } from '../../../utils/penaltyAmount'
+import { penaliDanniPerPrenotazione, sommaAddebiti, type Addebiti, type RigaFatturaAddebito } from '../../../utils/addebitiCliente'
 import { statusColorClasses } from './ClientStatusConfigSection'
 import {
   avvisoClasses,
@@ -113,6 +113,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     } catch (e) { toast.error('Errore: ' + (e as Error).message) } finally { setUploadingFoto(false) }
   }
   const [bookings, setBookings] = useState<BookingRecord[]>([])
+  // Le fatture penale/danno della prenotazione: senza di queste la scheda
+  // vedeva solo booking_details e la Spesa totale restava indietro rispetto
+  // al Report Clienti (04/09/2026).
+  const [fatture, setFatture] = useState<RigaFatturaAddebito[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
   const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
@@ -183,6 +187,22 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       }
       allBookings.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       setBookings(allBookings)
+
+      // Fatture penale/danno delle prenotazioni del cliente. Servono
+      // tipo_fattura/stato/related_invoice_id per scartare le note di credito
+      // e la fattura che annullano: contarle in positivo raddoppiava la
+      // pratica (caso Luca Pilloni: 5.000 EUR mostrati come 15.171,90).
+      const bookingIds = allBookings.map(b => b.id).filter(Boolean)
+      const righeFattura: RigaFatturaAddebito[] = []
+      const COLONNE_FATTURA = 'id, booking_id, importo_totale, items, tipo_fattura, stato, related_invoice_id'
+      for (let i = 0; i < bookingIds.length; i += 100) {
+        const { data: chunk } = await supabase
+          .from('fatture')
+          .select(COLONNE_FATTURA)
+          .in('booking_id', bookingIds.slice(i, i + 100))
+        if (chunk) righeFattura.push(...(chunk as RigaFatturaAddebito[]))
+      }
+      setFatture(righeFattura)
 
       // Wallet — check by user_id first, fallback to email lookup
       let walletUserId = userId
@@ -321,24 +341,41 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     }
   }
 
+  // Penali e danni per prenotazione: booking_details e fatture messi insieme
+  // una volta sola. La stessa penale sta in tutte e due le fonti, le note di
+  // credito ripetono l'importo in positivo e una fattura mista contiene sia
+  // penali sia danni: sommare le righe cosi' come stanno gonfiava il totale.
+  // Regola unica in utils/addebitiCliente.ts, gemella del Report Clienti.
+  const addebitiPerPrenotazione = useMemo(
+    () => penaliDanniPerPrenotazione(bookings.map(b => ({ id: b.id, booking_details: b.booking_details })), fatture),
+    [bookings, fatture],
+  )
+
   // KPIs
   const kpis = useMemo(() => {
     const noleggi = bookings.filter(b => b.service_type !== 'car_wash' && b.service_type !== 'mechanical_service' && b.service_type !== 'mechanical')
     const lavaggi = bookings.filter(b => b.service_type === 'car_wash')
     const meccanica = bookings.filter(b => b.service_type === 'mechanical_service' || b.service_type === 'mechanical')
 
-    const totalSpent = bookings.filter(b => b.payment_status === 'paid' || b.payment_status === 'succeeded' || b.payment_status === 'completed').reduce((s, b) => s + (b.price_total || 0), 0) / 100
     const cancelled = bookings.filter(b => b.status === 'cancelled' || b.status === 'annullata').length
 
-    // Danni & Penali from booking_details
-    let totalDanni = 0, totalPenali = 0, danniCount = 0, penaliCount = 0
-    bookings.forEach(b => {
-      const d = b.booking_details?.danni || []
-      const p = b.booking_details?.penalties || []
-      // Prezzo FINALE scontato (come in fattura) via helper condiviso — mai il listino.
-      d.forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalDanni += effectivePenaltyAmount(item); danniCount++ })
-      p.forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalPenali += effectivePenaltyAmount(item); penaliCount++ })
-    })
+    // Danni & Penali: da booking_details E dalle fatture, senza doppioni.
+    const addebiti = sommaAddebiti(addebitiPerPrenotazione.values())
+    const totalPenali = addebiti.penali
+    const totalDanni = addebiti.danni
+    const penaliCount = addebiti.eventiPenali
+    const danniCount = addebiti.eventiDanni
+
+    // Spesa totale = TUTTO quello che il cliente ha speso con DR7: noleggi,
+    // lavaggi, meccanica, penali e danni. Prima erano solo le prenotazioni
+    // pagate, quindi la scheda diceva una cifra e il Report Clienti un'altra.
+    // Le prenotazioni annullate non contano; il resto si', a prescindere dal
+    // fatto che sia gia' incassato (la parte non incassata resta in "Debiti in
+    // Sospeso").
+    const serviziSpesa = bookings
+      .filter(b => b.status !== 'cancelled' && b.status !== 'annullata')
+      .reduce((s, b) => s + (b.price_total || 0), 0) / 100
+    const totalSpent = Math.round((serviziSpesa + totalPenali + totalDanni) * 100) / 100
 
     // Unpaid
     const unpaid = bookings.filter(b => b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial')
@@ -355,10 +392,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
     return {
       noleggiCount: noleggi.length, lavaggiCount: lavaggi.length, meccanicaCount: meccanica.length,
-      totalSpent, cancelled, totalDanni, totalPenali, danniCount, penaliCount,
+      totalSpent, serviziSpesa, cancelled, totalDanni, totalPenali, danniCount, penaliCount,
       unpaidTotal, lastDate, punctuality
     }
-  }, [bookings])
+  }, [bookings, addebitiPerPrenotazione])
 
   // DR7 Club tier — stesse soglie del sito (Sito/utils/dr7club.ts).
   // Conta il denaro NUOVO incassato negli ultimi 12 mesi: prenotazioni pagate
@@ -453,18 +490,23 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   // Riepilogo economico limitato al periodo scelto (stesse regole dei KPI
   // globali: pagato = paid/succeeded/completed, penali/danni al prezzo finale).
   const econKpis = useMemo(() => {
-    const isPaid = (b: BookingRecord) => b.payment_status === 'paid' || b.payment_status === 'succeeded' || b.payment_status === 'completed'
-    const totalSpent = econBookings.filter(isPaid).reduce((s, b) => s + (b.price_total || 0), 0) / 100
     const unpaidTotal = econBookings
       .filter(b => b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial')
       .reduce((s, b) => s + (b.price_total || 0), 0) / 100
-    let totalDanni = 0, totalPenali = 0
-    econBookings.forEach(b => {
-      ;(b.booking_details?.danni || []).forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalDanni += effectivePenaltyAmount(item) })
-      ;(b.booking_details?.penalties || []).forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalPenali += effectivePenaltyAmount(item) })
-    })
-    return { totalSpent, unpaidTotal, totalDanni, totalPenali, count: econBookings.length }
-  }, [econBookings])
+    // Stessa regola dei KPI globali: penali e danni presi una volta sola dalle
+    // due fonti, e la spesa del periodo li comprende.
+    const nelPeriodo: Addebiti[] = []
+    for (const b of econBookings) {
+      const voci = addebitiPerPrenotazione.get(b.id)
+      if (voci) nelPeriodo.push(voci)
+    }
+    const addebiti = sommaAddebiti(nelPeriodo)
+    const serviziSpesa = econBookings
+      .filter(b => b.status !== 'cancelled' && b.status !== 'annullata')
+      .reduce((s, b) => s + (b.price_total || 0), 0) / 100
+    const totalSpent = Math.round((serviziSpesa + addebiti.penali + addebiti.danni) * 100) / 100
+    return { totalSpent, serviziSpesa, unpaidTotal, totalDanni: addebiti.danni, totalPenali: addebiti.penali, count: econBookings.length }
+  }, [econBookings, addebitiPerPrenotazione])
 
   // Fatturato per mese sull'intervallo attivo.
   const monthlyData = useMemo(() => {
@@ -802,7 +844,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent p-3">
                 <div className="text-[9px] uppercase tracking-wider text-emerald-300/80 font-semibold">Spesa totale</div>
                 <div className="text-lg font-bold text-emerald-400 mt-1 tabular-nums">{fmtEur(kpis.totalSpent)}</div>
-                <div className="text-[10px] text-theme-text-muted mt-0.5">storico completo</div>
+                <div className="text-[10px] text-theme-text-muted mt-0.5">servizi {fmtEur(kpis.serviziSpesa)} + penali/danni {fmtEur(kpis.totalPenali + kpis.totalDanni)}</div>
               </div>
 
               {/* Prenotazioni */}
@@ -1505,7 +1547,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     <div className="flex justify-between"><span className="text-theme-text-muted">Danni Totali</span><span className="font-bold text-red-400">{fmtEur(econKpis.totalDanni)}</span></div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-theme-border space-y-2 text-xs">
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Totale Fatturato (tutto lo storico)</span><span className="font-semibold text-theme-text-primary">{fmtEur(kpis.totalSpent)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Spesa totale (tutto lo storico)</span><span className="font-semibold text-theme-text-primary">{fmtEur(kpis.totalSpent)}</span></div>
                     <div className="flex justify-between"><span className="text-theme-text-muted">Debiti in Sospeso (tutto lo storico)</span><span className="font-semibold text-theme-text-primary">{fmtEur(kpis.unpaidTotal)}</span></div>
                   </div>
                 </div>

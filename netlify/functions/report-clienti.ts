@@ -1,56 +1,10 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { addebitiFattura, fattureDaIgnorare, penaliDanniPerPrenotazione, type RigaFatturaAddebito } from './utils/addebitiCliente'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-// Keywords from PenaltyModal labels that indicate PHYSICAL DAMAGE to the vehicle
-const DANNI_KEYWORDS = [
-  'fermo veicolo', 'fermo del veicolo', 'foro da sigaretta', 'foro sigaretta',
-  'gonfia e ripara', 'bomboletta', 'veicolo sporco', 'igienizzazione',
-  'controlli elettronici', 'disattivazione controlli', 'cani', 'pelo di cane',
-  'pista', 'competizioni', 'incidente', 'danni',
-]
-
-const PENALI_KEYWORDS = [
-  'fumo', 'odore', 'cenere', 'guidatore non', 'carburante', 'multe',
-  'sanzioni', 'assenza intestatario', 'ritardo', 'check-out', 'checkout',
-  'subnoleggio', 'neopatentati', 'non abilitati', 'patente', 'riconsegna',
-]
-
-// Detects whether an item description is a penalty / damage line.
-// Handles BOTH:
-//   - legacy phrasing: "Penale prenotazione DR7-XXXX - <motivo>"
-//   - new phrasing from generate-penalty-invoice.ts and
-//     generate-invoice-from-booking.ts: "Penale: <label>" / "Penale - <label>"
-//     and "Danno: <label>" / "Danno - <label>" (and bare "Penale" / "Danno")
-function itemKind(desc: string): 'danni' | 'penali' | null {
-  const d = desc.toLowerCase().trim()
-  if (!d) return null
-  // Damage wins over penalty when both keywords would match.
-  if (d.startsWith('danno') || d.includes('danno prenotazione') || d.includes(' danno ')) return 'danni'
-  if (d.startsWith('penale') || d.includes('penale prenotazione') || d.includes(' penale ')) {
-    // For legacy "Penale prenotazione X - <motivo>", classify by keywords;
-    // some "penali" rows actually describe damage.
-    const dashIdx = d.indexOf(' - ')
-    const motivo = dashIdx >= 0 ? d.substring(dashIdx + 3) : d
-    for (const kw of DANNI_KEYWORDS) if (motivo.includes(kw.toLowerCase())) return 'danni'
-    return 'penali'
-  }
-  return null
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
-  let result: 'danni' | 'penali' | null = null
-  for (const item of items) {
-    const k = itemKind(item.description || '')
-    if (k === 'danni') return 'danni' // damage takes precedence
-    if (k === 'penali') result = 'penali'
-  }
-  return result
-}
 
 // PostgREST tronca ogni select a 1000 righe: senza paginazione il report
 // perdeva prenotazioni, fatture e cauzioni oltre la prima pagina, quindi la
@@ -61,13 +15,23 @@ function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
 // il report ci metteva decine di secondi. Ora la prima pagina porta anche il
 // totale delle righe e tutte le altre partono insieme: il costo torna a
 // essere quello di un solo giro di rete, non di venti.
+//
+// 04/09/2026 — le pagine partono INSIEME ma la select non aveva un ORDER BY:
+// senza ordinamento PostgREST non garantisce che due `range()` diversi vedano
+// la stessa sequenza di righe, quindi una prenotazione poteva finire in due
+// pagine e un'altra in nessuna. Risultato: prenotazioni che sparivano dal
+// Report Clienti a caso (e ricomparivano al ricaricamento). Si ordina per la
+// prima colonna chiesta — sulle tabelle che superano le 1000 righe
+// (customers_extended, bookings, fatture) e' `id`, quindi un ordine totale.
 async function fetchAll<T = Record<string, unknown>>(table: string, columns: string, tweak?: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const PAGE = 1000
+  const ordine = columns.split(',')[0].trim()
   const query = (conConteggio: boolean) => {
     let q: any = conConteggio // eslint-disable-line @typescript-eslint/no-explicit-any
       ? supabase.from(table).select(columns, { count: 'exact' })
       : supabase.from(table).select(columns)
     if (tweak) q = tweak(q)
+    if (ordine) q = q.order(ordine, { ascending: true })
     return q
   }
 
@@ -130,6 +94,17 @@ export const handler: Handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
+  // 04/09/2026 — Report Clienti scaricava TUTTE le prenotazioni di sempre e il
+  // selettore "periodo" della tab si limitava a nascondere dei clienti: gli
+  // importi restavano quelli di tutta la vita del cliente, quindi non potevano
+  // combaciare con il Report Noleggio dello stesso mese. Ora la plage arriva
+  // qui e le somme riguardano SOLO quel periodo (assente = tutto lo storico,
+  // che e' il preset "Sempre").
+  const periodoFrom = (event.queryStringParameters?.from || '').slice(0, 10) || null
+  const periodoTo = (event.queryStringParameters?.to || '').slice(0, 10) || null
+  const periodoFromMs = periodoFrom ? new Date(periodoFrom + 'T00:00:00').getTime() : null
+  const periodoToMs = periodoTo ? new Date(periodoTo + 'T23:59:59.999').getTime() : null
+
   try {
     // 0) Anagrafica + attivita': tutte le tabelle partono insieme.
     //    Prima l'anagrafica veniva letta per intera PRIMA di far partire le
@@ -146,10 +121,13 @@ export const handler: Handler = async (event) => {
           'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
         ),
       ))(),
-      fetchAll<any>('bookings', 'id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, booked_at, created_at'),
+      fetchAll<any>('bookings', 'id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, vehicle_plate, booked_at, created_at, updated_at'),
       fetchAll<any>('vehicles', 'id, category'),
       fetchAll<any>('cauzioni', 'cliente_id, importo, stato, riferimento_contratto_id'),
-      fetchAll<any>('fatture', 'id, booking_id, importo_totale, items, customer_name, customer_email'),
+      // tipo_fattura/stato/related_invoice_id servono a scartare le note di
+      // credito e la fattura che annullano: senza, un documento annullato
+      // contava DUE volte in positivo (caso Luca Pilloni, 04/09/2026).
+      fetchAll<any>('fatture', 'id, booking_id, importo_totale, items, customer_name, customer_email, tipo_fattura, stato, related_invoice_id'),
       fetchAll<any>('dr7_club_subscriptions', 'user_id, plan, status, expires_at', q => q.eq('status', 'active')),
       fetchAll<any>('user_credit_balance', 'user_id, balance'),
       // Le ricariche fuori periodo o non riuscite venivano scaricate tutte e
@@ -308,19 +286,42 @@ export const handler: Handler = async (event) => {
     }
 
     // 7) Bookings — classify and aggregate. Cancelled go into annullate_count.
-    type BookingType = 'supercar' | 'urban' | 'aziendali' | 'car_wash' | 'mechanical'
+    type BookingType = 'supercar' | 'urban' | 'aziendali' | 'altri' | 'car_wash' | 'mechanical'
+
+    // Le stesse esclusioni del Report Noleggio (monthly-report.ts, STEP 1).
+    // Senza queste il Report Clienti contava righe che il Report Noleggio
+    // scarta — prenotazioni admin e mezzi di prova — e i due schermi non
+    // potevano tornare.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function isRigaDiServizio(b: any): boolean {
+      const details = b.booking_details || {}
+      if (details.internal === true) return true
+      if (details.createdBy === 'automatic_system') return true
+      const name = (b.customer_name || '').trim().toUpperCase()
+      if (name.startsWith('INTERNO') || name.startsWith('LAVAGGIO RIENTRO')) return true
+      if (name.toLowerCase().includes('admin dr7')) return true
+      if (norm(b.customer_email) === 'admin@dr7.app') return true
+      if (norm(details?.customer?.email) === 'admin@dr7.app') return true
+      const targa = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+      if (targa === 'TEST000' || targa === 'TEST002') return true
+      return false
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function classifyBooking(b: any): BookingType | null {
+      if (isRigaDiServizio(b)) return null
       const details = b.booking_details || {}
-      if (details.internal === true) return null
-      if (details.createdBy === 'automatic_system') return null
-      const name = (b.customer_name || '').trim().toUpperCase()
-      if (name.startsWith('INTERNO') || name.startsWith('LAVAGGIO RIENTRO')) return null
       const st = (b.service_type || '').trim().toLowerCase()
       if (st === 'car_wash') return 'car_wash'
       if (st === 'mechanical_service' || st === 'mechanical') return 'mechanical'
+      // Un'uscita straordinaria e' uno spostamento interno: ha pickup e
+      // dropoff come un noleggio, quindi finiva fra le Supercar del cliente,
+      // ma non e' un ricavo e il Report Noleggio la esclude sempre.
+      if (st === 'uscita_straordinaria') return null
       if (b.pickup_date && b.dropoff_date) {
+        // Mare / Aria / Soggiorni usano `noleggio_catalog`, non la flotta auto:
+        // la categoria non si trovava e finivano tutti in "Supercar".
+        if (st === 'boat_rental' || st === 'heli_rental' || st === 'stay_rental') return 'altri'
         const vid = b.vehicle_id || details.vehicle_id || ''
         const cat = vehicleCategoryMap.get(vid) || ''
         if (cat === 'aziendali') return 'aziendali'
@@ -330,7 +331,39 @@ export const handler: Handler = async (event) => {
       return null
     }
 
+    /** La prenotazione ricade nel periodo richiesto? Stessa regola del Report
+     *  Noleggio: si esclude cio' che si e' chiuso prima dell'inizio, e un
+     *  ritiro successivo alla fine entra solo se PAGATO dentro il periodo
+     *  (l'anticipata). Senza periodo passa tutto. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function nelPeriodo(b: any, type: BookingType): boolean {
+      if (!periodoFrom && !periodoTo) return true
+      if (type === 'car_wash' || type === 'mechanical') {
+        const g = String(b.appointment_date || b.pickup_date || b.booked_at || b.created_at || '').slice(0, 10)
+        if (!g) return true
+        if (periodoFrom && g < periodoFrom) return false
+        if (periodoTo && g > periodoTo) return false
+        return true
+      }
+      const pickup = String(b.pickup_date || '').slice(0, 10)
+      const dropoff = String(b.dropoff_date || '').slice(0, 10)
+      if (periodoFrom && dropoff && dropoff < periodoFrom) return false
+      if (periodoTo && pickup && pickup > periodoTo) {
+        const pagata = ['paid', 'completed', 'succeeded'].includes(norm(b.payment_status))
+        if (!pagata) return false
+        const pagataIl = b.booking_details?.nexi_paid_at || b.updated_at || b.created_at || ''
+        if (!pagataIl) return false
+        const ms = new Date(pagataIl).getTime()
+        if (Number.isNaN(ms)) return false
+        if (periodoFromMs != null && ms < periodoFromMs) return false
+        if (periodoToMs != null && ms > periodoToMs) return false
+        return true
+      }
+      return true
+    }
+
     const bookingToCustomerKey = new Map<string, string>()
+    let prenotazioniConAddebiti = new Set<string>()
 
     // Walk every booking — cancelled, internal, unclassified included — so
     // downstream lookups (fatture by booking_id, cauzioni by riferimento_contratto_id)
@@ -354,23 +387,9 @@ export const handler: Handler = async (event) => {
         if (!c.ultima_prenotazione || ts > c.ultima_prenotazione) c.ultima_prenotazione = ts
       }
 
-      // Pending penali/danni inside booking_details (not yet invoiced) — count
-      // these for ALL bookings, even cancelled/internal, so the customer's risk
-      // record is never silently dropped.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pendingPenali = (details.penalties || []).filter((p: any) => p.paymentStatus === 'pending')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pendingDanni = (details.danni || []).filter((d: any) => d.paymentStatus === 'pending')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const p of pendingPenali) {
-        const total = p.total || (p.amount || 0) * (p.quantity || 1)
-        c.penali_spesa_eur += total; c.penali_eventi += 1
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const d of pendingDanni) {
-        const total = d.total || (d.amount || 0) * (d.quantity || 1)
-        c.danni_spesa_eur += total; c.danni_eventi += 1
-      }
+      // I penali e i danni si contano DOPO, in un passaggio unico che mette
+      // insieme booking_details e fatture senza doppioni (vedi punto 8): qui
+      // si registra solo a chi appartiene la prenotazione.
 
       const status = norm(b.status)
       if (status === 'cancelled' || status === 'annullata') {
@@ -393,6 +412,8 @@ export const handler: Handler = async (event) => {
           c.supercar_spesa_cents += priceCents; c.supercar_prenotazioni += 1; c.supercar_giorni += days
         } else if (type === 'urban') {
           c.urban_spesa_cents += priceCents; c.urban_prenotazioni += 1; c.urban_giorni += days
+        } else if (type === 'altri') {
+          c.altri_spesa_cents += priceCents; c.altri_prenotazioni += 1; c.altri_giorni += days
         } else {
           c.aziendali_spesa_cents += priceCents; c.aziendali_prenotazioni += 1; c.aziendali_giorni += days
         }
@@ -403,18 +424,40 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 8) Fatture — invoiced penali/danni. classifyInvoice returns null when the
-    //    fattura has no penalty/damage line items, so it doubles as the prefilter.
-    if (fattureRes.data) {
+    // 8) Penali e danni — UNA sola volta per prenotazione, mettendo insieme
+    //    booking_details e fatture (vedi utils/addebitiCliente.ts). Prima si
+    //    sommavano tutte e due le fonti, si contava l'INTERO importo della
+    //    fattura in una sola categoria e le note di credito contavano in
+    //    positivo: la stessa pratica da 5.000 EUR ne mostrava 15.171,90.
+    {
+      const addebiti = penaliDanniPerPrenotazione(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (bookingsRes.data || []).map((b: any) => ({ id: b.id, booking_details: b.booking_details })),
+        (fattureRes.data || []) as RigaFatturaAddebito[],
+      )
+      for (const [bookingId, voci] of addebiti) {
+        const key = bookingToCustomerKey.get(bookingId)
+        if (!key || !customerMap[key]) continue
+        const c = customerMap[key]
+        c.penali_spesa_eur += voci.penali
+        c.penali_eventi += voci.eventiPenali
+        c.danni_spesa_eur += voci.danni
+        c.danni_eventi += voci.eventiDanni
+      }
+      prenotazioniConAddebiti = new Set(addebiti.keys())
+
+      // Fatture penale/danno senza prenotazione agganciata (o su prenotazioni
+      // sparite): si attribuiscono al cliente per email, poi per nome.
+      const fuori = fattureDaIgnorare((fattureRes.data || []) as RigaFatturaAddebito[])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const f of fattureRes.data as any[]) {
-        if (!f.items || !Array.isArray(f.items)) continue
-        const cls = classifyInvoice(f.items)
-        if (!cls) continue
+      for (const f of (fattureRes.data || []) as any[]) {
+        if (fuori.has(f.id)) continue
+        if (f.booking_id && bookingToCustomerKey.has(f.booking_id)) continue
+        const { penali, danni, vociPenali, vociDanni } = addebitiFattura(f.items)
+        if (penali <= 0 && danni <= 0) continue
 
         let key: string | undefined
-        if (f.booking_id && bookingToCustomerKey.has(f.booking_id)) key = bookingToCustomerKey.get(f.booking_id)
-        if (!key && f.customer_email) {
+        if (f.customer_email) {
           const e = norm(f.customer_email)
           if (idByEmail.has(e)) key = idByEmail.get(e)!
         }
@@ -422,21 +465,22 @@ export const handler: Handler = async (event) => {
           const target = norm(f.customer_name)
           key = Object.keys(customerMap).find(k => norm(customerMap[k].name) === target)
         }
-        if (!key) {
-          // Last resort — synthesize so the activity isn't silently dropped.
-          key = resolveKey({ name: f.customer_name, email: f.customer_email })
-        }
+        if (!key) key = resolveKey({ name: f.customer_name, email: f.customer_email })
 
         const c = customerMap[key]
-        const amount = Number(f.importo_totale) || 0
-        if (cls === 'penali') { c.penali_spesa_eur += amount; c.penali_eventi += 1 }
-        else { c.danni_spesa_eur += amount; c.danni_eventi += 1 }
+        c.penali_spesa_eur += penali
+        c.penali_eventi += vociPenali
+        c.danni_spesa_eur += danni
+        c.danni_eventi += vociDanni
       }
     }
 
     // 9) Cauzioni — match by cliente_id, fall back to riferimento_contratto_id (booking).
-    //    Bloccata = security deposit currently held. Incassata = cashed in for damage,
-    //    so it counts as a danno (mirrors what GestioneDanniTab / CauzioniTab show).
+    //    Stati (vedi CauzioniTab): 'Attiva' / 'In scadenza' / 'Incassata' = soldi
+    //    del cliente ancora in mano a DR7 ma DA RESTITUIRE -> cauzione aperta.
+    //    'Bloccata' = trattenuta da DR7, quindi un danno pagato col deposito.
+    //    Prima era il contrario: 'Incassata' finiva nei danni (gonfiandoli) e
+    //    'Bloccata' compariva come cauzione ancora aperta.
     if (cauzioniRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const cau of cauzioniRes.data as any[]) {
@@ -448,13 +492,16 @@ export const handler: Handler = async (event) => {
         const c = customerMap[key]
         const stato = norm(cau.stato)
         const importo = Number(cau.importo) || 0
+        if (stato === 'restituita' || stato === 'sbloccata') continue
         if (stato === 'bloccata') {
-          c.cauzioni_attive_count += 1
-          c.cauzioni_attive_eur += importo
-        } else if (stato === 'incassata') {
-          // Cashed-in security deposit = damage payment.
+          // Il danno e' gia' contato se la pratica ha una voce o una fattura:
+          // la cauzione e' solo il mezzo con cui e' stato pagato.
+          if (cau.riferimento_contratto_id && prenotazioniConAddebiti.has(cau.riferimento_contratto_id)) continue
           c.danni_spesa_eur += importo
           c.danni_eventi += 1
+        } else {
+          c.cauzioni_attive_count += 1
+          c.cauzioni_attive_eur += importo
         }
       }
     }
