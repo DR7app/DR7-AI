@@ -1725,7 +1725,7 @@ function nextCronAttemptText(sendHour: number | null): string {
 const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
   { value: 'customer', label: 'Cliente della pratica', hint: 'Il cliente della prenotazione che ha fatto scattare l\'evento (comportamento standard).' },
   { value: 'custom_phones', label: 'Numeri specifici', hint: 'Uno o più numeri scritti da te. Separali con virgola o a capo.' },
-  { value: 'admin_roles', label: 'Operatori per ruolo', hint: 'Tutti gli operatori con i ruoli scelti (numero preso da "Contatto interno" in Operatori).' },
+  { value: 'admin_roles', label: 'Dipendenti', hint: 'Tutti i dipendenti con i ruoli scelti (numero preso da "Contatto interno" nella loro scheda in Operatori).' },
   { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica — ANCHE chi non ha nulla in corso e i clienti del lavaggio. Usare con cautela.' },
   // 2026-08-23: prima mancava del tutto. Per raggiungere "chi ha adesso il
   // mezzo" l'unica strada era "Tutti i clienti", che ignora prenotazioni,
@@ -1786,7 +1786,7 @@ function recipientSummary(t: { recipient_mode?: string | null; recipient_phones?
   }
   if (mode === 'admin_roles') {
     const roles = String(t.recipient_admin_roles || '').split(',').map(s => s.trim()).filter(Boolean)
-    return roles.length === 0 ? 'operatori per ruolo — NESSUN ruolo scelto, non partirà' : `operatori con ruolo: ${roles.join(', ')}`
+    return roles.length === 0 ? 'dipendenti — NESSUN ruolo scelto, non partirà' : `dipendenti con ruolo: ${roles.join(', ')}`
   }
   if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica (anche senza noleggio in corso)'
   if (mode === 'active_bookings') return 'clienti che hanno il mezzo in questo momento'
@@ -4424,7 +4424,7 @@ export default function MessaggiSistemaProTab() {
                                             )}
                                             {newTriggerEvent === 'on_schedule' && newRecipientMode === 'customer' && (
                                                 <p className="text-[11px] text-amber-300 mt-1.5">
-                                                    Una programmazione ricorrente non ha una pratica di riferimento: scegli numeri specifici, operatori o tutti i clienti, altrimenti non partirà.
+                                                    Una programmazione ricorrente non ha una pratica di riferimento: scegli numeri specifici, dipendenti o tutti i clienti, altrimenti non partirà.
                                                 </p>
                                             )}
                                         </div>
