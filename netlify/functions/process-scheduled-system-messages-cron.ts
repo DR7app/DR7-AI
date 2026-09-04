@@ -961,8 +961,11 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
     // Destinatari fissi del template (numeri / ruoli): valgono al posto degli
     // autisti solo se l'admin ha scelto esplicitamente un altro destinatario.
+    // 'customer' (storico) e 'uscita_autisti' (voce dedicata) significano
+    // entrambi "gli autisti della card": su un'uscita non c'e' un cliente.
     const mode = String(tpl.recipient_mode || 'customer').trim();
-    const configured = mode !== 'customer' ? await resolveConfiguredRecipients(tpl) : [];
+    const agliAutisti = mode === 'customer' || mode === 'uscita_autisti';
+    const configured = agliAutisti ? [] : await resolveConfiguredRecipients(tpl);
 
     for (const booking of rows as Booking[]) {
         if (!booking.booking_details?.uscita) continue;

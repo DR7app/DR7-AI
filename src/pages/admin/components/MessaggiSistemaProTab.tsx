@@ -1731,6 +1731,10 @@ const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
   // mezzo" l'unica strada era "Tutti i clienti", che ignora prenotazioni,
   // Tipo servizio e Stati ammessi.
   { value: 'active_bookings', label: 'Clienti con noleggio in corso', hint: 'Solo chi in questo momento ha il mezzo (ritiro gia\' avvenuto, riconsegna non ancora). Rispetta i filtri Tipo servizio e Stati ammessi.' },
+  // 2026-09-04: destinatario esplicito per le Uscite Straordinarie. Prima
+  // gli autisti si raggiungevano solo lasciando "Cliente della pratica" —
+  // che su un'uscita non e' un cliente: si capiva solo leggendo il codice.
+  { value: 'uscita_autisti', label: 'Autisti dell\'uscita', hint: 'Gli autisti assegnati alla singola uscita straordinaria, sul numero della loro scheda. Da usare con gli eventi "Prima/Dopo un\'uscita straordinaria".' },
 ]
 
 
@@ -1788,6 +1792,7 @@ function recipientSummary(t: { recipient_mode?: string | null; recipient_phones?
     const roles = String(t.recipient_admin_roles || '').split(',').map(s => s.trim()).filter(Boolean)
     return roles.length === 0 ? 'dipendenti — NESSUN ruolo scelto, non partirà' : `dipendenti con ruolo: ${roles.join(', ')}`
   }
+  if (mode === 'uscita_autisti') return 'gli autisti assegnati all\'uscita straordinaria'
   if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica (anche senza noleggio in corso)'
   if (mode === 'active_bookings') return 'clienti che hanno il mezzo in questo momento'
   return 'il cliente della pratica'
@@ -4417,9 +4422,9 @@ export default function MessaggiSistemaProTab() {
                                             <p className="text-[11px] text-theme-text-muted mt-1.5">
                                                 {RECIPIENT_MODES.find(m => m.value === newRecipientMode)?.hint || ''}
                                             </p>
-                                            {EVENTI_USCITA.has(newTriggerEvent) && newRecipientMode === 'customer' && (
+                                            {EVENTI_USCITA.has(newTriggerEvent) && (newRecipientMode === 'customer' || newRecipientMode === 'uscita_autisti') && (
                                                 <p className="text-[11px] text-emerald-400 mt-1.5">
-                                                    Su un'uscita straordinaria non c'e' un cliente: con questa scelta il messaggio va agli AUTISTI assegnati alla singola uscita.
+                                                    Su un'uscita straordinaria non c'e' un cliente: il messaggio va agli AUTISTI assegnati alla singola uscita. Scegli "Autisti dell'uscita" per dirlo a chiare lettere.
                                                 </p>
                                             )}
                                             {newTriggerEvent === 'on_schedule' && newRecipientMode === 'customer' && (
