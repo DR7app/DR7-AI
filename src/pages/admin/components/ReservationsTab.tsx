@@ -623,6 +623,20 @@ function confermaNuovaKey(serviceType?: string | null): string {
   return CONFERMA_NUOVA_BY_SERVICE[String(serviceType || '')] || 'rental_new_customer'
 }
 
+/** Autisti assegnati a una riga di uscita straordinaria. Lo snapshot lo scrive
+ *  la modale in booking_details.uscita.autisti (id, full_name, phone).
+ *  2026-09-03: nell'elenco Uscite non si vedeva chi guidava — le colonne sono
+ *  quelle delle prenotazioni e su un'uscita il cliente non esiste. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function autistiDiUscita(booking: any): { full_name: string; phone: string }[] {
+  const lista = booking?.booking_details?.uscita?.autisti
+  if (!Array.isArray(lista)) return []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return lista.filter((a: any) => a && (a.full_name || a.phone))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((a: any) => ({ full_name: String(a.full_name || '').trim(), phone: String(a.phone || '').trim() }))
+}
+
 export default function ReservationsTab({ initialData, onDataConsumed, viewMode = 'bookings', serviceType = 'rental' }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void; viewMode?: 'bookings' | 'uscite'; serviceType?: string }) {
   // true quando la tab sta servendo Mare / Aria / Soggiorni: quei business
   // hanno un catalogo proprio (`noleggio_catalog`) al posto della flotta.
@@ -2207,7 +2221,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
       const bookingId = String(booking.id || '').toLowerCase()
       const bookingCode = bookingId.substring(0, 8)
-      const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
+      // 2026-09-03: sulle Uscite Straordinarie il "cliente" non esiste, quindi
+      // la ricerca era cieca sul dato che conta davvero: l'autista.
+      const autisti = autistiDiUscita(booking).map(a => `${a.full_name} ${a.phone}`).join(' ').toLowerCase()
+      const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${autisti} ${bookingId} ${bookingCode} dr7${bookingCode}`)
       return normalisedWords.every(word => searchText.includes(word))
     })
   }, [bookings, bookingSearchQuery, bookingDateRange])
@@ -11528,6 +11545,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         />
                       </div>
                       <div className="text-sm text-theme-text-muted"><NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" /></div>
+                      {viewMode === 'uscite' && autistiDiUscita(booking).length > 0 && (
+                        <div className="text-sm text-theme-text-primary mt-1">
+                          <span className="text-theme-text-muted">Autista: </span>
+                          {autistiDiUscita(booking).map(a => a.full_name || a.phone).join(', ')}
+                        </div>
+                      )}
                     </div>
                     {isCourtesy ? (
                       <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
@@ -11677,6 +11700,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Stato</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
+                    {viewMode === 'uscite' && (
+                      <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Autista</th>
+                    )}
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-full">Car</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
@@ -11714,6 +11740,28 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                           <NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" />
                         </td>
+                        {viewMode === 'uscite' && (
+                          <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                            {(() => {
+                              const drivers = autistiDiUscita(booking)
+                              if (drivers.length === 0) return <span className="text-theme-text-muted">-</span>
+                              return (
+                                <div className="flex flex-col leading-tight">
+                                  {drivers.map((a, i) => (
+                                    <span key={`${booking.id}-aut-${i}`} className="flex flex-col">
+                                      <span>{a.full_name || 'Autista'}</span>
+                                      {a.phone && (
+                                        <span className="text-xs text-theme-text-muted">
+                                          <NumeroTelefono valore={a.phone} vuoto="-" />
+                                        </span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              )
+                            })()}
+                          </td>
+                        )}
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
                           {isCarWash ? (
                             <span className="flex items-center gap-2">
@@ -11901,7 +11949,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
                   {bookingsVisibili.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">
+                        <td colSpan={viewMode === 'uscite' ? 9 : 8} className="px-4 py-8 text-center text-theme-text-muted">
                           {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
                         </td>
                       </tr>

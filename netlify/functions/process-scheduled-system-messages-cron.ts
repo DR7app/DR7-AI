@@ -15,6 +15,8 @@
  *   - on_payment                     → booking.updated_at quando payment_status diventa pagato
  *   - on_signature                   → booking.booking_details.signature_signed_at
  *   - on_extension                   → ultima extension_history entry created_at
+ *   - before_uscita, after_uscita    → uscite straordinarie: pickup_date / dropoff_date,
+ *                                      destinatari = gli autisti della card (non il cliente)
  *   - on_preventivo                  → SKIP (preventivi vivono in altra tabella, gia' gestiti)
  *
  * send_hour: se valorizzato, sposta il target a quell'ora (Rome) del giorno target.
@@ -432,6 +434,18 @@ function getEventTimeMs(booking: Booking, event: string): number | null {
             const t = isRental ? (booking.dropoff_date || booking.pickup_date) : apt;
             return t ? new Date(t).getTime() : null;
         }
+        // Uscite Straordinarie (movimenti interni con autista). Stessi campi del
+        // noleggio: la partenza e' pickup_date, il rientro dropoff_date. Il
+        // destinatario NON e' il cliente ma l'autista: l'invio passa da
+        // processUscitaTemplates, qui si calcola solo l'orario dell'evento.
+        case 'before_uscita': {
+            const t = booking.pickup_date;
+            return t ? new Date(t).getTime() : null;
+        }
+        case 'after_uscita': {
+            const t = booking.dropoff_date || booking.pickup_date;
+            return t ? new Date(t).getTime() : null;
+        }
         default:
             return null;
     }
@@ -753,11 +767,17 @@ async function processUscitaAutistaReminders(now: number): Promise<{ sent: numbe
     // il resto dei promemoria (parte solo se approvato dall'admin).
     const { data: tplRows } = await supabase
         .from('system_messages')
-        .select('message_body, is_enabled, cron_approved, message_key, label')
+        .select('message_body, is_enabled, cron_approved, message_key, label, trigger_event')
         .or('message_key.eq.pro_promemoria_autista,label.ilike.%autista%')
         .order('updated_at', { ascending: false });
+    // 2026-09-03: un template con un evento uscita (before_uscita/after_uscita)
+    // NON passa di qui — lo manda processUscitaTemplates all'anticipo scelto
+    // dall'admin. Senza questa esclusione la ricerca per label "%autista%"
+    // se lo prendeva e lo spediva comunque a 12 ore fisse (doppio invio).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && r.cron_approved === true && !!r.message_body);
+    const tpl = (tplRows || []).find((r: any) =>
+        r.is_enabled !== false && r.cron_approved === true && !!r.message_body
+        && !USCITA_EVENTS.has(String(r.trigger_event || '')));
     if (!tpl) return { sent, skipped, errors };
 
     const OFFSET_MS = 12 * 3600 * 1000;
@@ -799,6 +819,228 @@ async function processUscitaAutistaReminders(now: number): Promise<{ sent: numbe
             .update({ booking_details: { ...b.booking_details, uscita: { ...uscita, autista_reminder_sent_at: new Date().toISOString() } } })
             .eq('id', b.id);
     }
+    return { sent, skipped, errors };
+}
+
+// ── Eventi "Uscita Straordinaria" configurabili da Messaggi di Sistema Pro ────
+//
+// 2026-09-03 (richiesta direzione): il promemoria autista qui sopra e' rigido —
+// 12 ore fisse, un solo template, testo con la sola {nome}. Servivano eventi
+// veri, cosi' l'admin scrive un messaggio in Messaggi di Sistema Pro, sceglie
+// "Prima dell'uscita straordinaria" con l'anticipo che vuole (es. 2 ore) e il
+// cron lo manda agli autisti di quella uscita.
+//
+//   before_uscita → parte X ore PRIMA della partenza (pickup_date)
+//   after_uscita  → parte X ore DOPO il rientro (dropoff_date)
+//
+// Destinatari: gli autisti assegnati alla card (booking_details.uscita.autisti),
+// oppure i destinatari configurati sul template (numeri specifici / operatori
+// per ruolo) se l'admin sceglie un "Destinatario" diverso da "Cliente".
+// Dedup: system_message_send_log, UNIQUE (system_message_id, booking_id) — una
+// riga uscita = una card, quindi il template parte una volta sola per card.
+const USCITA_EVENTS = new Set(['before_uscita', 'after_uscita']);
+
+/** Business dell'uscita: `booking_details.uscita.business`, altrimenti dedotto
+ *  da vehicle_type. Assente = Terra (righe storiche). Mirror di
+ *  src/utils/uscitaStraordinaria.ts → uscitaBusinessOf. */
+function uscitaBusinessOfRow(booking: Booking): string {
+    const fromDetails = booking?.booking_details?.uscita?.business;
+    const known = ['rental', 'boat_rental', 'heli_rental', 'stay_rental', 'car_wash'];
+    if (fromDetails && known.includes(String(fromDetails))) return String(fromDetails);
+    const byVehicleType: Record<string, string> = {
+        car: 'rental', boat: 'boat_rental', helicopter: 'heli_rental', stay: 'stay_rental', carwash: 'car_wash',
+    };
+    return byVehicleType[String(booking?.vehicle_type || '')] || 'rental';
+}
+
+/** Sulle uscite il filtro "Tipo servizio" del template vale come filtro di
+ *  BUSINESS (Terra / Mare / Aria / Soggiorni / Lavaggio): il service_type della
+ *  riga e' sempre 'uscita_straordinaria', quindi matchesServiceType()
+ *  scarterebbe tutto tranne "Tutti i servizi". */
+function uscitaMatchesTargetBusiness(tpl: SystemMessage, booking: Booking): boolean {
+    const raw = String(tpl.target_service_type || 'all').toLowerCase();
+    if (!raw || raw === 'all' || raw === 'uscita_straordinaria') return true;
+    const wanted = raw === 'prime_wash' || raw === 'mechanical' ? 'car_wash' : raw;
+    return uscitaBusinessOfRow(booking) === wanted;
+}
+
+/** Variabili disponibili nel corpo del template, allineate a quelle della
+ *  modale Uscita Straordinaria (UscitaStraordinariaModal → templateVars). */
+function uscitaTemplateVars(booking: Booking, autistaName: string, bookingCollegato: string): Record<string, string> {
+    const u = booking?.booking_details?.uscita || {};
+    const fmtDate = (d: string) => {
+        if (!d) return '—';
+        const [y, m, g] = String(d).split('-');
+        return y && m && g ? `${g}/${m}/${y}` : String(d);
+    };
+    const luogo = (side: 'pickup' | 'dropoff') => {
+        const p = u[side] || {};
+        return { name: p.place || '—', address: p.address || '—', date: fmtDate(p.date || ''), time: p.time || '—' };
+    };
+    const partenza = luogo('pickup');
+    const ritorno = luogo('dropoff');
+    const firstName = String(autistaName || '').trim().split(/\s+/)[0] || 'Autista';
+    const servizi = Array.isArray(u.servizi_extra)
+        ? u.servizi_extra.map((s: { name?: string; quantity?: number }) => `${s?.name || ''}${s?.quantity && s.quantity > 1 ? ` x${s.quantity}` : ''}`).filter(Boolean).join(', ')
+        : '';
+    return {
+        nome: firstName,
+        nome_autista: firstName,
+        nome_autista_completo: String(autistaName || '').trim() || 'Autista',
+        titolo_corsa: String(u.title || '').trim() || (Array.isArray(u.motivazioni) ? u.motivazioni[0] : '') || 'Uscita Straordinaria',
+        veicolo: booking.vehicle_name || '—',
+        targa: booking.vehicle_plate || '—',
+        data_ritiro: partenza.date,
+        ora_ritiro: partenza.time,
+        luogo_ritiro: partenza.name,
+        indirizzo_ritiro: partenza.address,
+        data_riconsegna: ritorno.date,
+        ora_riconsegna: ritorno.time,
+        luogo_riconsegna: ritorno.name,
+        indirizzo_riconsegna: ritorno.address,
+        motivazione_uscita: Array.isArray(u.motivazioni) ? (u.motivazioni.join(', ') || '—') : '—',
+        booking_collegato: bookingCollegato || '—',
+        servizi_extra: servizi || '—',
+        stato_pagamento: u.payment?.state || '—',
+        stato_cauzione: u.cauzione?.state || '—',
+        note_operative: u.note_operative || '—',
+        note_integrative: u.note_integrative || '—',
+    };
+}
+
+async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<{ sent: number; skipped: number; errors: number }> {
+    let sent = 0, skipped = 0, errors = 0;
+
+    // Il corpo non e' nelle colonne caricate dal loop principale: si legge qui.
+    const { data: tplRow } = await supabase
+        .from('system_messages')
+        .select('message_body')
+        .eq('id', tpl.id)
+        .maybeSingle();
+    const rawBody = String((tplRow as { message_body?: string } | null)?.message_body || '').trim();
+    // Nessun testo hardcoded: template vuoto = nessun invio (stessa regola della
+    // notifica autista della modale).
+    if (!rawBody) return { sent, skipped, errors };
+
+    const offsetH = tpl.trigger_offset_hours || 0;
+    const sign = tpl.trigger_event === 'before_uscita' ? +1 : -1;
+    // Qui l'anticipo comanda da solo: "2 ore prima" vuol dire due ore prima
+    // della partenza, non le 09:00 del giorno della partenza. send_hour resta
+    // quindi ignorato (ed e' nascosto nella UI per questi eventi): con il suo
+    // default a 9 un promemoria a 2 ore sarebbe partito all'ora sbagliata
+    // senza che nulla lo segnalasse.
+    const lo = new Date(now + sign * offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
+    const hi = new Date(now + sign * offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
+    const dateColumn = tpl.trigger_event === 'before_uscita' ? 'pickup_date' : 'dropoff_date';
+
+    // "Stati ammessi" del template NON si applica qui: e' la lista degli stati
+    // di una PRENOTAZIONE (Confermata / Attiva / ...), mentre un'uscita ha i
+    // suoi (Programmata → pending, In Corso → active, Completata → completed).
+    // Col default 'confirmed,active' un promemoria sarebbe partito solo per le
+    // uscite gia' in corso e mai per quelle programmate — cioe' quasi mai.
+    // Regola: sempre fuori le annullate; le completate restano solo per
+    // after_uscita, dove "completata" e' proprio lo stato di fine corsa.
+    const esclusi = tpl.trigger_event === 'before_uscita'
+        ? '(cancelled,annullata,completed,completata)'
+        : '(cancelled,annullata)';
+    const q = supabase
+        .from('bookings')
+        .select('id, vehicle_name, vehicle_plate, vehicle_type, status, pickup_date, dropoff_date, booking_details')
+        .eq('service_type', 'uscita_straordinaria')
+        .gte(dateColumn, lo)
+        .lte(dateColumn, hi)
+        .not('status', 'in', esclusi);
+
+    const { data: rows, error } = await q.limit(500);
+    if (error) {
+        console.error(`[scheduled-msgs] uscite fetch failed for ${tpl.label}:`, error.message);
+        return { sent, skipped, errors };
+    }
+    if (!rows?.length) return { sent, skipped, errors };
+
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+    // Destinatari fissi del template (numeri / ruoli): valgono al posto degli
+    // autisti solo se l'admin ha scelto esplicitamente un altro destinatario.
+    const mode = String(tpl.recipient_mode || 'customer').trim();
+    const configured = mode !== 'customer' ? await resolveConfiguredRecipients(tpl) : [];
+
+    for (const booking of rows as Booking[]) {
+        if (!booking.booking_details?.uscita) continue;
+        if (!uscitaMatchesTargetBusiness(tpl, booking)) continue;
+
+        const eventMs = getEventTimeMs(booking, tpl.trigger_event);
+        if (eventMs == null) continue;
+        const targetMs = eventMs + (sign === +1 ? -1 : +1) * offsetH * 3600 * 1000;
+        if (targetMs < now - LOOKBACK_MS) continue;
+        if (targetMs > now + LOOKFORWARD_MS) continue;
+
+        // Prenotazione collegata alla card: serve alla variabile
+        // {booking_collegato}, la stessa che usa la notifica della modale.
+        let bookingCollegato = '';
+        const linkedId = booking.booking_details.uscita.linked_booking_id;
+        if (linkedId) {
+            const { data: linked } = await supabase
+                .from('bookings')
+                .select('id, customer_name, vehicle_name')
+                .eq('id', linkedId)
+                .maybeSingle();
+            if (linked) {
+                bookingCollegato = [`#${String(linked.id).slice(0, 8).toUpperCase()}`, linked.customer_name, linked.vehicle_name]
+                    .filter(Boolean).join(' · ');
+            }
+        }
+
+        const autisti = Array.isArray(booking.booking_details.uscita.autisti)
+            ? booking.booking_details.uscita.autisti as Array<{ full_name?: string; phone?: string }>
+            : [];
+        const recipients = configured.length > 0
+            ? configured.map(r => ({ full_name: r.nome, phone: r.phone }))
+            : autisti;
+        const validi = recipients.filter(r => normalizePhoneDigits(r.phone || '').length >= 8);
+        if (validi.length === 0) { skipped++; continue; }
+
+        // Claim prima dell'invio (UNIQUE system_message_id+booking_id):
+        // at-most-once anche se due tick si sovrappongono.
+        const { data: claim, error: claimErr } = await supabase
+            .from('system_message_send_log')
+            .insert({
+                system_message_id: tpl.id,
+                booking_id: booking.id,
+                customer_phone: normalizePhoneDigits(validi[0].phone || ''),
+                status: 'sending',
+            })
+            .select('id')
+            .maybeSingle();
+        if (claimErr || !claim?.id) { skipped++; continue; }
+
+        let inviati = 0, falliti = 0;
+        for (const r of validi) {
+            const vars = uscitaTemplateVars(booking, r.full_name || '', bookingCollegato);
+            let body = rawBody;
+            for (const [k, v] of Object.entries(vars)) body = body.split(`{${k}}`).join(v);
+            try {
+                const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customPhone: r.phone,
+                        customMessage: body,
+                        type: tpl.label || 'Uscita Straordinaria',
+                    }),
+                });
+                if (res.ok) inviati++; else falliti++;
+            } catch { falliti++; }
+        }
+        sent += inviati;
+        errors += falliti;
+        await supabase.from('system_message_send_log')
+            .update({
+                status: inviati > 0 ? 'sent' : 'error',
+                error: falliti > 0 ? `${falliti} invii falliti su ${validi.length}` : null,
+            })
+            .eq('id', claim.id);
+    }
+
     return { sent, skipped, errors };
 }
 
@@ -1328,6 +1570,17 @@ const cronHandler = async () => {
 
         // Fuori dalle ricorrenze, durante le quiet hours non parte nulla.
         if (quietHours) continue;
+
+        // ── Uscite Straordinarie (destinatari = autisti) ──────────────────
+        // Va prima delle guardie legacy/event-driven qui sotto: quelle matchano
+        // per label/message_key e scarterebbero un template autista chiamato
+        // come uno gia' esistente. L'uscita non ha un cliente, quindi il
+        // percorso booking-anchored standard non la puo' gestire.
+        if (USCITA_EVENTS.has(tpl.trigger_event)) {
+            const r = await processUscitaTemplates(tpl, now);
+            totalSent += r.sent; totalSkipped += r.skipped; totalErrors += r.errors;
+            continue;
+        }
 
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;

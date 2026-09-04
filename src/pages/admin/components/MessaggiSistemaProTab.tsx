@@ -129,6 +129,11 @@ interface SentMessageLog {
     status: string
 }
 
+/** Eventi delle Uscite Straordinarie: destinatario = autista, e gli "Stati
+ *  ammessi" (stati di una prenotazione) non li riguardano — un'uscita ha i
+ *  propri stati (Programmata / In Corso / Completata). */
+const EVENTI_USCITA = new Set(['before_uscita', 'after_uscita'])
+
 const TRIGGER_LABELS: Record<string, string> = {
     // Programmazione a calendario — NON legata a una prenotazione
     'on_schedule': 'Programmazione ricorrente (giorni + ora precisa)',
@@ -145,6 +150,9 @@ const TRIGGER_LABELS: Record<string, string> = {
     'after_signature_review': 'Recensione dopo firma',
     'on_extension': 'Dopo una proroga',
     'on_late_return': 'Ritardo riconsegna oltre grace',
+    // Uscite Straordinarie — il destinatario e' l'AUTISTA della card, non un cliente.
+    'before_uscita': 'Prima di un\'uscita straordinaria (autista)',
+    'after_uscita': 'Dopo il rientro di un\'uscita straordinaria (autista)',
     'on_preventivo': 'Invio preventivo (gestito separatamente)',
     // Cauzione lifecycle
     'on_cauzione_created': 'Nuova cauzione creata',
@@ -1879,8 +1887,16 @@ function buildScheduleSummary(
     const catLabel = cat === 'all' || !cat
       ? 'tutti i veicoli'
       : `solo ${categoryLabels[cat] || cat}`
+    // Uscite Straordinarie: ora fissa, stati e categoria non contano (il cron
+    // guarda solo l'anticipo e manda agli autisti della card). Scriverli qui
+    // avrebbe raccontato una programmazione diversa da quella reale.
+    if (EVENTI_USCITA.has(event)) {
+      lines.push(`Cron · invia ${offsetText} ${cleanTriggerLabel} · agli autisti assegnati all'uscita`)
+      lines.push(`Prossimo tentativo: ${nextCronAttemptText(null)}`)
+    } else {
     lines.push(`Cron · invia ${offsetText} ${cleanTriggerLabel} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
     lines.push(`Prossimo tentativo: ${nextCronAttemptText(t.send_hour ?? null)}`)
+    }
     // Filtri advanced del cron — il cron li applica davvero, quindi
     // mostrare tutti quelli attivi è essenziale per capire perché un
     // template "non parte": un filtro stretto (es. "solo cauzione
@@ -1932,6 +1948,8 @@ const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'on_review_received': 'Recensione Google ricevuta. Trigger MANUALE: si fa fire da admin via /trigger-system-event quando arriva una review (richiede integrazione esterna).',
     'on_promo_gap': 'Gap di disponibilita\' di un veicolo (4-48h tra due booking). Cron ogni 10 minuti tramite maxi-promo-gap-cron.',
     'on_cauzione_partial_capture': 'Quando l\'admin incassa solo una parte della cauzione (es. €100 su €500 di danno). Inline in CauzioniTab.',
+    'before_uscita': 'Il messaggio parte PRIMA della partenza di un\'uscita straordinaria e va agli AUTISTI assegnati a quella uscita (numero della loro scheda). Offset in ore: 2 = due ore prima. Filtro "Tipo servizio" = business dell\'uscita (Terra, Mare, Aria, Soggiorni, Lavaggio). Variabili: {nome_autista}, {titolo_corsa}, {veicolo}, {targa}, {data_ritiro}, {ora_ritiro}, {luogo_ritiro}, {indirizzo_ritiro}, {data_riconsegna}, {ora_riconsegna}, {luogo_riconsegna}, {motivazione_uscita}, {note_operative}.',
+    'after_uscita': 'Il messaggio parte DOPO il rientro dell\'uscita straordinaria (es. 1 ora dopo, per il resoconto). Stessi destinatari e stesse variabili di "Prima di un\'uscita straordinaria".',
 }
 
 // Le categorie veicolo sono caricate dinamicamente da
@@ -2221,7 +2239,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
     {
         label: 'Autista — Uscita Straordinaria',
         scope: 'specific',
-        scopeNote: 'Solo nel template "Notifica Autista — Uscita Straordinaria" (inviato all\'autista al salvataggio di un\'uscita straordinaria).',
+        scopeNote: 'Nel template "Notifica Autista — Uscita Straordinaria" (inviato al salvataggio dell\'uscita) e in ogni template con evento "Prima/Dopo un\'uscita straordinaria" (promemoria agli autisti via cron).',
         items: [
             { key: 'titolo_corsa', description: 'Titolo dell\'uscita (campo "Titolo uscita"); se vuoto usa la prima motivazione.', example: 'Consegne mattina sabato' },
             { key: 'nome_autista', description: "Nome dell'autista", example: 'Luca' },
@@ -2241,6 +2259,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'stato_cauzione', description: 'Stato cauzione prevista', example: 'Da bloccare €500' },
             { key: 'servizi_extra', description: 'Servizi extra / experience', example: 'Lavaggio, Seggiolino' },
             { key: 'note_integrative', description: 'Note integrative', example: 'Cliente arriva alle 9:30' },
+            { key: 'note_operative', description: 'Note operative della card (solo negli eventi "Prima/Dopo un\'uscita straordinaria")', example: 'Pieno di benzina prima della consegna' },
         ],
     },
 ]
@@ -4263,6 +4282,8 @@ export default function MessaggiSistemaProTab() {
                                             // legati a una pratica) e il primo click TOGLIEVA il giorno scelto:
                                             // chi cliccava "Sab" salvava "tutti tranne sabato".
                                             setNewTargetDays(ev === 'on_schedule' ? new Set<number>() : new Set([0, 1, 2, 3, 4, 5, 6]))
+                                            // Eventi uscita: l'invio segue l'anticipo, non un'ora fissa.
+                                            if (EVENTI_USCITA.has(ev)) setNewSendHour(null)
                                         }}
                                             className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                             {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
@@ -4284,6 +4305,11 @@ export default function MessaggiSistemaProTab() {
                                             <p className="text-xs text-theme-text-muted mt-1">1 = 1 ora · 24 = 1 giorno · 48 = 2 giorni · 0 = subito</p>
                                         </div>
                                     )}
+                                    {/* Sugli eventi delle Uscite Straordinarie l'orario fisso non
+                                        compare: comanda l'anticipo in ore ("2 ore prima" = due ore
+                                        prima della partenza). Col default 09:00 il promemoria
+                                        sarebbe partito alle nove del giorno dell'uscita. */}
+                                    {!EVENTI_USCITA.has(newTriggerEvent) && (
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">
                                             {newTriggerEvent === 'on_schedule' ? 'Orario esatto (Roma)' : 'Ora di invio (Roma)'}
@@ -4306,6 +4332,7 @@ export default function MessaggiSistemaProTab() {
                                         </div>
                                         <p className="text-xs text-theme-text-muted mt-1">Formato 24h. Es. 18:30 = sei e mezza di sera.</p>
                                     </div>
+                                    )}
 
                                     {/* Ricorrenza a calendario: giorni della settimana +
                                         finestra di validità. Nessuna prenotazione di mezzo. */}
@@ -4390,6 +4417,11 @@ export default function MessaggiSistemaProTab() {
                                             <p className="text-[11px] text-theme-text-muted mt-1.5">
                                                 {RECIPIENT_MODES.find(m => m.value === newRecipientMode)?.hint || ''}
                                             </p>
+                                            {EVENTI_USCITA.has(newTriggerEvent) && newRecipientMode === 'customer' && (
+                                                <p className="text-[11px] text-emerald-400 mt-1.5">
+                                                    Su un'uscita straordinaria non c'e' un cliente: con questa scelta il messaggio va agli AUTISTI assegnati alla singola uscita.
+                                                </p>
+                                            )}
                                             {newTriggerEvent === 'on_schedule' && newRecipientMode === 'customer' && (
                                                 <p className="text-[11px] text-amber-300 mt-1.5">
                                                     Una programmazione ricorrente non ha una pratica di riferimento: scegli numeri specifici, operatori o tutti i clienti, altrimenti non partirà.
@@ -4454,7 +4486,10 @@ export default function MessaggiSistemaProTab() {
                                         </select>
                                     </div>
                                     )}
-                                    {newTriggerEvent !== 'on_schedule' && (
+                                    {/* Un'uscita straordinaria non ha gli stati di una prenotazione:
+                                        il cron li ignora (fuori solo le annullate), quindi il riquadro
+                                        sparisce invece di far credere a un filtro che non esiste. */}
+                                    {newTriggerEvent !== 'on_schedule' && !EVENTI_USCITA.has(newTriggerEvent) && (
                                     <div className="col-span-2">
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">
                                             Stati prenotazione ammessi
@@ -5336,29 +5371,37 @@ export default function MessaggiSistemaProTab() {
                                                                             className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
                                                                         <span className="text-xs text-dr7-gold font-bold">ore</span>
                                                                     </div>
-                                                                    <span className="text-theme-text-muted text-xs">―</span>
-                                                                    <div className="flex items-center gap-1">
-                                                                        <select value={template.send_hour ?? ''}
-                                                                            onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
-                                                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                            <option value="">Subito</option>
-                                                                            {Array.from({ length: 24 }, (_, i) => (
-                                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </div>
-                                                                    <span className="text-theme-text-muted text-xs">―</span>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                                                                        <select value={template.target_category || 'all'}
-                                                                            onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
-                                                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                            <option value="all">Tutte le categorie</option>
-                                                                            {proCategories.map(c => (
-                                                                                <option key={c.id} value={c.id}>{c.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </div>
+                                                                    {/* Uscite Straordinarie: comanda solo l'anticipo in ore.
+                                                                        L'ora fissa (default 09:00) manderebbe il promemoria
+                                                                        alle nove del giorno dell'uscita invece che X ore
+                                                                        prima, e la categoria veicolo non le riguarda. */}
+                                                                    {!EVENTI_USCITA.has(template.trigger_event || '') && (
+                                                                        <>
+                                                                            <span className="text-theme-text-muted text-xs">―</span>
+                                                                            <div className="flex items-center gap-1">
+                                                                                <select value={template.send_hour ?? ''}
+                                                                                    onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
+                                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                                    <option value="">Subito</option>
+                                                                                    {Array.from({ length: 24 }, (_, i) => (
+                                                                                        <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </div>
+                                                                            <span className="text-theme-text-muted text-xs">―</span>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                                                                                <select value={template.target_category || 'all'}
+                                                                                    onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
+                                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                                    <option value="all">Tutte le categorie</option>
+                                                                                    {proCategories.map(c => (
+                                                                                        <option key={c.id} value={c.id}>{c.label}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </div>
+                                                                        </>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </div>
@@ -5367,7 +5410,7 @@ export default function MessaggiSistemaProTab() {
                                                             risultato: i messaggi non partivano su prenotazioni
                                                             in stato `pending` (es. on_booking pre-pagamento)
                                                             e l'admin non aveva modo di accorgersene. */}
-                                                        <div className={`pt-2 border-t border-theme-border/40 ${template.trigger_event === 'on_schedule' ? 'hidden' : ''}`}>
+                                                        <div className={`pt-2 border-t border-theme-border/40 ${template.trigger_event === 'on_schedule' || EVENTI_USCITA.has(template.trigger_event || '') ? 'hidden' : ''}`}>
                                                             <div className="flex items-center justify-between mb-1.5">
                                                                 <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Stati ammessi</span>
                                                                 <span className="text-[10px] text-theme-text-muted">
