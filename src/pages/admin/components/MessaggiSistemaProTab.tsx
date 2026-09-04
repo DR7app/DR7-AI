@@ -2847,7 +2847,7 @@ export default function MessaggiSistemaProTab() {
     // stava sempre aperto e da solo riempiva lo schermo (elenco eventi +
     // filtri per business). Ora si apre su richiesta, come i Filtri avanzati.
     const [expandedEventi, setExpandedEventi] = useState<Set<string>>(new Set())
-    const [templateSendLogs, setTemplateSendLogs] = useState<Record<string, Array<{ id: string; booking_id: string | null; customer_phone: string | null; status: string; error: string | null; created_at: string }>>>({})
+    const [templateSendLogs, setTemplateSendLogs] = useState<Record<string, Array<{ id: string; booking_id: string | null; customer_phone: string | null; status: string; error: string | null; sent_at: string }>>>({})
     const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null)
     const [testPhones, setTestPhones] = useState<Record<string, string>>({})
     const [testBookingIds, setTestBookingIds] = useState<Record<string, string>>({})
@@ -3602,9 +3602,9 @@ export default function MessaggiSistemaProTab() {
         try {
             const { data, error } = await supabase
                 .from('system_message_send_log')
-                .select('id, booking_id, customer_phone, status, error, created_at')
+                .select('id, booking_id, customer_phone, status, error, sent_at')
                 .eq('system_message_id', templateId)
-                .order('created_at', { ascending: false })
+                .order('sent_at', { ascending: false })
                 .limit(10)
             if (error && error.code !== '42P01') throw error
             setTemplateSendLogs(prev => ({ ...prev, [templateId]: data || [] }))
@@ -6093,7 +6093,7 @@ export default function MessaggiSistemaProTab() {
                                                                                 <li key={log.id} className="flex items-start gap-2 px-2 py-1.5 rounded bg-theme-bg-tertiary/50 text-[11px]">
                                                                                     <span className={`font-semibold ${statusColor} shrink-0`}>{log.status}</span>
                                                                                     <span className="text-theme-text-muted shrink-0">
-                                                                                        {new Date(log.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                                        {new Date(log.sent_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                                                     </span>
                                                                                     {log.customer_phone && (
                                                                                         <span className="text-theme-text-secondary font-mono shrink-0"><NumeroTelefono valore={log.customer_phone} /></span>
