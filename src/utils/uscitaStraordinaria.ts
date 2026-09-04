@@ -331,3 +331,31 @@ export function cardFromUscitaBooking(booking: any, localId: string): UscitaVehi
     note_integrative: u.note_integrative || '',
   }
 }
+
+/**
+ * Luogo di partenza/destinazione di una card, in chiaro.
+ *
+ * 04/09/2026: `bookings.pickup_location` conserva l'ID scelto nella tendina
+ * ('domicilio', 'dr7_office', l'id di un luogo di Centralina Pro), non la sua
+ * etichetta: il dettaglio della prenotazione mostrava letteralmente
+ * "domicilio" e l'indirizzo vero — che sta in `booking_details.uscita.*.address`
+ * — non compariva da nessuna parte. Stessa risoluzione che la modale usa per
+ * la notifica autista (`luogoParts`), qui condivisa per non farle divergere.
+ */
+export interface UscitaLuogo { name: string; address: string }
+export function luogoUscita(
+  placeId: string | null | undefined,
+  address: string | null | undefined,
+  locations?: Array<{ id: string; label: string }> | null,
+): UscitaLuogo {
+  const addr = String(address || '').trim()
+  const id = String(placeId || '').trim()
+  if (!id) return { name: '—', address: addr || '—' }
+  if (id === 'dr7_office') return { name: 'DR7 Office Cagliari', address: 'Viale Marconi 229, 09131 Cagliari CA' }
+  if (id === 'domicilio') return { name: 'Domicilio', address: addr || '—' }
+  const trovato = (locations || []).find(l => l.id === id)
+  // Le etichette dei luoghi Pro possono portare il suffisso della tariffa
+  // ("Aeroporto Cagliari Elmas (+€27.00)"): nel dettaglio non serve.
+  const name = (trovato?.label || id).replace(/\s*\(\+€[\d.,]+\)\s*$/, '').trim()
+  return { name, address: addr || '—' }
+}

@@ -864,9 +864,68 @@ function uscitaMatchesTargetBusiness(tpl: SystemMessage, booking: Booking): bool
     return uscitaBusinessOfRow(booking) === wanted;
 }
 
+/** Riga di Centralina Pro per business (mirror di businessRowForServiceType). */
+const USCITA_CONFIG_ROW: Record<string, string> = {
+    rental: 'main',
+    boat_rental: 'business_mare',
+    heli_rental: 'business_aria',
+    stay_rental: 'business_soggiorni',
+    car_wash: 'business_lavaggio',
+};
+
+// Luoghi di partenza/destinazione per business, con cache di processo: la riga
+// `main` della Centralina pesa oltre 200 KB e non cambia fra un tick e l'altro.
+let luoghiCache: { quando: number; mappa: Record<string, Array<{ id: string; label: string }>> } | null = null;
+const LUOGHI_TTL_MS = 5 * 60 * 1000;
+
+async function caricaLuoghiUscita(): Promise<Record<string, Array<{ id: string; label: string }>>> {
+    if (luoghiCache && Date.now() - luoghiCache.quando < LUOGHI_TTL_MS) return luoghiCache.mappa;
+    const mappa: Record<string, Array<{ id: string; label: string }>> = {};
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('id, config')
+            .in('id', ['main', 'business_mare', 'business_aria', 'business_soggiorni', 'business_lavaggio']);
+        for (const r of (data || []) as Array<{ id: string; config: Record<string, unknown> }>) {
+            const list = (r.config?.pickup_locations || []) as Array<{ id?: string; label?: string; is_active?: boolean }>;
+            mappa[r.id] = list
+                .filter(l => l?.id && l.is_active !== false)
+                .map(l => ({ id: String(l.id), label: String(l.label || l.id) }));
+        }
+    } catch (e) {
+        console.warn('[scheduled-msgs] luoghi uscita non caricati:', e instanceof Error ? e.message : String(e));
+    }
+    luoghiCache = { quando: Date.now(), mappa };
+    return mappa;
+}
+
+/** Luogo in chiaro a partire dall'id salvato ('domicilio', 'dr7_office', id di
+ *  Centralina Pro). Mirror di luogoUscita() in src/utils/uscitaStraordinaria.ts:
+ *  senza questa risoluzione {luogo_ritiro} usciva come "domicilio" e
+ *  l'indirizzo vero non compariva nel messaggio all'autista. */
+function luogoUscitaServer(
+    placeId: string | null | undefined,
+    address: string | null | undefined,
+    locations: Array<{ id: string; label: string }>,
+): { name: string; address: string } {
+    const addr = String(address || '').trim();
+    const id = String(placeId || '').trim();
+    if (!id) return { name: '—', address: addr || '—' };
+    if (id === 'dr7_office') return { name: 'DR7 Office Cagliari', address: 'Viale Marconi 229, 09131 Cagliari CA' };
+    if (id === 'domicilio') return { name: 'Domicilio', address: addr || '—' };
+    const trovato = locations.find(l => l.id === id);
+    const name = (trovato?.label || id).replace(/\s*\(\+€[\d.,]+\)\s*$/, '').trim();
+    return { name, address: addr || '—' };
+}
+
 /** Variabili disponibili nel corpo del template, allineate a quelle della
  *  modale Uscita Straordinaria (UscitaStraordinariaModal → templateVars). */
-function uscitaTemplateVars(booking: Booking, autistaName: string, bookingCollegato: string): Record<string, string> {
+function uscitaTemplateVars(
+    booking: Booking,
+    autistaName: string,
+    bookingCollegato: string,
+    locations: Array<{ id: string; label: string }>,
+): Record<string, string> {
     const u = booking?.booking_details?.uscita || {};
     const fmtDate = (d: string) => {
         if (!d) return '—';
@@ -875,7 +934,8 @@ function uscitaTemplateVars(booking: Booking, autistaName: string, bookingColleg
     };
     const luogo = (side: 'pickup' | 'dropoff') => {
         const p = u[side] || {};
-        return { name: p.place || '—', address: p.address || '—', date: fmtDate(p.date || ''), time: p.time || '—' };
+        const l = luogoUscitaServer(p.place, p.address, locations);
+        return { name: l.name, address: l.address, date: fmtDate(p.date || ''), time: p.time || '—' };
     };
     const partenza = luogo('pickup');
     const ritorno = luogo('dropoff');
@@ -959,6 +1019,7 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
     if (!rows?.length) return { sent, skipped, errors };
 
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+    const luoghiPerBusiness = await caricaLuoghiUscita();
     // Destinatari fissi del template (numeri / ruoli): valgono al posto degli
     // autisti solo se l'admin ha scelto esplicitamente un altro destinatario.
     // 'customer' (storico) e 'uscita_autisti' (voce dedicata) significano
@@ -993,6 +1054,11 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
             }
         }
 
+        // I luoghi sono quelli della Centralina del business dell'uscita: una
+        // barca non parte dai luoghi del Noleggio Terra.
+        const rowId = USCITA_CONFIG_ROW[uscitaBusinessOfRow(booking)] || 'main';
+        const luoghi = (luoghiPerBusiness[rowId]?.length ? luoghiPerBusiness[rowId] : luoghiPerBusiness['main']) || [];
+
         const autisti = Array.isArray(booking.booking_details.uscita.autisti)
             ? booking.booking_details.uscita.autisti as Array<{ full_name?: string; phone?: string }>
             : [];
@@ -1018,7 +1084,7 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
 
         let inviati = 0, falliti = 0;
         for (const r of validi) {
-            const vars = uscitaTemplateVars(booking, r.full_name || '', bookingCollegato);
+            const vars = uscitaTemplateVars(booking, r.full_name || '', bookingCollegato, luoghi);
             let body = rawBody;
             for (const [k, v] of Object.entries(vars)) body = body.split(`{${k}}`).join(v);
             try {

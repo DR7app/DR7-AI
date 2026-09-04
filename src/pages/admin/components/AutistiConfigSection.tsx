@@ -6,6 +6,7 @@ import { ScheletroLista } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 // La funzione /autisti (mapRow) restituisce { id, full_name, phone }.
 // 2026-08: il frontend leggeva nome/cognome/telefono (che NON arrivano) e
@@ -103,7 +104,10 @@ export default function AutistiConfigSection() {
             {autisti.map(a => (
               <div key={a.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-theme-bg-tertiary/40">
                 <span className="flex-1 text-sm text-theme-text-primary">{autistaName(a)}</span>
-                {a.phone && <span className="text-xs text-theme-text-muted font-mono">{a.phone}</span>}
+                {/* 04/09/2026: qui si leggeva la stringa salvata ("393518059343", "3468804536"):
+                    il prefisso non si distingueva dal numero e su quelli senza "+" sembrava mancare.
+                    NumeroTelefono mette bandiera e "+39 " come nel resto del gestionale. */}
+                {a.phone && <NumeroTelefono valore={a.phone} className="text-xs text-theme-text-muted font-mono" />}
                 <button onClick={() => removeAutista(a)} disabled={busy} className="px-2.5 py-1 rounded-lg border border-red-500/40 text-red-400 text-xs disabled:opacity-50">Rimuovi</button>
               </div>
             ))}

@@ -89,8 +89,9 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import UscitaStraordinariaModal from './UscitaStraordinariaModal'
-import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
+import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlottaAuto, luogoUscita } from '../../../utils/uscitaStraordinaria'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import { numeroLeggibile } from '../../../utils/prefissiPaesi'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
@@ -3617,16 +3618,34 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // Il lucchetto si chiude PRIMA della lettura in anagrafica: da qui in giu'
     // c'e' un'attesa, e senza lucchetto un doppio clic partirebbe due volte.
     autoProntaLockRef.current.add(booking.id)
-    // 03/09/2026: il numero puo' stare SOLO nella scheda cliente (prenotazione
-    // creata scegliendo un cliente gia' in anagrafica, senza ridigitare il
-    // telefono). Prima si guardava solo la prenotazione e il bottone diceva
-    // "nessun numero" con il numero registrato. Vedi utils/telefonoCliente.ts.
-    const mainPhone = await risolviTelefonoCliente(booking).catch(() => null)
-    if (mainPhone) drivers.push({ phone: String(mainPhone), firstName: firstNameOf(booking.customer_name || bd.customer?.fullName) })
-    const sd = bd.second_driver
-    if (sd?.phone) {
-      const sdFull = [sd.name, sd.surname].filter(Boolean).join(' ')
-      drivers.push({ phone: String(sd.phone), firstName: firstNameOf(sdFull || sd.name) })
+    // 2026-09-04: una USCITA STRAORDINARIA non ha cliente (customer_name e'
+    // "Uscita: <titolo>", niente user_id ne' telefono): i destinatari sono gli
+    // AUTISTI della card, snapshot scritto da UscitaStraordinariaModal in
+    // booking_details.uscita.autisti = [{ id, full_name, phone }].
+    const isUscita = booking.service_type === USCITA_SERVICE_TYPE
+    if (isUscita) {
+      const autistiUscita: unknown[] = Array.isArray(bd.uscita?.autisti) ? bd.uscita.autisti : []
+      for (const raw of autistiUscita) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const a: any = raw || {}
+        if (!a.phone) continue
+        // Il nome dell'autista puo' mancare nello snapshot: {nome} non deve
+        // mai diventare "Cliente" su un'uscita.
+        const nomeAutista = String(a.full_name || '').trim() ? firstNameOf(a.full_name) : 'Autista'
+        drivers.push({ phone: String(a.phone), firstName: nomeAutista })
+      }
+    } else {
+      // 03/09/2026: il numero puo' stare SOLO nella scheda cliente (prenotazione
+      // creata scegliendo un cliente gia' in anagrafica, senza ridigitare il
+      // telefono). Prima si guardava solo la prenotazione e il bottone diceva
+      // "nessun numero" con il numero registrato. Vedi utils/telefonoCliente.ts.
+      const mainPhone = await risolviTelefonoCliente(booking).catch(() => null)
+      if (mainPhone) drivers.push({ phone: String(mainPhone), firstName: firstNameOf(booking.customer_name || bd.customer?.fullName) })
+      const sd = bd.second_driver
+      if (sd?.phone) {
+        const sdFull = [sd.name, sd.surname].filter(Boolean).join(' ')
+        drivers.push({ phone: String(sd.phone), firstName: firstNameOf(sdFull || sd.name) })
+      }
     }
     // Dedup per numero (sole cifre): se il 2° guidatore coincide col cliente,
     // si invia una sola volta.
@@ -3638,7 +3657,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     })
     if (recipients.length === 0) {
       autoProntaLockRef.current.delete(booking.id)
-      toast.error('Nessun numero guidatore disponibile — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { duration: 8000 })
+      toast.error(isUscita
+        ? 'Nessun autista con numero di telefono su questa uscita — impossibile inviare WhatsApp. Assegna un autista con telefono modificando l\'uscita straordinaria.'
+        : 'Nessun numero guidatore disponibile — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { duration: 8000 })
       return
     }
 
@@ -9652,13 +9673,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             }}
                           >
                             <option value="">+ Aggiungi autista…</option>
-                            {autisti.filter(a => !autistiRitiro.some(p => p.id === a.id)).map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
+                            {autisti.filter(a => !autistiRitiro.some(p => p.id === a.id)).map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${numeroLeggibile(a.phone)}` : ''}</option>)}
                           </select>
                           {autistiRitiro.length > 0 && (
                             <div className="mt-2 space-y-1.5">
                               {autistiRitiro.map(a => (
                                 <div key={a.id} className="flex items-center gap-2 rounded-md bg-theme-bg-tertiary/40 border border-theme-border px-2 py-1.5">
-                                  <span className="flex-1 min-w-0 truncate text-xs text-theme-text-primary">{a.full_name}{a.phone ? ` · ${a.phone}` : ' · (no tel.)'}</span>
+                                  <span className="flex-1 min-w-0 truncate text-xs text-theme-text-primary">{a.full_name}{a.phone ? ` · ${numeroLeggibile(a.phone)}` : ' · (no tel.)'}</span>
                                   <button type="button" title="Rimuovi autista" onClick={() => setAutistiRitiro(prev => prev.filter(p => p.id !== a.id))}
                                     className="shrink-0 px-1 text-base leading-none text-red-500 hover:text-red-400">×</button>
                                 </div>
@@ -9679,13 +9700,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             }}
                           >
                             <option value="">+ Aggiungi autista…</option>
-                            {autisti.filter(a => !autistiRiconsegna.some(p => p.id === a.id)).map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
+                            {autisti.filter(a => !autistiRiconsegna.some(p => p.id === a.id)).map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${numeroLeggibile(a.phone)}` : ''}</option>)}
                           </select>
                           {autistiRiconsegna.length > 0 && (
                             <div className="mt-2 space-y-1.5">
                               {autistiRiconsegna.map(a => (
                                 <div key={a.id} className="flex items-center gap-2 rounded-md bg-theme-bg-tertiary/40 border border-theme-border px-2 py-1.5">
-                                  <span className="flex-1 min-w-0 truncate text-xs text-theme-text-primary">{a.full_name}{a.phone ? ` · ${a.phone}` : ' · (no tel.)'}</span>
+                                  <span className="flex-1 min-w-0 truncate text-xs text-theme-text-primary">{a.full_name}{a.phone ? ` · ${numeroLeggibile(a.phone)}` : ' · (no tel.)'}</span>
                                   <button type="button" title="Rimuovi autista" onClick={() => setAutistiRiconsegna(prev => prev.filter(p => p.id !== a.id))}
                                     className="shrink-0 px-1 text-base leading-none text-red-500 hover:text-red-400">×</button>
                                 </div>
@@ -12049,9 +12070,29 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           <div><span className="text-theme-text-muted">Targa:</span> <span className="text-theme-text-primary">{selectedBooking.vehicle_plate}</span></div>
                         )}
                         <div><span className="text-theme-text-muted">Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_date ? new Date(typeof selectedBooking.pickup_date === 'number' ? selectedBooking.pickup_date * 1000 : selectedBooking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
-                        <div><span className="text-theme-text-muted">Luogo Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_location || '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Luogo Ritiro:</span> <span className="text-theme-text-primary">{(() => {
+                          // Sulle uscite `pickup_location` e' l'ID della tendina
+                          // ('domicilio', 'dr7_office', id di Centralina Pro):
+                          // qui va il nome in chiaro con l'indirizzo vero.
+                          if (selectedBooking.service_type !== USCITA_SERVICE_TYPE) return selectedBooking.pickup_location || '-'
+                          const u = selectedBooking.booking_details?.uscita
+                          const l = luogoUscita(u?.pickup?.place || selectedBooking.pickup_location, u?.pickup?.address, rentalConfig?.pickup_locations)
+                          return l.address && l.address !== '—' ? `${l.name} — ${l.address}` : l.name
+                        })()}</span></div>
                         <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
-                        <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
+                        <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{(() => {
+                          if (selectedBooking.service_type !== USCITA_SERVICE_TYPE) return selectedBooking.dropoff_location || '-'
+                          const u = selectedBooking.booking_details?.uscita
+                          const l = luogoUscita(u?.dropoff?.place || selectedBooking.dropoff_location, u?.dropoff?.address, rentalConfig?.pickup_locations)
+                          return l.address && l.address !== '—' ? `${l.name} — ${l.address}` : l.name
+                        })()}</span></div>
+                        {/* 04/09/2026: assicurazione, cauzione, KM, FLEX e consegna
+                            a domicilio sono campi del NOLEGGIO. Su un'uscita
+                            straordinaria non esistono e la scheda inventava
+                            "Kasko Base" / "KM Illimitati": i dati veri
+                            dell'uscita stanno nel riquadro qui sotto. */}
+                        {selectedBooking.service_type !== USCITA_SERVICE_TYPE && (
+                          <>
                         <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{(() => {
                           const rawId = selectedBooking.booking_details?.insuranceOption || ''
                           const proName = getInsuranceNameById(rentalConfig, rawId)
@@ -12139,10 +12180,142 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             </span>
                           </div>
                         )}
+                          </>
+                        )}
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* Dettaglio Uscita Straordinaria — 04/09/2026.
+                    La scheda mostrava solo i campi comuni alle prenotazioni:
+                    autisti, indirizzi esatti, motivazioni, servizi extra e note
+                    restavano invisibili anche se salvati sulla riga. */}
+                {selectedBooking.service_type === USCITA_SERVICE_TYPE && (() => {
+                  const u = selectedBooking.booking_details?.uscita
+                  if (!u) return null
+                  const autisti = Array.isArray(u.autisti) ? u.autisti : []
+                  const partenza = luogoUscita(u.pickup?.place, u.pickup?.address, rentalConfig?.pickup_locations)
+                  const rientro = luogoUscita(u.dropoff?.place, u.dropoff?.address, rentalConfig?.pickup_locations)
+                  const dataOra = (d?: string, t?: string) => {
+                    if (!d) return '-'
+                    const [y, m, g] = String(d).split('-')
+                    const data = y && m && g ? `${g}/${m}/${y}` : String(d)
+                    return t ? `${data} alle ${t}` : data
+                  }
+                  const servizi = Array.isArray(u.servizi_extra) ? u.servizi_extra : []
+                  const collegata = u.linked_booking_id
+                    ? bookings.find(b => b.id === u.linked_booking_id)
+                    : null
+                  const riga = (label: string, valore: React.ReactNode) => (
+                    <div className="flex gap-2">
+                      <span className="text-theme-text-muted shrink-0">{label}:</span>
+                      <span className="text-theme-text-primary">{valore}</span>
+                    </div>
+                  )
+                  return (
+                    <div className="p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+                      <h4 className="font-semibold text-theme-text-primary mb-3">Uscita Straordinaria</h4>
+                      <div className="space-y-2 text-sm">
+                        {riga('Titolo', u.title || '-')}
+                        {riga('Stato', u.stato || '-')}
+                        {riga('Motivazione', Array.isArray(u.motivazioni) && u.motivazioni.length > 0 ? u.motivazioni.join(', ') : '-')}
+
+                        <div className="pt-2 mt-1 border-t border-theme-border/30">
+                          <div className="text-theme-text-muted mb-1">Autisti</div>
+                          {autisti.length === 0 ? (
+                            <div className="text-theme-text-primary">Nessun autista assegnato</div>
+                          ) : (
+                            <div className="space-y-1">
+                              {autisti.map((a: { id?: string; full_name?: string; phone?: string }, i: number) => {
+                                // Ogni autista puo' guidare un mezzo diverso da
+                                // quello della card (vehicle_to_drive).
+                                const guidaId = (u.vehicle_to_drive || {})[a.id || '']
+                                const guida = guidaId ? vehicles.find(v => v.id === guidaId) : null
+                                return (
+                                  <div key={`uscita-aut-${i}`} className="flex flex-wrap items-center gap-x-2">
+                                    <span className="text-theme-text-primary">{a.full_name || 'Autista'}</span>
+                                    {a.phone && (
+                                      <span className="text-theme-text-muted">
+                                        <NumeroTelefono valore={a.phone} vuoto="-" />
+                                      </span>
+                                    )}
+                                    {guida && (
+                                      <span className="text-xs text-theme-text-muted">
+                                        guida: {guida.display_name}{guida.plate ? ` (${guida.plate})` : ''}
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 mt-1 border-t border-theme-border/30 space-y-1">
+                          <div className="text-theme-text-muted">Partenza</div>
+                          {riga('Quando', dataOra(u.pickup?.date, u.pickup?.time))}
+                          {riga('Luogo', partenza.name)}
+                          {riga('Indirizzo', partenza.address)}
+                        </div>
+
+                        <div className="pt-2 mt-1 border-t border-theme-border/30 space-y-1">
+                          <div className="text-theme-text-muted">Rientro</div>
+                          {riga('Quando', dataOra(u.dropoff?.date, u.dropoff?.time))}
+                          {riga('Luogo', rientro.name)}
+                          {riga('Indirizzo', rientro.address)}
+                        </div>
+
+                        {u.linked_booking_id && (
+                          <div className="pt-2 mt-1 border-t border-theme-border/30 space-y-1">
+                            <div className="text-theme-text-muted">Prenotazione collegata</div>
+                            {collegata ? (
+                              <>
+                                {riga('Codice', `DR7-${String(collegata.id).substring(0, 8).toUpperCase()}`)}
+                                {riga('Cliente', collegata.booking_details?.customer?.fullName || collegata.customer_name || '-')}
+                                {riga('Telefono', <NumeroTelefono valore={collegata.customer_phone || collegata.booking_details?.customer?.phone} vuoto="-" />)}
+                                {riga('Veicolo', [collegata.vehicle_name, collegata.vehicle_plate].filter(Boolean).join(' · ') || '-')}
+                              </>
+                            ) : (
+                              // La prenotazione collegata puo' stare fuori dal
+                              // periodo caricato: si mostra almeno il codice.
+                              riga('Codice', `DR7-${String(u.linked_booking_id).substring(0, 8).toUpperCase()}`)
+                            )}
+                          </div>
+                        )}
+
+                        {servizi.length > 0 && (
+                          <div className="pt-2 mt-1 border-t border-theme-border/30 space-y-1">
+                            <div className="text-theme-text-muted">Servizi extra</div>
+                            {servizi.map((sv: { name?: string; quantity?: number; price?: string; stato?: string; note_operative?: string }, i: number) => (
+                              <div key={`uscita-svc-${i}`} className="text-theme-text-primary">
+                                {sv.name || 'Servizio'}
+                                {sv.quantity && sv.quantity > 1 ? ` x${sv.quantity}` : ''}
+                                {sv.price ? ` · €${sv.price}` : ''}
+                                {sv.stato ? ` · ${sv.stato}` : ''}
+                                {sv.note_operative ? ` · ${sv.note_operative}` : ''}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="pt-2 mt-1 border-t border-theme-border/30 space-y-1">
+                          {riga('Pagamento previsto', [u.payment?.state, u.payment?.amount ? `€${u.payment.amount}` : '', u.payment?.method].filter(Boolean).join(' · ') || '-')}
+                          {u.payment?.notes && riga('Note pagamento', u.payment.notes)}
+                          {riga('Cauzione prevista', [u.cauzione?.state, u.cauzione?.amount ? `€${u.cauzione.amount}` : '', u.cauzione?.method].filter(Boolean).join(' · ') || '-')}
+                          {u.cauzione?.notes && riga('Note cauzione', u.cauzione.notes)}
+                        </div>
+
+                        {(u.note_operative || u.note_integrative) && (
+                          <div className="pt-2 mt-1 border-t border-theme-border/30 space-y-1">
+                            {u.note_operative && riga('Note operative', u.note_operative)}
+                            {u.note_integrative && riga('Note integrative', u.note_integrative)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Payment Info */}
                 <div className=" p-4 rounded-lg">
