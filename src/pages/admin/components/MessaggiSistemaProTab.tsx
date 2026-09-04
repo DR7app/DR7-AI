@@ -1723,8 +1723,8 @@ function nextCronAttemptText(sendHour: number | null): string {
 // sceglie qui e il cron lo rispetta — nessuna modifica al codice per un
 // destinatario nuovo.
 const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
-  { value: 'customer', label: 'Cliente della pratica', hint: 'Il cliente della prenotazione che ha fatto scattare l\'evento (comportamento standard).' },
-  { value: 'custom_phones', label: 'Numeri specifici', hint: 'Uno o più numeri scritti da te. Separali con virgola o a capo.' },
+  { value: 'customer', label: 'Clienti', hint: 'Il cliente della prenotazione che ha fatto scattare l\'evento (comportamento standard).' },
+  { value: 'custom_phones', label: 'Numero specifico', hint: 'Uno o più numeri scritti da te. Separali con virgola o a capo.' },
   { value: 'admin_roles', label: 'Dipendenti', hint: 'Tutti i dipendenti con i ruoli scelti (numero preso da "Contatto interno" nella loro scheda in Operatori).' },
   { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica — ANCHE chi non ha nulla in corso e i clienti del lavaggio. Usare con cautela.' },
   // 2026-08-23: prima mancava del tutto. Per raggiungere "chi ha adesso il
@@ -1734,7 +1734,7 @@ const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
   // 2026-09-04: destinatario esplicito per le Uscite Straordinarie. Prima
   // gli autisti si raggiungevano solo lasciando "Cliente della pratica" —
   // che su un'uscita non e' un cliente: si capiva solo leggendo il codice.
-  { value: 'uscita_autisti', label: 'Autisti dell\'uscita', hint: 'Gli autisti assegnati alla singola uscita straordinaria, sul numero della loro scheda. Da usare con gli eventi "Prima/Dopo un\'uscita straordinaria".' },
+  { value: 'uscita_autisti', label: 'Autista', hint: 'Gli autisti assegnati alla singola uscita straordinaria, sul numero della loro scheda. Da usare con gli eventi "Prima/Dopo un\'uscita straordinaria".' },
 ]
 
 
@@ -4424,7 +4424,7 @@ export default function MessaggiSistemaProTab() {
                                             </p>
                                             {EVENTI_USCITA.has(newTriggerEvent) && (newRecipientMode === 'customer' || newRecipientMode === 'uscita_autisti') && (
                                                 <p className="text-[11px] text-emerald-400 mt-1.5">
-                                                    Su un'uscita straordinaria non c'e' un cliente: il messaggio va agli AUTISTI assegnati alla singola uscita. Scegli "Autisti dell'uscita" per dirlo a chiare lettere.
+                                                    Su un'uscita straordinaria non c'e' un cliente: il messaggio va agli AUTISTI assegnati alla singola uscita. Scegli "Autista" per dirlo a chiare lettere.
                                                 </p>
                                             )}
                                             {newTriggerEvent === 'on_schedule' && newRecipientMode === 'customer' && (
