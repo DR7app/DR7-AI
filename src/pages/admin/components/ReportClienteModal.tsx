@@ -121,6 +121,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('stato')
   const [isDR7Club, setIsDR7Club] = useState(false)
+  // Sezione Economica: periodo 3/6/12 mesi oppure intervallo personalizzato.
+  const [econPeriod, setEconPeriod] = useState<'3m' | '6m' | '12m' | 'custom'>('6m')
+  const [econDal, setEconDal] = useState('')
+  const [econAl, setEconAl] = useState('')
 
   useEffect(() => {
     loadAll()
@@ -405,24 +409,94 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     return { label: 'Cliente standard', color: 'text-theme-text-muted', bg: 'bg-theme-bg-tertiary border-theme-border' }
   }, [customer, riskScore, kpis, statusCfg])
 
-  // Monthly spend for chart (last 6 months)
+  // Sezione Economica — intervallo attivo. I preset 3/6/12 mesi partono dal
+  // primo giorno del mese piu' vecchio della finestra (mese corrente incluso);
+  // il personalizzato usa le due date scelte, estremi compresi.
+  const econRange = useMemo(() => {
+    const end = new Date()
+    end.setHours(23, 59, 59, 999)
+    if (econPeriod === 'custom') {
+      const start = econDal ? new Date(`${econDal}T00:00:00`) : null
+      const customEnd = econAl ? new Date(`${econAl}T23:59:59.999`) : end
+      return { start, end: customEnd }
+    }
+    const mesi = econPeriod === '3m' ? 3 : econPeriod === '12m' ? 12 : 6
+    const start = new Date()
+    start.setDate(1)
+    start.setMonth(start.getMonth() - (mesi - 1))
+    start.setHours(0, 0, 0, 0)
+    return { start, end }
+  }, [econPeriod, econDal, econAl])
+
+  const econRangeLabel = useMemo(() => {
+    const fmt = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    if (econPeriod === 'custom') {
+      if (!econRange.start && !econAl) return 'Tutto lo storico'
+      return `${econRange.start ? fmt(econRange.start) : 'Inizio'} — ${fmt(econRange.end)}`
+    }
+    return econPeriod === '3m' ? 'Ultimi 3 Mesi' : econPeriod === '12m' ? 'Ultimi 12 Mesi' : 'Ultimi 6 Mesi'
+  }, [econPeriod, econAl, econRange])
+
+  const inEconRange = useMemo(() => {
+    const startMs = econRange.start ? econRange.start.getTime() : -Infinity
+    const endMs = econRange.end.getTime()
+    return (iso?: string) => {
+      if (!iso) return false
+      const t = new Date(iso).getTime()
+      return Number.isFinite(t) && t >= startMs && t <= endMs
+    }
+  }, [econRange])
+
+  const econBookings = useMemo(() => bookings.filter(b => inEconRange(b.created_at)), [bookings, inEconRange])
+  const econWalletTxs = useMemo(() => walletTxs.filter(t => inEconRange(t.created_at)), [walletTxs, inEconRange])
+
+  // Riepilogo economico limitato al periodo scelto (stesse regole dei KPI
+  // globali: pagato = paid/succeeded/completed, penali/danni al prezzo finale).
+  const econKpis = useMemo(() => {
+    const isPaid = (b: BookingRecord) => b.payment_status === 'paid' || b.payment_status === 'succeeded' || b.payment_status === 'completed'
+    const totalSpent = econBookings.filter(isPaid).reduce((s, b) => s + (b.price_total || 0), 0) / 100
+    const unpaidTotal = econBookings
+      .filter(b => b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial')
+      .reduce((s, b) => s + (b.price_total || 0), 0) / 100
+    let totalDanni = 0, totalPenali = 0
+    econBookings.forEach(b => {
+      ;(b.booking_details?.danni || []).forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalDanni += effectivePenaltyAmount(item) })
+      ;(b.booking_details?.penalties || []).forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalPenali += effectivePenaltyAmount(item) })
+    })
+    return { totalSpent, unpaidTotal, totalDanni, totalPenali, count: econBookings.length }
+  }, [econBookings])
+
+  // Fatturato per mese sull'intervallo attivo.
   const monthlyData = useMemo(() => {
+    const first = econRange.start
+      ? new Date(econRange.start.getFullYear(), econRange.start.getMonth(), 1)
+      : (() => {
+          const dates = econBookings.map(b => new Date(b.created_at).getTime()).filter(t => Number.isFinite(t))
+          const oldest = dates.length ? new Date(Math.min(...dates)) : econRange.end
+          return new Date(oldest.getFullYear(), oldest.getMonth(), 1)
+        })()
+    const last = new Date(econRange.end.getFullYear(), econRange.end.getMonth(), 1)
+    const totals = new Map<string, number>()
+    econBookings.forEach(b => {
+      if (!(b.payment_status === 'paid' || b.payment_status === 'succeeded' || b.payment_status === 'completed')) return
+      const bd = new Date(b.created_at)
+      const key = `${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}`
+      totals.set(key, (totals.get(key) || 0) + (b.price_total || 0) / 100)
+    })
     const months: { label: string; total: number }[] = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date()
-      d.setMonth(d.getMonth() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const label = d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
-      const monthBookings = bookings.filter(b => {
-        const bd = new Date(b.created_at)
-        return `${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}` === key &&
-          (b.payment_status === 'paid' || b.payment_status === 'succeeded' || b.payment_status === 'completed')
+    const cursor = new Date(first)
+    // Tetto di sicurezza: intervalli lunghissimi non devono generare centinaia
+    // di barre illeggibili.
+    while (cursor <= last && months.length < 36) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+      months.push({
+        label: cursor.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }),
+        total: totals.get(key) || 0,
       })
-      const total = monthBookings.reduce((s, b) => s + (b.price_total || 0), 0) / 100
-      months.push({ label, total })
+      cursor.setMonth(cursor.getMonth() + 1)
     }
     return months
-  }, [bookings])
+  }, [econBookings, econRange])
 
   const chartMax = Math.max(...monthlyData.map(m => m.total), 1)
 
@@ -1352,31 +1426,87 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
           {/* SEZIONE ECONOMICA */}
           {activeTab === 'economica' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              {/* Filtro periodo: 3 / 6 / 12 mesi oppure date personalizzate */}
+              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-3 flex flex-wrap items-center gap-3">
+                <span className="text-[10px] font-bold text-theme-text-muted uppercase tracking-wider">Periodo</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {([['3m', '3 Mesi'], ['6m', '6 Mesi'], ['12m', '12 Mesi'], ['custom', 'Personalizzato']] as ['3m' | '6m' | '12m' | 'custom', string][]).map(([id, label]) => (
+                    <button
+                      key={id}
+                      onClick={() => setEconPeriod(id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                        econPeriod === id
+                          ? 'bg-dr7-gold/15 border-dr7-gold/50 text-dr7-gold'
+                          : 'bg-theme-bg-primary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+                      }`}
+                    >{label}</button>
+                  ))}
+                </div>
+                {econPeriod === 'custom' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="text-xs text-theme-text-muted">Dal</label>
+                    <input
+                      type="date"
+                      value={econDal}
+                      max={econAl || undefined}
+                      onChange={e => setEconDal(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg bg-theme-bg-primary border border-theme-border text-xs text-theme-text-primary"
+                    />
+                    <label className="text-xs text-theme-text-muted">Al</label>
+                    <input
+                      type="date"
+                      value={econAl}
+                      min={econDal || undefined}
+                      onChange={e => setEconAl(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg bg-theme-bg-primary border border-theme-border text-xs text-theme-text-primary"
+                    />
+                    {(econDal || econAl) && (
+                      <button
+                        onClick={() => { setEconDal(''); setEconAl('') }}
+                        className="px-2 py-1.5 rounded-lg text-xs border border-theme-border text-theme-text-muted hover:bg-theme-bg-hover"
+                      >Azzera</button>
+                    )}
+                  </div>
+                )}
+                <span className="text-xs text-theme-text-muted ml-auto">
+                  {econRangeLabel} · {econKpis.count} {econKpis.count === 1 ? 'prenotazione' : 'prenotazioni'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Chart */}
               <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
-                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-4">Fatturato Ultimi 6 Mesi</h4>
-                <div className="flex items-end gap-2 h-48">
+                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-4">Fatturato — {econRangeLabel}</h4>
+                {monthlyData.length === 0 ? (
+                  <div className="h-48 flex items-center justify-center text-sm text-theme-text-muted">Nessun dato nel periodo selezionato</div>
+                ) : (
+                <div className="flex items-end gap-2 h-48 overflow-x-auto">
                   {monthlyData.map((m, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
+                    <div key={i} className="flex-1 min-w-[28px] flex flex-col items-center justify-end h-full">
                       <div className="text-xs text-theme-text-muted mb-1">{m.total > 0 ? fmtEur(m.total) : ''}</div>
                       <div className="w-full bg-dr7-gold/80 rounded-t transition-all" style={{ height: `${Math.max(2, (m.total / chartMax) * 100)}%` }} />
                       <div className="text-xs text-theme-text-muted mt-2">{m.label}</div>
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               {/* Summary */}
               <div className="space-y-4">
                 <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
-                  <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Economico</h4>
+                  <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Economico — {econRangeLabel}</h4>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Totale Fatturato</span><span className="font-bold text-green-400">{fmtEur(kpis.totalSpent)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Totale Fatturato</span><span className="font-bold text-green-400">{fmtEur(econKpis.totalSpent)}</span></div>
                     <div className="flex justify-between"><span className="text-theme-text-muted">Wallet Creditato</span><span className="font-bold text-dr7-gold">{fmtEur(walletBalance)}</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Debiti in Sospeso</span><span className={`font-bold ${kpis.unpaidTotal > 0 ? 'text-red-400' : 'text-green-400'}`}>{fmtEur(kpis.unpaidTotal)}</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Penali Totali</span><span className="font-bold text-yellow-400">{fmtEur(kpis.totalPenali)}</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Danni Totali</span><span className="font-bold text-red-400">{fmtEur(kpis.totalDanni)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Debiti in Sospeso</span><span className={`font-bold ${econKpis.unpaidTotal > 0 ? 'text-red-400' : 'text-green-400'}`}>{fmtEur(econKpis.unpaidTotal)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Penali Totali</span><span className="font-bold text-yellow-400">{fmtEur(econKpis.totalPenali)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Danni Totali</span><span className="font-bold text-red-400">{fmtEur(econKpis.totalDanni)}</span></div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-theme-border space-y-2 text-xs">
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Totale Fatturato (tutto lo storico)</span><span className="font-semibold text-theme-text-primary">{fmtEur(kpis.totalSpent)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Debiti in Sospeso (tutto lo storico)</span><span className="font-semibold text-theme-text-primary">{fmtEur(kpis.unpaidTotal)}</span></div>
                   </div>
                 </div>
 
@@ -1388,11 +1518,12 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                       <div className="text-2xl font-bold text-dr7-gold">{fmtEur(walletBalance)}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs text-theme-text-muted">Transazioni</div>
-                      <div className="text-lg font-bold text-theme-text-primary">{walletTxs.length}</div>
+                      <div className="text-xs text-theme-text-muted">Transazioni nel periodo</div>
+                      <div className="text-lg font-bold text-theme-text-primary">{econWalletTxs.length}<span className="text-xs font-normal text-theme-text-muted"> / {walletTxs.length}</span></div>
                     </div>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
           )}
