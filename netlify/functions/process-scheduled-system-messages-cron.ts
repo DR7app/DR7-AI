@@ -965,6 +965,25 @@ function uscitaTemplateVars(
         stato_cauzione: u.cauzione?.state || '—',
         note_operative: u.note_operative || '—',
         note_integrative: u.note_integrative || '—',
+        // 04/09/2026: gli stessi dati anche con i nomi "standard" usati dagli
+        // altri template del gestionale. Un corpo scritto con {vehicle_name}
+        // non partiva AFFATTO: la variabile restava letterale e il guard
+        // anti-placeholder di send-whatsapp-notification (riga 930) scartava il
+        // messaggio rispondendo HTTP 200 — che il cron conta come inviato. Chi
+        // scriveva il template non vedeva ne' il messaggio ne' un errore.
+        // Adesso {veicolo} e {vehicle_name} sono equivalenti: si scrive quello
+        // che si ricorda.
+        vehicle_name: booking.vehicle_name || '—',
+        vehicle_plate: booking.vehicle_plate || '—',
+        customer_name: firstName,
+        pickup_date: partenza.date,
+        pickup_time: partenza.time,
+        pickup_location: partenza.name,
+        pickup_address: partenza.address,
+        dropoff_date: ritorno.date,
+        dropoff_time: ritorno.time,
+        dropoff_location: ritorno.name,
+        dropoff_address: ritorno.address,
     };
 }
 
@@ -1097,7 +1116,21 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
                         type: tpl.label || 'Uscita Straordinaria',
                     }),
                 });
-                if (res.ok) inviati++; else falliti++;
+                // 04/09/2026: `res.ok` non bastava. send-whatsapp-notification
+                // risponde 200 anche quando SCARTA il messaggio (body vuoto,
+                // oppure una variabile scritta con un nome inesistente rimasta
+                // letterale, che il guard anti-placeholder blocca): l'invio
+                // finiva nel conteggio "inviati" e la riga di log diceva
+                // 'sent', mentre l'autista non riceveva nulla. Un template
+                // scritto male sembrava funzionare. Il motivo dello scarto va
+                // nei log: e' l'unico modo per capire QUALE template correggere.
+                const esito = await res.json().catch(() => ({})) as { skipped?: boolean; reason?: string };
+                if (res.ok && !esito?.skipped) inviati++;
+                else {
+                    falliti++;
+                    const motivo = esito?.reason || (res.ok ? 'skipped' : `HTTP ${res.status}`);
+                    console.error(`[scheduled-msgs] uscita ${booking.id}: messaggio NON consegnato a ${r.full_name || r.phone} — template "${tpl.label}" (${tpl.message_key}) scartato: ${motivo}`);
+                }
             } catch { falliti++; }
         }
         sent += inviati;

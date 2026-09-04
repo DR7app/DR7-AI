@@ -613,6 +613,27 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
             stato_cauzione: cauStr,
             servizi_extra: svcExtras || '—',
             note_integrative: noteInt,
+            // 04/09/2026: stessi alias del cron (processUscitaTemplates →
+            // uscitaTemplateVars). Un corpo scritto con {nome} o
+            // {vehicle_name} restava letterale e il guard anti-placeholder di
+            // send-whatsapp-notification scartava il messaggio con HTTP 200:
+            // nessun invio e nessun errore visibile. I due percorsi (bottone
+            // della modale e cron) devono conoscere le stesse variabili,
+            // altrimenti lo stesso template funziona da una parte e non
+            // dall'altra.
+            nome: firstName,
+            customer_name: firstName,
+            note_operative: (c.note_operative || noteOperative || '').trim() || '—',
+            vehicle_name: driveV?.display_name || '',
+            vehicle_plate: driveV?.plate || c.plate || '—',
+            pickup_date: fmtDate(c.pickup_date),
+            pickup_time: c.pickup_time || '—',
+            pickup_location: partenza.name,
+            pickup_address: partenza.address,
+            dropoff_date: fmtDate(c.dropoff_date),
+            dropoff_time: c.dropoff_time || '—',
+            dropoff_location: ritorno.name,
+            dropoff_address: ritorno.address,
           }
           try {
             // 2026-06-12: il CORPO arriva SEMPRE dal template Pro "Notifica
