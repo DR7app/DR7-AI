@@ -91,6 +91,8 @@ import type {
     HeaderCopy,
     HomeCategoryOverride,
     HomeCopy,
+    TemaFont,
+    TemaRaggio,
     HomeExperience,
     HomeMetric,
     HomeSlide,
@@ -151,6 +153,8 @@ import {
     INITIAL_PRESS,
     INITIAL_REGISTRAZIONE_CLIENTE,
     INITIAL_SIGNUP,
+    INITIAL_TEMA_FONT,
+    INITIAL_TEMA_RAGGIO,
     INITIAL_TOKEN,
 } from './sito/siteCopyDefaults'
 
@@ -6147,6 +6151,30 @@ function ToggleRow({ label, hint, checked, onChange }: { label: string; hint: st
 }
 
 /** Campo px. Mai type="number": si scrive la cifra, si valida qui. */
+/** Colore: selettore nativo + campo esadecimale, perche' un colore si incolla. */
+function FieldColore({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+    return (
+        <label className="block">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">{label}</span>
+            <div className="mt-1 flex items-center gap-2">
+                <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#000000'}
+                    onChange={e => onChange(e.target.value.toUpperCase())}
+                    className="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-theme-border bg-transparent p-0.5"
+                />
+                <input
+                    type="text"
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    placeholder="#08090A"
+                    className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] font-mono uppercase"
+                />
+            </div>
+        </label>
+    )
+}
+
 function FieldPx({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
     return (
         <label className="block">
@@ -6173,9 +6201,75 @@ function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
-                Layout del logo e interruttori dei widget presenti su ogni pagina di dr7.app.
+                Tema, layout del logo e interruttori dei widget presenti su ogni pagina di dr7.app.
                 Le modifiche si vedono al primo ricaricamento del sito.
             </p>
+
+            {/* Tema */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Tema del sito</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Colori e coppia tipografica di tutto dr7.app. Il sito li applica come variabili,
+                    quindi cambiano ovunque in una volta sola. <strong>L'accento va usato poco</strong>:
+                    e' un accento, non un tema — nove decimi dell'effetto vengono da fondo, luce e
+                    contrasto.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <FieldColore label="Fondo pagina" value={copy.tema_bg} onChange={v => update('tema_bg', v)} />
+                    <FieldColore label="Superfici (schede, pannelli)" value={copy.tema_surface} onChange={v => update('tema_surface', v)} />
+                    <FieldColore label="Testo principale" value={copy.tema_ink} onChange={v => update('tema_ink', v)} />
+                    <FieldColore label="Testo secondario" value={copy.tema_muted} onChange={v => update('tema_muted', v)} />
+                    <FieldColore label="Accento" value={copy.tema_accent} onChange={v => update('tema_accent', v)} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="block">
+                        <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Coppia tipografica</span>
+                        <select
+                            value={copy.tema_font}
+                            onChange={e => update('tema_font', e.target.value as TemaFont)}
+                            className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px]"
+                        >
+                            {Object.entries(INITIAL_TEMA_FONT).map(([k, v]) => (
+                                <option key={k} value={k}>{v.nome}</option>
+                            ))}
+                        </select>
+                        <span className="mt-1 block text-[11px] text-theme-text-secondary">
+                            Si sceglie l'accostamento, non i due caratteri separatamente: e' l'accostamento
+                            a reggere l'impaginazione.
+                        </span>
+                    </label>
+                    <label className="block">
+                        <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Angoli</span>
+                        <select
+                            value={copy.tema_raggio}
+                            onChange={e => update('tema_raggio', e.target.value as TemaRaggio)}
+                            className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px]"
+                        >
+                            {Object.entries(INITIAL_TEMA_RAGGIO).map(([k, v]) => (
+                                <option key={k} value={k}>{v.nome}</option>
+                            ))}
+                        </select>
+                    </label>
+                </div>
+
+                {/* Anteprima: gli stessi colori applicati su un pezzo di pagina. */}
+                <div className="rounded-xl border border-theme-border overflow-hidden">
+                    <div className="p-6" style={{ background: copy.tema_bg }}>
+                        <div style={{ color: copy.tema_accent, fontSize: 10, letterSpacing: '0.28em', textTransform: 'uppercase' }}>Anteprima</div>
+                        <div style={{ color: copy.tema_ink, fontSize: 30, marginTop: 10, fontFamily: (INITIAL_TEMA_FONT[copy.tema_font] || INITIAL_TEMA_FONT['bodoni-jost']).display }}>
+                            Sardegna, a un'altra velocita'.
+                        </div>
+                        <div style={{ color: copy.tema_muted, fontSize: 13, marginTop: 8, fontFamily: (INITIAL_TEMA_FONT[copy.tema_font] || INITIAL_TEMA_FONT['bodoni-jost']).ui }}>
+                            Terra, mare, aria. Una sola collezione, un solo accesso.
+                        </div>
+                        <div className="mt-4 inline-block px-5 py-2.5" style={{ background: copy.tema_surface, color: copy.tema_ink, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                            La collezione
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             {/* Logo */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">

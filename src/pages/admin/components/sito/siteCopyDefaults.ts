@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 34 — interfacce: 71
+ * Sezioni generate: 36 — interfacce: 73
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -1050,7 +1050,39 @@ export interface AspettoCopy {
   auto_booking_popup_enabled?: boolean;
   /** Popup del tour in elicottero. */
   heli_tour_popup_enabled?: boolean;
+
+  // ── Tema ────────────────────────────────────────────────────────────────
+  // I colori e la coppia tipografica del sito. Il sito li applica come
+  // VARIABILI CSS, non come classi: una classe Tailwind composta a runtime
+  // non verrebbe generata in nessuno dei due progetti (stessa ragione
+  // dell'altezza del logo, che infatti e' uno `style` e non una classe).
+  //
+  // La tipografia si sceglie fra poche coppie preparate invece che campo per
+  // campo: e' l'accostamento a fare la differenza, e lasciarlo libero
+  // significa poter rompere l'impaginazione con due tendine.
+  /** Fondo della pagina. */
+  tema_bg?: string;
+  /** Superfici sollevate: schede, pannelli. */
+  tema_surface?: string;
+  /** Testo principale. */
+  tema_ink?: string;
+  /** Testo secondario. */
+  tema_muted?: string;
+  /** Accento metallico. Usarlo poco: e' un accento, non un tema. */
+  tema_accent?: string;
+  /** Coppia tipografica (display + interfaccia). */
+  tema_font?: TemaFont;
+  /** Durezza degli angoli. */
+  tema_raggio?: TemaRaggio;
 }
+
+/**
+ * Coppie tipografiche disponibili. Tutte da Google Fonts, quindi utilizzabili
+ * senza licenza da acquistare. La prima e' quella di progetto.
+ */
+export type TemaFont = 'bodoni-jost' | 'playfair-jost' | 'cormorant-outfit' | 'italiana-jost';
+
+export type TemaRaggio = 'vivo' | 'morbido' | 'tondo';
 
 // ─── Confirmation Success page (booking + email fallback) ─────────────────
 // `{total}` placeholder in rental_agency_footnote is replaced with the
@@ -1478,6 +1510,39 @@ export interface CancellazionePlaceholderValues {
   daysWord: string;
 }
 
+export const INITIAL_TEMA_FONT: Record<TemaFont, { nome: string; display: string; ui: string; google: string | null }> = {
+  'bodoni-jost': {
+    nome: 'Bodoni Moda + Jost',
+    display: "'Bodoni Moda', 'Playfair Display', Georgia, serif",
+    ui: "'Jost', system-ui, -apple-system, sans-serif",
+    google: null, // gia' caricata in index.html
+  },
+  'playfair-jost': {
+    nome: 'Playfair Display + Jost',
+    display: "'Playfair Display', Georgia, serif",
+    ui: "'Jost', system-ui, -apple-system, sans-serif",
+    google: 'Playfair+Display:ital,wght@0,400..800;1,400..600',
+  },
+  'cormorant-outfit': {
+    nome: 'Cormorant Garamond + Outfit',
+    display: "'Cormorant Garamond', Georgia, serif",
+    ui: "'Outfit', system-ui, -apple-system, sans-serif",
+    google: 'Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Outfit:wght@200..600',
+  },
+  'italiana-jost': {
+    nome: 'Italiana + Jost',
+    display: "'Italiana', Georgia, serif",
+    ui: "'Jost', system-ui, -apple-system, sans-serif",
+    google: 'Italiana',
+  },
+};
+
+export const INITIAL_TEMA_RAGGIO: Record<TemaRaggio, { nome: string; xs: string; sm: string; md: string }> = {
+  vivo:    { nome: 'Vivo (angoli netti)', xs: '0px', sm: '0px', md: '0px' },
+  morbido: { nome: 'Morbido (di progetto)', xs: '2px', sm: '3px', md: '4px' },
+  tondo:   { nome: 'Tondo', xs: '6px', sm: '10px', md: '14px' },
+};
+
 // ─── Defaults ────────────────────────────────────────────────────────────────
 export const INITIAL_FAQ_ENTRIES: FaqEntry[] = [
   {
@@ -1547,6 +1612,13 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   chatbot_avatar_url: '/Valerio.jpg',
   auto_booking_popup_enabled: true,
   heli_tour_popup_enabled: true,
+  tema_bg: '#08090A',
+  tema_surface: '#131416',
+  tema_ink: '#F6F3ED',
+  tema_muted: '#A19C92',
+  tema_accent: '#C9BEA8',
+  tema_font: 'bodoni-jost',
+  tema_raggio: 'morbido',
 };
 
 // ─── Default Locations seed (mirrors current constants.ts arrays) ──────
