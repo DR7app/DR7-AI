@@ -4639,7 +4639,7 @@ const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: s
     { key: 'mobilita', name: 'Mobilità', titleIt: 'Mobilità', titleEn: 'Mobility', subIt: 'Auto esclusive per ogni esperienza su strada', subEn: 'Exclusive cars for every experience on the road', img: '/menu-mobilita.jpeg' },
     { key: 'mare', name: 'Mare', titleIt: 'Mare', titleEn: 'Sea', subIt: 'Yacht, barche e esperienze esclusive in mare', subEn: 'Yachts, boats and exclusive experiences at sea', img: '/menu-mare.jpeg' },
     { key: 'aria', name: 'Aria', titleIt: 'Aria', titleEn: 'Air', subIt: 'Voli privati ed elicotteri per viaggiare senza confini', subEn: 'Private jets and helicopters to travel without limits', img: '/menu-aria.jpeg' },
-    { key: 'property', name: 'Property', titleIt: 'Property', titleEn: 'Property', subIt: 'Ville, appartamenti e residenze selezionate in tutto il mondo', subEn: 'Villas, apartments and residences selected worldwide', img: '/menu-property.jpeg' },
+    { key: 'property', name: 'Soggiorni & Ospitalità', titleIt: 'Soggiorni & Ospitalità', titleEn: 'Stays & Hospitality', subIt: 'Ville, appartamenti e residenze selezionate in tutto il mondo', subEn: 'Villas, apartments and residences selected worldwide', img: '/menu-property.jpeg' },
     { key: 'servizi', name: 'Lavaggio & Meccanica', titleIt: 'Lavaggio & Meccanica', titleEn: 'Car Wash & Mechanics', subIt: 'Lavaggio auto premium e officina meccanica', subEn: 'Premium car wash and mechanical workshop', img: '/servizi-lavaggio.jpeg' },
     { key: 'wallet', name: 'Credit Wallet', titleIt: 'Credit Wallet', titleEn: 'Credit Wallet', subIt: 'Il tuo credito DR7 Wallet per prenotare e ricaricare', subEn: 'Your DR7 Wallet credit to book and top up', img: '/menu-club.jpeg' },
     { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits', img: '/menu-club.jpeg' },
@@ -4889,6 +4889,12 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                     <FieldText label="Tax code invalid (EN)" value={copy.err_cf_invalid_en} onChange={v => update('err_cf_invalid_en', v)} />
                     <FieldText label="CF obbligatorio (IT)" value={copy.err_cf_required_it} onChange={v => update('err_cf_required_it', v)} />
                     <FieldText label="Tax code required (EN)" value={copy.err_cf_required_en} onChange={v => update('err_cf_required_en', v)} />
+                    <FieldText label="Sesso obbligatorio (IT)" value={copy.err_sesso_required_it} onChange={v => update('err_sesso_required_it', v)} />
+                    <FieldText label="Gender required (EN)" value={copy.err_sesso_required_en} onChange={v => update('err_sesso_required_en', v)} />
+                    <FieldText label="Città di nascita obbligatoria (IT)" value={copy.err_birth_city_required_it} onChange={v => update('err_birth_city_required_it', v)} />
+                    <FieldText label="Place of birth required (EN)" value={copy.err_birth_city_required_en} onChange={v => update('err_birth_city_required_en', v)} />
+                    <FieldText label="Provincia di nascita obbligatoria (IT)" value={copy.err_birth_province_required_it} onChange={v => update('err_birth_province_required_it', v)} />
+                    <FieldText label="Province of birth required (EN)" value={copy.err_birth_province_required_en} onChange={v => update('err_birth_province_required_en', v)} />
                     <FieldText label="Numero civico obbligatorio (IT)" value={copy.err_civico_required_it} onChange={v => update('err_civico_required_it', v)} />
                     <FieldText label="Street number required (EN)" value={copy.err_civico_required_en} onChange={v => update('err_civico_required_en', v)} />
                     <FieldText label="CAP obbligatorio (IT)" value={copy.err_cap_required_it} onChange={v => update('err_cap_required_it', v)} />
@@ -5058,6 +5064,10 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                     <FieldTextArea label="DR7 Club body (EN)" value={copy.body_dr7_club_en} onChange={v => update('body_dr7_club_en', v)} />
                     <FieldTextArea label="Corpo Membership (IT) — usa {tierName} {cycle}" value={copy.body_membership_template_it} onChange={v => update('body_membership_template_it', v)} />
                     <FieldTextArea label="Membership body (EN) — uses {tierName} {cycle}" value={copy.body_membership_template_en} onChange={v => update('body_membership_template_en', v)} />
+                    <FieldText label="Titolo cauzione pre-autorizzata (IT)" value={copy.success_title_cauzione_it} onChange={v => update('success_title_cauzione_it', v)} />
+                    <FieldText label="Deposit pre-authorized title (EN)" value={copy.success_title_cauzione_en} onChange={v => update('success_title_cauzione_en', v)} />
+                    <FieldTextArea label="Corpo cauzione (IT) — importo bloccato, non addebitato" value={copy.body_cauzione_it} onChange={v => update('body_cauzione_it', v)} />
+                    <FieldTextArea label="Deposit body (EN)" value={copy.body_cauzione_en} onChange={v => update('body_cauzione_en', v)} />
                     <FieldTextArea label="Corpo Wallet (IT) — usa {packageName} {amount}" value={copy.body_wallet_template_it} onChange={v => update('body_wallet_template_it', v)} />
                     <FieldTextArea label="Wallet body (EN) — uses {packageName} {amount}" value={copy.body_wallet_template_en} onChange={v => update('body_wallet_template_en', v)} />
                 </div>
@@ -5116,6 +5126,8 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                     <FieldText label="Wallet credit add error (EN)" value={copy.err_credit_add_en} onChange={v => update('err_credit_add_en', v)} />
                     <FieldText label="Ordine non trovato (IT)" value={copy.err_order_not_found_it} onChange={v => update('err_order_not_found_it', v)} />
                     <FieldText label="Order not found (EN)" value={copy.err_order_not_found_en} onChange={v => update('err_order_not_found_en', v)} />
+                    <FieldTextArea label="Pagamento non ancora confermato (IT)" value={copy.err_payment_not_confirmed_it} onChange={v => update('err_payment_not_confirmed_it', v)} />
+                    <FieldTextArea label="Payment not confirmed yet (EN)" value={copy.err_payment_not_confirmed_en} onChange={v => update('err_payment_not_confirmed_en', v)} />
                     <FieldText label="Errore generico (IT)" value={copy.err_generic_it} onChange={v => update('err_generic_it', v)} />
                     <FieldText label="Generic error (EN)" value={copy.err_generic_en} onChange={v => update('err_generic_en', v)} />
                 </div>

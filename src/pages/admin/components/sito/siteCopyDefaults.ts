@@ -166,6 +166,14 @@ export interface MembershipCopy {
   elite_cta_title_it: string; elite_cta_title_en: string;
   elite_cta_text_it: string; elite_cta_text_en: string;
   elite_cta_logged_out_it: string; elite_cta_logged_out_en: string;
+
+  // Scala dei livelli cashback. I livelli veri stanno in Centralina Pro > DR7
+  // Club: qui c'e' solo l'intestazione della sezione. Opzionali perche'
+  // getMembershipCopy ripiega a blocco e la riga gia' salvata non le contiene:
+  // il valore di fabbrica sta nel punto in cui vengono lette.
+  tiers_eyebrow_it?: string; tiers_eyebrow_en?: string;
+  tiers_title_it?: string; tiers_title_en?: string;
+  tiers_note_it?: string; tiers_note_en?: string;
   elite_cta_logged_in_it: string; elite_cta_logged_in_en: string;
   // Reward-system grid
   reward_title_it: string; reward_title_en: string;
@@ -2832,21 +2840,20 @@ export const INITIAL_HOME: HomeCopy = {
   seo_h1_it: 'DR7 — Noleggio Auto di Lusso, Supercar e Servizi Premium in Sardegna',
   seo_h1_en: 'DR7 — Luxury Car Rental, Supercars & Premium Services in Sardinia',
   hero_autoplay_seconds: 8,
-  // I quattro film DR7: 1920x1080, marchiati, lenti. Uno per divisione —
-  // terra, mare, aria, soggiorni — che e' esattamente cio' che dice il
-  // microcopy dello hero. Ricodificati da 10-12 MB a 1,4-3,1 MB e affiancati
-  // da una variante 720 per il telefono e da un poster.
+  // UNA sola scena d'apertura: `/main.mp4`, quella con cui il sito si e'
+  // sempre aperto ed era la prima delle sei in configurazione.
   //
-  // NON usare qui i vecchi main.mp4 / video2..6: sono 576x1024, cioe' clip
-  // verticali da telefono larghe 576 pixel. In uno schermo intero orizzontale
-  // vengono ingrandite tre volte e tagliate a fascia: e' il motivo per cui lo
-  // hero sembrava sfocato e inquadrato a caso. Restano nella cartella public,
-  // utilizzabili dove il formato verticale ha senso.
+  // Non e' una svista che sia una sola: la direzione ha chiesto una scena
+  // sola, non un carosello. Aggiungerne altre dal pannello le fa ruotare di
+  // nuovo, con il tempo impostato in "Autoplay".
+  //
+  // Nota tecnica, per chi passera' di qui: il file e' 576x1024, cioe' verticale
+  // e largo 576 pixel. Sul telefono e' nel suo formato ed e' perfetto; su uno
+  // schermo orizzontale grande viene ingrandito e tagliato a fascia, ed e' il
+  // meglio che quel file possa dare. Per averlo nitido servirebbe una versione
+  // orizzontale ad alta risoluzione della stessa scena, da caricare qui.
   hero_slides: [
-    { id: 'film-terra',     video_src: '/film/cars1.mp4',       mobile_src: '/film/cars1-720.mp4',       poster_src: '/poster/film-cars1.jpg' },
-    { id: 'film-mare',      video_src: '/film/yacht.mp4',       mobile_src: '/film/yacht-720.mp4',       poster_src: '/poster/film-yacht.jpg' },
-    { id: 'film-aria',      video_src: '/film/helicopter1.mp4', mobile_src: '/film/helicopter1-720.mp4', poster_src: '/poster/film-helicopter1.jpg' },
-    { id: 'film-soggiorni', video_src: '/film/villa1.mp4',      mobile_src: '/film/villa1-720.mp4',      poster_src: '/poster/film-villa1.jpg' },
+    { id: 'slide-1', video_src: '/main.mp4', poster_src: '/poster/main.jpg' },
   ],
   categories: [
     { id: 'cars',                 display_title_it: 'DR7 Supercar & Luxury Division',         display_title_en: 'DR7 Supercar & Luxury Division',         image_src: '/car.jpeg' },
@@ -2913,7 +2920,7 @@ export const INITIAL_HOME: HomeCopy = {
       copy_en: 'Private flights and helicopters to travel without limits.',
       cta_it: 'Scopri', cta_en: 'Discover' },
     { id: 'soggiorni', to: '/soggiorni', image_src: '/menu-property.jpeg',
-      title_it: 'Soggiorni', title_en: 'Stays',
+      title_it: 'Soggiorni & Ospitalità', title_en: 'Stays & Hospitality',
       copy_it: 'Ville, appartamenti e residenze selezionate.',
       copy_en: 'Villas, apartments and selected residences.',
       cta_it: 'Scopri', cta_en: 'Discover' },
