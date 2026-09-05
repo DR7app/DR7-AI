@@ -1605,8 +1605,8 @@ export const INITIAL_HEADER: HeaderCopy = {
 export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   logo_url: '/DR7logo1.png',
   logo_alignment: 'center',
-  logo_height_desktop: 84,
-  logo_height_mobile: 72,
+  logo_height_desktop: 96,
+  logo_height_mobile: 80,
   footer_logo_height: 48,
   chatbot_enabled: true,
   chatbot_avatar_url: '/Valerio.jpg',
@@ -2453,9 +2453,9 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   stats_footer_main: 'Il brand di lusso più riconosciuto d\'Italia.',
   stats_footer_main_it: 'Il brand di lusso più riconosciuto d\'Italia.',
   stats_footer_main_en: 'The most recognised luxury brand in Italy.',
-  stats_footer_sub: 'Italia • Dubai Rent 7.0 S.p.A.',
-  stats_footer_sub_it: 'Italia • Dubai Rent 7.0 S.p.A.',
-  stats_footer_sub_en: 'Italy • Dubai Rent 7.0 S.p.A.',
+  stats_footer_sub: 'Italia • DR7 S.p.A.',
+  stats_footer_sub_it: 'Italia • DR7 S.p.A.',
+  stats_footer_sub_en: 'Italy • DR7 S.p.A.',
   expansion_heading: 'Il Nostro Piano di Espansione',
   expansion_heading_it: 'Il Nostro Piano di Espansione',
   expansion_heading_en: 'Our Expansion Plan',
@@ -2515,32 +2515,32 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   hero_subtitle_it: 'Partecipa alla crescita del gruppo DR7',
   hero_subtitle_en: 'Take part in the growth of the DR7 group',
   intro_paragraphs_it: [
-    'Dubai Rent 7.0 S.p.A. rappresenta il cuore del progetto DR7 Luxury Empire, una realtà italiana in espansione internazionale nel settore Luxury Mobility & Lifestyle.',
+    'DR7 S.p.A. rappresenta il cuore del progetto DR7 Luxury Empire, una realtà italiana in espansione internazionale nel settore Luxury Mobility & Lifestyle.',
     'Fondata da Valerio Saia, la società persegue l\'obiettivo di costruire entro il 2030 un gruppo di riferimento nel panorama del lusso globale, integrando noleggio supercar, yacht, elicotteri, ville di pregio e servizi di concierge in un\'unica piattaforma.',
   ],
   intro_paragraphs_en: [
-    'Dubai Rent 7.0 S.p.A. is the heart of the DR7 Luxury Empire project, an Italian company expanding internationally in the Luxury Mobility & Lifestyle sector.',
+    'DR7 S.p.A. is the heart of the DR7 Luxury Empire project, an Italian company expanding internationally in the Luxury Mobility & Lifestyle sector.',
     'Founded by Valerio Saia, the company aims to build by 2030 a benchmark group in the global luxury landscape, integrating supercar rental, yachts, helicopters, prestige villas and concierge services into a single platform.',
   ],
   intro_paragraphs: [
-    'Dubai Rent 7.0 S.p.A. rappresenta il cuore del progetto DR7 Luxury Empire, una realtà italiana in espansione internazionale nel settore Luxury Mobility & Lifestyle.',
+    'DR7 S.p.A. rappresenta il cuore del progetto DR7 Luxury Empire, una realtà italiana in espansione internazionale nel settore Luxury Mobility & Lifestyle.',
     'Fondata da Valerio Saia, la società persegue l\'obiettivo di costruire entro il 2030 un gruppo di riferimento nel panorama del lusso globale, integrando noleggio supercar, yacht, elicotteri, ville di pregio e servizi di concierge in un\'unica piattaforma.',
   ],
   opportunity_heading: 'Opportunità di partecipazione al capitale',
   opportunity_heading_it: 'Opportunità di partecipazione al capitale',
   opportunity_heading_en: 'Equity participation opportunity',
   opportunity_paragraphs_it: [
-    'Il Consiglio di Amministrazione di Dubai Rent 7.0 S.p.A. ha deliberato l\'apertura selettiva del capitale sociale a investitori privati e partner strategici, con l\'intento di favorire la crescita e l\'espansione del brand a livello internazionale.',
+    'Il Consiglio di Amministrazione di DR7 S.p.A. ha deliberato l\'apertura selettiva del capitale sociale a investitori privati e partner strategici, con l\'intento di favorire la crescita e l\'espansione del brand a livello internazionale.',
     'L\'ingresso nel capitale è riservato a soggetti qualificati, selezionati direttamente dalla Direzione Generale, nel rispetto delle normative vigenti e delle procedure interne di valutazione.',
     'L\'obiettivo è consolidare la struttura patrimoniale della società e accelerare il piano Vision 2030, che prevede il rafforzamento delle attività operative, lo sviluppo di nuove divisioni e, in prospettiva, la quotazione in mercati regolamentati.',
   ],
   opportunity_paragraphs_en: [
-    'The Board of Directors of Dubai Rent 7.0 S.p.A. has resolved to selectively open the share capital to private investors and strategic partners, with the aim of supporting the growth and international expansion of the brand.',
+    'The Board of Directors of DR7 S.p.A. has resolved to selectively open the share capital to private investors and strategic partners, with the aim of supporting the growth and international expansion of the brand.',
     'Entry into the share capital is reserved for qualified parties, selected directly by General Management, in compliance with applicable regulations and internal assessment procedures.',
     'The objective is to strengthen the company\'s capital structure and accelerate the Vision 2030 plan, which foresees reinforcing operations, developing new divisions and, in due course, listing on regulated markets.',
   ],
   opportunity_paragraphs: [
-    'Il Consiglio di Amministrazione di Dubai Rent 7.0 S.p.A. ha deliberato l\'apertura selettiva del capitale sociale a investitori privati e partner strategici, con l\'intento di favorire la crescita e l\'espansione del brand a livello internazionale.',
+    'Il Consiglio di Amministrazione di DR7 S.p.A. ha deliberato l\'apertura selettiva del capitale sociale a investitori privati e partner strategici, con l\'intento di favorire la crescita e l\'espansione del brand a livello internazionale.',
     'L\'ingresso nel capitale è riservato a soggetti qualificati, selezionati direttamente dalla Direzione Generale, nel rispetto delle normative vigenti e delle procedure interne di valutazione.',
     'L\'obiettivo è consolidare la struttura patrimoniale della società e accelerare il piano Vision 2030, che prevede il rafforzamento delle attività operative, lo sviluppo di nuove divisioni e, in prospettiva, la quotazione in mercati regolamentati.',
   ],
@@ -2578,7 +2578,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   info_heading_it: 'Informazioni sintetiche',
   info_heading_en: 'Summary information',
   info_items: [
-    { label: 'Denominazione',                 label_it: 'Denominazione',                 label_en: 'Company name',                value: 'Dubai Rent 7.0 S.p.A.', value_it: 'Dubai Rent 7.0 S.p.A.', value_en: 'Dubai Rent 7.0 S.p.A.' },
+    { label: 'Denominazione',                 label_it: 'Denominazione',                 label_en: 'Company name',                value: 'DR7 S.p.A.', value_it: 'DR7 S.p.A.', value_en: 'DR7 S.p.A.' },
     { label: 'Sede legale',                   label_it: 'Sede legale',                   label_en: 'Registered office',           value: 'Cagliari, Italia', value_it: 'Cagliari, Italia', value_en: 'Cagliari, Italy' },
     { label: 'Settore',                       label_it: 'Settore',                       label_en: 'Sector',                      value: 'Luxury Mobility & Lifestyle', value_it: 'Luxury Mobility & Lifestyle', value_en: 'Luxury Mobility & Lifestyle' },
     { label: 'Forma giuridica',               label_it: 'Forma giuridica',               label_en: 'Legal form',                  value: 'Società per Azioni', value_it: 'Società per Azioni', value_en: 'Joint-stock company (S.p.A.)' },
@@ -2595,15 +2595,15 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   legal_heading_en: 'Legal disclaimer',
   legal_paragraphs_it: [
     'Le informazioni contenute in questa sezione hanno finalità esclusivamente informative e non costituiscono, in alcun modo, un\'offerta pubblica di sottoscrizione o una sollecitazione all\'investimento ai sensi dell\'art. 94 del D.Lgs. 58/1998 (TUF) e della normativa europea vigente.',
-    'L\'adesione a operazioni di partecipazione al capitale è riservata a soggetti selezionati, previa valutazione da parte di Dubai Rent 7.0 S.p.A. e nel pieno rispetto delle procedure legali e regolamentari applicabili.',
+    'L\'adesione a operazioni di partecipazione al capitale è riservata a soggetti selezionati, previa valutazione da parte di DR7 S.p.A. e nel pieno rispetto delle procedure legali e regolamentari applicabili.',
   ],
   legal_paragraphs_en: [
     'The information in this section is provided for information purposes only and does not constitute, in any way, a public offer of subscription or an investment solicitation under art. 94 of Italian Legislative Decree 58/1998 (TUF) or applicable European regulations.',
-    'Participation in equity transactions is reserved for selected parties, subject to assessment by Dubai Rent 7.0 S.p.A. and in full compliance with the applicable legal and regulatory procedures.',
+    'Participation in equity transactions is reserved for selected parties, subject to assessment by DR7 S.p.A. and in full compliance with the applicable legal and regulatory procedures.',
   ],
   legal_paragraphs: [
     'Le informazioni contenute in questa sezione hanno finalità esclusivamente informative e non costituiscono, in alcun modo, un\'offerta pubblica di sottoscrizione o una sollecitazione all\'investimento ai sensi dell\'art. 94 del D.Lgs. 58/1998 (TUF) e della normativa europea vigente.',
-    'L\'adesione a operazioni di partecipazione al capitale è riservata a soggetti selezionati, previa valutazione da parte di Dubai Rent 7.0 S.p.A. e nel pieno rispetto delle procedure legali e regolamentari applicabili.',
+    'L\'adesione a operazioni di partecipazione al capitale è riservata a soggetti selezionati, previa valutazione da parte di DR7 S.p.A. e nel pieno rispetto delle procedure legali e regolamentari applicabili.',
   ],
 };
 
@@ -2793,7 +2793,7 @@ export const INITIAL_CONTACT: ContactCopy = {
   hours_lines_it: ['Lun–Ven: 9:00–13:00 / 15:00–19:00', 'Sabato: 9:00–17:00', 'Domenica: Chiuso'],
   hours_lines_en: ['Mon–Fri: 9:00–13:00 / 15:00–19:00', 'Saturday: 9:00–17:00', 'Sunday: Closed'],
   office_heading_it: 'Sede Operativa', office_heading_en: 'Operating Office',
-  office_company_name: 'Dubai Rent 7.0 S.p.A.',
+  office_company_name: 'DR7 S.p.A.',
   office_address_it: 'Viale Marconi, 229 – 09131 Cagliari (CA), Italia',
   office_address_en: 'Viale Marconi, 229 – 09131 Cagliari (CA), Italy',
   office_piva: 'P.IVA / C.F.: 04104640927',
@@ -3166,7 +3166,7 @@ export const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
   contact_label_it: 'Per assistenza o informazioni:',
   contact_label_en: 'For assistance or information:',
   contact_email: 'info@dr7.app',
-  contact_address: 'Dubai Rent 7.0 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
+  contact_address: 'DR7 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
   last_updated_it: 'Ultimo aggiornamento: 10 aprile 2026',
   last_updated_en: 'Last updated: April 10, 2026',
   sections: [
@@ -3177,8 +3177,8 @@ export const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
       title_en: '1. Scope of application',
       blocks: [
         { type: 'p',
-          text_it: 'La presente policy disciplina le condizioni di cancellazione e gestione delle prenotazioni relative a tutti i servizi erogati da Dubai Rent 7.0 S.p.A. (DR7), inclusi – a titolo esemplificativo e non esaustivo – noleggio veicoli, servizi accessori, esperienze e qualsiasi altra prestazione disponibile.',
-          text_en: 'This policy governs the cancellation and management conditions for bookings related to all services provided by Dubai Rent 7.0 S.p.A. (DR7), including – but not limited to – vehicle rental, ancillary services, experiences, and any other available service.' },
+          text_it: 'La presente policy disciplina le condizioni di cancellazione e gestione delle prenotazioni relative a tutti i servizi erogati da DR7 S.p.A., inclusi – a titolo esemplificativo e non esaustivo – noleggio veicoli, servizi accessori, esperienze e qualsiasi altra prestazione disponibile.',
+          text_en: 'This policy governs the cancellation and management conditions for bookings related to all services provided by DR7 S.p.A., including – but not limited to – vehicle rental, ancillary services, experiences, and any other available service.' },
         { type: 'p',
           text_it: 'La policy si applica a tutte le prenotazioni effettuate tramite:',
           text_en: 'The policy applies to all bookings made via:' },
@@ -3347,8 +3347,8 @@ export const INITIAL_LEGAL: LegalCopy = {
         { id: 'introduzione', heading_it: '1. Introduzione e Titolare del Trattamento', heading_en: '1. Introduction and Data Controller',
           blocks: [
             { type: 'p',
-              text_it: 'Dubai Rent 7.0 S.p.A. – DR7 ("noi", "nostro" o "ci") si impegna a proteggere la tua privacy. Questa Informativa sulla Privacy spiega come raccogliamo, utilizziamo, divulghiamo e proteggiamo i tuoi dati personali quando utilizzi i nostri servizi. Questa informativa è fornita in conformità con il Regolamento Generale sulla Protezione dei Dati (GDPR) dell\'UE.',
-              text_en: 'Dubai Rent 7.0 S.p.A. – DR7 ("we", "our" or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal data when you use our services. This notice is provided in compliance with the EU General Data Protection Regulation (GDPR).' },
+              text_it: 'DR7 S.p.A. ("noi", "nostro" o "ci") si impegna a proteggere la tua privacy. Questa Informativa sulla Privacy spiega come raccogliamo, utilizziamo, divulghiamo e proteggiamo i tuoi dati personali quando utilizzi i nostri servizi. Questa informativa è fornita in conformità con il Regolamento Generale sulla Protezione dei Dati (GDPR) dell\'UE.',
+              text_en: 'DR7 S.p.A. ("we", "our" or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal data when you use our services. This notice is provided in compliance with the EU General Data Protection Regulation (GDPR).' },
             { type: 'p',
               text_it: 'DR7 è il Titolare del Trattamento dei dati personali raccolti attraverso la nostra piattaforma ed è responsabile dei tuoi dati personali.',
               text_en: 'DR7 is the Data Controller for personal data collected via our platform and is responsible for your personal data.' },
@@ -3458,8 +3458,8 @@ export const INITIAL_LEGAL: LegalCopy = {
       ],
       outro_blocks: [
         { type: 'p-italic',
-          text_it: 'Dubai Rent 7.0 S.p.A.\nViale Marconi, 229, 09131 Cagliari CA\nEmail: info@dr7.app',
-          text_en: 'Dubai Rent 7.0 S.p.A.\nViale Marconi, 229, 09131 Cagliari CA\nEmail: info@dr7.app' },
+          text_it: 'DR7 S.p.A.\nViale Marconi, 229, 09131 Cagliari CA\nEmail: info@dr7.app',
+          text_en: 'DR7 S.p.A.\nViale Marconi, 229, 09131 Cagliari CA\nEmail: info@dr7.app' },
       ],
     },
     {
