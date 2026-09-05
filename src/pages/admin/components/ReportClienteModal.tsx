@@ -17,6 +17,7 @@ import {
   type ClientStatusDef,
 } from '../../../utils/clientStatusConfig'
 import { computeAnnualSpend } from '../../../utils/dr7ClubTierSpend'
+import { loadClubTiers, pickClubTier, DEFAULT_CLUB_TIERS, type ClubTierDef } from '../../../utils/dr7ClubTiers'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -121,6 +122,14 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
   const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
   const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
+  // Livelli DR7 Club come configurati in Centralina Pro (non piu' i tre
+  // Access/Black/Signature scritti nel codice: l'operatore ne puo' avere 30).
+  const [clubTiers, setClubTiers] = useState<ClubTierDef[]>(DEFAULT_CLUB_TIERS)
+  useEffect(() => {
+    let alive = true
+    loadClubTiers().then(t => { if (alive) setClubTiers(t) })
+    return () => { alive = false }
+  }, [])
   const [documents, setDocuments] = useState<DocRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('stato')
@@ -412,14 +421,29 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     const { annualSpend, bookingSpend: cardBookingSpend, rechargeSpend, rechargeCount } =
       computeAnnualSpend(bookings, walletRecharges, customer?.user_id)
 
-    if (annualSpend >= 10000) {
-      return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
+    // 04/09/2026 — I livelli arrivano da Centralina Pro > DR7 Club. Prima
+    // erano tre soglie scritte qui dentro: aggiungerne di nuovi in Centralina
+    // non cambiava nulla ne' qui ne' sul sito, mentre il cashback (che i
+    // livelli li legge davvero) pagava gia' con le percentuali nuove.
+    const match = pickClubTier(annualSpend, clubTiers)
+    const isTop = match.next === null && match.tier !== 'none'
+    const badge = match.tier === 'none'
+      ? 'bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-400/50'
+      : isTop
+        ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+        : 'bg-dr7-gold/15 text-dr7-gold border-dr7-gold/40'
+    return {
+      tier: match.tier,
+      label: match.label,
+      reward: match.rewardPercent,
+      annualSpend, cardBookingSpend, rechargeSpend, rechargeCount,
+      currentThreshold: match.min,
+      nextThreshold: match.next ? match.next.min : null,
+      nextLabel: match.next ? match.next.label : null,
+      isTop,
+      badge,
     }
-    if (annualSpend >= 3000) {
-      return { tier: 'black', label: 'Black', reward: 3, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 10000, badge: 'bg-zinc-900 text-white border-zinc-900' }
-    }
-    return { tier: 'access', label: 'Access', reward: 2, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 3000, badge: 'bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-400/50' }
-  }, [bookings, walletRecharges, customer?.user_id])
+  }, [bookings, walletRecharges, customer?.user_id, clubTiers])
 
   // Risk / reliability score (0-10)
   const riskScore = useMemo(() => {
@@ -759,8 +783,8 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-600 hover:bg-red-700 border-2 border-theme-bg-primary flex items-center justify-center text-white text-xs font-bold"
                   >×</button>
                 )}
-                {clubTier.tier === 'signature' && (
-                  <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-amber-400 border-2 border-theme-bg-primary flex items-center justify-center text-theme-bg-primary text-sm" title="Signature">
+                {clubTier.isTop && (
+                  <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-amber-400 border-2 border-theme-bg-primary flex items-center justify-center text-theme-bg-primary text-sm" title={clubTier.label}>
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
                   </div>
                 )}
@@ -870,15 +894,14 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
         {/* DR7 Club tier progress — same panel as the customer sees on website */}
         {(() => {
-          const nextLabel = clubTier.nextThreshold === 10000 ? 'Signature' : 'Black'
+          const nextLabel = clubTier.nextLabel
           const nextThr = clubTier.nextThreshold
-          const prevThr = clubTier.tier === 'access' ? 0 : clubTier.tier === 'black' ? 3000 : 10000
-          const progress = nextThr
-            ? Math.min(100, Math.max(0, Math.round(((clubTier.annualSpend - prevThr) / (nextThr - prevThr)) * 100)))
+          const prevThr = clubTier.currentThreshold
+          const span = nextThr !== null ? nextThr - prevThr : 0
+          const progress = nextThr !== null && span > 0
+            ? Math.min(100, Math.max(0, Math.round(((clubTier.annualSpend - prevThr) / span) * 100)))
             : 100
-          const progressColor =
-            clubTier.tier === 'signature' ? 'bg-amber-400' :
-            clubTier.tier === 'black' ? 'bg-zinc-900' : 'bg-dr7-gold'
+          const progressColor = clubTier.isTop ? 'bg-amber-400' : 'bg-dr7-gold'
           return (
             <div className="px-6 py-4 border-b border-theme-border shrink-0">
               <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4">
@@ -918,22 +941,16 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     🏆 Livello massimo raggiunto
                   </div>
                 )}
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'access' ? 'border-gray-400/60 bg-gray-500/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
-                    <div className="text-[11px] font-semibold text-theme-text-primary">Access</div>
-                    <div className="text-[10px] text-theme-text-muted">€0 – €2.999</div>
-                    <div className="text-[10px] text-theme-text-muted">2% reward</div>
-                  </div>
-                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'black' ? 'border-zinc-900/70 bg-zinc-900/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
-                    <div className="text-[11px] font-semibold text-theme-text-primary">Black</div>
-                    <div className="text-[10px] text-theme-text-muted">€3.000 – €9.999</div>
-                    <div className="text-[10px] text-theme-text-muted">3% reward</div>
-                  </div>
-                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'signature' ? 'border-amber-400/60 bg-amber-500/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
-                    <div className="text-[11px] font-semibold text-theme-text-primary">Signature</div>
-                    <div className="text-[10px] text-theme-text-muted">da €10.000</div>
-                    <div className="text-[10px] text-theme-text-muted">4% reward</div>
-                  </div>
+                {/* Tutti i livelli configurati in Centralina Pro. Possono
+                    essere trenta: la griglia va a capo e non li taglia. */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 mt-4">
+                  {clubTiers.map((t) => (
+                    <div key={t.tier} className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === t.tier ? 'border-dr7-gold/60 bg-dr7-gold/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
+                      <div className="text-[11px] font-semibold text-theme-text-primary truncate" title={t.label}>{t.label}</div>
+                      <div className="text-[10px] text-theme-text-muted tabular-nums">{t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)} – ${fmtEur(t.max)}`}</div>
+                      <div className="text-[10px] text-theme-text-muted">{t.rewardPercent}% reward</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

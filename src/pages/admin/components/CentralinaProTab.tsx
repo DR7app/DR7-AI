@@ -7,6 +7,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import AddressAutocomplete from './AddressAutocomplete'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { invalidatePaymentMethodsCache } from '../../../hooks/usePaymentMethods'
+import { invalidateClubTiersCache } from '../../../utils/dr7ClubTiers'
 import { reloadAutoInvoiceConfig } from '../../../utils/paymentMethodAutoInvoice'
 import { svuotaCacheBusinessConfig } from '../../../utils/businessConfigClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -2069,6 +2070,9 @@ export default function CentralinaProTab() {
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
+    // Stessa ragione per i livelli DR7 Club: la scheda cliente li legge una
+    // volta sola per sessione di pagina.
+    invalidateClubTiersCache()
     // Bust the auto_invoice cache: il flag Fattura per ciascun metodo viene
     // letto dai flussi booking (CarWash + Reservations) prima di generare
     // la fattura. Senza questa invalidazione, modifiche fatte adesso non
