@@ -256,6 +256,11 @@ export interface HomeCopy {
   collection_eyebrow_it: string; collection_eyebrow_en: string;
   collection_title_it: string; collection_title_en: string;
   collection_intro_it: string; collection_intro_en: string;
+  /**
+   * L'immagine dell'atto. Percorso sotto /public (es. "/collezione.jpeg").
+   * Vuota = l'atto non viene mostrato.
+   */
+  collection_image: string;
   /** Id veicolo da mettere in evidenza. Vuoto = i primi disponibili. */
   collection_featured_ids: string[];
   collection_featured_count: number;
@@ -2966,6 +2971,7 @@ export const INITIAL_HOME: HomeCopy = {
   collection_title_en: 'The Collection',
   collection_intro_it: 'Una selezione ristretta. Il catalogo completo \u00e8 a un passo.',
   collection_intro_en: 'A short selection. The full catalogue is one step away.',
+  collection_image: '/collezione.jpeg',
   collection_featured_ids: [],
   collection_featured_count: 3,
   collection_cta_label_it: 'Esplora la collezione',

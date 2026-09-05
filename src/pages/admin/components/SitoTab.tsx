@@ -2248,10 +2248,10 @@ function HomeEditor({
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">La Collezione</h3>
                 <p className="text-[12px] text-theme-text-secondary">
-                    I veicoli in evidenza arrivano dal gestionale. Lasciando vuoto l'elenco degli id si prendono
-                    i primi delle categorie visibili in Flotta; scrivendo degli id si mostrano quelli, in
-                    quell'ordine. Nessun veicolo viene inventato: se il gestionale non ne restituisce, la
-                    sezione non compare.
+                    Un'immagine sola, poi l'invito al catalogo. L'immagine e' un file dentro la cartella
+                    public del sito: si scrive il percorso, per esempio <code>/collezione.jpeg</code>.
+                    Lasciando il campo vuoto l'intera sezione non compare. Le categorie si raggiungono
+                    dalla CTA finale e dal menu, non piu' da qui.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Occhiello (IT)" value={copy.collection_eyebrow_it} onChange={v => updateField('collection_eyebrow_it', v)} />
@@ -2263,16 +2263,12 @@ function HomeEditor({
                     <FieldTextArea label="Introduzione (IT)" value={copy.collection_intro_it} onChange={v => updateField('collection_intro_it', v)} />
                     <FieldTextArea label="Introduzione (EN)" value={copy.collection_intro_en} onChange={v => updateField('collection_intro_en', v)} />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FieldText label="Quanti veicoli in evidenza" value={String(copy.collection_featured_count)} onChange={v => updateField('collection_featured_count', Math.max(1, Math.min(8, Number(v) || 3)))} />
-                    <FieldText label="CTA sotto ogni veicolo (IT)" value={copy.collection_item_cta_it} onChange={v => updateField('collection_item_cta_it', v)} />
-                    <FieldText label="CTA sotto ogni veicolo (EN)" value={copy.collection_item_cta_en} onChange={v => updateField('collection_item_cta_en', v)} />
-                </div>
-                <FieldTextArea
-                    label="Id dei veicoli in evidenza — uno per riga, vuoto = automatico"
-                    value={copy.collection_featured_ids.join('\n')}
-                    onChange={v => updateField('collection_featured_ids', v.split('\n').map(r => r.trim()).filter(Boolean))}
-                />
+                <FieldText label="Immagine — percorso sotto public (es. /collezione.jpeg)" value={copy.collection_image} onChange={v => updateField('collection_image', v)} />
+                {/* 05/09/2026 - tolti "Quanti veicoli in evidenza", le due CTA per
+                    veicolo e l'elenco degli id: la home non monta piu' le tre tavole
+                    dei veicoli, quindi erano campi che si salvavano senza cambiare
+                    niente. Le chiavi restano in siteCopy, cosi' nessun valore gia'
+                    scritto va perso se un giorno le tavole tornano. */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FieldText label="CTA finale (IT)" value={copy.collection_cta_label_it} onChange={v => updateField('collection_cta_label_it', v)} />
                     <FieldText label="CTA finale (EN)" value={copy.collection_cta_label_en} onChange={v => updateField('collection_cta_label_en', v)} />
