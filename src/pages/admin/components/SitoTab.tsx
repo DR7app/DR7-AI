@@ -3500,18 +3500,6 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 </div>
                 <FieldText label="P.IVA / C.F." value={copy.office_piva} onChange={v => update('office_piva', v)} />
             </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Mappa</h3>
-                <FieldText label="Title accessibilità (IT)" value={copy.map_title_it ?? ''} onChange={v => update('map_title_it', v)} />
-                <FieldText label="Title accessibility (EN)" value={copy.map_title_en ?? ''} onChange={v => update('map_title_en', v)} />
-                <FieldText label="URL iframe (OpenStreetMap embed)" value={copy.map_iframe_url} onChange={v => update('map_iframe_url', v)} />
-                {copy.map_iframe_url && (
-                    <div className="rounded-xl overflow-hidden border border-theme-border">
-                        <iframe title={copy.map_title || 'preview'} src={copy.map_iframe_url} width="100%" height="200" style={{ border: 0 }} loading="lazy" />
-                    </div>
-                )}
-            </section>
         </div>
     )
 }
