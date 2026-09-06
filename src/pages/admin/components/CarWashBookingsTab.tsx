@@ -629,12 +629,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   // Service filtering
   const categoryLabels: Record<string, string> = {
-    urban: 'PRIME URBAN CLASS',
-    maxi: 'PRIME MAXI CLASS',
-    extra: 'PRIME EXTRA CARE',
-    moto: 'PRIME MOTO',
-    experience: 'PRIME EXPERIENCE',
-    tech: 'PRIME TECH SERVICE'
+    urban: 'URBAN CLASS',
+    maxi: 'MAXI CLASS',
+    extra: 'EXTRA CARE',
+    moto: 'MOTO',
+    experience: 'EXPERIENCE',
+    tech: 'TECH SERVICE'
   }
 
   // Fixed service numbers matching the flyer/marketing material

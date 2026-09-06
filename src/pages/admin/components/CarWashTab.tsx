@@ -288,14 +288,14 @@ export default function CarWashTab() {
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="PRIME FULL CLEAN"
+              placeholder="FULL CLEAN"
             />
             <Input
               label="Nome (Inglese)"
               required
               value={formData.name_en}
               onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
-              placeholder="PRIME FULL CLEAN"
+              placeholder="FULL CLEAN"
             />
             <Input
               label="Durata"
@@ -322,12 +322,12 @@ export default function CarWashTab() {
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
               >
-                <option value="urban">PRIME URBAN CLASS</option>
-                <option value="maxi">PRIME MAXI CLASS</option>
-                <option value="extra">PRIME EXTRA CARE</option>
-                <option value="moto">PRIME MOTO</option>
-                <option value="experience">PRIME EXPERIENCE</option>
-                <option value="tech">PRIME TECH SERVICE</option>
+                <option value="urban">URBAN CLASS</option>
+                <option value="maxi">MAXI CLASS</option>
+                <option value="extra">EXTRA CARE</option>
+                <option value="moto">MOTO</option>
+                <option value="experience">EXPERIENCE</option>
+                <option value="tech">TECH SERVICE</option>
               </select>
             </div>
             <div>
