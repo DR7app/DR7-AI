@@ -211,6 +211,18 @@ export const handler: Handler = async (event) => {
         return handleWalletPurchaseFattura(purchaseId, purchaseData, !!includeIVA)
     }
 
+    // ── FATTURA DR7 CLUB (senza autenticazione, stessa capability) ────────
+    // 06/09/2026 — l'iscrizione al Club pagava e non riceveva niente.
+    // nexi-callback chiamava questa funzione con purchaseType
+    // 'membership_purchase', che qui non esisteva: senza bookingId e senza
+    // header di autorizzazione la richiesta cadeva nel 401 poco sotto. E
+    // siccome la chiamata era a vuoto (nessun controllo sulla risposta), nei
+    // log restava scritto "Fattura generated for membership" mentre nel
+    // database non c'era nulla.
+    if (purchaseType === 'membership_purchase' && purchaseId) {
+        return handleMembershipPurchaseFattura(purchaseId, purchaseData, !!includeIVA)
+    }
+
     // Booking flow — require admin auth UNLESS this is a server-to-server
     // callback from the website's nexi-callback.js. The website doesn't have
     // ADMIN_API_TOKEN set in its Netlify env, so every booking fattura call
@@ -1565,6 +1577,213 @@ async function handleWalletPurchaseFattura(
  * fatture and for backfills (existing fattura with no pdf_url).
  * Returns the public pdf_url, or null if upload failed.
  */
+/**
+ * Fattura dell'iscrizione DR7 Club.
+ *
+ * Gemella di handleWalletPurchaseFattura: stessa capability (l'id della riga
+ * pagata al posto del token), stessa numerazione atomica, stesso PDF via
+ * WhatsApp, stesso invio allo SDI quando il cliente ha CF o P.IVA.
+ * Cambia la tabella (membership_purchases) e la descrizione della riga.
+ */
+async function handleMembershipPurchaseFattura(
+    purchaseId: string,
+    purchaseData: Record<string, any> | null | undefined,
+    includeIVA: boolean,
+): Promise<{ statusCode: number; body: string }> {
+    try {
+        const dynamicVatRate = await loadVatRate()
+
+        // 1. La riga dell'iscrizione, e deve risultare pagata.
+        const { data: purchase, error: purchErr } = await supabase
+            .from('membership_purchases')
+            .select('*')
+            .eq('id', purchaseId)
+            .single()
+
+        if (purchErr || !purchase) {
+            return { statusCode: 404, body: JSON.stringify({ error: 'Membership purchase not found', purchaseId }) }
+        }
+        const PAID_STATUSES = ['succeeded', 'completed', 'paid']
+        if (!PAID_STATUSES.includes(String(purchase.payment_status || '').toLowerCase())) {
+            return { statusCode: 400, body: JSON.stringify({ error: `Purchase not paid (status: ${purchase.payment_status})` }) }
+        }
+
+        // 2. Il cliente. Prima per id, poi per user_id: sono due modi di
+        // collegare la stessa persona a customers_extended.
+        const userId = purchase.user_id
+        let customerData: any = null
+        if (userId) {
+            const { data: byId } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle()
+            customerData = byId
+            if (!customerData) {
+                const { data: byUserId } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .maybeSingle()
+                customerData = byUserId
+            }
+        }
+
+        // 3. Una sola fattura per iscrizione: il callback Nexi puo' arrivare
+        // piu' volte. Se esiste ma le manca il PDF, lo si rifa'.
+        const notesMarker = `membership_purchase:${purchaseId}`
+        const { data: existingFattura } = await supabase
+            .from('fatture')
+            .select('*')
+            .eq('note', notesMarker)
+            .maybeSingle()
+        if (existingFattura) {
+            console.log(`[Club Fattura] Già generata per ${purchaseId}: ${existingFattura.numero_fattura}`)
+            if (!existingFattura.pdf_url) {
+                const backfilledUrl = await sendWalletFatturaPdfAndWhatsApp(existingFattura, customerData)
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: 'Fattura already existed — PDF and WhatsApp backfilled',
+                        invoice: { ...existingFattura, pdf_url: backfilledUrl },
+                        backfilled: true,
+                    })
+                }
+            }
+            return { statusCode: 200, body: JSON.stringify({ message: 'Fattura already exists', invoice: existingFattura, skipped: true }) }
+        }
+
+        // 4. L'importo pagato con la carta e' LORDO (IVA inclusa).
+        const paidAmount = Number(purchase.price ?? purchaseData?.price ?? 0)
+        if (!(paidAmount > 0)) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Invalid purchase amount (0 or missing)' }) }
+        }
+        const vatRate = includeIVA ? dynamicVatRate : 0
+        const vatDivisor = includeIVA ? 1 + dynamicVatRate / 100 : 1
+        const netUnit = Number((paidAmount / vatDivisor).toFixed(2))
+
+        const cicloRaw = String(purchase.billing_cycle || purchaseData?.billingCycle || '').toLowerCase()
+        const ciclo = cicloRaw === 'monthly' ? 'Mensile' : cicloRaw === 'annually' || cicloRaw === 'annual' || cicloRaw === 'yearly' ? 'Annuale' : ''
+        const nomePiano = purchase.tier_name || purchaseData?.tierName || 'DR7 Club'
+        const descr = ciclo
+            ? `Iscrizione DR7 Club - ${nomePiano} (${ciclo})`
+            : `Iscrizione DR7 Club - ${nomePiano}`
+
+        const items = [{
+            description: descr,
+            unit_price: netUnit,
+            quantity: 1,
+            vat_rate: vatRate,
+            total: netUnit,
+        }]
+        const subtotal = netUnit
+        // L'IVA e' la differenza, non il netto per l'aliquota: cosi' il totale
+        // resta al centesimo quello che il cliente ha pagato.
+        const total = paidAmount
+        const vatAmount = Number((total - subtotal).toFixed(2))
+
+        // 5. Numero fattura: stessa sequenza atomica del resto.
+        const currentYear = new Date().getFullYear()
+        let invoiceNumber = ''
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+            if (seqError || seqResult == null) {
+                console.error('[Club Fattura] Sequence error:', seqError)
+                return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate invoice number' }) }
+            }
+            const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+            const { data: exist } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+            if (!exist) { invoiceNumber = candidate; break }
+        }
+        if (!invoiceNumber) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate unique invoice number' }) }
+        }
+
+        // 6. Intestazione. L'indirizzo si compone in un posto solo: senza via
+        // non si scrive niente, altrimenti esce una fattura con dentro "CA".
+        const fullAddress = componiIndirizzo({
+            via: customerData?.indirizzo || '',
+            civico: customerData?.numero_civico || '',
+            cap: customerData?.codice_postale || customerData?.cap || '',
+            citta: customerData?.citta || customerData?.citta_residenza || '',
+            provincia: customerData?.provincia || customerData?.provincia_residenza || '',
+        })
+        const isAziendaCustomer = customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione'
+        const customerName = isAziendaCustomer
+            ? (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente')
+            : (customerData?.nome
+                ? `${customerData.nome} ${customerData.cognome || ''}`.trim()
+                : (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente'))
+
+        const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        const invoiceData: Record<string, any> = {
+            numero_fattura: invoiceNumber,
+            data_emissione: italyDate,
+            importo_totale: total,
+            stato: 'paid',
+            customer_name: customerName,
+            customer_address: fullAddress,
+            customer_phone: customerData?.telefono || customerData?.phone || '',
+            customer_email: customerData?.email || '',
+            customer_tax_code: customerData?.codice_fiscale || '',
+            customer_vat: customerData?.partita_iva || '',
+            booking_id: null,
+            items,
+            subtotal,
+            vat_amount: vatAmount,
+            exempt_amount: 0,
+            sdi_status: 'draft',
+            note: notesMarker,
+            updated_at: new Date().toISOString(),
+        }
+
+        const { data: invoice, error: insertError } = await supabase
+            .from('fatture')
+            .insert([invoiceData])
+            .select()
+            .single()
+
+        if (insertError || !invoice) {
+            console.error('[Club Fattura] Insert failed:', insertError)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to insert fattura', details: insertError?.message }) }
+        }
+
+        // 7. PDF + WhatsApp, poi SDI. Se falliscono la fattura resta salvata.
+        const clubPdfUrl = await sendWalletFatturaPdfAndWhatsApp(invoice as any, customerData)
+
+        if (invoice.customer_tax_code || invoice.customer_vat) {
+            try {
+                const xmlContent = generateFatturaXML(invoice as any)
+                const filename = generateInvoiceFilename(invoice as any)
+                const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+                await supabase.from('fatture').update({
+                    sdi_status: 'sending',
+                    aruba_invoice_id: arubaResult.id,
+                    xml_filename: filename,
+                    aruba_upload_filename: arubaResult.filename,
+                    sdi_sent_at: new Date().toISOString(),
+                }).eq('id', invoice.id)
+                console.log('[Club Fattura] Inviata allo SDI:', arubaResult.id)
+            } catch (sdiErr: any) {
+                console.error('[Club Fattura] Invio SDI fallito (fattura salvata come bozza):', sdiErr?.message)
+                await supabase.from('fatture').update({
+                    sdi_response: { auto_send_error: String(sdiErr?.message || sdiErr), at: new Date().toISOString() }
+                }).eq('id', invoice.id)
+            }
+        } else {
+            console.log('[Club Fattura] Nessun codice fiscale: SDI saltato')
+        }
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ success: true, invoice, pdfUrl: clubPdfUrl, message: 'Membership purchase fattura generated' })
+        }
+    } catch (error: any) {
+        console.error('[Club Fattura] Errore inatteso:', error)
+        return { statusCode: 500, body: JSON.stringify({ error: error.message || 'Unexpected error', stack: error.stack }) }
+    }
+}
+
 async function sendWalletFatturaPdfAndWhatsApp(
     invoice: any,
     customerData: any
