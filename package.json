@@ -17,7 +17,10 @@
     "test:watch": "vitest",
     "sito:gen": "node scripts/genSiteCopyDefaults.mjs",
     "sito:check": "node scripts/genSiteCopyDefaults.mjs --check && node scripts/checkSitoSiteMap.mjs",
-    "sito:gaps": "node scripts/sitoGaps.mjs"
+    "sito:gaps": "node scripts/sitoGaps.mjs",
+    "wb:sync": "node scripts/syncWebsiteBuilder.mjs",
+    "wb:check": "node scripts/syncWebsiteBuilder.mjs --check",
+    "wb:verifica": "node scripts/verificaWebsiteBuilder.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -48,6 +51,7 @@
     "resend": "^6.9.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.36.0",
     "@types/jszip": "^3.4.0",
     "@types/node": "^24.6.0",

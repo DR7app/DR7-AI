@@ -88,6 +88,9 @@ const SystemControlTab = lazyWithRetry(() => import('./components/SystemControlT
 
 const AccontiTab = lazyWithRetry(() => import('./components/AccontiTab'))
 const SitoTab = lazyWithRetry(() => import('./components/SitoTab'))
+// Website Builder (04/09/2026): struttura, tema, media e versioni del sito
+// pubblico. Affiancato a SitoTab, che continua a gestirne i testi.
+const WebsiteBuilderTab = lazyWithRetry(() => import('./components/WebsiteBuilderTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 const DocumentsVerificationTab = lazyWithRetry(() => import('./components/DocumentsVerificationTab'))
 const EMTNTab = lazyWithRetry(() => import('./components/EMTNTab'))
@@ -97,7 +100,7 @@ const GpsKeylessTab = lazyWithRetry(() => import('./components/GpsKeylessTab'))
 // una rotella. Con il precarico al passaggio del mouse quasi non si vede.
 const TabLoader = () => <ScheletroPagina card={4} righe={8} />
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control' | 'website-builder'
 
 /**
  * Chunk di ogni tab, per poterlo scaricare PRIMA del clic.
@@ -200,6 +203,7 @@ const CHUNK_TAB: Partial<Record<TabType, { preload: () => void }>> = {
   'system-control': SystemControlTab,
   'acconti': AccontiTab,
   'sito': SitoTab,
+  'website-builder': WebsiteBuilderTab,
   'gestione-otp': GestioneOtpTab,
   'verifica-documenti': DocumentsVerificationTab,
   'fornitori': FornitoriTab,
@@ -722,6 +726,10 @@ export default function AdminDashboard() {
     ] },
     { name: 'Sito', tabs: [
       { tab: 'sito', label: 'Sito' },
+      // 04/09/2026: il Website Builder sta accanto ai testi, non al posto
+      // loro. "Sito" resta la via rapida per correggere una frase; qui si
+      // cambia com'e' fatta la pagina.
+      { tab: 'website-builder', label: 'Website Builder' },
     ] },
     { name: 'DR7 Trust', tabs: [
       { tab: 'trustera', label: 'DR7 Trust' },
@@ -1584,6 +1592,7 @@ export default function AdminDashboard() {
           {activeTab === 'system-control' && <SystemControlTab />}
           {activeTab === 'acconti' && <AccontiTab />}
           {activeTab === 'sito' && <SitoTab />}
+          {activeTab === 'website-builder' && <WebsiteBuilderTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
           {activeTab === 'verifica-documenti' && <DocumentsVerificationTab />}
           {activeTab === 'fornitori' && <FornitoriTab />}
