@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 73
+ * Sezioni generate: 36 — interfacce: 74
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -142,6 +142,13 @@ export interface MembershipRewardItem {
   note_en: string | null;
 }
 
+/** Una riga della tabella d'esempio del Privilege Bonus. */
+export interface MembershipPrivilegeRow {
+  label_it: string;
+  label_en: string;
+  value: string;        // "€1", "€30", ... — testo libero, lo scrive l'admin
+}
+
 export interface MembershipCopy {
   // Hero band
   hero_eyebrow_it: string; hero_eyebrow_en: string;
@@ -180,6 +187,24 @@ export interface MembershipCopy {
   reward_intro_it: string; reward_intro_en: string;
   reward_items: MembershipRewardItem[];
   reward_footnote_it: string; reward_footnote_en: string;
+
+  // ─── DR7 Club Privilege (maturazione giornaliera sul Wallet) ──────────
+  // OPZIONALI: la riga `membership` gia' salvata in centralina_pro_config
+  // non li contiene, e getMembershipCopy la restituisce cosi' com'e'. Se
+  // fossero obbligatori la pagina si svuoterebbe per tutti fino alla
+  // migrazione dei dati. Il valore di fabbrica arriva dalla fusione con
+  // INITIAL_MEMBERSHIP dentro getMembershipCopy.
+  privilege_eyebrow_it?: string; privilege_eyebrow_en?: string;
+  privilege_title_it?: string; privilege_title_en?: string;
+  privilege_intro_it?: string; privilege_intro_en?: string;
+  privilege_claim_1_it?: string; privilege_claim_1_en?: string;
+  privilege_claim_2_it?: string; privilege_claim_2_en?: string;
+  privilege_calc_it?: string; privilege_calc_en?: string;
+  privilege_example_label_it?: string; privilege_example_label_en?: string;
+  privilege_rows?: MembershipPrivilegeRow[];
+  privilege_principle_it?: string; privilege_principle_en?: string;
+  privilege_usage_it?: string; privilege_usage_en?: string;
+  privilege_closing_it?: string; privilege_closing_en?: string;
 }
 
 export interface MembershipPlaceholderValues {
@@ -2422,37 +2447,40 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   hero_p2: 'Nessun investimento impossibile, supporto totale della casa madre\ne un brand che cresce ogni singolo giorno.',
   hero_p2_it: 'Nessun investimento impossibile, supporto totale della casa madre\ne un brand che cresce ogni singolo giorno.',
   hero_p2_en: 'No impossible investment, full support from head office\nand a brand that grows every single day.',
-  stats_heading: 'In soli 18 mesi di attività',
-  stats_heading_it: 'In soli 18 mesi di attività',
-  stats_heading_en: 'In just 18 months of operation',
+  stats_heading: 'In soli 30 mesi di attività',
+  stats_heading_it: 'In soli 30 mesi di attività',
+  stats_heading_en: 'In just 30 months of operation',
   stats_lines: [
-    '* oltre 1.800 contratti firmati',
-    '* più di €1.500.000 di fatturato netto',
+    '* oltre 4.000 contratti firmati',
+    '* più di €2.500.000 di fatturato',
     '* oltre €1.500.000 in parco auto',
-    '* più di 900 clienti attivi',
-    '* {reviewCount} recensioni a 5 stelle reali',
+    '* più di 4.000 clienti',
+    '* più di {reviewCount} recensioni a 5 stelle reali',
     '* Valutazione aziendale: €15.000.000',
-    '* Valutazione brand: oltre €4.000.000',
+    '* Valutazione brand: €5.000.000',
+    '* Capitale sociale: €1.000.000',
     '* Da S.R.L. a S.P.A. in un solo anno.',
   ],
   stats_lines_it: [
-    '* oltre 1.800 contratti firmati',
-    '* più di €1.500.000 di fatturato netto',
+    '* oltre 4.000 contratti firmati',
+    '* più di €2.500.000 di fatturato',
     '* oltre €1.500.000 in parco auto',
-    '* più di 900 clienti attivi',
-    '* {reviewCount} recensioni a 5 stelle reali',
+    '* più di 4.000 clienti',
+    '* più di {reviewCount} recensioni a 5 stelle reali',
     '* Valutazione aziendale: €15.000.000',
-    '* Valutazione brand: oltre €4.000.000',
+    '* Valutazione brand: €5.000.000',
+    '* Capitale sociale: €1.000.000',
     '* Da S.R.L. a S.P.A. in un solo anno.',
   ],
   stats_lines_en: [
-    '* over 1,800 signed contracts',
-    '* more than €1,500,000 in net revenue',
+    '* over 4,000 signed contracts',
+    '* more than €2,500,000 in revenue',
     '* over €1,500,000 in fleet value',
-    '* more than 900 active clients',
-    '* {reviewCount} genuine 5-star reviews',
+    '* more than 4,000 clients',
+    '* more than {reviewCount} genuine 5-star reviews',
     '* Company valuation: €15,000,000',
-    '* Brand valuation: over €4,000,000',
+    '* Brand valuation: €5,000,000',
+    '* Share capital: €1,000,000',
     '* From S.R.L. to S.P.A. in a single year.',
   ],
   stats_footer_main: 'Il brand di lusso più riconosciuto d\'Italia.',
@@ -2587,7 +2615,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
     { label: 'Sede legale',                   label_it: 'Sede legale',                   label_en: 'Registered office',           value: 'Cagliari, Italia', value_it: 'Cagliari, Italia', value_en: 'Cagliari, Italy' },
     { label: 'Settore',                       label_it: 'Settore',                       label_en: 'Sector',                      value: 'Luxury Mobility & Lifestyle', value_it: 'Luxury Mobility & Lifestyle', value_en: 'Luxury Mobility & Lifestyle' },
     { label: 'Forma giuridica',               label_it: 'Forma giuridica',               label_en: 'Legal form',                  value: 'Società per Azioni', value_it: 'Società per Azioni', value_en: 'Joint-stock company (S.p.A.)' },
-    { label: 'Capitale sociale',              label_it: 'Capitale sociale',              label_en: 'Share capital',               value: 'In aumento progressivo secondo piano Vision 2030', value_it: 'In aumento progressivo secondo piano Vision 2030', value_en: 'Progressively increasing under the Vision 2030 plan' },
+    { label: 'Capitale sociale',              label_it: 'Capitale sociale',              label_en: 'Share capital',               value: '€1.000.000', value_it: '€1.000.000', value_en: '€1,000,000' },
     { label: 'Tipologia quote',               label_it: 'Tipologia quote',               label_en: 'Share type',                  value: 'Azioni ordinarie nominative', value_it: 'Azioni ordinarie nominative', value_en: 'Registered ordinary shares' },
     { label: 'Investimento minimo indicativo', label_it: 'Investimento minimo indicativo', label_en: 'Indicative minimum investment', value: 'Da €25.000', value_it: 'Da €25.000', value_en: 'From €25,000' },
     { label: 'Distribuzione utili',           label_it: 'Distribuzione utili',           label_en: 'Profit distribution',         value: 'Secondo deliberazioni dell\'Assemblea e risultati di bilancio', value_it: 'Secondo deliberazioni dell\'Assemblea e risultati di bilancio', value_en: 'As resolved by the Shareholders Meeting and based on financial results' },
@@ -2822,8 +2850,8 @@ export const INITIAL_FOOTER: FooterCopy = {
   reviews_title: 'A Global Standard of Excellence',
   reviews_title_it: 'Uno Standard Globale di Eccellenza',
   reviews_title_en: 'A Global Standard of Excellence',
-  reviews_text_it: 'DR7 Cagliari mantiene un rating impeccabile di 5.0/5.0 su quasi 300 recensioni verificate, confermandosi un punto di riferimento nel settore della luxury mobility.',
-  reviews_text_en: 'DR7 Cagliari maintains a flawless 5.0/5.0 rating across nearly 300 verified reviews, confirming itself as a benchmark in the luxury mobility sector.',
+  reviews_text_it: 'DR7 Cagliari mantiene un rating impeccabile di 5.0/5.0 su più di 300 recensioni verificate, confermandosi un punto di riferimento nel settore della luxury mobility.',
+  reviews_text_en: 'DR7 Cagliari maintains a flawless 5.0/5.0 rating across more than 300 verified reviews, confirming itself as a benchmark in the luxury mobility sector.',
   contact_title: 'Contact',
   contact_whatsapp_number: '+39 345 790 5205',
   contact_whatsapp_url: 'https://wa.me/393457905205',
@@ -2982,10 +3010,10 @@ export const INITIAL_HOME: HomeCopy = {
 
   // ── Atto 04 — Esperienze ───────────────────────────────────────────────
   // Solo servizi realmente attivi sul sito, con le stesse destinazioni del menu.
-  experiences_eyebrow_it: '02 \u2014 Esperienze',
-  experiences_eyebrow_en: '02 \u2014 Experiences',
-  experiences_title_it: 'Ci\u00f2 che rendono possibile',
-  experiences_title_en: 'What they make possible',
+  experiences_eyebrow_it: '02 \u2014 Esperienza',
+  experiences_eyebrow_en: '02 \u2014 Experience',
+  experiences_title_it: 'Esperienza',
+  experiences_title_en: 'Experience',
   experiences: [
     { id: 'mare', to: '/noleggio-mare', image_src: '/menu-mare.jpeg',
       title_it: 'Mare', title_en: 'Sea',
@@ -3161,6 +3189,38 @@ export const INITIAL_MEMBERSHIP: MembershipCopy = {
   ],
   reward_footnote_it: 'Senza DR7 Club il sistema premi non è attivo.',
   reward_footnote_en: 'Without DR7 Club the reward system is not active.',
+
+  // DR7 Club Privilege. Il motore sta in DR7-AI:
+  // netlify/functions/accrue-club-wallet-interest.ts matura ogni giorno
+  // 0,1% (DAILY_RATE = 0.001) sul capitale = saldo meno il bonus residuo,
+  // e solo per gli iscritti con abbonamento attivo;
+  // payout-club-wallet-interest lo accredita nel Wallet una volta al mese.
+  // Il bonus accreditato e' classificato come bonus, quindi non matura a
+  // sua volta: l'esempio qui sotto e' lineare, senza capitalizzazione.
+  // Se cambia DAILY_RATE, questi numeri vanno rifatti.
+  privilege_eyebrow_it: 'DR7 CLUB PRIVILEGE', privilege_eyebrow_en: 'DR7 CLUB PRIVILEGE',
+  privilege_title_it: 'Il tuo Wallet non resta fermo. Cresce ogni giorno.',
+  privilege_title_en: 'Your Wallet does not stand still. It grows every day.',
+  privilege_intro_it: 'Con DR7 Club Privilege, il saldo idoneo presente nel tuo Wallet matura automaticamente un Privilege Bonus dello 0,10% al giorno, fino a un valore nominale equivalente al 36% su base annua.',
+  privilege_intro_en: 'With DR7 Club Privilege, the eligible balance in your Wallet automatically accrues a Privilege Bonus of 0.10% per day, up to a nominal value equivalent to 36% on an annual basis.',
+  privilege_claim_1_it: 'Non devi attivare nulla.', privilege_claim_1_en: 'Nothing to activate.',
+  privilege_claim_2_it: 'Non devi aspettare la fine dell\'anno.', privilege_claim_2_en: 'No waiting until year end.',
+  privilege_calc_it: 'La maturazione viene calcolata giorno dopo giorno, direttamente sul saldo idoneo presente nel tuo Wallet.',
+  privilege_calc_en: 'The accrual is calculated day after day, directly on the eligible balance in your Wallet.',
+  privilege_example_label_it: 'Esempio: mantieni €1.000 di saldo idoneo nel Wallet.',
+  privilege_example_label_en: 'Example: you keep €1,000 of eligible balance in the Wallet.',
+  privilege_rows: [
+    { label_it: 'Dopo 1 giorno', label_en: 'After 1 day', value: '€1 di Privilege Bonus maturato' },
+    { label_it: 'Dopo 30 giorni', label_en: 'After 30 days', value: '€30' },
+    { label_it: 'Dopo 180 giorni', label_en: 'After 180 days', value: '€180' },
+    { label_it: 'Dopo 360 giorni', label_en: 'After 360 days', value: '€360' },
+  ],
+  privilege_principle_it: 'Il principio è semplice: più valore mantieni nel tuo ecosistema DR7 e più privilegi accumuli nel tempo.',
+  privilege_principle_en: 'The principle is simple: the more value you keep in your DR7 ecosystem, the more privileges you build over time.',
+  privilege_usage_it: 'Il Privilege Bonus maturato resta nel tuo Wallet, non ha scadenza e puoi utilizzarlo su tutti i servizi DR7.',
+  privilege_usage_en: 'The accrued Privilege Bonus stays in your Wallet, never expires, and you can use it on all DR7 services.',
+  privilege_closing_it: 'Il valore non aspetta. Matura ogni giorno.',
+  privilege_closing_en: 'Value does not wait. It accrues every day.',
 };
 
 // ─── Default Cancellazione seed ─────────────────────────────────────────────
