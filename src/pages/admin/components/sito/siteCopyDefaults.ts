@@ -1022,6 +1022,10 @@ export interface HeaderCopy {
   menu_wallet_sub_it?: string; menu_wallet_sub_en?: string;
   menu_club_title_it?: string; menu_club_title_en?: string;
   menu_club_sub_it?: string; menu_club_sub_en?: string;
+  // DR7 Club Privilege: la voce non porta a una pagina sua, punta al blocco
+  // dentro /membership (ancora #privilege). Il testo vive in un posto solo.
+  menu_privilege_title_it?: string; menu_privilege_title_en?: string;
+  menu_privilege_sub_it?: string; menu_privilege_sub_en?: string;
   menu_business_title_it?: string; menu_business_title_en?: string;
   menu_business_sub_it?: string; menu_business_sub_en?: string;
   menu_digital_title_it?: string; menu_digital_title_en?: string;
@@ -1039,6 +1043,7 @@ export interface HeaderCopy {
   menu_servizi_img?: string;
   menu_wallet_img?: string;
   menu_club_img?: string;
+  menu_privilege_img?: string;
   menu_business_img?: string;
   menu_digital_img?: string;
   menu_contatti_img?: string;
@@ -2747,6 +2752,69 @@ export const INITIAL_PRESS: PressCopy = {
   read_more_label_it: 'Leggi l\'articolo',
   read_more_label_en: 'Read full article',
   articles: [
+    {
+      id: 'art-7',
+      title: 'From \u20ac10,000 to a \u20ac5 Million Brand: How Valerio Saia and Ilenia Campagnola Built DR7 Through Reinvestment and Technology',
+      publication: 'Forbes Miami',
+      date: '16 Giugno 2026',
+      summary_it: 'Forbes Miami ricostruisce il percorso di Valerio Saia e Ilenia Campagnola: da un investimento iniziale di 10.000 euro a un marchio valutato 5 milioni, costruito reinvestendo gli utili e sviluppando tecnologia proprietaria.',
+      summary_en: 'Forbes Miami retraces the path of Valerio Saia and Ilenia Campagnola: from an initial \u20ac10,000 investment to a brand valued at \u20ac5 million, built by reinvesting profits and developing proprietary technology.',
+      link: 'https://forbesmia.com/2026/06/16/from-e10000-to-a-e5-million-brand-how-valerio-saia-and-ilenia-campagnola-built-dr7-through-reinvestment-and-technology/',
+    },
+    {
+      id: 'art-8',
+      title: 'DR7: da investimento da 10.000 euro a marchio valutato 5 milioni di euro in due anni',
+      publication: 'Fortune Italia',
+      date: '5 Giugno 2026',
+      summary_it: 'Fortune Italia racconta come Valerio Saia e Ilenia Campagnola abbiano dato vita a DR7, oggi uno dei progetti emergenti nel settore della mobilit\u00e0 e del lusso.',
+      summary_en: 'Fortune Italia tells how Valerio Saia and Ilenia Campagnola created DR7, today one of the emerging projects in the mobility and luxury sector.',
+      link: 'https://www.fortuneita.com/2026/06/05/valerio-saia-e-ilenia-campagnola-gli-imprenditori-che-hanno-trasformato-10-000-euro-in-un-marchio-valutato-5-milioni-di-euro-in-due-anni/',
+    },
+    {
+      id: 'art-9',
+      title: 'Valerio Saia e Ilenia Campagnola, gli imprenditori che hanno trasformato 10.000 euro in un marchio valutato 5 milioni di euro in due anni',
+      publication: 'Il Tirreno',
+      date: '3 Giugno 2026',
+      summary_it: 'Una realt\u00e0 che oggi rappresenta uno dei progetti emergenti nel settore della mobilit\u00e0 premium e della tecnologia applicata ai servizi luxury, costruita in poco pi\u00f9 di due anni.',
+      summary_en: 'A company that today stands as one of the emerging projects in premium mobility and technology applied to luxury services, built in little more than two years.',
+      link: 'https://www.iltirreno.it/italia-mondo/cronaca/2026/06/03/news/valerio-saia-e-ilenia-campagnola-gli-imprenditori-che-hanno-trasformato-10-000-euro-in-un-marchio-valutato-5-milioni-di-euro-in-due-anni-1.100877939',
+    },
+    {
+      id: 'art-10',
+      title: 'Valerio Saia e Ilenia Campagnola, pronti via: in due anni da 10mila euro a 5 milioni',
+      publication: 'Libero Quotidiano',
+      date: 'Giugno 2026',
+      summary_it: 'Libero Quotidiano dedica un approfondimento alla crescita di DR7: in due anni da un capitale iniziale di 10mila euro a un marchio valutato 5 milioni di euro.',
+      summary_en: 'Libero Quotidiano covers DR7\u2019s growth: in two years from an initial \u20ac10,000 to a brand valued at \u20ac5 million.',
+      link: 'https://www.liberoquotidiano.it/news/general/48180927/valerio-saia-e-ilenia-campagnola-pronti-via-in-due-anni-da-10mila-euro-a-5-milioni.html',
+    },
+    {
+      id: 'art-11',
+      title: 'Valerio Saia e Ilenia Campagnola, gli imprenditori che hanno trasformato 10.000 euro in un marchio valutato 5 milioni di euro in due anni',
+      publication: 'Il Roma',
+      date: '3 Giugno 2026',
+      summary_it: 'Il Roma racconta la costruzione di DR7 da parte di Valerio Saia e Ilenia Campagnola: in poco pi\u00f9 di due anni una delle realt\u00e0 emergenti della mobilit\u00e0 premium e dei servizi luxury.',
+      summary_en: 'Il Roma covers how Valerio Saia and Ilenia Campagnola built DR7: in little more than two years, one of the emerging names in premium mobility and luxury services.',
+      link: 'https://www.ilroma.net/news/costume/861890/valerio-saia-e-ilenia-campagnola-gli-imprenditori-che-hanno-trasformato-10-000-euro-in-un-marchio-valutato-5-milioni-di-euro-in-due-anni.html',
+    },
+    {
+      id: 'art-12',
+      title: 'Ilenia Campagnola \u2014 Profilo imprenditoriale',
+      publication: 'Crunchbase',
+      date: '2026',
+      summary_it: 'Scheda Crunchbase di Ilenia Campagnola, co-fondatrice di DR7, con il profilo imprenditoriale e i riferimenti alle societ\u00e0 collegate.',
+      summary_en: 'Crunchbase profile of Ilenia Campagnola, DR7 co-founder, with her entrepreneurial profile and related company references.',
+      link: 'https://www.crunchbase.com/person/ilenia-campagnola',
+    },
+    {
+      id: 'art-13',
+      title: 'Ilenia Campagnola \u2014 Scheda IMDb',
+      publication: 'IMDb',
+      date: '2026',
+      summary_it: 'Scheda IMDb di Ilenia Campagnola, con i crediti e le apparizioni registrate nel database internazionale del cinema e della televisione.',
+      summary_en: 'IMDb page for Ilenia Campagnola, listing credits and appearances recorded in the international film and television database.',
+      link: 'https://www.imdb.com/it/name/nm18721515/',
+    },
     {
       id: 'art-1',
       title: 'Dubai Rent, la prima startup al mondo nel noleggio auto di lusso, a diventare Società per Azioni con €100.000 di capitale sociale',
