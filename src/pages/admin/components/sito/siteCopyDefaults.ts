@@ -205,6 +205,7 @@ export interface MembershipCopy {
   privilege_principle_it?: string; privilege_principle_en?: string;
   privilege_usage_it?: string; privilege_usage_en?: string;
   privilege_closing_it?: string; privilege_closing_en?: string;
+  privilege_link_it?: string; privilege_link_en?: string;
 }
 
 export interface MembershipPlaceholderValues {
@@ -3286,6 +3287,8 @@ export const INITIAL_MEMBERSHIP: MembershipCopy = {
   privilege_principle_en: 'The principle is simple: the more value you keep in your DR7 ecosystem, the more privileges you build over time.',
   privilege_usage_it: 'Il Privilege Bonus maturato resta nel tuo Wallet, non ha scadenza e puoi utilizzarlo su tutti i servizi DR7.',
   privilege_usage_en: 'The accrued Privilege Bonus stays in your Wallet, never expires, and you can use it on all DR7 services.',
+  privilege_link_it: 'Scopri DR7 Club Privilege',
+  privilege_link_en: 'Discover DR7 Club Privilege',
   privilege_closing_it: 'Il valore non aspetta. Matura ogni giorno.',
   privilege_closing_en: 'Value does not wait. It accrues every day.',
 };
