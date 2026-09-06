@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 74
+ * Sezioni generate: 36 — interfacce: 73
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -134,13 +134,6 @@ export interface CancellazioneCopy {
 // section (header + sub-sections with rich blocks), and the reward-system
 // grid items. Use the same `{monthlyPrice}` / `{annualPrice}` /
 // `{annualMonthly}` placeholders if you want admin to inline live numbers.
-export interface MembershipRewardItem {
-  label_it: string;
-  label_en: string;
-  reward: string;       // "2%", "1%", "3%", ... — free-form badge text
-  note_it: string | null;
-  note_en: string | null;
-}
 
 /** Una riga della tabella d'esempio del Privilege Bonus. */
 export interface MembershipPrivilegeRow {
@@ -185,7 +178,6 @@ export interface MembershipCopy {
   // Reward-system grid
   reward_title_it: string; reward_title_en: string;
   reward_intro_it: string; reward_intro_en: string;
-  reward_items: MembershipRewardItem[];
   reward_footnote_it: string; reward_footnote_en: string;
 
   // ─── DR7 Club Privilege (maturazione giornaliera sul Wallet) ──────────
@@ -3249,12 +3241,6 @@ export const INITIAL_MEMBERSHIP: MembershipCopy = {
   reward_title_en: 'How Rewards Work',
   reward_intro_it: 'Accumula credito nel tuo wallet ad ogni prenotazione e servizio. Il premio dipende dal tuo comportamento, non dal metodo di pagamento.',
   reward_intro_en: 'Earn wallet credit on every booking and service. Rewards are based on your behavior, not your payment method.',
-  reward_items: [
-    { label_it: 'Pagamento anticipato (100%)', label_en: 'Full prepayment (100%)', reward: '2%', note_it: 'fino al 4% per livelli più alti', note_en: 'up to 4% at higher levels' },
-    { label_it: 'Pagamento con acconto (30%)', label_en: 'Deposit payment (30%)', reward: '1%', note_it: null, note_en: null },
-    { label_it: 'Servizi extra', label_en: 'Extra services', reward: '2%', note_it: null, note_en: null },
-    { label_it: 'Lavaggio & Meccanica', label_en: 'Car Wash & Mechanics', reward: '3%', note_it: null, note_en: null },
-  ],
   reward_footnote_it: 'Senza DR7 Club il sistema premi non è attivo.',
   reward_footnote_en: 'Without DR7 Club the reward system is not active.',
 
@@ -3287,8 +3273,8 @@ export const INITIAL_MEMBERSHIP: MembershipCopy = {
   privilege_principle_en: 'The principle is simple: the more value you keep in your DR7 ecosystem, the more privileges you build over time.',
   privilege_usage_it: 'Il Privilege Bonus maturato resta nel tuo Wallet, non ha scadenza e puoi utilizzarlo su tutti i servizi DR7.',
   privilege_usage_en: 'The accrued Privilege Bonus stays in your Wallet, never expires, and you can use it on all DR7 services.',
-  privilege_link_it: 'Scopri DR7 Club Privilege',
-  privilege_link_en: 'Discover DR7 Club Privilege',
+  privilege_link_it: 'Accesso al DR7 Club Privilege',
+  privilege_link_en: 'Access DR7 Club Privilege',
   privilege_closing_it: 'Il valore non aspetta. Matura ogni giorno.',
   privilege_closing_en: 'Value does not wait. It accrues every day.',
 };

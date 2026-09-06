@@ -108,7 +108,6 @@ import type {
     MechanicalCopy,
     MechanicalHowStep,
     MembershipCopy,
-    MembershipRewardItem,
     PaymentCancelCopy,
     PaymentCopy,
     PaymentSuccessCopy,
@@ -1783,30 +1782,6 @@ function MembershipEditor({
         })
     }
 
-    // Reward grid items
-    const updateRewardItem = (idx: number, patch: Partial<MembershipRewardItem>) => {
-        const next = [...copy.reward_items]
-        next[idx] = { ...next[idx], ...patch }
-        setCopy({ ...copy, reward_items: next })
-    }
-    const moveRewardItem = (idx: number, dir: -1 | 1) => {
-        const j = idx + dir
-        if (j < 0 || j >= copy.reward_items.length) return
-        const next = [...copy.reward_items]
-        ;[next[idx], next[j]] = [next[j], next[idx]]
-        setCopy({ ...copy, reward_items: next })
-    }
-    const removeRewardItem = (idx: number) => {
-        if (!confirm('Rimuovere questa voce reward?')) return
-        setCopy({ ...copy, reward_items: copy.reward_items.filter((_, i) => i !== idx) })
-    }
-    const addRewardItem = () => {
-        setCopy({
-            ...copy,
-            reward_items: [...copy.reward_items, { label_it: 'Nuova voce', label_en: 'New item', reward: '0%', note_it: null, note_en: null }],
-        })
-    }
-
     return (
         <div className="space-y-6">
             <div>
@@ -1919,29 +1894,6 @@ function MembershipEditor({
                     <FieldTextArea label="Intro (EN)" value={copy.reward_intro_en} onChange={v => updateField('reward_intro_en', v)} />
                 </div>
 
-                <div className="space-y-2">
-                    <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Voci reward ({copy.reward_items.length})</h4>
-                    {copy.reward_items.map((item, i) => (
-                        <RewardItemCard
-                            key={i}
-                            item={item}
-                            first={i === 0}
-                            last={i === copy.reward_items.length - 1}
-                            onChange={(patch) => updateRewardItem(i, patch)}
-                            onMoveUp={() => moveRewardItem(i, -1)}
-                            onMoveDown={() => moveRewardItem(i, 1)}
-                            onRemove={() => removeRewardItem(i)}
-                        />
-                    ))}
-                    <button
-                        onClick={addRewardItem}
-                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        Aggiungi voce reward
-                    </button>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
                     <FieldText label="Footnote (IT)" value={copy.reward_footnote_it} onChange={v => updateField('reward_footnote_it', v)} />
                     <FieldText label="Footnote (EN)" value={copy.reward_footnote_en} onChange={v => updateField('reward_footnote_en', v)} />
@@ -1963,39 +1915,6 @@ function FieldTextArea({ label, value, onChange, placeholder }: { label: string;
                 className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
             />
         </label>
-    )
-}
-
-function RewardItemCard({
-    item, first, last, onChange, onMoveUp, onMoveDown, onRemove,
-}: {
-    item: MembershipRewardItem
-    first: boolean
-    last: boolean
-    onChange: (patch: Partial<MembershipRewardItem>) => void
-    onMoveUp: () => void
-    onMoveDown: () => void
-    onRemove: () => void
-}) {
-    return (
-        <div className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
-            <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{item.label_it || '(senza titolo)'}</span>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700">{item.reward}</span>
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-                <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px] gap-2">
-                <input type="text" value={item.label_it} onChange={e => onChange({ label_it: e.target.value })} placeholder="Etichetta IT" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={item.label_en} onChange={e => onChange({ label_en: e.target.value })} placeholder="Label EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={item.reward} onChange={e => onChange({ reward: e.target.value })} placeholder='Reward (es. "2%")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-center font-semibold" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input type="text" value={item.note_it ?? ''} onChange={e => onChange({ note_it: e.target.value || null })} placeholder="Nota IT (opzionale)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
-                <input type="text" value={item.note_en ?? ''} onChange={e => onChange({ note_en: e.target.value || null })} placeholder="Note EN (optional)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
-            </div>
-        </div>
     )
 }
 
