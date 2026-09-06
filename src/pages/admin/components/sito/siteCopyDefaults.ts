@@ -1345,6 +1345,7 @@ export interface CarWashCopy {
   plate_search_it: string; plate_search_en: string;
   plate_searching_it: string; plate_searching_en: string;
   plate_manual_prompt_it: string; plate_manual_prompt_en: string;
+  plate_detected_it: string; plate_detected_en: string;
   plate_change_it: string; plate_change_en: string;
   // Service card
   add_to_cart_it: string; add_to_cart_en: string;
@@ -2643,6 +2644,8 @@ export const INITIAL_CARWASH: CarWashCopy = {
   plate_searching_it: 'Cercando...', plate_searching_en: 'Searching...',
   plate_manual_prompt_it: 'Seleziona manualmente la categoria del tuo veicolo:',
   plate_manual_prompt_en: 'Manually select your vehicle category:',
+  plate_detected_it: 'Categoria rilevata dalla targa:',
+  plate_detected_en: 'Category detected from the plate:',
   plate_change_it: 'Cambia veicolo', plate_change_en: 'Change vehicle',
   add_to_cart_it: 'AGGIUNGI AL CARRELLO', add_to_cart_en: 'ADD TO CART',
   cart_title_it: 'Il tuo carrello', cart_title_en: 'Your cart',

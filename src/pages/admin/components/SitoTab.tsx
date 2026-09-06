@@ -3863,6 +3863,8 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
                     <FieldText label='State "Searching..." (EN)' value={copy.plate_searching_en} onChange={v => update('plate_searching_en', v)} />
                     <FieldTextArea label="Prompt categoria manuale (IT)" value={copy.plate_manual_prompt_it} onChange={v => update('plate_manual_prompt_it', v)} />
                     <FieldTextArea label="Manual category prompt (EN)" value={copy.plate_manual_prompt_en} onChange={v => update('plate_manual_prompt_en', v)} />
+                    <FieldText label="Frase categoria rilevata (IT)" value={copy.plate_detected_it} onChange={v => update('plate_detected_it', v)} />
+                    <FieldText label="Frase categoria rilevata (EN)" value={copy.plate_detected_en} onChange={v => update('plate_detected_en', v)} />
                     <FieldText label='"Cambia veicolo" (IT)' value={copy.plate_change_it} onChange={v => update('plate_change_it', v)} />
                     <FieldText label='"Change vehicle" (EN)' value={copy.plate_change_en} onChange={v => update('plate_change_en', v)} />
                 </div>
