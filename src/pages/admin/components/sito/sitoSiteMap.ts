@@ -124,6 +124,7 @@ export const SITO_SCREENS: SitoScreen[] = [
     // ─── DR7 Club ────────────────────────────────────────────────────────
     { id: 'membership',        path: '/membership',              label: 'DR7 Club',                 area: 'club',      editor: 'membership',        file: 'pages/MembershipPage.tsx' },
     { id: 'dr7-club-plan',     path: '/membership',              label: 'Piano e benefit del Club', area: 'club',      editor: 'dr7-club-plan',     file: 'utils/getMembershipTiers.ts' },
+    { id: 'membership-privilege', path: '/membership#privilege', label: 'DR7 Club Privilege',     area: 'club',      editor: 'membership',        file: 'pages/MembershipPage.tsx' },
     { id: 'membership-enroll', path: '/membership/enroll/:tier', label: 'Iscrizione al Club',       area: 'club',      editor: null,                file: 'pages/MembershipEnrollmentPage.tsx' },
 
     // ─── Business ────────────────────────────────────────────────────────
