@@ -280,12 +280,9 @@ export interface HomeCopy {
    */
   collection_image: string;
   /** Id veicolo da mettere in evidenza. Vuoto = i primi disponibili. */
-  collection_featured_ids: string[];
-  collection_featured_count: number;
   collection_cta_label_it: string; collection_cta_label_en: string;
   collection_cta_to: string;
   /** Etichetta della CTA sotto ogni veicolo in evidenza. */
-  collection_item_cta_it: string; collection_item_cta_en: string;
 
   // ── Atto 04 — Esperienze ─────────────────────────────────────────────────
   experiences_eyebrow_it: string; experiences_eyebrow_en: string;
@@ -1428,9 +1425,6 @@ export interface ContactCopy {
   office_company_name: string;
   office_address_it: string; office_address_en: string;
   office_piva: string;
-  map_title: string;
-  map_title_it?: string; map_title_en?: string;
-  map_iframe_url: string;
 }
 
 // ─── Legal pages (Privacy, Cookie, Rental Agreement, Terms) ────────────────
@@ -2890,10 +2884,6 @@ export const INITIAL_CONTACT: ContactCopy = {
   office_address_it: 'Viale Marconi, 229 – 09131 Cagliari (CA), Italia',
   office_address_en: 'Viale Marconi, 229 – 09131 Cagliari (CA), Italy',
   office_piva: 'P.IVA / C.F.: 04104640927',
-  map_title: 'DR7 – Sede Operativa Cagliari',
-  map_title_it: 'DR7 – Sede Operativa Cagliari',
-  map_title_en: 'DR7 – Cagliari Operating Office',
-  map_iframe_url: 'https://www.openstreetmap.org/export/embed.html?bbox=9.1000%2C39.2200%2C9.1300%2C39.2300&layer=mapnik&marker=39.2253%2C9.1150',
 };
 
 // ─── Default Footer seed ────────────────────────────────────────────────────
@@ -3060,13 +3050,9 @@ export const INITIAL_HOME: HomeCopy = {
   collection_intro_it: 'Una selezione ristretta. Il catalogo completo \u00e8 a un passo.',
   collection_intro_en: 'A short selection. The full catalogue is one step away.',
   collection_image: '/collezione.jpeg',
-  collection_featured_ids: [],
-  collection_featured_count: 3,
   collection_cta_label_it: 'Esplora la collezione',
   collection_cta_label_en: 'Explore the collection',
   collection_cta_to: '/flotta',
-  collection_item_cta_it: 'Scopri',
-  collection_item_cta_en: 'Discover',
 
   // ── Atto 04 — Esperienze ───────────────────────────────────────────────
   // Solo servizi realmente attivi sul sito, con le stesse destinazioni del menu.

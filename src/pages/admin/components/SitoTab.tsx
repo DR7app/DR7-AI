@@ -108,6 +108,7 @@ import type {
     MechanicalCopy,
     MechanicalHowStep,
     MembershipCopy,
+    MembershipPrivilegeRow,
     PaymentCancelCopy,
     PaymentCopy,
     PaymentSuccessCopy,
@@ -1782,6 +1783,28 @@ function MembershipEditor({
         })
     }
 
+    // Righe dell'esempio Privilege (etichetta + valore).
+    const righePrivilege = (): MembershipPrivilegeRow[] => copy.privilege_rows || []
+    const updatePrivilegeRow = (idx: number, patch: Partial<MembershipPrivilegeRow>) => {
+        const next = [...righePrivilege()]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, privilege_rows: next })
+    }
+    const movePrivilegeRow = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        const next = [...righePrivilege()]
+        if (j < 0 || j >= next.length) return
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, privilege_rows: next })
+    }
+    const removePrivilegeRow = (idx: number) => {
+        if (!confirm('Rimuovere questa riga?')) return
+        setCopy({ ...copy, privilege_rows: righePrivilege().filter((_, i) => i !== idx) })
+    }
+    const addPrivilegeRow = () => {
+        setCopy({ ...copy, privilege_rows: [...righePrivilege(), { label_it: 'Nuova riga', label_en: 'New row', value: '' }] })
+    }
+
     return (
         <div className="space-y-6">
             <div>
@@ -1881,6 +1904,68 @@ function MembershipEditor({
                     <FieldText label="Bottone se non loggato (EN)" value={copy.elite_cta_logged_out_en} onChange={v => updateField('elite_cta_logged_out_en', v)} />
                     <FieldText label="Bottone se loggato (IT)" value={copy.elite_cta_logged_in_it} onChange={v => updateField('elite_cta_logged_in_it', v)} />
                     <FieldText label="Bottone se loggato (EN)" value={copy.elite_cta_logged_in_en} onChange={v => updateField('elite_cta_logged_in_en', v)} />
+                </div>
+            </section>
+
+            {/* DR7 CLUB PRIVILEGE */}
+            {/* Il racconto della maturazione giornaliera sul Wallet. Il motore
+                sta in accrue-club-wallet-interest (0,1% al giorno): qui si
+                scrivono solo le parole e i numeri dell'esempio, che vanno
+                rifatti a mano se cambia la percentuale. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 Club Privilege</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Occhiello (IT)" value={copy.privilege_eyebrow_it ?? ''} onChange={v => updateField('privilege_eyebrow_it', v)} />
+                    <FieldText label="Occhiello (EN)" value={copy.privilege_eyebrow_en ?? ''} onChange={v => updateField('privilege_eyebrow_en', v)} />
+                    <FieldText label="Titolo (IT)" value={copy.privilege_title_it ?? ''} onChange={v => updateField('privilege_title_it', v)} />
+                    <FieldText label="Titolo (EN)" value={copy.privilege_title_en ?? ''} onChange={v => updateField('privilege_title_en', v)} />
+                    <FieldTextArea label="Intro (IT)" value={copy.privilege_intro_it ?? ''} onChange={v => updateField('privilege_intro_it', v)} />
+                    <FieldTextArea label="Intro (EN)" value={copy.privilege_intro_en ?? ''} onChange={v => updateField('privilege_intro_en', v)} />
+                    <FieldText label="Frase 1 (IT)" value={copy.privilege_claim_1_it ?? ''} onChange={v => updateField('privilege_claim_1_it', v)} />
+                    <FieldText label="Frase 1 (EN)" value={copy.privilege_claim_1_en ?? ''} onChange={v => updateField('privilege_claim_1_en', v)} />
+                    <FieldText label="Frase 2 (IT)" value={copy.privilege_claim_2_it ?? ''} onChange={v => updateField('privilege_claim_2_it', v)} />
+                    <FieldText label="Frase 2 (EN)" value={copy.privilege_claim_2_en ?? ''} onChange={v => updateField('privilege_claim_2_en', v)} />
+                    <FieldTextArea label="Come si calcola (IT)" value={copy.privilege_calc_it ?? ''} onChange={v => updateField('privilege_calc_it', v)} />
+                    <FieldTextArea label="Come si calcola (EN)" value={copy.privilege_calc_en ?? ''} onChange={v => updateField('privilege_calc_en', v)} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Etichetta esempio (IT)" value={copy.privilege_example_label_it ?? ''} onChange={v => updateField('privilege_example_label_it', v)} />
+                    <FieldText label="Etichetta esempio (EN)" value={copy.privilege_example_label_en ?? ''} onChange={v => updateField('privilege_example_label_en', v)} />
+                </div>
+
+                <div className="space-y-2">
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Righe dell'esempio ({righePrivilege().length})</h4>
+                    {righePrivilege().map((row, i) => (
+                        <div key={i} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{row.label_it || '(senza etichetta)'}</span>
+                                <button onClick={() => movePrivilegeRow(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                                <button onClick={() => movePrivilegeRow(i, 1)} disabled={i === righePrivilege().length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                                <button onClick={() => removePrivilegeRow(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px] gap-2">
+                                <input type="text" value={row.label_it} onChange={e => updatePrivilegeRow(i, { label_it: e.target.value })} placeholder="Etichetta IT" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                <input type="text" value={row.label_en} onChange={e => updatePrivilegeRow(i, { label_en: e.target.value })} placeholder="Label EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                <input type="text" value={row.value} onChange={e => updatePrivilegeRow(i, { value: e.target.value })} placeholder='Valore (es. "€1.030")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-center font-semibold" />
+                            </div>
+                        </div>
+                    ))}
+                    <button onClick={addPrivilegeRow} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Aggiungi riga
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
+                    <FieldTextArea label="Principio (IT)" value={copy.privilege_principle_it ?? ''} onChange={v => updateField('privilege_principle_it', v)} />
+                    <FieldTextArea label="Principio (EN)" value={copy.privilege_principle_en ?? ''} onChange={v => updateField('privilege_principle_en', v)} />
+                    <FieldTextArea label="Utilizzo (IT)" value={copy.privilege_usage_it ?? ''} onChange={v => updateField('privilege_usage_it', v)} />
+                    <FieldTextArea label="Utilizzo (EN)" value={copy.privilege_usage_en ?? ''} onChange={v => updateField('privilege_usage_en', v)} />
+                    <FieldText label="Chiusura (IT)" value={copy.privilege_closing_it ?? ''} onChange={v => updateField('privilege_closing_it', v)} />
+                    <FieldText label="Chiusura (EN)" value={copy.privilege_closing_en ?? ''} onChange={v => updateField('privilege_closing_en', v)} />
+                    <FieldText label="Rimando sopra il bottone (IT)" value={copy.privilege_link_it ?? ''} onChange={v => updateField('privilege_link_it', v)} />
+                    <FieldText label="Rimando sopra il bottone (EN)" value={copy.privilege_link_en ?? ''} onChange={v => updateField('privilege_link_en', v)} />
                 </div>
             </section>
 
