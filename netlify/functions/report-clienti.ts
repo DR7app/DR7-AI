@@ -197,6 +197,10 @@ export const handler: Handler = async (event) => {
       aziendali_spesa_cents: number
       aziendali_prenotazioni: number
       aziendali_giorni: number
+      // Mare / Aria / Soggiorni: mezzi del catalogo dedicato, non della flotta auto.
+      altri_spesa_cents: number
+      altri_prenotazioni: number
+      altri_giorni: number
       // Services
       lavaggi_spesa_cents: number
       lavaggi_prenotazioni: number
@@ -230,6 +234,7 @@ export const handler: Handler = async (event) => {
         supercar_spesa_cents: 0, supercar_prenotazioni: 0, supercar_giorni: 0,
         urban_spesa_cents: 0, urban_prenotazioni: 0, urban_giorni: 0,
         aziendali_spesa_cents: 0, aziendali_prenotazioni: 0, aziendali_giorni: 0,
+        altri_spesa_cents: 0, altri_prenotazioni: 0, altri_giorni: 0,
         lavaggi_spesa_cents: 0, lavaggi_prenotazioni: 0,
         meccanica_spesa_cents: 0, meccanica_prenotazioni: 0,
         penali_spesa_eur: 0, penali_eventi: 0,
@@ -401,7 +406,7 @@ export const handler: Handler = async (event) => {
       if (!type) continue
 
       const priceCents = Number(b.price_total) || 0
-      const isRental = type === 'supercar' || type === 'urban' || type === 'aziendali'
+      const isRental = type === 'supercar' || type === 'urban' || type === 'aziendali' || type === 'altri'
       if (isRental) {
         let days = 0
         if (b.pickup_date && b.dropoff_date) {
@@ -515,13 +520,14 @@ export const handler: Handler = async (event) => {
       const supercar_spesa = toEur(c.supercar_spesa_cents)
       const urban_spesa = toEur(c.urban_spesa_cents)
       const aziendali_spesa = toEur(c.aziendali_spesa_cents)
+      const altri_spesa = toEur(c.altri_spesa_cents)
       const lavaggi_spesa = toEur(c.lavaggi_spesa_cents)
       const meccanica_spesa = toEur(c.meccanica_spesa_cents)
       const penali_spesa = round2(c.penali_spesa_eur)
       const danni_spesa = round2(c.danni_spesa_eur)
-      const totale_giorni = c.supercar_giorni + c.urban_giorni + c.aziendali_giorni
-      const totale_prenotazioni = c.supercar_prenotazioni + c.urban_prenotazioni + c.aziendali_prenotazioni + c.lavaggi_prenotazioni + c.meccanica_prenotazioni
-      const totale_spesa = round2(supercar_spesa + urban_spesa + aziendali_spesa + lavaggi_spesa + meccanica_spesa + penali_spesa + danni_spesa)
+      const totale_giorni = c.supercar_giorni + c.urban_giorni + c.aziendali_giorni + c.altri_giorni
+      const totale_prenotazioni = c.supercar_prenotazioni + c.urban_prenotazioni + c.aziendali_prenotazioni + c.altri_prenotazioni + c.lavaggi_prenotazioni + c.meccanica_prenotazioni
+      const totale_spesa = round2(supercar_spesa + urban_spesa + aziendali_spesa + altri_spesa + lavaggi_spesa + meccanica_spesa + penali_spesa + danni_spesa)
 
       return {
         customerId: c.customerId,
@@ -536,6 +542,7 @@ export const handler: Handler = async (event) => {
         supercar_spesa, supercar_prenotazioni: c.supercar_prenotazioni, supercar_giorni: c.supercar_giorni,
         urban_spesa, urban_prenotazioni: c.urban_prenotazioni, urban_giorni: c.urban_giorni,
         aziendali_spesa, aziendali_prenotazioni: c.aziendali_prenotazioni, aziendali_giorni: c.aziendali_giorni,
+        altri_spesa, altri_prenotazioni: c.altri_prenotazioni, altri_giorni: c.altri_giorni,
         lavaggi_spesa, lavaggi_prenotazioni: c.lavaggi_prenotazioni,
         meccanica_spesa, meccanica_prenotazioni: c.meccanica_prenotazioni,
         penali_spesa, penali_eventi: c.penali_eventi,
