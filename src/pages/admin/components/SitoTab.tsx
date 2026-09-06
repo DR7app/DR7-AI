@@ -5599,6 +5599,12 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
                     <FieldText label='Pulsante "Torna alla Home" (IT)' value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
                     <FieldText label='"Back to Home" button (EN)' value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
                 </div>
+                <FieldText label="Immagine — percorso sotto public (es. /dr7-token.jpeg)" value={copy.hero_image ?? ''} onChange={v => update('hero_image', v)} />
+                {copy.hero_image && (
+                    <div className="rounded-xl overflow-hidden border border-theme-border bg-black p-4 flex justify-center">
+                        <img src={copy.hero_image} alt="" className="max-h-40 w-auto" />
+                    </div>
+                )}
             </section>
         </div>
     )

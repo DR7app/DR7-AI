@@ -649,6 +649,7 @@ export interface TokenCopy {
   hero_eyebrow_it: string; hero_eyebrow_en: string;      // "Coming Soon"
   body_message_it: string; body_message_en: string;
   cta_button_it: string; cta_button_en: string;          // "Torna alla Home"
+  hero_image?: string;                                   // percorso sotto public
 }
 
 // ─── Credit Wallet page (recharge funnel + benefits + checkout modal) ────
@@ -2004,6 +2005,7 @@ export const INITIAL_TOKEN: TokenCopy = {
   body_message_it: 'Il sistema DR7 Token è in fase di sviluppo. Tornate presto per scoprire la moneta digitale del lusso reale.',
   body_message_en: 'The DR7 Token system is under development. Come back soon to discover the digital currency of real luxury.',
   cta_button_it: 'Torna alla pagina iniziale', cta_button_en: 'Back to Home',
+  hero_image: '/dr7-token.jpeg',
 };
 
 // ─── Default Credit Wallet seed ──────────────────────────────────────────
