@@ -174,9 +174,9 @@ export default function CarWashCatalogTab() {
       if (error) throw error
       setPrimeFlexSavedPrice(parsed)
       setPrimeFlexPrice(parsed.toFixed(2))
-      toast.success('Prime Flex salvato')
+      toast.success('DR7 Flex salvato')
     } catch (err: unknown) {
-      toast.error('Errore salvataggio Prime Flex: ' + (err as Error).message)
+      toast.error('Errore salvataggio DR7 Flex: ' + (err as Error).message)
     } finally {
       setPrimeFlexSaving(false)
       primeFlexLockRef.current = false
@@ -381,7 +381,7 @@ export default function CarWashCatalogTab() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="min-w-0">
                 <h3 className="text-base font-semibold text-theme-text-primary">
-                  Prime Flex — Protezione Cancellazione
+                  DR7 Flex — Protezione Cancellazione
                 </h3>
                 <p className="text-sm text-theme-text-muted mt-1">
                   Add-on opzionale sul checkout lavaggio: il cliente puo' annullare fino al giorno

@@ -553,7 +553,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (seatNames) name += ` [${seatNames}]`
       parts.push(name)
     }
-    if (primeFlex) parts.push('Prime Flex')
+    if (primeFlex) parts.push('DR7 Flex')
     return parts.join(' + ')
   }
 
@@ -4539,7 +4539,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-theme-text-primary">PRIME FLEX</span>
+                        <span className="text-sm font-bold text-theme-text-primary">DR7 FLEX</span>
                         <span className="text-[11px] font-bold text-emerald-400">+ €{PRIME_FLEX_PRICE.toFixed(2)}</span>
                       </div>
                       <p className="text-[11px] text-theme-text-muted mt-0.5">Cancellazione gratuita — rimborso del 90% come credito DR7 Wallet</p>
@@ -4620,7 +4620,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             <div className="flex items-center justify-between gap-2 text-[11px]">
                               <span className="flex items-center gap-1.5 text-theme-text-secondary">
                                 <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                                Prime Flex
+                                DR7 Flex
                               </span>
                               <span className="font-mono text-emerald-300 tabular-nums">€{PRIME_FLEX_PRICE.toFixed(2)}</span>
                             </div>
@@ -4743,7 +4743,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   })}
                   {primeFlex && (
                     <div className="flex justify-between text-theme-text-muted">
-                      <span>+ Prime Flex</span>
+                      <span>+ DR7 Flex</span>
                       <span>EUR {PRIME_FLEX_PRICE.toFixed(2)}</span>
                     </div>
                   )}

@@ -728,7 +728,7 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   cancellation_rules: [
     { id: 'standard',   label: 'Cancellazione standard',  applies_to: 'all',     requires_service: 'none',       min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
     { id: 'dr7_flex',   label: 'DR7 Flex (noleggio)',     applies_to: 'rental',  requires_service: 'dr7_flex',   min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
-    { id: 'prime_flex', label: 'Prime Flex (lavaggio)',   applies_to: 'carwash', requires_service: 'prime_flex', min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
+    { id: 'prime_flex', label: 'DR7 Flex (lavaggio)',   applies_to: 'carwash', requires_service: 'prime_flex', min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
     { id: 'elite',      label: 'Elite Member',            applies_to: 'all',     requires_service: 'elite',      min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
   ],
   // Default: KM Illimitati ESCLUSO dal coefficiente (venduto a listino).
@@ -2645,7 +2645,7 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
         out.push(`Cancellazione / ${c.label}: si applica a ${lbl(p.applies_to || 'all')} → ${lbl(c.applies_to || 'all')}`)
       }
       if ((p.requires_service || 'none') !== (c.requires_service || 'none')) {
-        const lbl = (m: string) => m === 'dr7_flex' ? 'DR7 Flex' : m === 'prime_flex' ? 'Prime Flex' : m === 'elite' ? 'Elite' : 'nessuna'
+        const lbl = (m: string) => m === 'dr7_flex' ? 'DR7 Flex' : m === 'prime_flex' ? 'DR7 Flex' : m === 'elite' ? 'Elite' : 'nessuna'
         out.push(`Cancellazione / ${c.label}: condizione ${lbl(p.requires_service || 'none')} → ${lbl(c.requires_service || 'none')}`)
       }
       if (p.is_active !== c.is_active) out.push(`Cancellazione / ${c.label}: ${c.is_active ? 'attivata' : 'disattivata'}`)
@@ -6753,7 +6753,7 @@ function AutomazioniSection({
           <li className="flex gap-3">
             <span className="inline-flex shrink-0 w-6 h-6 rounded-full bg-[#ff3b30] text-white items-center justify-center text-[11px] font-bold mt-0.5">5</span>
             <div>
-              <b>Cancellazione standard.</b> Cliente puo' cancellare se mancano almeno <b>X giorni</b> al pickup → riceve <b>Y%</b> come credito DR7 Wallet (penale = 100−Y). Sotto la soglia, cancellazione bloccata salvo DR7 Flex / Prime Flex / Elite (regole definite nei rispettivi servizi). Default: 5 giorni / 90% rimborso (10% penale).
+              <b>Cancellazione standard.</b> Cliente puo' cancellare se mancano almeno <b>X giorni</b> al pickup → riceve <b>Y%</b> come credito DR7 Wallet (penale = 100−Y). Sotto la soglia, cancellazione bloccata salvo DR7 Flex / Elite (regole definite nei rispettivi servizi). Default: 5 giorni / 90% rimborso (10% penale).
             </div>
           </li>
         </ul>
@@ -6837,7 +6837,7 @@ function AutomazioniSection({
               Regole di cancellazione
             </h3>
             <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
-              Lista di regole valutate per giorni di preavviso decrescenti. Vince la prima regola attiva con preavviso ≥ soglia. Penale = 100 − rimborso. DR7 Flex / Prime Flex / Elite hanno regole proprie (servizi).
+              Lista di regole valutate per giorni di preavviso decrescenti. Vince la prima regola attiva con preavviso ≥ soglia. Penale = 100 − rimborso. DR7 Flex (noleggio e lavaggio) / Elite hanno regole proprie (servizi).
             </p>
           </div>
           <button
@@ -6867,7 +6867,7 @@ function AutomazioniSection({
               const patch = (p: Partial<CancellationRule>) =>
                 update({ cancellation_rules: (automations.cancellation_rules || []).map(x => x.id === r.id ? { ...x, ...p } : x) })
               const appliesLbl = (r.applies_to || 'all') === 'rental' ? 'Solo noleggio' : (r.applies_to || 'all') === 'carwash' ? 'Solo lavaggio' : 'Tutto'
-              const requiresLbl = (r.requires_service || 'none') === 'dr7_flex' ? 'DR7 Flex' : (r.requires_service || 'none') === 'prime_flex' ? 'Prime Flex' : (r.requires_service || 'none') === 'elite' ? 'Elite' : '—'
+              const requiresLbl = (r.requires_service || 'none') === 'dr7_flex' ? 'DR7 Flex' : (r.requires_service || 'none') === 'prime_flex' ? 'DR7 Flex' : (r.requires_service || 'none') === 'elite' ? 'Elite' : '—'
               return (
                 <li key={r.id} className="px-5 py-4 group">
                   {/* Header: toggle + label + delete */}
@@ -6924,7 +6924,7 @@ function AutomazioniSection({
                       >
                         <option value="none">Nessuna</option>
                         <option value="dr7_flex">DR7 Flex acquistato</option>
-                        <option value="prime_flex">Prime Flex acquistato</option>
+                        <option value="prime_flex">DR7 Flex lavaggio acquistato</option>
                         <option value="elite">Cliente Elite</option>
                       </select>
                     </label>
