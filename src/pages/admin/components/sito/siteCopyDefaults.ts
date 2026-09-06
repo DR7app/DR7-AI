@@ -2499,7 +2499,6 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   expansion_heading_en: 'Our Expansion Plan',
   expansion_locations: [
     { id: 'cagliari', icon: 'square',  name: 'Cagliari', name_it: 'Cagliari', name_en: 'Cagliari', description: 'Sede Principale', description_it: 'Sede Principale', description_en: 'Headquarters' },
-    { id: 'iglesias', icon: 'diamond', name: 'Iglesias', name_it: 'Iglesias', name_en: 'Iglesias', description: 'Franchising Operativo', description_it: 'Franchising Operativo', description_en: 'Operating Franchise' },
     { id: 'target',   icon: 'lines',   name: '300 Sedi',  name_it: '300 Sedi', name_en: '300 Locations', description: 'Obiettivo Italia', description_it: 'Obiettivo Italia', description_en: 'Italy Target' },
   ],
   about_heading: 'L\'Impero DR7',
@@ -2539,9 +2538,9 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   contact_intro_it: 'e scopri come aprire la tua sede ufficiale DR7.',
   contact_intro_en: 'and find out how to open your official DR7 location.',
   contact_email: 'franchising@dr7.app',
-  footer_statement: '-\n> "Solo per veri imprenditori. Posti limitati per le nuove aperture 2025."',
-  footer_statement_it: '-\n> "Solo per veri imprenditori. Posti limitati per le nuove aperture 2025."',
-  footer_statement_en: '-\n> "For genuine entrepreneurs only. Limited places for new 2025 openings."',
+  footer_statement: '-\n> "Solo per veri imprenditori. Posti limitati per le nuove aperture 2027."',
+  footer_statement_it: '-\n> "Solo per veri imprenditori. Posti limitati per le nuove aperture 2027."',
+  footer_statement_en: '-\n> "For genuine entrepreneurs only. Limited places for new 2027 openings."',
 };
 
 // ─── Default Investitori seed ──────────────────────────────────────────────
