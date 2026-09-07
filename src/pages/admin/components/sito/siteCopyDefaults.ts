@@ -59,6 +59,10 @@ export interface SiteCopySnapshot {
   // first migration — a raw FaqEntry[]. The getter normalizes both shapes.
   faq?: FaqCopy | FaqEntry[];
   cancellazione?: CancellazioneCopy;
+  /** Testi liberi: ogni stringa del sito riscritta dal gestionale.
+   *  Chiave `k:<voce del dizionario>` o `s:<impronta del testo italiano>`,
+   *  vedi utils/testiSito.ts. */
+  testi?: Record<string, { it?: string; en?: string }>;
   membership?: MembershipCopy;
   home?: HomeCopy;
   about?: AboutCopy;

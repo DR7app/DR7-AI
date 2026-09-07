@@ -36,6 +36,9 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import MoneyInput from '../../../components/MoneyInput'
 // Alberatura reale di dr7.app: una voce dell'onglet = una pagina del sito.
+// Catalogo dei testi del sito: GENERATO da scripts/genTestiCatalogo.mjs.
+// E' quello che rende modificabili anche le pagine senza editor dedicato.
+import { TESTI_CATALOGO, type VoceTesto } from './sito/testiCatalogo'
 import {
     SITO_AREAS,
     SITO_SCREENS,
@@ -218,7 +221,15 @@ const SPEC_KEY_LABEL: Record<AviationMarineSpecKey, string> = {
 // Il mode compare solo quando l'operatore tocca davvero questa sezione.
 const INITIAL_FLOTTA: FlottaCopy = { visible_category_ids: [] }
 
+/** Una stringa del sito riscritta dal gestionale. */
+export interface TestoRiscritto {
+    it?: string
+    en?: string
+}
+
 interface CurrentState {
+    /** Testi liberi: chiave del catalogo -> testo riscritto. */
+    testi: Record<string, TestoRiscritto>
     flotta: FlottaCopy
     faq: FaqCopy
     cancellazione: CancellazioneCopy
@@ -573,6 +584,10 @@ export default function SitoTab() {
     const [savedDr7ClubPlan, setSavedDr7ClubPlan] = useState<Dr7ClubPlanCopy>(INITIAL_DR7_CLUB_PLAN)
     const [aspetto, setAspetto] = useState<Required<AspettoCopy>>(INITIAL_ASPETTO)
     const [savedAspetto, setSavedAspetto] = useState<Required<AspettoCopy>>(INITIAL_ASPETTO)
+    // Testi liberi: nessun default: quello che non e' stato riscritto resta
+    // il testo del codice del sito, mostrato come segnaposto negli editor.
+    const [testi, setTesti] = useState<Record<string, TestoRiscritto>>({})
+    const [savedTesti, setSavedTesti] = useState<Record<string, TestoRiscritto>>({})
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -757,6 +772,11 @@ export default function SitoTab() {
                     setToken(remote.token)
                     setSavedToken(remote.token)
                 }
+                if (remote?.testi && typeof remote.testi === 'object') {
+                    const mappa = remote.testi as Record<string, TestoRiscritto>
+                    setTesti(mappa)
+                    setSavedTesti(mappa)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -769,10 +789,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan, aspetto },
-            { flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine, dr7ClubPlan: savedDr7ClubPlan, aspetto: savedAspetto }
+            { testi, flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan, aspetto },
+            { testi: savedTesti, flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine, dr7ClubPlan: savedDr7ClubPlan, aspetto: savedAspetto }
         ),
-        [flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine, dr7ClubPlan, savedDr7ClubPlan, aspetto, savedAspetto]
+        [testi, savedTesti, flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine, dr7ClubPlan, savedDr7ClubPlan, aspetto, savedAspetto]
     )
     const dirty = changes.length > 0
 
@@ -786,7 +806,8 @@ export default function SitoTab() {
             // Un pacchetto senza id il sito non lo mostra: l'id si completa qui.
             const creditWalletToSave = normalizeCreditPackagesForSave(creditWallet)
             if (JSON.stringify(creditWalletToSave) !== JSON.stringify(creditWallet)) setCreditWallet(creditWalletToSave)
-            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet: creditWalletToSave, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan, aspetto })
+            await savePersisted({ testi, flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet: creditWalletToSave, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan, aspetto })
+            setSavedTesti(testi)
             setSavedFlotta(flotta)
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
@@ -851,6 +872,7 @@ export default function SitoTab() {
 
     const handleDiscard = () => {
         if (!dirty) return
+        setTesti(savedTesti)
         setFlotta(savedFlotta)
         setFaq(savedFaq)
         setCancellazione(savedCancellazione)
@@ -943,7 +965,10 @@ export default function SitoTab() {
                     <div>
                         <h1 className="text-[28px] font-semibold tracking-tight text-theme-text-primary">Sito</h1>
                         <p className="text-[14px] text-theme-text-secondary mt-1">
-                            Le pagine di dr7.app, nell'ordine in cui le trova un visitatore. {MANAGED_COUNT} su {TOTAL_COUNT} si modificano da qui.
+                            Le pagine di dr7.app, nell'ordine in cui le trova un visitatore.{' '}
+                            {MANAGED_COUNT === TOTAL_COUNT
+                                ? <>Tutte e {TOTAL_COUNT} si modificano da qui: nessun testo del sito richiede uno sviluppatore.</>
+                                : <>{MANAGED_COUNT} su {TOTAL_COUNT} si modificano da qui.</>}
                         </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
@@ -1075,6 +1100,9 @@ export default function SitoTab() {
                         {hydrated && section === 'aspetto' && (
                             <AspettoEditor copy={aspetto} setCopy={setAspetto} />
                         )}
+                        {hydrated && section === 'testi' && (
+                            <TestiEditor screen={screen} copy={testi} setCopy={setTesti} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1109,6 +1137,21 @@ export default function SitoTab() {
 // ─── Changes detection ───────────────────────────────────────────────────────
 function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     const out: string[] = []
+    // Testi liberi — una riga per stringa toccata, con l'inizio del testo
+    // cosi' la barra di salvataggio dice QUALE frase cambia.
+    {
+        const cur = current.testi || {}
+        const sav = saved.testi || {}
+        const chiavi = new Set([...Object.keys(cur), ...Object.keys(sav)])
+        for (const k of chiavi) {
+            const a = JSON.stringify(cur[k] || {})
+            const b = JSON.stringify(sav[k] || {})
+            if (a === b) continue
+            const voce = TESTI_CATALOGO.find(v => v.chiave === k)
+            const nome = (voce?.it || k).slice(0, 40)
+            out.push(!cur[k] ? `Testo ripristinato: "${nome}"` : `Testo modificato: "${nome}"`)
+        }
+    }
     // Flotta — diff sulle categorie visibili. Senza questo, le checkbox
     // dell'editor "Flotta (categorie visibili)" non rendevano il form dirty
     // e il bottone Salva restava disabilitato (bug "non riesco a salvare").
@@ -6667,3 +6710,162 @@ function AviationMarineEditor({ copy, setCopy }: { copy: AviationMarineCopy; set
     )
 }
 
+// ─── Testi della pagina (centralina_pro_config.site_copy.testi) ─────────
+//
+// L'editor che chiude il cerchio: ogni stringa che il sito mostra passando
+// da useTranslation() e' qui, pagina per pagina, e si riscrive senza
+// toccare il codice. Le pagine con un editor dedicato (Home, Chi Siamo,
+// Membership...) restano gestite da quello: qui ci sono le altre.
+//
+// Il catalogo e' GENERATO dal repo del sito (npm run testi:gen): se una
+// pagina cambia testo nel codice, la voce vecchia sparisce e la riscrittura
+// smette di applicarsi — meglio del contrario, cioe' una traduzione vecchia
+// incollata su una frase nuova.
+function TestiEditor({ screen, copy, setCopy }: {
+    screen: SitoScreen
+    copy: Record<string, TestoRiscritto>
+    setCopy: (next: Record<string, TestoRiscritto>) => void
+}) {
+    const [cerca, setCerca] = useState('')
+    const [soloModificati, setSoloModificati] = useState(false)
+
+    // La schermata "Testi condivisi" raccoglie cio' che non appartiene a una
+    // pagina sola (modali, wizard, barre di ricerca): senza di lei quelle
+    // stringhe non sarebbero raggiungibili da nessuna voce della nav.
+    const condivisi = screen.id === 'testi-condivisi'
+    const voci = useMemo(() => {
+        const base = condivisi
+            ? TESTI_CATALOGO.filter(v => !v.schermata)
+            : TESTI_CATALOGO.filter(v => v.schermata === screen.id)
+        const q = cerca.trim().toLowerCase()
+        return base.filter(v => {
+            if (soloModificati && !copy[v.chiave]) return false
+            if (!q) return true
+            return v.it.toLowerCase().includes(q) || v.en.toLowerCase().includes(q) || v.file.toLowerCase().includes(q)
+        })
+    }, [screen.id, condivisi, cerca, soloModificati, copy])
+
+    const modificati = useMemo(
+        () => TESTI_CATALOGO.filter(v => (condivisi ? !v.schermata : v.schermata === screen.id) && copy[v.chiave]).length,
+        [screen.id, condivisi, copy],
+    )
+
+    /** Scrive una lingua. Testo uguale all'originale o vuoto = nessun override. */
+    const scrivi = (voce: VoceTesto, lingua: 'it' | 'en', valore: string) => {
+        const attuale = { ...(copy[voce.chiave] || {}) }
+        const originale = lingua === 'it' ? voce.it : voce.en
+        if (valore.trim() === '' || valore === originale) delete attuale[lingua]
+        else attuale[lingua] = valore
+        const next = { ...copy }
+        if (Object.keys(attuale).length === 0) delete next[voce.chiave]
+        else next[voce.chiave] = attuale
+        setCopy(next)
+    }
+
+    const ripristina = (voce: VoceTesto) => {
+        const next = { ...copy }
+        delete next[voce.chiave]
+        setCopy(next)
+    }
+
+    // Raggruppate per file: l'operatore vede da dove viene ogni blocco.
+    const perFile = useMemo(() => {
+        const mappa = new Map<string, VoceTesto[]>()
+        for (const v of voci) {
+            if (!mappa.has(v.file)) mappa.set(v.file, [])
+            mappa.get(v.file)!.push(v)
+        }
+        return [...mappa.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    }, [voci])
+
+    const totaleSchermata = useMemo(
+        () => TESTI_CATALOGO.filter(v => (condivisi ? !v.schermata : v.schermata === screen.id)).length,
+        [screen.id, condivisi],
+    )
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">
+                    {condivisi ? 'Testi condivisi' : `Testi di ${screen.label}`}
+                </h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    {condivisi
+                        ? 'Le frasi che compaiono su piu\' pagine: modali, wizard di prenotazione, barre di ricerca.'
+                        : <>Ogni frase di questa pagina. Il campo vuoto significa &laquo;come nel sito&raquo;: quello che scrivi qui lo sostituisce.</>}
+                    {' '}<b>{totaleSchermata}</b> frasi, <b>{modificati}</b> riscritte.
+                </p>
+            </div>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    <input
+                        value={cerca}
+                        onChange={e => setCerca(e.target.value)}
+                        placeholder="Cerca una frase..."
+                        className="flex-1 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-secondary text-[13px] text-theme-text-primary"
+                    />
+                    <label className="flex items-center gap-2 text-[13px] text-theme-text-secondary">
+                        <input type="checkbox" checked={soloModificati} onChange={e => setSoloModificati(e.target.checked)} />
+                        Solo le riscritte
+                    </label>
+                </div>
+
+                {totaleSchermata === 0 && (
+                    <p className="text-[13px] text-theme-text-secondary">
+                        Nessuna frase raccolta per questa schermata. I suoi testi non passano ancora da
+                        {' '}<code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">useTranslation()</code>:
+                        vanno prima portati li nel repo del sito, poi rigenerato il catalogo con
+                        {' '}<code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">npm run testi:gen</code>.
+                    </p>
+                )}
+
+                {perFile.map(([file, elenco]) => (
+                    <div key={file} className="space-y-3">
+                        <h3 className="text-[12px] font-semibold text-theme-text-secondary uppercase tracking-wide">{file}</h3>
+                        {elenco.map(voce => {
+                            const scritto = copy[voce.chiave]
+                            return (
+                                <div key={voce.chiave} className={`rounded-xl border p-4 space-y-3 ${scritto ? 'border-emerald-500/40 bg-emerald-500/[0.04]' : 'border-theme-border bg-theme-bg-secondary'}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <p className="text-[13px] text-theme-text-primary flex-1">{voce.it}</p>
+                                        {scritto && (
+                                            <button
+                                                onClick={() => ripristina(voce)}
+                                                className="text-[12px] text-theme-text-secondary hover:text-theme-text-primary underline shrink-0"
+                                            >
+                                                Ripristina
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[12px] text-theme-text-secondary mb-1">Italiano</label>
+                                            <textarea
+                                                rows={voce.it.length > 90 ? 3 : 1}
+                                                value={scritto?.it ?? ''}
+                                                placeholder={voce.it}
+                                                onChange={e => scrivi(voce, 'it', e.target.value)}
+                                                className="w-full px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-[13px] text-theme-text-primary"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[12px] text-theme-text-secondary mb-1">Inglese</label>
+                                            <textarea
+                                                rows={voce.en.length > 90 ? 3 : 1}
+                                                value={scritto?.en ?? ''}
+                                                placeholder={voce.en}
+                                                onChange={e => scrivi(voce, 'en', e.target.value)}
+                                                className="w-full px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-[13px] text-theme-text-primary"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                ))}
+            </section>
+        </div>
+    )
+}

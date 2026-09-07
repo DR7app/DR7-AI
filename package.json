@@ -16,11 +16,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sito:gen": "node scripts/genSiteCopyDefaults.mjs",
-    "sito:check": "node scripts/genSiteCopyDefaults.mjs --check && node scripts/checkSitoSiteMap.mjs",
+    "sito:check": "node scripts/genSiteCopyDefaults.mjs --check && node scripts/genTestiCatalogo.mjs --check && node scripts/checkSitoSiteMap.mjs",
     "sito:gaps": "node scripts/sitoGaps.mjs",
     "wb:sync": "node scripts/syncWebsiteBuilder.mjs",
     "wb:check": "node scripts/syncWebsiteBuilder.mjs --check",
-    "wb:verifica": "node scripts/verificaWebsiteBuilder.mjs"
+    "wb:verifica": "node scripts/verificaWebsiteBuilder.mjs",
+    "testi:gen": "node scripts/genTestiCatalogo.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
