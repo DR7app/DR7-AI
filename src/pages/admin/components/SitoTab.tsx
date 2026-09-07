@@ -4381,6 +4381,54 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                     <FieldText label="Notes label (EN)" value={copy.field_notes_label_en} onChange={v => update('field_notes_label_en', v)} />
                     <FieldText label="Note placeholder (IT)" value={copy.field_notes_placeholder_it} onChange={v => update('field_notes_placeholder_it', v)} />
                     <FieldText label="Notes placeholder (EN)" value={copy.field_notes_placeholder_en} onChange={v => update('field_notes_placeholder_en', v)} />
+                    <FieldText label="Orario partenza label (IT)" value={copy.field_departure_time_label_it} onChange={v => update('field_departure_time_label_it', v)} />
+                    <FieldText label="Departure time label (EN)" value={copy.field_departure_time_label_en} onChange={v => update('field_departure_time_label_en', v)} />
+                    <FieldText label="Volo di ritorno? label (IT)" value={copy.field_return_flight_label_it} onChange={v => update('field_return_flight_label_it', v)} />
+                    <FieldText label="Return flight? label (EN)" value={copy.field_return_flight_label_en} onChange={v => update('field_return_flight_label_en', v)} />
+                    <FieldText label="Orario ritorno label (IT)" value={copy.field_return_time_label_it} onChange={v => update('field_return_time_label_it', v)} />
+                    <FieldText label="Return time label (EN)" value={copy.field_return_time_label_en} onChange={v => update('field_return_time_label_en', v)} />
+                    <FieldText label="Tappe/scali? label (IT)" value={copy.field_stops_label_it} onChange={v => update('field_stops_label_it', v)} />
+                    <FieldText label="Stops? label (EN)" value={copy.field_stops_label_en} onChange={v => update('field_stops_label_en', v)} />
+                    <FieldText label="Quali tappe label (IT)" value={copy.field_stops_detail_label_it} onChange={v => update('field_stops_detail_label_it', v)} />
+                    <FieldText label="Which stops label (EN)" value={copy.field_stops_detail_label_en} onChange={v => update('field_stops_detail_label_en', v)} />
+                    <FieldText label="Quali tappe placeholder (IT)" value={copy.field_stops_detail_placeholder_it} onChange={v => update('field_stops_detail_placeholder_it', v)} />
+                    <FieldText label="Which stops placeholder (EN)" value={copy.field_stops_detail_placeholder_en} onChange={v => update('field_stops_detail_placeholder_en', v)} />
+                    <FieldText label="Bagagli label (IT)" value={copy.field_luggage_label_it} onChange={v => update('field_luggage_label_it', v)} />
+                    <FieldText label="Luggage label (EN)" value={copy.field_luggage_label_en} onChange={v => update('field_luggage_label_en', v)} />
+                    <FieldText label="Bagagli riga sotto (IT)" value={copy.field_luggage_placeholder_it} onChange={v => update('field_luggage_placeholder_it', v)} />
+                    <FieldText label="Luggage hint line (EN)" value={copy.field_luggage_placeholder_en} onChange={v => update('field_luggage_placeholder_en', v)} />
+                    <FieldText label="Numero bagagli label (IT)" value={copy.field_luggage_count_label_it} onChange={v => update('field_luggage_count_label_it', v)} />
+                    <FieldText label="Luggage count label (EN)" value={copy.field_luggage_count_label_en} onChange={v => update('field_luggage_count_label_en', v)} />
+                    <FieldText label="Numero bagagli — ultima voce (IT)" value={copy.field_luggage_count_max_option_it} onChange={v => update('field_luggage_count_max_option_it', v)} />
+                    <FieldText label="Luggage count — last option (EN)" value={copy.field_luggage_count_max_option_en} onChange={v => update('field_luggage_count_max_option_en', v)} />
+                    <FieldText label="Peso bagaglio label (IT)" value={copy.field_luggage_weight_label_it} onChange={v => update('field_luggage_weight_label_it', v)} />
+                    <FieldText label="Luggage weight label (EN)" value={copy.field_luggage_weight_label_en} onChange={v => update('field_luggage_weight_label_en', v)} />
+                    <FieldText label="Peso bagaglio — voci separate da virgola (IT)" value={copy.field_luggage_weight_options_it} onChange={v => update('field_luggage_weight_options_it', v)} />
+                    <FieldText label="Luggage weight — comma separated options (EN)" value={copy.field_luggage_weight_options_en} onChange={v => update('field_luggage_weight_options_en', v)} />
+                    <FieldText label="Peso bagaglio placeholder (IT)" value={copy.field_luggage_weight_placeholder_it} onChange={v => update('field_luggage_weight_placeholder_it', v)} />
+                    <FieldText label="Luggage weight placeholder (EN)" value={copy.field_luggage_weight_placeholder_en} onChange={v => update('field_luggage_weight_placeholder_en', v)} />
+                    <FieldText label="Budget label (IT)" value={copy.field_budget_label_it} onChange={v => update('field_budget_label_it', v)} />
+                    <FieldText label="Budget label (EN)" value={copy.field_budget_label_en} onChange={v => update('field_budget_label_en', v)} />
+                    <FieldText label="Budget placeholder (IT)" value={copy.field_budget_placeholder_it} onChange={v => update('field_budget_placeholder_it', v)} />
+                    <FieldText label="Budget placeholder (EN)" value={copy.field_budget_placeholder_en} onChange={v => update('field_budget_placeholder_en', v)} />
+                    <FieldText label="Budget riga sotto — vuoto = nascosta (IT)" value={copy.field_budget_hint_it} onChange={v => update('field_budget_hint_it', v)} />
+                    <FieldText label="Budget hint — empty hides it (EN)" value={copy.field_budget_hint_en} onChange={v => update('field_budget_hint_en', v)} />
+                    <FieldText label="Tipologia aeromobile label (IT)" value={copy.field_aircraft_label_it} onChange={v => update('field_aircraft_label_it', v)} />
+                    <FieldText label="Aircraft type label (EN)" value={copy.field_aircraft_label_en} onChange={v => update('field_aircraft_label_en', v)} />
+                    <FieldText label="Opzione Jet (IT)" value={copy.field_aircraft_option_jet_it} onChange={v => update('field_aircraft_option_jet_it', v)} />
+                    <FieldText label="Jet option (EN)" value={copy.field_aircraft_option_jet_en} onChange={v => update('field_aircraft_option_jet_en', v)} />
+                    <FieldText label="Opzione Elicottero (IT)" value={copy.field_aircraft_option_helicopter_it} onChange={v => update('field_aircraft_option_helicopter_it', v)} />
+                    <FieldText label="Helicopter option (EN)" value={copy.field_aircraft_option_helicopter_en} onChange={v => update('field_aircraft_option_helicopter_en', v)} />
+                    <FieldText label="Opzione «scegliete voi» (IT)" value={copy.field_aircraft_option_any_it} onChange={v => update('field_aircraft_option_any_it', v)} />
+                    <FieldText label="«You choose» option (EN)" value={copy.field_aircraft_option_any_en} onChange={v => update('field_aircraft_option_any_en', v)} />
+                    <FieldText label="Date/orari flessibili? label (IT)" value={copy.field_flexibility_label_it} onChange={v => update('field_flexibility_label_it', v)} />
+                    <FieldText label="Flexible dates? label (EN)" value={copy.field_flexibility_label_en} onChange={v => update('field_flexibility_label_en', v)} />
+                    <FieldText label="Flessibilita' riga sotto — vuoto = nascosta (IT)" value={copy.field_flexibility_hint_it} onChange={v => update('field_flexibility_hint_it', v)} />
+                    <FieldText label="Flexibility hint — empty hides it (EN)" value={copy.field_flexibility_hint_en} onChange={v => update('field_flexibility_hint_en', v)} />
+                    <FieldText label="Voce «Si» (IT)" value={copy.option_yes_it} onChange={v => update('option_yes_it', v)} />
+                    <FieldText label="«Yes» option (EN)" value={copy.option_yes_en} onChange={v => update('option_yes_en', v)} />
+                    <FieldText label="Voce «No» (IT)" value={copy.option_no_it} onChange={v => update('option_no_it', v)} />
+                    <FieldText label="«No» option (EN)" value={copy.option_no_en} onChange={v => update('option_no_en', v)} />
                 </div>
             </section>
 
