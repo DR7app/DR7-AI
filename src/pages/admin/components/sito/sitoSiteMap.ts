@@ -94,7 +94,7 @@ export const SITO_SCREENS: SitoScreen[] = [
 
     // ─── Home ────────────────────────────────────────────────────────────
     { id: 'hero',              path: '/',                        label: 'Home',                     area: 'home',      editor: 'hero',              file: 'pages/HomePage.tsx', note: 'Slide del hero + titoli e immagini delle card.' },
-    { id: 'reviews',           path: '/',                        label: 'Recensioni in home',       area: 'home',      editor: 'testi',                file: 'sections/ReviewsSection.tsx' },
+    { id: 'reviews',           path: '/',                        label: 'Recensioni in home',       area: 'home',      editor: 'testi',             file: 'sections/ReviewsSection.tsx', note: 'Le recensioni arrivano da Google, non si scrivono da qui: la sezione non ha testo proprio.' },
 
     // ─── Mobilita ────────────────────────────────────────────────────────
     { id: 'flotta',            path: '/flotta',                  label: 'Flotta (indice categorie)',area: 'mobilita',  editor: 'flotta',            file: 'pages/FlottaIndexPage.tsx', note: 'L\'editor decide quali categorie sono visibili; i testi della pagina sono nel codice.' },

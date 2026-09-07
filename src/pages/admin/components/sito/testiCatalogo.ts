@@ -1700,6 +1700,34 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "auth-verify"
     },
     {
+        "chiave": "s:acfbc110",
+        "it": "Mezzo scelto:",
+        "en": "Selected aircraft:",
+        "file": "pages/AviationQuoteRequestPage.tsx",
+        "schermata": "aviation"
+    },
+    {
+        "chiave": "s:dd209a01",
+        "it": "Nessun bagaglio",
+        "en": "No luggage",
+        "file": "pages/AviationQuoteRequestPage.tsx",
+        "schermata": "aviation"
+    },
+    {
+        "chiave": "s:62221bd7",
+        "it": "Richiesta inviata",
+        "en": "Request sent",
+        "file": "pages/AviationQuoteRequestPage.tsx",
+        "schermata": "aviation"
+    },
+    {
+        "chiave": "s:530651bc",
+        "it": "Torna alla pagina iniziale",
+        "en": "Back to home",
+        "file": "pages/AviationQuoteRequestPage.tsx",
+        "schermata": "aviation"
+    },
+    {
         "chiave": "k:Arrival_Airport",
         "it": "Aeroporto di Arrivo",
         "en": "Arrival Airport",
@@ -2680,11 +2708,39 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "credit-wallet"
     },
     {
+        "chiave": "s:a76fc2b4",
+        "it": "(senza titolo)",
+        "en": "(no title)",
+        "file": "pages/FAQPage.tsx",
+        "schermata": "faq"
+    },
+    {
+        "chiave": "s:c0b698bf",
+        "it": "Nessuna domanda configurata.",
+        "en": "No questions configured.",
+        "file": "pages/FAQPage.tsx",
+        "schermata": "faq"
+    },
+    {
+        "chiave": "s:3c104cf8",
+        "it": "ACCEDI ALLA COLLEZIONE",
+        "en": "ENTER THE COLLECTION",
+        "file": "pages/FlottaIndexPage.tsx",
+        "schermata": "flotta"
+    },
+    {
+        "chiave": "s:072dc6f5",
+        "it": "Cerca città, località o aeroporto",
+        "en": "Search city, location or airport",
+        "file": "pages/FlottaIndexPage.tsx",
+        "schermata": "flotta"
+    },
+    {
         "chiave": "s:d628c5ef",
         "it": "Chiudi",
         "en": "Close",
-        "file": "components/layout/Footer.tsx",
-        "schermata": "footer"
+        "file": "pages/FlottaIndexPage.tsx",
+        "schermata": "flotta"
     },
     {
         "chiave": "s:d519010b",
@@ -8410,13 +8466,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Togli terza fila",
         "en": "Remove third row",
         "file": "components/ui/SeatPlanPicker.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:530651bc",
-        "it": "Torna alla pagina iniziale",
-        "en": "Back to home",
-        "file": "components/ui/BookingErrorBoundary.tsx",
         "schermata": null
     },
     {
