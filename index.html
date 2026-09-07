@@ -14,6 +14,31 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <title>DR7 - Admin Panel</title>
 
+    <!-- Rete di sicurezza all'avvio (07/09/2026).
+         Se il pacchetto principale non si carica, la scheda resta bianca e
+         non compare nemmeno la pagina di accesso: da dentro il programma non
+         si puo' rimediare, perche' il programma non parte. Questo pezzo sta
+         nell'index.html, che non viene mai messo in cache, quindi c'e'
+         sempre. Ricarica il file saltando la cache del browser (una volta
+         sola per sessione) e poi ricarica la pagina. -->
+    <script>
+      (function () {
+        var CHIAVE = 'dr7_recupero_avvio'
+        window.addEventListener('error', function (e) {
+          var t = e.target
+          if (!t || t.tagName !== 'SCRIPT' || !t.src) return
+          try {
+            if (sessionStorage.getItem(CHIAVE)) return
+            sessionStorage.setItem(CHIAVE, '1')
+          } catch (err) { return }
+          var riparti = function () { location.reload() }
+          try {
+            fetch(t.src, { cache: 'reload' }).then(riparti, riparti)
+          } catch (err) { riparti() }
+        }, true)
+      })()
+    </script>
+
     <!-- Open Graph / WhatsApp / social previews -->
     <!-- og-image.png e' 1200x630 con il logo centrato su sfondo nero,
          taglio standard OG (~1.9:1) cosi' WhatsApp non lo croppa male. -->

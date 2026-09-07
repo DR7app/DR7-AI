@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { decidiRicarica } from '../utils/lazyWithRetry'
 
 interface Props {
   children: ReactNode
@@ -31,7 +32,7 @@ function isChunkLoadError(error: Error): boolean {
   )
 }
 
-const REFRESH_KEY = 'chunk_error_refresh'
+const REFRESH_KEY = 'chunk_load_refresh'
 
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -51,19 +52,31 @@ export default class ErrorBoundary extends Component<Props, State> {
     console.error('ErrorBoundary caught:', error, info.componentStack)
     this.setState({ errorInfo: info.componentStack || null })
 
-    // For chunk errors, attempt ONE automatic hard refresh
-    if (isChunkLoadError(error) && !sessionStorage.getItem(REFRESH_KEY)) {
-      console.warn('[ErrorBoundary] Chunk load error detected. Auto-refreshing...')
-      sessionStorage.setItem(REFRESH_KEY, '1')
-      window.location.reload()
-      return
+    // 07/09/2026 — Il conto delle ricariche e' lo stesso di lazyWithRetry:
+    // non una sola per sessione (bastavano due pubblicazioni di seguito per
+    // ritrovarsi davanti a questa schermata senza rimedio), ma fino a tre,
+    // e il conto riparte dopo dieci minuti.
+    if (isChunkLoadError(error)) {
+      const { ricarica, nuovoValore } = decidiRicarica(sessionStorage.getItem(REFRESH_KEY))
+      if (ricarica) {
+        console.warn('[ErrorBoundary] Chunk load error detected. Auto-refreshing...')
+        sessionStorage.setItem(REFRESH_KEY, nuovoValore)
+        window.location.reload()
+        return
+      }
     }
   }
 
   handleRefresh = () => {
     // Clear the refresh guard so next time we can auto-refresh again
     sessionStorage.removeItem(REFRESH_KEY)
-    window.location.reload()
+    // Il file che manca puo' essere rimasto in cache come pagina HTML
+    // ("immutable, un anno"): si rifa' la richiesta saltando la cache prima
+    // di ricaricare, altrimenti il browser ripropone la stessa risposta.
+    const trovato = (this.state.error?.message || '').match(/https?:\/\/[^\s'"]+\.(?:js|css|mjs)/i)
+    const riparti = () => window.location.reload()
+    if (trovato) fetch(trovato[0], { cache: 'reload' }).then(riparti, riparti)
+    else riparti()
   }
 
   handleRetry = () => {

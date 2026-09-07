@@ -19,6 +19,11 @@ installSendDedupe()
 // nessuna scrittura esce dal browser. Spento non fa nulla.
 installaOscuramento()
 
+// Il programma e' partito: si cancella il segno lasciato dalla rete di
+// sicurezza in index.html, cosi' e' di nuovo disponibile alla prossima
+// pubblicazione.
+try { sessionStorage.removeItem('dr7_recupero_avvio') } catch { /* niente */ }
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

@@ -116,6 +116,13 @@ async function retryImport<T extends ComponentType<any>>(
       )
 
       if (attempt < retries) {
+        // 07/09/2026 — Prima di riprovare si ripulisce la cache del browser
+        // per QUEL file. Netlify risponde ai file mancanti con una pagina
+        // HTML marcata "immutable, un anno": se il browser se l'e' tenuta,
+        // riprovare l'import restituisce all'infinito la stessa pagina.
+        // `cache: 'reload'` obbliga il browser a rifare la richiesta vera e
+        // a sostituire quello che aveva in cassetto.
+        await ripuliscilaCache(error)
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, retryDelay))
         continue
@@ -140,6 +147,20 @@ async function retryImport<T extends ComponentType<any>>(
 
   // TypeScript: unreachable, but satisfies return type
   throw new Error('Import failed after all retries')
+}
+
+/**
+ * Rifa' la richiesta del file saltando la cache del browser, cosi' una
+ * risposta sbagliata memorizzata viene sostituita. Non lancia mai: e' un
+ * tentativo di riparazione, non un passaggio obbligato.
+ */
+async function ripuliscilaCache(error: unknown): Promise<void> {
+  try {
+    const messaggio = error instanceof Error ? error.message : String(error)
+    const trovato = messaggio.match(/https?:\/\/[^\s'"]+\.(?:js|css|mjs)/i)
+    if (!trovato) return
+    await fetch(trovato[0], { cache: 'reload' })
+  } catch { /* la riparazione e' facoltativa */ }
 }
 
 /**
