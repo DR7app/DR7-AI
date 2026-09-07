@@ -1280,6 +1280,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-profilo"
     },
     {
+        "chiave": "s:01012987",
+        "it": "PEC",
+        "en": "PEC",
+        "file": "pages/account/ProfileSettings.tsx",
+        "schermata": "account-profilo"
+    },
+    {
         "chiave": "s:7bedbbb9",
         "it": "Programma Fedeltà Lavaggio",
         "en": "Car Wash Loyalty Programme",
@@ -2260,6 +2267,27 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:b289db1b",
+        "it": "DR7 Flex",
+        "en": "DR7 Flex",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:356456fb",
+        "it": "DR7 FLEX",
+        "en": "DR7 FLEX",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:3003f4f3",
+        "it": "DR7 Flex:",
+        "en": "DR7 Flex:",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:6fddb182",
         "it": "È possibile 1 solo spostamento gratuito, salvo eventuale differenza di prezzo.",
         "en": "One free reschedule is allowed, subject to any price difference.",
@@ -2526,6 +2554,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:0acee258",
+        "it": "RSSMRA80A01H501U",
+        "en": "RSSMRA80A01H501U",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:f7b2ac80",
         "it": "Saldo Disponibile",
         "en": "Available Balance",
@@ -2617,6 +2652,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:aa25c538",
+        "it": "Subtotale",
+        "en": "Subtotal",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:db752226",
+        "it": "Subtotale:",
+        "en": "Subtotal:",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:3786a589",
         "it": "Telefono",
         "en": "Phone",
@@ -2641,6 +2690,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:d0aae98c",
         "it": "Via Roma",
         "en": "Main Street",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:feb7bfd8",
+        "it": "Visa, Mastercard",
+        "en": "Visa, Mastercard",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -2743,16 +2799,30 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "flotta"
     },
     {
-        "chiave": "s:d519010b",
-        "it": "Lingua",
-        "en": "Language",
+        "chiave": "s:97d69387",
+        "it": "DR7 Cagliari Logo",
+        "en": "DR7 Cagliari Logo",
         "file": "components/layout/Footer.tsx",
         "schermata": "footer"
     },
     {
-        "chiave": "s:92985a9a",
-        "it": "text-white",
-        "en": "hover:text-white",
+        "chiave": "s:4af06ef4",
+        "it": "Inglese",
+        "en": "English",
+        "file": "components/layout/Footer.tsx",
+        "schermata": "footer"
+    },
+    {
+        "chiave": "s:6ea5fa0c",
+        "it": "Italiano",
+        "en": "Italian",
+        "file": "components/layout/Footer.tsx",
+        "schermata": "footer"
+    },
+    {
+        "chiave": "s:d519010b",
+        "it": "Lingua",
+        "en": "Language",
         "file": "components/layout/Footer.tsx",
         "schermata": "footer"
     },
@@ -2769,6 +2839,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "en": "Franchising",
         "file": "pages/FranchisingPage.tsx",
         "schermata": "franchising"
+    },
+    {
+        "chiave": "s:8e51b185",
+        "it": "Absolute Detail",
+        "en": "Absolute Detail",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
     },
     {
         "chiave": "s:5096718e",
@@ -3023,13 +3100,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "mechanical-booking"
     },
     {
-        "chiave": "s:db752226",
-        "it": "Subtotale:",
-        "en": "Subtotal:",
-        "file": "pages/MechanicalBookingPage.tsx",
-        "schermata": "mechanical-booking"
-    },
-    {
         "chiave": "s:a36ec340",
         "it": "Targa",
         "en": "License Plate",
@@ -3068,6 +3138,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:4cdebb31",
         "it": "Conferma il tuo abbonamento",
         "en": "Confirm your subscription",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:a56e7688",
+        "it": "DR7 Club",
+        "en": "DR7 Club",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:62945f68",
+        "it": "DR7 CLUB",
+        "en": "DR7 CLUB",
         "file": "pages/MembershipEnrollmentPage.tsx",
         "schermata": "membership-enroll"
     },
@@ -3296,6 +3380,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "partner-annuncio"
     },
     {
+        "chiave": "k:Add_edit_and_organize_your_assets",
+        "it": "Aggiungi, modifica e organizza i tuoi beni disponibili per il noleggio.",
+        "en": "Add, edit, and organize your assets available for rent.",
+        "file": "pages/partner/PartnerDashboardPage.tsx",
+        "schermata": "partner-dashboard"
+    },
+    {
+        "chiave": "k:Analytics",
+        "it": "Analisi",
+        "en": "Analytics",
+        "file": "pages/partner/PartnerDashboardPage.tsx",
+        "schermata": "partner-dashboard"
+    },
+    {
         "chiave": "k:Welcome_to_your_Partner_Dashboard",
         "it": "Benvenuto nella tua Dashboard Partner",
         "en": "Welcome to your Partner Dashboard",
@@ -3320,6 +3418,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "k:Verification_Required_Partner",
         "it": "È richiesta la verifica per pubblicare annunci.",
         "en": "Verification is required to publish listings.",
+        "file": "pages/partner/PartnerDashboardPage.tsx",
+        "schermata": "partner-dashboard"
+    },
+    {
+        "chiave": "k:Manage_Listings",
+        "it": "Gestisci Annunci",
+        "en": "Manage Listings",
         "file": "pages/partner/PartnerDashboardPage.tsx",
         "schermata": "partner-dashboard"
     },
@@ -3373,6 +3478,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "partner-dashboard"
     },
     {
+        "chiave": "k:Gain_insights_into_your_performance",
+        "it": "Ottieni approfondimenti sui tuoi guadagni e sulle prestazioni dei tuoi beni.",
+        "en": "Gain insights into your earnings and asset performance.",
+        "file": "pages/partner/PartnerDashboardPage.tsx",
+        "schermata": "partner-dashboard"
+    },
+    {
         "chiave": "k:Coming_Soon",
         "it": "Prossimamente",
         "en": "Coming Soon",
@@ -3383,6 +3495,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "k:Account_Status",
         "it": "Stato Account",
         "en": "Account Status",
+        "file": "pages/partner/PartnerDashboardPage.tsx",
+        "schermata": "partner-dashboard"
+    },
+    {
+        "chiave": "k:Track_upcoming_and_past_bookings",
+        "it": "Tieni traccia delle prenotazioni imminenti e passate per i tuoi beni.",
+        "en": "Track upcoming and past bookings for your assets.",
         "file": "pages/partner/PartnerDashboardPage.tsx",
         "schermata": "partner-dashboard"
     },
@@ -3404,6 +3523,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "k:Verified",
         "it": "Verificato",
         "en": "Verified",
+        "file": "pages/partner/PartnerDashboardPage.tsx",
+        "schermata": "partner-dashboard"
+    },
+    {
+        "chiave": "k:View_Bookings",
+        "it": "Visualizza Prenotazioni",
+        "en": "View Bookings",
         "file": "pages/partner/PartnerDashboardPage.tsx",
         "schermata": "partner-dashboard"
     },
@@ -4164,6 +4290,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "supercar-luxury"
     },
     {
+        "chiave": "s:c1c2bc63",
+        "it": "Montenegro",
+        "en": "Montenegro",
+        "file": "pages/RentalPage.tsx",
+        "schermata": "supercar-luxury"
+    },
+    {
+        "chiave": "s:c1dc1ee5",
+        "it": "Motoryacht",
+        "en": "Motoryacht",
+        "file": "pages/RentalPage.tsx",
+        "schermata": "supercar-luxury"
+    },
+    {
         "chiave": "s:1157ad3e",
         "it": "N. civico *",
         "en": "Street no. *",
@@ -4342,6 +4482,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:9f9ab24b",
         "it": "Spagna",
         "en": "Spain",
+        "file": "pages/RentalPage.tsx",
+        "schermata": "supercar-luxury"
+    },
+    {
+        "chiave": "s:ae161d0f",
+        "it": "Superyacht",
+        "en": "Superyacht",
         "file": "pages/RentalPage.tsx",
         "schermata": "supercar-luxury"
     },
@@ -4640,6 +4787,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:b9ecef3f",
+        "it": "25 marzo 2026",
+        "en": "25 March 2026",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:b65cd0ff",
+        "it": "25/03/2026",
+        "en": "25/03/2026",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:739b3b8d",
         "it": "26-69 anni",
         "en": "26-69 years",
@@ -4724,6 +4885,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:41dca603",
+        "it": "ABC1234",
+        "en": "ABC1234",
+        "file": "components/NewClientModal.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:b1c15705",
         "it": "Accedi per prenotare",
         "en": "Sign in to book",
@@ -4801,6 +4969,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:b386a646",
+        "it": "Agosto",
+        "en": "August",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:per_day",
         "it": "al giorno",
         "en": "per day",
@@ -4826,6 +5001,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Andata e Ritorno",
         "en": "Round trip",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:4270b570",
+        "it": "Anteprima",
+        "en": "Preview",
+        "file": "components/ui/DocumentUploader.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:93d140f6",
+        "it": "Aprile",
+        "en": "April",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -4948,6 +5137,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:8d9759e4",
+        "it": "Budget max:",
+        "en": "Max budget:",
+        "file": "components/ui/RentalFilters.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:f500fde2",
         "it": "Buono Auguri DR7",
         "en": "DR7 Birthday Voucher",
@@ -4966,6 +5162,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "C. VERIFICA REQUISITI",
         "en": "C. REQUIREMENTS CHECK",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:7bbf4e8d",
+        "it": "Cagliari",
+        "en": "Cagliari",
+        "file": "components/DynamicCustomerForm.tsx",
         "schermata": null
     },
     {
@@ -5214,6 +5417,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:3b7674bc",
+        "it": "cliente@example.com",
+        "en": "cliente@example.com",
+        "file": "components/NewClientModal.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:c710ee4a",
         "it": "Codice Destinatario / SDI",
         "en": "Recipient Code / SDI",
@@ -5379,6 +5589,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Consegna/Ritiro a domicilio",
         "en": "Delivery/Collection at your address",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:57d52795",
+        "it": "Consenso ai cookie",
+        "en": "Cookie consent",
+        "file": "components/ui/CookieBanner.tsx",
         "schermata": null
     },
     {
@@ -5760,6 +5977,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:546b1593",
+        "it": "di credito wallet (4% del totale)",
+        "en": "of wallet credit (4% of the total)",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:80de8d3c",
+        "it": "Dicembre",
+        "en": "December",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:c7bed8c7",
         "it": "Dichiaro che i dati inseriti sono veritieri e conformi ai requisiti richiesti.",
         "en": "I declare that the information provided is true and meets the required conditions.",
@@ -5844,6 +6075,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:516dc71b",
+        "it": "Dom",
+        "en": "Sun",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:579db5d2",
+        "it": "DR7 AI Assistant",
+        "en": "DR7 AI Assistant",
+        "file": "components/ui/DR7AIChat.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:b69ea09f",
         "it": "DR7 Club — Pagamento separato",
         "en": "DR7 Club — Separate payment",
@@ -5855,6 +6100,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "DR7 è il Titolare del Trattamento dei dati personali raccolti attraverso la nostra piattaforma ed è responsabile dei tuoi dati personali.",
         "en": "DR7 is the Data Controller for personal data collected through our platform and is responsible for your personal data.",
         "file": "pages/PrivacyPolicyPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:65420ef9",
+        "it": "DR7 Wallet Bonus fino al 100%",
+        "en": "DR7 Wallet Bonus up to 100%",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:9b42efc9",
+        "it": "DR7 Wallet Privilege fino al 36%",
+        "en": "DR7 Wallet Privilege up to 36%",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -6152,6 +6411,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:e0f37f68",
+        "it": "es. RSSMRA85M01H501Z",
+        "en": "e.g. RSSMRA85M01H501Z",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:a2c364b4",
         "it": "es. Tappa a Cagliari",
         "en": "e.g. Stop in Cagliari",
@@ -6208,6 +6474,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:c354faa7",
+        "it": "EUR",
+        "en": "EUR",
+        "file": "components/ui/RentalFilters.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:5b4b5f98",
         "it": "Eventuali altre richieste, dettagli o informazioni...",
         "en": "Any other requests, details or information...",
@@ -6226,6 +6499,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "fatture@pec.azienda.it",
         "en": "invoices@pec.company.it",
         "file": "components/NewClientModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:7e9bac01",
+        "it": "Febbraio",
+        "en": "February",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -6299,10 +6579,31 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:1683928c",
+        "it": "Gennaio",
+        "en": "January",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:2f9c280b",
+        "it": "GG/MM/AAAA",
+        "en": "DD/MM/YYYY",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:5999f631",
         "it": "Già in archivio",
         "en": "Already on file",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:bfb56236",
+        "it": "Gio",
+        "en": "Thu",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -6317,6 +6618,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Giorno",
         "en": "Day",
         "file": "components/ui/BookingModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:6efd3942",
+        "it": "Giugno",
+        "en": "June",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -6341,6 +6649,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:52f50eae",
+        "it": "Home",
+        "en": "Home",
+        "file": "components/website/WbHeaderFooter.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:78c4aa96",
         "it": "I cookie sono piccoli file di testo memorizzati sul tuo dispositivo quando visiti un sito web. Aiutano a far funzionare i siti più efficientemente e a fornire informazioni ai gestori.",
         "en": "Cookies are small text files stored on your device when you visit a website. They help sites work more efficiently and provide information to site owners.",
@@ -6352,6 +6667,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "I Miei Preventivi",
         "en": "My Quotes",
         "file": "pages/AccountPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:74f122e1",
+        "it": "I veicoli della categoria Urban & Utilitarie non sono disponibili oltre il",
+        "en": "Urban & Utility vehicles are not available beyond",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -6380,6 +6702,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Illimitati — Inclusi",
         "en": "Unlimited — Included",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:fbb24ea0",
+        "it": "Immagine carosello",
+        "en": "Carousel image",
+        "file": "components/Carousel.tsx",
         "schermata": null
     },
     {
@@ -6541,6 +6870,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Info sui jet privati",
         "en": "Private jet information",
         "file": "components/ui/DR7AIChat.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:279cac5f",
+        "it": "info@dr7.app",
+        "en": "info@dr7.app",
+        "file": "pages/PrivacyPolicyPage.tsx",
         "schermata": null
     },
     {
@@ -6712,6 +7048,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:ddc81b1a",
+        "it": "L'ultimo check-out disponibile è il",
+        "en": "The last available check-out is",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:f5619b90",
         "it": "La distanza sarà verificata da DR7. In caso di discrepanza, verrà applicata la distanza reale.",
         "en": "The distance will be verified by DR7. If it differs, the actual distance will be applied.",
@@ -6838,6 +7181,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:1101aa05",
+        "it": "Luglio",
+        "en": "July",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:b91cb47c",
+        "it": "Lun",
+        "en": "Mon",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:00849175",
         "it": "Luogo",
         "en": "Location",
@@ -6887,10 +7244,24 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:d566a75d",
+        "it": "Maggio",
+        "en": "May",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:eeccbb87",
         "it": "Mappa posti elicottero",
         "en": "Helicopter seat map",
         "file": "components/ui/TourBookingModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:42a7ed2b",
+        "it": "Mar",
+        "en": "Tue",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -6905,6 +7276,48 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Marina",
         "en": "Marinas",
         "file": "components/ui/CercaSedi.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a77531ab",
+        "it": "Mario",
+        "en": "Mario",
+        "file": "components/DynamicCustomerForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a79b9584",
+        "it": "Marzo",
+        "en": "March",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:1cbc10e5",
+        "it": "Mastercard",
+        "en": "Mastercard",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:00c6075a",
+        "it": "Menu",
+        "en": "Menu",
+        "file": "components/website/WbHeaderFooter.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:eac7a6a7",
+        "it": "Menu principale",
+        "en": "Main menu",
+        "file": "components/website/WbHeaderFooter.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:3ab26def",
+        "it": "Mer",
+        "en": "Wed",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -7153,6 +7566,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:3bc58931",
+        "it": "Novembre",
+        "en": "November",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:850648fd",
         "it": "Numero Documento *",
         "en": "Document Number *",
@@ -7251,6 +7671,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:09da3182",
+        "it": "Ottobre",
+        "en": "October",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:226cef95",
         "it": "Pacchetto km (50 km/giorno)",
         "en": "Km package (50 km/day)",
@@ -7314,6 +7741,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:43d5396e",
+        "it": "Partner Account",
+        "en": "Partner Account",
+        "file": "layouts/PartnerDashboardLayout.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:e4110957",
         "it": "Patente (Fronte)",
         "en": "Licence (Front)",
@@ -7342,10 +7776,10 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:01012987",
-        "it": "PEC",
-        "en": "PEC (certified email)",
-        "file": "components/NewClientModal.tsx",
+        "chiave": "s:13a9bfa6",
+        "it": "PayPal",
+        "en": "PayPal",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -7353,6 +7787,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "PEC per Fatturazione Elettronica *",
         "en": "PEC for Electronic Invoicing *",
         "file": "components/NewClientModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:edef0fb6",
+        "it": "pec@pec.it",
+        "en": "pec@pec.it",
+        "file": "components/DynamicCustomerForm.tsx",
         "schermata": null
     },
     {
@@ -7584,6 +8025,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Priorità principale",
         "en": "Main priority",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:2526541f",
+        "it": "Privacy Policy",
+        "en": "Privacy Policy",
+        "file": "components/ui/MarketingConsentModal.tsx",
         "schermata": null
     },
     {
@@ -7867,10 +8315,38 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:b82dfbc8",
+        "it": "Roma",
+        "en": "Roma",
+        "file": "components/NewClientModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:c8f3a10f",
+        "it": "Rossi",
+        "en": "Rossi",
+        "file": "components/DynamicCustomerForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:856ea4e2",
+        "it": "RSSMRA85M01H501Z",
+        "en": "RSSMRA85M01H501Z",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:4c599d73",
         "it": "Ruolo in Azienda *",
         "en": "Role in the Company *",
         "file": "components/NewClientModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:46a74081",
+        "it": "Sab",
+        "en": "Sat",
+        "file": "components/ui/CalendarPicker.tsx",
         "schermata": null
     },
     {
@@ -8189,6 +8665,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:e862f0b6",
+        "it": "Settembre",
+        "en": "September",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:2cbd4cb4",
         "it": "Sezione riservata per campi aggiuntivi futuri",
         "en": "Section reserved for future additional fields",
@@ -8340,13 +8823,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Stesso luogo di riconsegna",
         "en": "Same drop-off location",
         "file": "components/ui/RentalSearchBar.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:aa25c538",
-        "it": "Subtotale",
-        "en": "Subtotal",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -8644,6 +9120,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:d8baed3e",
+        "it": "Ven",
+        "en": "Fri",
+        "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Verification",
         "it": "Verifica",
         "en": "Verification",
@@ -8700,6 +9183,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:95ce1caf",
+        "it": "Via Roma 1",
+        "en": "Via Roma 1",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:9ab4758b",
+        "it": "Via Roma 10, 09100 Cagliari",
+        "en": "Via Roma 10, 09100 Cagliari",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:2a0b2430",
         "it": "Via Roma, 10 - 20100 Milano (MI)",
         "en": "Via Roma 10 - 20100 Milano (MI)",
@@ -8728,6 +9225,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:486facb8",
+        "it": "Visa",
+        "en": "Visa",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:f1ea4dcf",
         "it": "Volo",
         "en": "Flight",
@@ -8746,6 +9250,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Wi-Fi a bordo",
         "en": "Wi-Fi on board",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:97ef8ebd",
+        "it": "XXXXXX",
+        "en": "XXXXXX",
+        "file": "components/DynamicCustomerForm.tsx",
         "schermata": null
     }
 ]
