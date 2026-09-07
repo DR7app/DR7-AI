@@ -484,6 +484,18 @@ function ScreenNotManaged({ screen }: { screen: SitoScreen }) {
 
 
 // ─── Component ───────────────────────────────────────────────────────────────
+/**
+ * Una riga di configurazione salvata PRIMA che una chiave esistesse non ha
+ * quella chiave: la scheda leggeva `undefined.join(...)` e moriva intera
+ * ("undefined is not an object", tutta la sezione Sito inaccessibile). Qui i
+ * default riempiono i buchi, i valori dell'operatore restano i suoi.
+ *
+ * Fusione superficiale di proposito: le sezioni sono oggetti piatti di testi.
+ */
+function conDefault<T extends object>(remoto: T | null | undefined, iniziale: T): T {
+    return { ...iniziale, ...(remoto || {}) }
+}
+
 export default function SitoTab() {
     const { loading: roleLoading, hasRole } = useAdminRole()
     const isDirezione = hasRole('sito-direzione')
@@ -614,24 +626,24 @@ export default function SitoTab() {
                     setSavedFaq(next)
                 }
                 if (remote?.cancellazione && Array.isArray(remote.cancellazione.sections)) {
-                    setCancellazione(remote.cancellazione)
-                    setSavedCancellazione(remote.cancellazione)
+                    setCancellazione(conDefault(remote.cancellazione, INITIAL_CANCELLAZIONE))
+                    setSavedCancellazione(conDefault(remote.cancellazione, INITIAL_CANCELLAZIONE))
                 }
                 if (remote?.membership && Array.isArray(remote.membership.elite_sections)) {
-                    setMembership(remote.membership)
-                    setSavedMembership(remote.membership)
+                    setMembership(conDefault(remote.membership, INITIAL_MEMBERSHIP))
+                    setSavedMembership(conDefault(remote.membership, INITIAL_MEMBERSHIP))
                 }
                 if (remote?.home && Array.isArray(remote.home.hero_slides)) {
-                    setHome(remote.home)
-                    setSavedHome(remote.home)
+                    setHome(conDefault(remote.home, INITIAL_HOME))
+                    setSavedHome(conDefault(remote.home, INITIAL_HOME))
                 }
                 if (remote?.about && Array.isArray(remote.about.founders)) {
-                    setAbout(remote.about)
-                    setSavedAbout(remote.about)
+                    setAbout(conDefault(remote.about, INITIAL_ABOUT))
+                    setSavedAbout(conDefault(remote.about, INITIAL_ABOUT))
                 }
                 if (remote?.footer && Array.isArray(remote.footer.social_links)) {
-                    setFooter(remote.footer)
-                    setSavedFooter(remote.footer)
+                    setFooter(conDefault(remote.footer, INITIAL_FOOTER))
+                    setSavedFooter(conDefault(remote.footer, INITIAL_FOOTER))
                 }
                 if (remote?.legal && Array.isArray(remote.legal.pages)) {
                     // Ensure all 4 page slots exist (in case the seed missed one).
@@ -644,72 +656,72 @@ export default function SitoTab() {
                     setSavedLegal(merged)
                 }
                 if (remote?.careers && Array.isArray(remote.careers.jobs)) {
-                    setCareers(remote.careers)
-                    setSavedCareers(remote.careers)
+                    setCareers(conDefault(remote.careers, INITIAL_CAREERS))
+                    setSavedCareers(conDefault(remote.careers, INITIAL_CAREERS))
                 }
                 if (remote?.press && Array.isArray(remote.press.articles)) {
-                    setPress(remote.press)
-                    setSavedPress(remote.press)
+                    setPress(conDefault(remote.press, INITIAL_PRESS))
+                    setSavedPress(conDefault(remote.press, INITIAL_PRESS))
                 }
                 if (remote?.contact && remote.contact.email_address) {
-                    setContact(remote.contact)
-                    setSavedContact(remote.contact)
+                    setContact(conDefault(remote.contact, INITIAL_CONTACT))
+                    setSavedContact(conDefault(remote.contact, INITIAL_CONTACT))
                 }
                 if (remote?.flotta && Array.isArray(remote.flotta.visible_category_ids)) {
-                    setFlotta(remote.flotta)
-                    setSavedFlotta(remote.flotta)
+                    setFlotta(conDefault(remote.flotta, INITIAL_FLOTTA))
+                    setSavedFlotta(conDefault(remote.flotta, INITIAL_FLOTTA))
                 }
                 if (remote?.mechanical && remote.mechanical.hero_title) {
-                    setMechanical(remote.mechanical)
-                    setSavedMechanical(remote.mechanical)
+                    setMechanical(conDefault(remote.mechanical, INITIAL_MECHANICAL))
+                    setSavedMechanical(conDefault(remote.mechanical, INITIAL_MECHANICAL))
                 }
                 if (remote?.carwash && remote.carwash.cart_title_it) {
-                    setCarwash(remote.carwash)
-                    setSavedCarwash(remote.carwash)
+                    setCarwash(conDefault(remote.carwash, INITIAL_CARWASH))
+                    setSavedCarwash(conDefault(remote.carwash, INITIAL_CARWASH))
                 }
                 if (remote?.investitori && remote.investitori.hero_title) {
-                    setInvestitori(remote.investitori)
-                    setSavedInvestitori(remote.investitori)
+                    setInvestitori(conDefault(remote.investitori, INITIAL_INVESTITORI))
+                    setSavedInvestitori(conDefault(remote.investitori, INITIAL_INVESTITORI))
                 }
                 if (remote?.franchising && remote.franchising.hero_h2) {
-                    setFranchising(remote.franchising)
-                    setSavedFranchising(remote.franchising)
+                    setFranchising(conDefault(remote.franchising, INITIAL_FRANCHISING))
+                    setSavedFranchising(conDefault(remote.franchising, INITIAL_FRANCHISING))
                 }
                 if (remote?.aviationQuote && remote.aviationQuote.header_title_template_it) {
-                    setAviationQuote(remote.aviationQuote)
-                    setSavedAviationQuote(remote.aviationQuote)
+                    setAviationQuote(conDefault(remote.aviationQuote, INITIAL_AVIATION_QUOTE))
+                    setSavedAviationQuote(conDefault(remote.aviationQuote, INITIAL_AVIATION_QUOTE))
                 }
                 if (remote?.checkEmail && remote.checkEmail.title_it) {
-                    setCheckEmail(remote.checkEmail)
-                    setSavedCheckEmail(remote.checkEmail)
+                    setCheckEmail(conDefault(remote.checkEmail, INITIAL_CHECK_EMAIL))
+                    setSavedCheckEmail(conDefault(remote.checkEmail, INITIAL_CHECK_EMAIL))
                 }
                 if (remote?.jetSearchResults && remote.jetSearchResults.title_it) {
-                    setJetSearchResults(remote.jetSearchResults)
-                    setSavedJetSearchResults(remote.jetSearchResults)
+                    setJetSearchResults(conDefault(remote.jetSearchResults, INITIAL_JET_SEARCH))
+                    setSavedJetSearchResults(conDefault(remote.jetSearchResults, INITIAL_JET_SEARCH))
                 }
                 if (remote?.confirmationSuccess && remote.confirmationSuccess.booking_title_it) {
-                    setConfirmationSuccess(remote.confirmationSuccess)
-                    setSavedConfirmationSuccess(remote.confirmationSuccess)
+                    setConfirmationSuccess(conDefault(remote.confirmationSuccess, INITIAL_CONFIRMATION_SUCCESS))
+                    setSavedConfirmationSuccess(conDefault(remote.confirmationSuccess, INITIAL_CONFIRMATION_SUCCESS))
                 }
                 if (remote?.header && remote.header.explore_label_it) {
-                    setHeader(remote.header)
-                    setSavedHeader(remote.header)
+                    setHeader(conDefault(remote.header, INITIAL_HEADER))
+                    setSavedHeader(conDefault(remote.header, INITIAL_HEADER))
                 }
                 if (remote?.signUp && remote.signUp.client_type_label_it) {
-                    setSignUp(remote.signUp)
-                    setSavedSignUp(remote.signUp)
+                    setSignUp(conDefault(remote.signUp, INITIAL_SIGNUP))
+                    setSavedSignUp(conDefault(remote.signUp, INITIAL_SIGNUP))
                 }
                 if (remote?.payment && remote.payment.ready_title_it) {
-                    setPayment(remote.payment)
-                    setSavedPayment(remote.payment)
+                    setPayment(conDefault(remote.payment, INITIAL_PAYMENT))
+                    setSavedPayment(conDefault(remote.payment, INITIAL_PAYMENT))
                 }
                 if (remote?.paymentSuccess && remote.paymentSuccess.success_title_it) {
-                    setPaymentSuccess(remote.paymentSuccess)
-                    setSavedPaymentSuccess(remote.paymentSuccess)
+                    setPaymentSuccess(conDefault(remote.paymentSuccess, INITIAL_PAYMENT_SUCCESS))
+                    setSavedPaymentSuccess(conDefault(remote.paymentSuccess, INITIAL_PAYMENT_SUCCESS))
                 }
                 if (remote?.booking && remote.booking.auth_required_title_it) {
-                    setBooking(remote.booking)
-                    setSavedBooking(remote.booking)
+                    setBooking(conDefault(remote.booking, INITIAL_BOOKING))
+                    setSavedBooking(conDefault(remote.booking, INITIAL_BOOKING))
                 }
                 if (remote?.creditWallet && remote.creditWallet.hero_intro_it) {
                     // `packages` e' arrivato dopo: le righe salvate prima non ce
@@ -726,32 +738,32 @@ export default function SitoTab() {
                     setSavedCreditWallet(cw)
                 }
                 if (remote?.firma && remote.firma.otp_step1_title_it) {
-                    setFirma(remote.firma)
-                    setSavedFirma(remote.firma)
+                    setFirma(conDefault(remote.firma, INITIAL_FIRMA))
+                    setSavedFirma(conDefault(remote.firma, INITIAL_FIRMA))
                 }
                 if (remote?.registrazioneCliente && remote.registrazioneCliente.intro_title_it) {
-                    setRegistrazioneCliente(remote.registrazioneCliente)
-                    setSavedRegistrazioneCliente(remote.registrazioneCliente)
+                    setRegistrazioneCliente(conDefault(remote.registrazioneCliente, INITIAL_REGISTRAZIONE_CLIENTE))
+                    setSavedRegistrazioneCliente(conDefault(remote.registrazioneCliente, INITIAL_REGISTRAZIONE_CLIENTE))
                 }
                 if (remote?.bookingSearchBox && remote.bookingSearchBox.title_it) {
-                    setBookingSearchBox(remote.bookingSearchBox)
-                    setSavedBookingSearchBox(remote.bookingSearchBox)
+                    setBookingSearchBox(conDefault(remote.bookingSearchBox, INITIAL_BOOKING_SEARCH_BOX))
+                    setSavedBookingSearchBox(conDefault(remote.bookingSearchBox, INITIAL_BOOKING_SEARCH_BOX))
                 }
                 if (remote?.paymentCancel && remote.paymentCancel.title_it) {
-                    setPaymentCancel(remote.paymentCancel)
-                    setSavedPaymentCancel(remote.paymentCancel)
+                    setPaymentCancel(conDefault(remote.paymentCancel, INITIAL_PAYMENT_CANCEL))
+                    setSavedPaymentCancel(conDefault(remote.paymentCancel, INITIAL_PAYMENT_CANCEL))
                 }
                 if (remote?.locations && Array.isArray(remote.locations.airports)) {
-                    setLocations(remote.locations)
-                    setSavedLocations(remote.locations)
+                    setLocations(conDefault(remote.locations, INITIAL_LOCATIONS))
+                    setSavedLocations(conDefault(remote.locations, INITIAL_LOCATIONS))
                 }
                 if (remote?.aviationMarine && (Array.isArray(remote.aviationMarine.yachts) || Array.isArray(remote.aviationMarine.jets) || Array.isArray(remote.aviationMarine.helis))) {
-                    setAviationMarine(remote.aviationMarine)
-                    setSavedAviationMarine(remote.aviationMarine)
+                    setAviationMarine(conDefault(remote.aviationMarine, INITIAL_AVIATION_MARINE))
+                    setSavedAviationMarine(conDefault(remote.aviationMarine, INITIAL_AVIATION_MARINE))
                 }
                 if (remote?.dr7ClubPlan && remote.dr7ClubPlan.id) {
-                    setDr7ClubPlan(remote.dr7ClubPlan)
-                    setSavedDr7ClubPlan(remote.dr7ClubPlan)
+                    setDr7ClubPlan(conDefault(remote.dr7ClubPlan, INITIAL_DR7_CLUB_PLAN))
+                    setSavedDr7ClubPlan(conDefault(remote.dr7ClubPlan, INITIAL_DR7_CLUB_PLAN))
                 }
                 // Aspetto: fusione sopra il seed, non sostituzione. Le altre
                 // sezioni riconoscono una riga salvata da un campo di testo
@@ -769,8 +781,8 @@ export default function SitoTab() {
                     setSavedAspetto(merged)
                 }
                 if (remote?.token && remote.token.hero_title_it) {
-                    setToken(remote.token)
-                    setSavedToken(remote.token)
+                    setToken(conDefault(remote.token, INITIAL_TOKEN))
+                    setSavedToken(conDefault(remote.token, INITIAL_TOKEN))
                 }
                 if (remote?.testi && typeof remote.testi === 'object') {
                     const mappa = remote.testi as Record<string, TestoRiscritto>
@@ -2282,8 +2294,8 @@ function HomeEditor({
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Frase grande (silenzio)</h3>
                 <p className="text-[12px] text-theme-text-secondary">La frase enorme dopo il primo schermo. Una riga per riga: sono le righe che si vedono.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldTextArea label="Frase (IT)" value={copy.statement_lines_it.join('\n')} onChange={v => setLines('statement_lines_it', v)} />
-                    <FieldTextArea label="Frase (EN)" value={copy.statement_lines_en.join('\n')} onChange={v => setLines('statement_lines_en', v)} />
+                    <FieldTextArea label="Frase (IT)" value={(copy.statement_lines_it || []).join('\n')} onChange={v => setLines('statement_lines_it', v)} />
+                    <FieldTextArea label="Frase (EN)" value={(copy.statement_lines_en || []).join('\n')} onChange={v => setLines('statement_lines_en', v)} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Nota sotto la frase (IT)" value={copy.statement_note_it} onChange={v => updateField('statement_note_it', v)} />
@@ -2375,8 +2387,8 @@ function HomeEditor({
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Momento di marca</h3>
                 <p className="text-[12px] text-theme-text-secondary">La frase grande su fondo chiaro, piu' due o tre blocchi di testo.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldTextArea label="Frase (IT) — una riga per riga" value={copy.brand_lines_it.join('\n')} onChange={v => setLines('brand_lines_it', v)} />
-                    <FieldTextArea label="Frase (EN)" value={copy.brand_lines_en.join('\n')} onChange={v => setLines('brand_lines_en', v)} />
+                    <FieldTextArea label="Frase (IT) — una riga per riga" value={(copy.brand_lines_it || []).join('\n')} onChange={v => setLines('brand_lines_it', v)} />
+                    <FieldTextArea label="Frase (EN)" value={(copy.brand_lines_en || []).join('\n')} onChange={v => setLines('brand_lines_en', v)} />
                 </div>
                 <ul className="space-y-3">
                     {copy.brand_paragraphs.map((par, i) => (
