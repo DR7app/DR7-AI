@@ -1669,6 +1669,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               const sCau = splitX(cauzioneVeicoliFee,     coeffFlags.cauzione_veicoli)
               const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC + sCau.inC
               const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at  + sCau.at
+              const listSubtotalNoExp = listRentalTotal + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
               // Clamp the clamp-eligible portion (rental + standard extras)
@@ -1677,15 +1678,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               const maxDaily = typeof data.maxPrice === 'number' ? data.maxPrice : null
               const maxTotal = maxDaily != null ? maxDaily * data.rentalDays : null
               const minTotal = minDaily != null ? minDaily * data.rentalDays : null
-              // 07/09/2026 — il minimo e il massimo sono €/giorno DELLA
-              // VETTURA: si applicano alla riga vettura, non al pacchetto.
-              // Con l'assicurazione dentro, il pacchetto restava sempre sopra
-              // la soglia e il minimo non mordeva mai. Stessa regola nel sito
-              // e in Preventivi.
-              let rentalAfterCoeff = listRentalTotal * combinedCoeff
-              if (maxTotal != null && rentalAfterCoeff > maxTotal) rentalAfterCoeff = maxTotal
-              if (minTotal != null && rentalAfterCoeff < minTotal) rentalAfterCoeff = minTotal
-              let afterRevenueNoExp = rentalAfterCoeff + extrasInCoeff * combinedCoeff
+              let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
+              if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
+              if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
               // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai
               // centesimi, come revenuePricingEngine (finalDailyRate). Arrotondare
               // solo il totale faceva perdere 1 cent (es. 624,9975/g → 1249,99

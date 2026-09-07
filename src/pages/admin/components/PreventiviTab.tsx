@@ -1516,23 +1516,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // finiva 'min' con label sbagliata. Adesso: max O min, mai entrambe,
     // label sempre corretta. Tolerance 0.5 EUR per evitare banner per
     // arrotondamenti.
-    // 07/09/2026 — minimo e massimo sono €/giorno DELLA VETTURA: si applicano
-    // alla riga vettura, non al pacchetto. Confrontandoli con vettura +
-    // assicurazione + lavaggio insieme, una Kasko da 600 euro teneva il
-    // pacchetto sopra la soglia e il minimo non mordeva mai: la vettura poteva
-    // scendere sotto il suo minimo senza che niente la fermasse. Ora la
-    // vettura si porta dentro i suoi limiti PRIMA di sommare gli extra.
-    // Stessa regola nel sito (CarBookingWizard) e in Prenotazioni.
-    let rentalAfterRevenue = listRentalTotal * revenueCoeff
+    let afterRevenueTotalNoExp = rawAfterRevenueNoExp
     let clampHit: 'min' | 'max' | null = null
-    if (maxTotal != null && rentalAfterRevenue > maxTotal + 0.5) {
-      rentalAfterRevenue = maxTotal
+    if (maxTotal != null && afterRevenueTotalNoExp > maxTotal + 0.5) {
+      afterRevenueTotalNoExp = maxTotal
       clampHit = 'max'
-    } else if (minTotal != null && rentalAfterRevenue < minTotal - 0.5) {
-      rentalAfterRevenue = minTotal
+    } else if (minTotal != null && afterRevenueTotalNoExp < minTotal - 0.5) {
+      afterRevenueTotalNoExp = minTotal
       clampHit = 'min'
     }
-    let afterRevenueTotalNoExp = rentalAfterRevenue + extrasInCoeff * revenueCoeff
 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
