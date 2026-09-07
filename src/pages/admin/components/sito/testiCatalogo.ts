@@ -69,13 +69,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-club"
     },
     {
-        "chiave": "s:c02e013d",
-        "it": "Annuale",
-        "en": "Annual",
-        "file": "pages/account/DR7Club.tsx",
-        "schermata": "account-club"
-    },
-    {
         "chiave": "s:f0dad064",
         "it": "Attivo",
         "en": "Active",
@@ -324,13 +317,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:4ac356d2",
         "it": "Maturato oggi",
         "en": "Accrued today",
-        "file": "pages/account/DR7Club.tsx",
-        "schermata": "account-club"
-    },
-    {
-        "chiave": "s:8c337d18",
-        "it": "Mensile",
-        "en": "Monthly",
         "file": "pages/account/DR7Club.tsx",
         "schermata": "account-club"
     },
@@ -615,6 +601,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-membership"
     },
     {
+        "chiave": "s:c403dd28",
+        "it": "Rinnova Membership",
+        "en": "Renew Membership",
+        "file": "pages/account/MembershipStatus.tsx",
+        "schermata": "account-membership"
+    },
+    {
         "chiave": "k:Essential_updates_about_your_bookings",
         "it": "Aggiornamenti essenziali sulle tue prenotazioni.",
         "en": "Essential updates about your bookings.",
@@ -678,9 +671,37 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-prenotazioni"
     },
     {
+        "chiave": "s:c4b60e73",
+        "it": "alle",
+        "en": "at",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
         "chiave": "s:f54d4902",
         "it": "Annulla",
         "en": "Cancel",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:69a63a07",
+        "it": "Assicurazione",
+        "en": "Insurance",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:f2c1fea6",
+        "it": "Autolavaggio",
+        "en": "Car Wash",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:00b44153",
+        "it": "Cauzione",
+        "en": "Deposit",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
     },
@@ -695,6 +716,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:40238c50",
         "it": "Conferma modifica",
         "en": "Confirm change",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:a2ca9f87",
+        "it": "Data Appuntamento",
+        "en": "Appointment",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
     },
@@ -716,6 +744,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:5ba4995b",
         "it": "Errore addebito wallet.",
         "en": "Wallet charge failed.",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:3a099818",
+        "it": "ID Prenotazione",
+        "en": "Booking ID",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
     },
@@ -790,6 +825,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-prenotazioni"
     },
     {
+        "chiave": "s:33f158a2",
+        "it": "Noleggio Auto",
+        "en": "Rent a Car",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
         "chiave": "s:c80c2de4",
         "it": "Nuova data",
         "en": "New date",
@@ -814,6 +856,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:24b3f3e5",
         "it": "Paga differenza con carta",
         "en": "Pay difference by card",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:8296414c",
+        "it": "Prenotato il",
+        "en": "Booked on",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
     },
@@ -881,25 +930,11 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-prenotazioni"
     },
     {
-        "chiave": "s:591f1d68",
-        "it": "Totale",
-        "en": "Total",
+        "chiave": "s:419d834e",
+        "it": "Visualizza tutte le tue prenotazioni",
+        "en": "View all your bookings",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
-    },
-    {
-        "chiave": "s:69a63a07",
-        "it": "Assicurazione",
-        "en": "Insurance",
-        "file": "pages/account/MyPreventivi.tsx",
-        "schermata": "account-preventivi"
-    },
-    {
-        "chiave": "s:00b44153",
-        "it": "Cauzione",
-        "en": "Deposit",
-        "file": "pages/account/MyPreventivi.tsx",
-        "schermata": "account-preventivi"
     },
     {
         "chiave": "s:09ac8b24",
@@ -1231,13 +1266,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-profilo"
     },
     {
-        "chiave": "s:3f7812e0",
-        "it": "Numero Civico",
-        "en": "Street number",
-        "file": "pages/account/ProfileSettings.tsx",
-        "schermata": "account-profilo"
-    },
-    {
         "chiave": "s:8aeda89a",
         "it": "Partita IVA",
         "en": "VAT number",
@@ -1255,13 +1283,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:7bedbbb9",
         "it": "Programma Fedeltà Lavaggio",
         "en": "Car Wash Loyalty Programme",
-        "file": "pages/account/ProfileSettings.tsx",
-        "schermata": "account-profilo"
-    },
-    {
-        "chiave": "s:4da1f870",
-        "it": "Provincia",
-        "en": "Province",
         "file": "pages/account/ProfileSettings.tsx",
         "schermata": "account-profilo"
     },
@@ -1311,13 +1332,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:848af044",
         "it": "Ruolo",
         "en": "Role",
-        "file": "pages/account/ProfileSettings.tsx",
-        "schermata": "account-profilo"
-    },
-    {
-        "chiave": "s:f7b2ac80",
-        "it": "Saldo Disponibile",
-        "en": "Available Balance",
         "file": "pages/account/ProfileSettings.tsx",
         "schermata": "account-profilo"
     },
@@ -1409,13 +1423,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:71dfb89b",
         "it": "Ancora nessun amico ha completato una ricarica qualificante. Condividi il tuo link per iniziare.",
         "en": "No friend has completed a qualifying top-up yet. Share your link to get started.",
-        "file": "pages/account/ReferralProgram.tsx",
-        "schermata": "account-referral"
-    },
-    {
-        "chiave": "s:aa176e65",
-        "it": "Caricamento...",
-        "en": "Loading...",
         "file": "pages/account/ReferralProgram.tsx",
         "schermata": "account-referral"
     },
@@ -1605,13 +1612,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "k:Current_Password",
         "it": "Password Attuale",
         "en": "Current Password",
-        "file": "pages/account/SecuritySettings.tsx",
-        "schermata": "account-sicurezza"
-    },
-    {
-        "chiave": "s:6393ca71",
-        "it": "Reindirizzamento...",
-        "en": "Redirecting...",
         "file": "pages/account/SecuritySettings.tsx",
         "schermata": "account-sicurezza"
     },
@@ -1931,13 +1931,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-booking-success"
     },
     {
-        "chiave": "s:c4b60e73",
-        "it": "alle",
-        "en": "at",
-        "file": "components/ui/CarBookingConfirmationPage.tsx",
-        "schermata": "car-booking-success"
-    },
-    {
         "chiave": "s:f2b98a74",
         "it": "Carta d'identità o passaporto valido",
         "en": "Valid ID card or passport",
@@ -2085,9 +2078,142 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-booking-success"
     },
     {
+        "chiave": "s:6cc1c879",
+        "it": "(necessario per la fattura)",
+        "en": "(required for the invoice)",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:4380b006",
+        "it": "Accedi",
+        "en": "Login",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:9ea73454",
+        "it": "Accesso Richiesto",
+        "en": "Login Required",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:bb8b19e9",
         "it": "Cancellazione consentita fino al giorno stesso del servizio.",
         "en": "Cancellation allowed up to the day of the service.",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:d3102e51",
+        "it": "CAP *",
+        "en": "Postal Code *",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:004ec4fd",
+        "it": "Caricamento flotta...",
+        "en": "Loading fleet...",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:aa176e65",
+        "it": "Caricamento...",
+        "en": "Loading...",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:1c4fc74a",
+        "it": "Carta",
+        "en": "Card",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:4adc0df7",
+        "it": "Chiusi la domenica",
+        "en": "Closed on Sundays",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:3bb35181",
+        "it": "Città di Residenza *",
+        "en": "City *",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:fd57727b",
+        "it": "Codice Fiscale *",
+        "en": "Tax Code *",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:ff489e4a",
+        "it": "Codice fiscale non valido (16 caratteri)",
+        "en": "Invalid Codice Fiscale (16 characters)",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:45d8706e",
+        "it": "Codice Sconto",
+        "en": "Discount Code",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:ba967a27",
+        "it": "Completa il Pagamento",
+        "en": "Complete Payment",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:12d8c844",
+        "it": "Costo Servizio",
+        "en": "Service Cost",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:a0da1689",
+        "it": "Credit Wallet",
+        "en": "Credit Wallet",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:4a3d293f",
+        "it": "Credito insufficiente",
+        "en": "Insufficient credit",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:79b95a9f",
+        "it": "Credito Insufficiente",
+        "en": "Insufficient Credit",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:3f5279c5",
+        "it": "Data",
+        "en": "Date",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:45304b5a",
+        "it": "Data e Ora Appuntamento",
+        "en": "Appointment Date & Time",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -2099,9 +2225,79 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:c80ec8c1",
+        "it": "Disponibile",
+        "en": "Available",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:6fddb182",
         "it": "È possibile 1 solo spostamento gratuito, salvo eventuale differenza di prezzo.",
         "en": "One free reschedule is allowed, subject to any price difference.",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:2cdf204e",
+        "it": "Elaborazione...",
+        "en": "Processing...",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:4a05d9dd",
+        "it": "Formato telefono non valido",
+        "en": "Invalid phone format",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:d4f7400a",
+        "it": "Il CAP è obbligatorio per la fattura",
+        "en": "Postal code is required for the invoice",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:1272def2",
+        "it": "Il codice fiscale è obbligatorio per la fattura",
+        "en": "Codice Fiscale is required for the invoice",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:45f91298",
+        "it": "Il nome è obbligatorio",
+        "en": "Name is required",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:ff367517",
+        "it": "Il telefono è obbligatorio",
+        "en": "Phone is required",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:1d5cf88e",
+        "it": "Il tuo carrello:",
+        "en": "Your cart:",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:078f4a27",
+        "it": "Indirizzo *",
+        "en": "Address *",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:c14eae78",
+        "it": "Informazioni Cliente",
+        "en": "Customer Information",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -2113,9 +2309,184 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:2335f441",
+        "it": "L'email è obbligatoria",
+        "en": "Email is required",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:a4fc8d6c",
+        "it": "L'indirizzo è obbligatorio per la fattura",
+        "en": "Address is required for the invoice",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:8b68b4ad",
+        "it": "L'ora è obbligatoria",
+        "en": "Time is required",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:bf077d2a",
+        "it": "La città è obbligatoria per la fattura",
+        "en": "City is required for the invoice",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:90bf47d3",
+        "it": "La data è obbligatoria",
+        "en": "Date is required",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:b02a6f7b",
+        "it": "La data non può essere nel passato. Seleziona da oggi in poi.",
+        "en": "Date cannot be in the past. Select from today onwards.",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:c0e2c580",
+        "it": "Lun-Ven 9:00-13:00 / 15:00-19:00 | Sabato 9:00-17:00",
+        "en": "Mon-Fri 9:00-1:00 PM / 3:00-7:00 PM | Saturday 9:00-5:00 PM",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:a19868ee",
+        "it": "Metodo di Pagamento",
+        "en": "Payment Method",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:af9984d3",
+        "it": "Milano",
+        "en": "Milan",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:5c001fda",
         "it": "Nessuna perdita totale dell'importo, salvo promozioni non rimborsabili o mancata presentazione.",
         "en": "No total loss of the amount, except for non-refundable promotions or no-shows.",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:f5fd6595",
+        "it": "Nome Completo",
+        "en": "Full Name",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:e9fa37d6",
+        "it": "Note Aggiuntive",
+        "en": "Additional Notes",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:3f7812e0",
+        "it": "Numero Civico",
+        "en": "Civic Number",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:8c113237",
+        "it": "Occupata",
+        "en": "Busy",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:00a88b1f",
+        "it": "Ora",
+        "en": "Time",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:017791a7",
+        "it": "Orari di apertura:",
+        "en": "Opening hours:",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:c1e559ee",
+        "it": "Orario disponibile: Lun-Ven 9:00-13:00 / 15:00-19:00, Sabato 9:00-17:00 (minimo 2 ore in anticipo)",
+        "en": "Available hours: Mon-Fri 9:00-1:00 PM / 3:00-7:00 PM, Saturday 9:00-5:00 PM (minimum 2 hours in advance)",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:8e73867c",
+        "it": "Pagamento Sicuro con Nexi",
+        "en": "Secure Payment with Nexi",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:d864df6e",
+        "it": "Prenota il Servizio",
+        "en": "Book Service",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:b4bf16ea",
+        "it": "Prenotazioni non disponibili in questa data.",
+        "en": "Bookings are not available on this date.",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:83cd89c8",
+        "it": "PROCEDI AL PAGAMENTO",
+        "en": "PROCEED TO PAYMENT",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:8a23dcef",
+        "it": "Prova un'altra data",
+        "en": "Try another date",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:4da1f870",
+        "it": "Provincia",
+        "en": "Province",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:3dbdaead",
+        "it": "Registrati",
+        "en": "Sign Up",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:6393ca71",
+        "it": "Reindirizzamento...",
+        "en": "Redirecting...",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:7e380bea",
+        "it": "Richieste speciali o note...",
+        "en": "Special requests or notes...",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -2127,9 +2498,100 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:f7b2ac80",
+        "it": "Saldo Disponibile",
+        "en": "Available Balance",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:cee0eff2",
+        "it": "Saldo Dopo",
+        "en": "Balance After",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:04110200",
+        "it": "Saldo: ",
+        "en": "Balance: ",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:b01dc157",
+        "it": "Scegli la tua hypercar",
+        "en": "Choose your hypercar",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:5b4bce10",
+        "it": "Scegli la tua supercar",
+        "en": "Choose your supercar",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:c2a3a76a",
+        "it": "Seleziona un orario",
+        "en": "Select a time",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:e83d2cf6",
+        "it": "Selezionata",
+        "en": "Selected",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:574029fd",
+        "it": "Servizi:",
+        "en": "Services:",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:a240a00e",
+        "it": "Servizio",
+        "en": "Service",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "k:Unexpected_error",
         "it": "Si è verificato un errore imprevisto",
         "en": "An unexpected error occurred",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:d44c8bde",
+        "it": "Siamo chiusi la domenica",
+        "en": "We are closed on Sundays",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:7b986dcf",
+        "it": "Siamo chiusi nei giorni festivi",
+        "en": "We are closed on holidays",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:0e3c5c63",
+        "it": "SOLD OUT — Nessun orario disponibile",
+        "en": "SOLD OUT — No time slots available",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:3786a589",
+        "it": "Telefono",
+        "en": "Phone",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -2139,6 +2601,27 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "en": "Timeout — please retry the payment.",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:591f1d68",
+        "it": "Totale",
+        "en": "Total",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:d0aae98c",
+        "it": "Via Roma",
+        "en": "Main Street",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:889985c5",
+        "it": "Caricamento…",
+        "en": "Loading…",
+        "file": "pages/CareersPage.tsx",
+        "schermata": "careers"
     },
     {
         "chiave": "k:Careers",
@@ -2211,6 +2694,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "footer"
     },
     {
+        "chiave": "s:92985a9a",
+        "it": "text-white",
+        "en": "hover:text-white",
+        "file": "components/layout/Footer.tsx",
+        "schermata": "footer"
+    },
+    {
         "chiave": "s:85042bfd",
         "it": "Torna su",
         "en": "Back to top",
@@ -2225,9 +2715,65 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "franchising"
     },
     {
+        "chiave": "s:5096718e",
+        "it": "Autolavaggio Premium Sardegna | Detailing & Cura di Lusso | DR7 Lavaggio & Meccanica",
+        "en": "Premium Car Wash Sardinia | Detailing & Luxury Care | DR7 Car Wash & Mechanics",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:186500d6",
+        "it": "Autolavaggio professionale, detailing premium, trattamento ceramico e protezione vernice a Cagliari, Sardegna. Pacchetti lavaggio urban e maxi. DR7 Lavaggio & Meccanica.",
+        "en": "Professional car wash, premium detailing, ceramic coating and paint protection in Cagliari, Sardinia. Urban and maxi wash packages. DR7 Car Wash & Mechanics.",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:a743d018",
+        "it": "Continua",
+        "en": "Continue",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:581cc856",
+        "it": "da",
+        "en": "from",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:cedefb8d",
+        "it": "Errore nella ricerca.",
+        "en": "Search error.",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
         "chiave": "s:0e8fd25d",
         "it": "Lavaggio & Meccanica",
         "en": "Car Wash & Mechanics",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:6ba07579",
+        "it": "Modifica sedili",
+        "en": "Edit seats",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:14d42252",
+        "it": "Rivedi carrello",
+        "en": "Review Cart",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:04fc9040",
+        "it": "Salta",
+        "en": "Skip",
         "file": "pages/CarWashServicesPage.tsx",
         "schermata": "lavaggio"
     },
@@ -2239,9 +2785,37 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "lavaggio"
     },
     {
+        "chiave": "s:14fbcd06",
+        "it": "Targa non valida. Inserisci una targa italiana (es. EX117YA).",
+        "en": "Invalid plate. Enter an Italian plate (e.g. EX117YA).",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:ef972aa6",
+        "it": "Documentazione legale",
+        "en": "Legal documentation",
+        "file": "pages/TermsOfServicePage.tsx",
+        "schermata": "legali"
+    },
+    {
         "chiave": "s:1f58f844",
         "it": "I termini di servizio non sono ancora pubblicati. Contatta info@dr7.app per maggiori informazioni.",
         "en": "The terms of service have not been published yet. Contact info@dr7.app for more information.",
+        "file": "pages/TermsOfServicePage.tsx",
+        "schermata": "legali"
+    },
+    {
+        "chiave": "s:ad958195",
+        "it": "Indice",
+        "en": "Contents",
+        "file": "pages/TermsOfServicePage.tsx",
+        "schermata": "legali"
+    },
+    {
+        "chiave": "s:558312ba",
+        "it": "it-IT",
+        "en": "en-GB",
         "file": "pages/TermsOfServicePage.tsx",
         "schermata": "legali"
     },
@@ -2253,9 +2827,30 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "legali"
     },
     {
+        "chiave": "s:4a739475",
+        "it": "Anno",
+        "en": "Year",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
         "chiave": "s:58154816",
         "it": "applicato",
         "en": "applied",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:219c5743",
+        "it": "Carta di Credito",
+        "en": "Credit Card",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:a19169ad",
+        "it": "Codice Fiscale * (necessario per la fattura)",
+        "en": "Tax Code * (required for the invoice)",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
     },
@@ -2267,9 +2862,79 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "mechanical-booking"
     },
     {
+        "chiave": "s:a6fde40f",
+        "it": "es. AB123CD",
+        "en": "e.g. AB123CD",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:9e30b073",
+        "it": "es. Fiat",
+        "en": "e.g. Fiat",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:9f45922d",
+        "it": "es. Panda",
+        "en": "e.g. Panda",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:eed4bb0f",
+        "it": "Il modello è obbligatorio",
+        "en": "Model is required",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:6f49234d",
+        "it": "Informazioni Veicolo",
+        "en": "Vehicle Information",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
         "chiave": "s:f77a9cb1",
         "it": "Inserisci codice sconto",
         "en": "Enter discount code",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:65dc74e5",
+        "it": "La data non può essere nel passato",
+        "en": "Date cannot be in the past",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:492f4bd7",
+        "it": "La marca è obbligatoria",
+        "en": "Make is required",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:37b7dfe8",
+        "it": "Lun-Ven 9:00-13:00 / 15:00-19:00 | Sabato 9:00-13:00 / 14:00-18:00",
+        "en": "Mon-Fri 9:00-1:00 PM / 3:00-7:00 PM | Saturday 9:00-1:00 PM / 2:00-6:00 PM",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:c98471bb",
+        "it": "Marca",
+        "en": "Make",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:99f02537",
+        "it": "Modello",
+        "en": "Model",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
     },
@@ -2309,11 +2974,74 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "mechanical-booking"
     },
     {
+        "chiave": "s:a36ec340",
+        "it": "Targa",
+        "en": "License Plate",
+        "file": "pages/MechanicalBookingPage.tsx",
+        "schermata": "mechanical-booking"
+    },
+    {
         "chiave": "k:User_not_logged_in",
         "it": "Utente non autenticato",
         "en": "User not logged in",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
+    },
+    {
+        "chiave": "s:c02e013d",
+        "it": "Annuale",
+        "en": "Annual",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:245fe458",
+        "it": "Annuale (-33%)",
+        "en": "Annual (-33%)",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:1cd5d958",
+        "it": "Conferma e paga",
+        "en": "Confirm and pay",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:4cdebb31",
+        "it": "Conferma il tuo abbonamento",
+        "en": "Confirm your subscription",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:ec351981",
+        "it": "Fatturazione",
+        "en": "Billing",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:8c337d18",
+        "it": "Mensile",
+        "en": "Monthly",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:7578ba7a",
+        "it": "Pagamento protetto e certificato",
+        "en": "Protected and certified payment",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
+    },
+    {
+        "chiave": "s:010fe67e",
+        "it": "Piano",
+        "en": "Plan",
+        "file": "pages/MembershipEnrollmentPage.tsx",
+        "schermata": "membership-enroll"
     },
     {
         "chiave": "s:fc723534",
@@ -3117,13 +3845,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:3a3fc2f5",
         "it": "Barca a vela",
         "en": "Sailing boat",
-        "file": "pages/RentalPage.tsx",
-        "schermata": "supercar-luxury"
-    },
-    {
-        "chiave": "s:d3102e51",
-        "it": "CAP *",
-        "en": "Postcode *",
         "file": "pages/RentalPage.tsx",
         "schermata": "supercar-luxury"
     },
@@ -3947,13 +4668,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:4380b006",
-        "it": "Accedi",
-        "en": "Sign in",
-        "file": "pages/NoleggioServicePage.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:b1c15705",
         "it": "Accedi per prenotare",
         "en": "Sign in to book",
@@ -3978,13 +4692,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:8279718a",
         "it": "Accesso prioritario alle nuove supercar",
         "en": "Priority access to new supercars",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:9ea73454",
-        "it": "Accesso Richiesto",
-        "en": "Sign-in required",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -4276,13 +4983,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:1c4fc74a",
-        "it": "Carta",
-        "en": "Card",
-        "file": "components/ui/HelicopterBookingForm.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:17391c2a",
         "it": "Carta d'Identità",
         "en": "ID card",
@@ -4437,13 +5137,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:3bb35181",
-        "it": "Città di Residenza *",
-        "en": "City of Residence *",
-        "file": "components/NewClientModal.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:8987c790",
         "it": "Città obbligatoria",
         "en": "City is required",
@@ -4479,13 +5172,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:fd57727b",
-        "it": "Codice Fiscale *",
-        "en": "Tax Code *",
-        "file": "components/NewClientModal.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:76d3b66a",
         "it": "Codice Fiscale non valido (16 caratteri)",
         "en": "Invalid tax code (16 characters)",
@@ -4504,13 +5190,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Codice Fiscale obbligatorio per clienti italiani",
         "en": "Tax code is required for Italian customers",
         "file": "components/NewClientModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:45d8706e",
-        "it": "Codice Sconto",
-        "en": "Discount Code",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -4728,13 +5407,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Credito immediato ogni volta che acquisti",
         "en": "Instant credit every time you buy",
         "file": "components/ui/MarketingConsentModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:4a3d293f",
-        "it": "Credito insufficiente",
-        "en": "Insufficient credit",
-        "file": "components/ui/TourBookingModal.tsx",
         "schermata": null
     },
     {
@@ -5319,13 +5991,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:a6fde40f",
-        "it": "es. AB123CD",
-        "en": "e.g. AB123CD",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:34c57519",
         "it": "es. AW109, Airbus H145",
         "en": "e.g. AW109, Airbus H145",
@@ -5532,13 +6197,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:a38f0b4b",
         "it": "Formato email non valido",
         "en": "Invalid email format",
-        "file": "components/NewClientModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:4a05d9dd",
-        "it": "Formato telefono non valido",
-        "en": "Invalid phone format",
         "file": "components/NewClientModal.tsx",
         "schermata": null
     },
@@ -5770,13 +6428,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:adfb527f",
         "it": "Indietro",
         "en": "Back",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:078f4a27",
-        "it": "Indirizzo *",
-        "en": "Address *",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -6432,13 +7083,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:e9fa37d6",
-        "it": "Note Aggiuntive",
-        "en": "Additional Notes",
-        "file": "components/ui/HelicopterBookingForm.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "k:Notifications",
         "it": "Notifiche",
         "en": "Notifications",
@@ -6985,13 +7629,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:3dbdaead",
-        "it": "Registrati",
-        "en": "Sign up",
-        "file": "pages/NoleggioServicePage.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:23e0f38f",
         "it": "Registrazione Cliente",
         "en": "Customer Registration",
@@ -7185,13 +7822,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Saldo Credit Wallet",
         "en": "Credit Wallet balance",
         "file": "components/ui/TourBookingModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:04fc9040",
-        "it": "Salta",
-        "en": "Skip",
-        "file": "components/ui/DocumentUploadModal.tsx",
         "schermata": null
     },
     {
@@ -7422,13 +8052,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:aa95ef60",
         "it": "Seleziona un'assicurazione prima di salvare il preventivo.",
         "en": "Select an insurance option before saving the quote.",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:e83d2cf6",
-        "it": "Selezionata",
-        "en": "Selected",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -7717,13 +8340,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Supplemento:",
         "en": "Surcharge:",
         "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:3786a589",
-        "it": "Telefono",
-        "en": "Phone",
-        "file": "components/DynamicCustomerForm.tsx",
         "schermata": null
     },
     {
