@@ -1199,8 +1199,29 @@ export interface AviationQuoteCopy {
   field_arrival_label_it: string; field_arrival_label_en: string;
   field_arrival_placeholder_it: string; field_arrival_placeholder_en: string;
   field_departure_date_label_it: string; field_departure_date_label_en: string;
+  field_departure_time_label_it: string; field_departure_time_label_en: string;
+  field_return_flight_label_it: string; field_return_flight_label_en: string;
   field_return_date_label_it: string; field_return_date_label_en: string;
+  field_return_time_label_it: string; field_return_time_label_en: string;
+  // Flessibilita': nel charter privato sposta il preventivo piu' di ogni
+  // altra risposta, quindi si chiede al cliente invece di darla per fissa.
+  field_flexibility_label_it: string; field_flexibility_label_en: string;
+  field_flexibility_hint_it: string; field_flexibility_hint_en: string;
   field_passengers_label_it: string; field_passengers_label_en: string;
+  field_stops_label_it: string; field_stops_label_en: string;
+  field_stops_detail_label_it: string; field_stops_detail_label_en: string;
+  field_stops_detail_placeholder_it: string; field_stops_detail_placeholder_en: string;
+  field_luggage_label_it: string; field_luggage_label_en: string;
+  field_luggage_placeholder_it: string; field_luggage_placeholder_en: string;
+  field_budget_label_it: string; field_budget_label_en: string;
+  field_budget_placeholder_it: string; field_budget_placeholder_en: string;
+  field_budget_hint_it: string; field_budget_hint_en: string;
+  field_aircraft_label_it: string; field_aircraft_label_en: string;
+  field_aircraft_option_jet_it: string; field_aircraft_option_jet_en: string;
+  field_aircraft_option_helicopter_it: string; field_aircraft_option_helicopter_en: string;
+  field_aircraft_option_any_it: string; field_aircraft_option_any_en: string;
+  option_yes_it: string; option_yes_en: string;
+  option_no_it: string; option_no_en: string;
   field_notes_label_it: string; field_notes_label_en: string;
   field_notes_placeholder_it: string; field_notes_placeholder_en: string;
   // Submit + footer
@@ -2393,10 +2414,10 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   auth_login_cta_it: 'Accedi', auth_login_cta_en: 'Login',
   auth_signup_cta_it: 'Registrati', auth_signup_cta_en: 'Sign Up',
   service_label_jet: 'Jet Privato', service_label_helicopter: 'Elicottero',
-  header_title_template_it: 'Richiedi Preventivo {service}',
-  header_title_template_en: 'Request Quote {service}',
-  header_subtitle_it: 'Compila il form e ti contatteremo con un preventivo personalizzato',
-  header_subtitle_en: 'Fill in the form and we\'ll get back to you with a personalized quote',
+  header_title_template_it: 'RICHIEDI IL TUO PREVENTIVO PERSONALIZZATO',
+  header_title_template_en: 'REQUEST YOUR TAILORED QUOTE',
+  header_subtitle_it: 'Inserisci i dettagli del viaggio. Il nostro team elaborerà una proposta su misura in base alle tue esigenze.',
+  header_subtitle_en: 'Tell us about your trip. Our team will put together a proposal built around what you need.',
   section_customer_it: 'Dati Cliente', section_customer_en: 'Customer Details',
   section_flight_it: 'Dettagli Viaggio', section_flight_en: 'Trip Details',
   field_name_label_it: 'Nome Completo *', field_name_label_en: 'Full Name *',
@@ -2405,17 +2426,39 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   field_email_placeholder_it: 'mario@email.com', field_email_placeholder_en: 'john@email.com',
   field_phone_label_it: 'Telefono *', field_phone_label_en: 'Phone *',
   field_phone_placeholder_it: '+39 333 123 4567', field_phone_placeholder_en: '+39 333 123 4567',
-  field_departure_label_it: 'Partenza da *', field_departure_label_en: 'Departure from *',
+  field_departure_label_it: 'Da dove desideri partire?', field_departure_label_en: 'Where would you like to depart from?',
   field_departure_placeholder_it: 'Milano, Roma, Cagliari...', field_departure_placeholder_en: 'Milan, Rome, Cagliari...',
-  field_arrival_label_it: 'Arrivo a *', field_arrival_label_en: 'Arrival at *',
+  field_arrival_label_it: 'Qual è la destinazione?', field_arrival_label_en: 'What is your destination?',
   field_arrival_placeholder_it: 'Parigi, Londra, Ibiza...', field_arrival_placeholder_en: 'Paris, London, Ibiza...',
-  field_departure_date_label_it: 'Data Partenza *', field_departure_date_label_en: 'Departure Date *',
-  field_return_date_label_it: 'Data Ritorno (opzionale)', field_return_date_label_en: 'Return Date (optional)',
-  field_passengers_label_it: 'Numero Passeggeri *', field_passengers_label_en: 'Number of Passengers *',
-  field_notes_label_it: 'Note Aggiuntive', field_notes_label_en: 'Additional Notes',
-  field_notes_placeholder_it: 'Richieste speciali, bagagli, preferenze...',
-  field_notes_placeholder_en: 'Special requests, luggage, preferences...',
-  submit_idle_it: 'Richiedi Preventivo', submit_idle_en: 'Request Quote',
+  field_departure_date_label_it: 'Data di partenza', field_departure_date_label_en: 'Departure date',
+  field_departure_time_label_it: 'Orario indicativo di partenza', field_departure_time_label_en: 'Approximate departure time',
+  field_return_flight_label_it: 'Hai bisogno anche del volo di ritorno?', field_return_flight_label_en: 'Do you also need a return flight?',
+  field_return_date_label_it: 'Data di ritorno (opzionale)', field_return_date_label_en: 'Return date (optional)',
+  field_return_time_label_it: 'Orario indicativo di ritorno (opzionale)', field_return_time_label_en: 'Approximate return time (optional)',
+  field_flexibility_label_it: 'Le date e gli orari sono flessibili?', field_flexibility_label_en: 'Are your dates and times flexible?',
+  field_flexibility_hint_it: '', field_flexibility_hint_en: '',
+  field_passengers_label_it: 'Numero di passeggeri', field_passengers_label_en: 'Number of passengers',
+  field_stops_label_it: 'Sono previste tappe o scali intermedi?', field_stops_label_en: 'Any intermediate stops?',
+  field_stops_detail_label_it: 'Indica le tappe o gli scali desiderati', field_stops_detail_label_en: 'Which stops would you like?',
+  field_stops_detail_placeholder_it: "Esempio: scalo a Nizza all'andata",
+  field_stops_detail_placeholder_en: 'Example: stop in Nice on the way out',
+  field_luggage_label_it: 'Bagagli', field_luggage_label_en: 'Luggage',
+  field_luggage_placeholder_it: 'Quanti e specifica peso',
+  field_luggage_placeholder_en: 'How many, and their approximate weight',
+  field_budget_label_it: 'Budget indicativo', field_budget_label_en: 'Approximate budget',
+  field_budget_placeholder_it: 'Esempio: 8.000 - 10.000 EUR',
+  field_budget_placeholder_en: 'Example: EUR 8,000 - 10,000',
+  field_budget_hint_it: '', field_budget_hint_en: '',
+  field_aircraft_label_it: 'Tipologia di aeromobile', field_aircraft_label_en: 'Aircraft type',
+  field_aircraft_option_jet_it: 'Jet privato', field_aircraft_option_jet_en: 'Private jet',
+  field_aircraft_option_helicopter_it: 'Elicottero', field_aircraft_option_helicopter_en: 'Helicopter',
+  field_aircraft_option_any_it: 'Valuta la soluzione migliore per me', field_aircraft_option_any_en: 'Recommend the best option for me',
+  option_yes_it: 'Sì', option_yes_en: 'Yes',
+  option_no_it: 'No', option_no_en: 'No',
+  field_notes_label_it: 'Esigenze o richieste particolari (facoltativo)', field_notes_label_en: 'Any particular needs or requests (optional)',
+  field_notes_placeholder_it: 'Inserisci eventuali necessità, preferenze o servizi aggiuntivi. (opzionale)',
+  field_notes_placeholder_en: 'Tell us about any needs, preferences or extra services.',
+  submit_idle_it: 'RICHIEDI IL TUO PREVENTIVO', submit_idle_en: 'REQUEST YOUR QUOTE',
   submit_submitting_it: 'Invio in corso...', submit_submitting_en: 'Submitting...',
   disclaimer_it: 'Verrai reindirizzato su WhatsApp. Ti contatteremo entro 24 ore con un preventivo personalizzato.',
   disclaimer_en: 'You\'ll be redirected to WhatsApp. We\'ll contact you within 24 hours with a personalized quote.',
@@ -3278,8 +3321,8 @@ export const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
   contact_label_en: 'For assistance or information:',
   contact_email: 'info@dr7.app',
   contact_address: 'DR7 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
-  last_updated_it: 'Ultimo aggiornamento: 10 aprile 2026',
-  last_updated_en: 'Last updated: April 10, 2026',
+  last_updated_it: 'Ultimo aggiornamento: 7 settembre 2026',
+  last_updated_en: 'Last updated: 7 September 2026',
   sections: [
     {
       id: 'ambito',
@@ -3435,6 +3478,103 @@ export const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
         { type: 'p-italic',
           text_it: 'In assenza dell’acquisto del servizio DR7 FLEX, si applica integralmente la presente policy standard per il lavaggio.',
           text_en: 'In the absence of purchasing the DR7 FLEX service, this standard policy applies in full for the car wash.' },
+      ],
+    },
+    {
+      id: 'account-dr7',
+      variant: 'standard',
+      title_it: '9. Cancellazione dell’account DR7',
+      title_en: '9. Deletion of the DR7 account',
+      blocks: [
+        { type: 'p',
+          text_it: 'L’Utente può richiedere in qualsiasi momento la cancellazione del proprio account DR7 attraverso le funzionalità rese disponibili sulla piattaforma.',
+          text_en: 'The User may request deletion of their DR7 account at any time through the features made available on the platform.' },
+        { type: 'p',
+          text_it: 'La cancellazione dell’account determina la cessazione dell’accesso al profilo personale e ai servizi, funzionalità e benefici strettamente connessi all’esistenza dell’account, fatti salvi eventuali diritti già acquisiti che, per loro natura o per disposizione di legge, non possano essere legittimamente cancellati.',
+          text_en: 'Deleting the account ends access to the personal profile and to the services, features and benefits strictly connected with the existence of the account, without prejudice to any rights already acquired which, by their nature or by law, cannot lawfully be cancelled.' },
+        { type: 'p',
+          text_it: 'Prima della conferma definitiva, DR7 informa chiaramente l’Utente delle conseguenze della cancellazione.',
+          text_en: 'Before final confirmation, DR7 clearly informs the User of the consequences of the deletion.' },
+        { type: 'p',
+          text_it: 'La cancellazione dell’account non comporta necessariamente l’eliminazione immediata di ogni dato personale. DR7 potrà conservare esclusivamente i dati per i quali sussista un obbligo legale di conservazione o un’altra valida base giuridica, compresa, ove applicabile, la necessità di accertare, esercitare o difendere un diritto in sede giudiziaria, nel rispetto del Regolamento (UE) 2016/679 (“GDPR”), in particolare degli artt. 5, 6 e 17.',
+          text_en: 'Deleting the account does not necessarily mean the immediate erasure of every personal data item. DR7 may retain only the data for which a legal retention obligation or another valid legal basis exists, including, where applicable, the need to establish, exercise or defend a legal claim, in compliance with Regulation (EU) 2016/679 (“GDPR”), in particular Articles 5, 6 and 17.' },
+        { type: 'p',
+          text_it: 'I dati personali non più necessari rispetto alle finalità per le quali sono stati raccolti saranno cancellati o resi anonimi secondo quanto previsto dalla normativa applicabile e dall’Informativa Privacy di DR7.',
+          text_en: 'Personal data no longer necessary for the purposes for which it was collected will be erased or anonymised as provided by applicable law and by the DR7 Privacy Policy.' },
+      ],
+    },
+    {
+      id: 'club-cancellazione',
+      variant: 'standard',
+      title_it: '10. Cancellazione dell’abbonamento DR7 Club',
+      title_en: '10. Cancellation of the DR7 Club subscription',
+      blocks: [
+        { type: 'p',
+          text_it: 'L’Utente può cancellare il proprio abbonamento DR7 Club secondo le modalità indicate sulla piattaforma, senza applicazione di penali, fatti salvi gli importi eventualmente già dovuti per periodi di abbonamento precedenti.',
+          text_en: 'The User may cancel their DR7 Club subscription in the manner indicated on the platform, with no penalty, without prejudice to any amounts already due for previous subscription periods.' },
+        { type: 'p',
+          text_it: 'La cancellazione determina, alla relativa data di efficacia, la cessazione dello status di membro DR7 Club e la conseguente perdita dell’accesso ai privilegi, alle condizioni riservate, alle funzionalità esclusive e agli ulteriori benefici collegati alla permanenza nel Club.',
+          text_en: 'As of its effective date, the cancellation ends DR7 Club member status and with it access to the privileges, reserved conditions, exclusive features and further benefits linked to remaining in the Club.' },
+        { type: 'p',
+          text_it: 'Eventuali crediti, somme, cashback o altri diritti economici già definitivamente acquisiti dall’Utente saranno disciplinati dalle specifiche condizioni applicabili al relativo beneficio e dalla normativa vigente.',
+          text_en: 'Any credits, sums, cashback or other economic rights already definitively acquired by the User are governed by the specific conditions applicable to that benefit and by applicable law.' },
+        { type: 'p',
+          text_it: 'Qualora le Condizioni del DR7 Club prevedano che l’adesione sia personale, esclusiva e non nuovamente attivabile dopo una cancellazione volontaria, l’Utente ne sarà informato chiaramente prima di confermare la cancellazione.',
+          text_en: 'Where the DR7 Club Conditions provide that membership is personal, exclusive and cannot be activated again after a voluntary cancellation, the User will be clearly informed of this before confirming the cancellation.' },
+        { type: 'p',
+          text_it: 'L’eventuale trattamento di dati necessario a verificare precedenti adesioni e l’ammissibilità di future richieste di iscrizione sarà effettuato esclusivamente in presenza di un’idonea base giuridica, secondo principi di necessità, proporzionalità e minimizzazione dei dati e per il periodo previsto nell’Informativa Privacy.',
+          text_en: 'Any processing of data needed to verify previous memberships and the admissibility of future enrolment requests will be carried out only where a suitable legal basis exists, following the principles of necessity, proportionality and data minimisation, and for the period set out in the Privacy Policy.' },
+      ],
+    },
+    {
+      id: 'club-prezzo',
+      variant: 'standard',
+      title_it: '11. Variazioni del prezzo DR7 Club',
+      title_en: '11. DR7 Club price changes',
+      blocks: [
+        { type: 'p',
+          text_it: 'Il prezzo dell’abbonamento DR7 Club potrà essere modificato nel tempo per giustificati motivi e secondo quanto previsto dalle presenti Condizioni.',
+          text_en: 'The price of the DR7 Club subscription may change over time for justified reasons and as provided by these Conditions.' },
+        { type: 'p',
+          text_it: 'Qualsiasi variazione applicabile ai rinnovi successivi sarà comunicata preventivamente all’Utente, indicando il nuovo prezzo e la relativa data di entrata in vigore.',
+          text_en: 'Any change applying to subsequent renewals will be communicated to the User in advance, stating the new price and its effective date.' },
+        { type: 'p',
+          text_it: 'Prima dell’applicazione del nuovo prezzo, l’Utente potrà scegliere se proseguire l’abbonamento alle nuove condizioni oppure cancellarlo secondo le modalità previste, senza penali derivanti dalla sola decisione di non accettare il nuovo prezzo.',
+          text_en: 'Before the new price is applied, the User may choose either to continue the subscription under the new terms or to cancel it in the manner provided, with no penalty arising from the mere decision not to accept the new price.' },
+      ],
+    },
+    {
+      id: 'conferma-cancellazione',
+      variant: 'standard',
+      title_it: '12. Conferma della cancellazione',
+      title_en: '12. Cancellation confirmation',
+      blocks: [
+        { type: 'p',
+          text_it: 'Prima di completare una cancellazione, DR7 presenta all’Utente una schermata di conferma contenente le principali conseguenze dell’operazione.',
+          text_en: 'Before a cancellation is completed, DR7 shows the User a confirmation screen setting out the main consequences of the operation.' },
+        { type: 'p',
+          text_it: 'Una volta completata la procedura, DR7 potrà trasmettere all’Utente una conferma della richiesta tramite e-mail o altro supporto durevole.',
+          text_en: 'Once the procedure is complete, DR7 may send the User a confirmation of the request by e-mail or other durable medium.' },
+        { type: 'p',
+          text_it: 'Il trattamento dei dati personali conseguente alla cancellazione avverrà conformemente al Regolamento (UE) 2016/679, al D.Lgs. 196/2003, come modificato dal D.Lgs. 101/2018, e all’Informativa Privacy DR7.',
+          text_en: 'The processing of personal data following the cancellation will comply with Regulation (EU) 2016/679, Legislative Decree 196/2003 as amended by Legislative Decree 101/2018, and the DR7 Privacy Policy.' },
+      ],
+    },
+    {
+      id: 'tutela-consumatore',
+      variant: 'standard',
+      title_it: '13. Tutela del consumatore',
+      title_en: '13. Consumer protection',
+      blocks: [
+        { type: 'p',
+          text_it: 'Le presenti disposizioni si applicano nel rispetto del D.Lgs. 206/2005 (“Codice del Consumo”) e della normativa europea applicabile ai contratti conclusi a distanza.',
+          text_en: 'These provisions apply in compliance with Legislative Decree 206/2005 (the Italian “Consumer Code”) and with the European rules applicable to distance contracts.' },
+        { type: 'p',
+          text_it: 'Nessuna disposizione della presente Politica può essere interpretata come limitativa dei diritti inderogabili riconosciuti al consumatore dalla normativa vigente.',
+          text_en: 'No provision of this Policy may be construed as limiting the mandatory rights granted to consumers by applicable law.' },
+        { type: 'p',
+          text_it: 'Qualora una disposizione risulti nulla, inefficace o inapplicabile, ciò non pregiudicherà, nei limiti consentiti dalla legge, la validità delle restanti disposizioni.',
+          text_en: 'Should any provision be void, ineffective or unenforceable, this will not affect, to the extent permitted by law, the validity of the remaining provisions.' },
       ],
     },
   ],
