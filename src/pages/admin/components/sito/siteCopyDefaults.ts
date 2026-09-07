@@ -1760,23 +1760,18 @@ export const INITIAL_DR7_CLUB_PLAN: Dr7ClubPlanCopy = {
   monthly_eur: 4.90,
   annually_eur: 39,
   features_it: [
-    'Sistema wallet reward attivo su ogni prenotazione',
-    '2% di cashback su prenotazioni con pagamento anticipato (fino al 4%)',
-    '1% di cashback su prenotazioni con acconto (30%)',
-    '2% di cashback su servizi extra',
-    '3% di cashback su servizi Lavaggio & Meccanica',
+    'Sistema Wallet Reward attivo su ogni prenotazione',
+    'Cashback dall’1% fino al 31%',
     'Accesso prioritario alle prenotazioni',
-    'Inviti a eventi esclusivi DR7 e serate partner',
+    'Inviti esclusivi a eventi DR7 e serate con i nostri partner',
+    'Accesso al DR7 Club Privilege, con rendimento fino al 36% annuo a maturazione giornaliera',
   ],
   features_en: [
-    'Wallet reward system activated on every booking',
-    '2% cashback on full prepayment bookings (up to 4%)',
-    '1% cashback on deposit bookings (30% advance)',
-    '2% cashback on extra services',
-    '3% cashback on Car Wash & Mechanics services',
+    'Wallet Reward system active on every booking',
+    'Cashback from 1% up to 31%',
     'Priority booking access',
-    'Access to "DR7 Members" WhatsApp group for flash offers',
-    'Invitations to exclusive DR7 events and partner evenings',
+    'Exclusive invitations to DR7 events and evenings with our partners',
+    'Access to DR7 Club Privilege, with up to 36% annual return accruing daily',
   ],
 };
 
@@ -3030,10 +3025,10 @@ export const INITIAL_HOME: HomeCopy = {
   // ── Atto 01 — Arrivo ───────────────────────────────────────────────────
   hero_kicker_it: 'Cagliari · Sardegna',
   hero_kicker_en: 'Cagliari · Sardinia',
-  hero_headline_it: 'Sardegna,\na un\u2019altra velocit\u00e0.',
-  hero_headline_en: 'Sardinia,\nat another speed.',
-  hero_microcopy_it: 'Terra, mare, aria. Una sola collezione, un solo accesso.',
-  hero_microcopy_en: 'Land, sea, air. One collection, one access.',
+  hero_headline_it: 'Il privilegio di andare oltre.',
+  hero_headline_en: 'The privilege of going further.',
+  hero_microcopy_it: 'Terra, mare, aria. Una sola collezione. Un solo accesso.',
+  hero_microcopy_en: 'Land, sea, air. One collection. One access.',
   hero_cta_label_it: 'La Collezione',
   hero_cta_label_en: 'The Collection',
   hero_cta_to: '/flotta',
@@ -3042,10 +3037,10 @@ export const INITIAL_HOME: HomeCopy = {
   hero_cta2_to: '#esperienze',
 
   // ── Atto 02 — Silenzio ─────────────────────────────────────────────────
-  statement_lines_it: ['Scegliere un mezzo', '\u00e8 scegliere', 'come arrivare.'],
-  statement_lines_en: ['Choosing how you move', 'is choosing', 'how you arrive.'],
-  statement_note_it: 'Terra · Mare · Aria',
-  statement_note_en: 'Land · Sea · Air',
+  statement_lines_it: ['Non conta dove arrivi.', 'Conta come ci arrivi.'],
+  statement_lines_en: ['It is not where you arrive.', 'It is how you get there.'],
+  statement_note_it: 'TERRA · MARE · ARIA',
+  statement_note_en: 'LAND · SEA · AIR',
 
   // ── Atto 03 — La Collezione ────────────────────────────────────────────
   collection_eyebrow_it: '01 \u2014 La Collezione',
@@ -3092,24 +3087,27 @@ export const INITIAL_HOME: HomeCopy = {
   ],
 
   // ── Atto 05 — Marca ────────────────────────────────────────────────────
-  brand_lines_it: ['Una flotta', 'non \u00e8 un parcheggio.', '\u00c8 una collezione.'],
-  brand_lines_en: ['A fleet', 'is not a car park.', 'It is a collection.'],
+  brand_lines_it: ['Una flotta non \u00e8 un parcheggio.', '\u00c8 una collezione.'],
+  brand_lines_en: ['A fleet is not a car park.', 'It is a collection.'],
   brand_paragraphs: [
-    { text_it: 'Selezione, servizio, tecnologia. Ogni veicolo viene preparato, consegnato e riconsegnato secondo lo stesso standard, a Cagliari e in tutta la Sardegna.',
-      text_en: 'Selection, service, technology. Every vehicle is prepared, delivered and returned to the same standard, in Cagliari and across Sardinia.' },
-    { text_it: 'Una sola piattaforma per prenotare, firmare, pagare e gestire il noleggio, con il credito DR7 Wallet e i vantaggi DR7 Club.',
-      text_en: 'One platform to book, sign, pay and manage your rental, with DR7 Wallet credit and DR7 Club benefits.' },
+    { text_it: 'Ogni veicolo DR7 \u00e8 scelto per rappresentare un preciso standard di eccellenza. Prestazioni, presenza e cura si incontrano in una collezione pensata per chi non cerca semplicemente un\u2019auto, ma un\u2019esperienza all\u2019altezza delle proprie aspettative.',
+      text_en: 'Every DR7 vehicle is chosen to embody a precise standard of excellence. Performance, presence and care meet in a collection made for those who are not simply looking for a car, but for an experience that matches their expectations.' },
+    { text_it: 'Dalla selezione alla consegna, ogni dettaglio segue un unico principio: offrire un servizio impeccabile, personale e riconoscibile. Perch\u00e9 il vero lusso non \u00e8 avere di pi\u00f9. \u00c8 non dover accettare compromessi.',
+      text_en: 'From selection to delivery, every detail follows one principle: an impeccable, personal and recognisable service. Because true luxury is not having more. It is never having to compromise.' },
   ],
   // Vuoto di proposito: un numero si pubblica solo se verificato nei dati.
   metrics: [],
 
   // ── Atto 06 — Accesso ──────────────────────────────────────────────────
-  access_title_it: 'Il prossimo arrivo \u00e8 il tuo.',
-  access_title_en: 'The next arrival is yours.',
-  access_copy_it: 'Scegli il mezzo, la data, il luogo.',
-  access_copy_en: 'Choose the vehicle, the date, the place.',
-  access_cta_label_it: 'Prenota',
-  access_cta_label_en: 'Book now',
+  // Il titolo va a capo dove ci sono gli \n: la pagina rispetta le
+  // interruzioni scritte qui, cosi' la spezzatura la decide chi scrive il
+  // testo dal gestionale e non la larghezza dello schermo.
+  access_title_it: 'La prossima\nesperienza\nporta il tuo nome.',
+  access_title_en: 'The next\nexperience\nbears your name.',
+  access_copy_it: 'Scegli dove. Scegli quando. Al resto pensiamo noi.',
+  access_copy_en: 'Choose where. Choose when. We take care of the rest.',
+  access_cta_label_it: 'PRENOTA',
+  access_cta_label_en: 'BOOK',
   access_cta_to: '/flotta',
   access_media_src: '/poster/video5.jpg',
   access_video_src: '/video5.mp4',
