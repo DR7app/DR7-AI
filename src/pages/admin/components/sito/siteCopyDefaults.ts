@@ -1213,6 +1213,13 @@ export interface AviationQuoteCopy {
   field_stops_detail_placeholder_it: string; field_stops_detail_placeholder_en: string;
   field_luggage_label_it: string; field_luggage_label_en: string;
   field_luggage_placeholder_it: string; field_luggage_placeholder_en: string;
+  // Bagagli: due tendine invece di un campo libero. Le voci del peso sono
+  // una riga sola separata da virgole, cosi' l'operatore le cambia da qui.
+  field_luggage_count_label_it: string; field_luggage_count_label_en: string;
+  field_luggage_count_max_option_it: string; field_luggage_count_max_option_en: string;
+  field_luggage_weight_label_it: string; field_luggage_weight_label_en: string;
+  field_luggage_weight_options_it: string; field_luggage_weight_options_en: string;
+  field_luggage_weight_placeholder_it: string; field_luggage_weight_placeholder_en: string;
   field_budget_label_it: string; field_budget_label_en: string;
   field_budget_placeholder_it: string; field_budget_placeholder_en: string;
   field_budget_hint_it: string; field_budget_hint_en: string;
@@ -2445,6 +2452,12 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   field_luggage_label_it: 'Bagagli', field_luggage_label_en: 'Luggage',
   field_luggage_placeholder_it: 'Quanti e specifica peso',
   field_luggage_placeholder_en: 'How many, and their approximate weight',
+  field_luggage_count_label_it: 'Numero di bagagli', field_luggage_count_label_en: 'Number of bags',
+  field_luggage_count_max_option_it: 'Più di 10', field_luggage_count_max_option_en: 'More than 10',
+  field_luggage_weight_label_it: 'Peso per bagaglio', field_luggage_weight_label_en: 'Weight per bag',
+  field_luggage_weight_options_it: 'Fino a 10 kg, 10-15 kg, 15-20 kg, 20-23 kg, 23-32 kg, Oltre 32 kg',
+  field_luggage_weight_options_en: 'Up to 10 kg, 10-15 kg, 15-20 kg, 20-23 kg, 23-32 kg, Over 32 kg',
+  field_luggage_weight_placeholder_it: 'Seleziona', field_luggage_weight_placeholder_en: 'Select',
   field_budget_label_it: 'Budget indicativo', field_budget_label_en: 'Approximate budget',
   field_budget_placeholder_it: 'Esempio: 8.000 - 10.000 EUR',
   field_budget_placeholder_en: 'Example: EUR 8,000 - 10,000',
