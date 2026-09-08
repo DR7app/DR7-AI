@@ -93,6 +93,42 @@ export function dowDelGiorno(dataISO: string): number {
     return Number.isNaN(d.getTime()) ? -1 : d.getDay()
 }
 
+/**
+ * Giorni della settimana in italiano, nell'ordine in cui si leggono (Lun -> Dom).
+ * `n` e' il numero di getDay() usato in `pause_config.giorni` (0 = Dom .. 6 = Sab):
+ * l'ordine dell'elenco e' quello del calendario, non quello dei numeri.
+ */
+export const GIORNI_SETTIMANA_IT: ReadonlyArray<{ n: number; breve: string; lungo: string }> = [
+    { n: 1, breve: 'Lun', lungo: 'Lunedì' },
+    { n: 2, breve: 'Mar', lungo: 'Martedì' },
+    { n: 3, breve: 'Mer', lungo: 'Mercoledì' },
+    { n: 4, breve: 'Gio', lungo: 'Giovedì' },
+    { n: 5, breve: 'Ven', lungo: 'Venerdì' },
+    { n: 6, breve: 'Sab', lungo: 'Sabato' },
+    { n: 0, breve: 'Dom', lungo: 'Domenica' },
+]
+
+/**
+ * Frase in italiano che dice in quali giorni vale la pausa, per non lasciare
+ * l'utente a interpretare dei numeri o delle pillole colorate:
+ *   []            -> "Tutti i giorni"
+ *   [1,2,3,4,5]   -> "Da Lunedì a Venerdì"
+ *   [1,3,5]       -> "Lunedì, Mercoledì e Venerdì"
+ * Con `breve` usa Lun/Mer/Ven al posto dei nomi interi (spazi stretti).
+ */
+export function descriviGiorniPausa(giorni?: number[] | null, breve = false): string {
+    const validi = (giorni ?? []).filter(n => Number.isInteger(n) && n >= 0 && n <= 6)
+    const unici = GIORNI_SETTIMANA_IT.filter(g => validi.includes(g.n))
+    if (unici.length === 0 || unici.length === 7) return 'Tutti i giorni'
+    const nome = (g: { breve: string; lungo: string }) => breve ? g.breve : g.lungo
+    // Intervallo continuo (Lun-Ven, Mar-Sab...): si legge meglio come "Da X a Y".
+    const primo = GIORNI_SETTIMANA_IT.findIndex(g => g.n === unici[0].n)
+    const continuo = unici.length >= 3 && unici.every((g, i) => GIORNI_SETTIMANA_IT[primo + i]?.n === g.n)
+    if (continuo) return `Da ${nome(unici[0])} a ${nome(unici[unici.length - 1])}`
+    if (unici.length === 1) return nome(unici[0])
+    return `${unici.slice(0, -1).map(nome).join(', ')} e ${nome(unici[unici.length - 1])}`
+}
+
 /** JSONB grezzo dal DB -> PauseConfig tipizzata. null se non c'e' nulla di utile. */
 export function normalizzaPauseConfig(raw: unknown): PauseConfig | null {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null

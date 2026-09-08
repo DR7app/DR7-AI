@@ -23,6 +23,8 @@ import {
     fetchPauseConfigOperatore,
     pausaObbligatoriaDelGiorno,
     combinaPauseGiorno,
+    GIORNI_SETTIMANA_IT,
+    descriviGiorniPausa,
     type PauseConfig as PauseConfigContratto,
 } from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
@@ -612,9 +614,10 @@ function KpiCard({ label, value, sub, tone = 'emerald' }: { label: string; value
 
 // 2026-07-17: pause obbligatorie fisse (direzione), per operatore.
 interface PausaFascia { da: string; a: string }
-// `giorni` non e' editabile da questo modale (il selettore Lun-Dom sta in
-// Contratti Operatore) ma va dichiarato: il salvataggio riscrive pause_config
-// per intero e senza questo campo si perderebbero i giorni configurati.
+// 08/09/2026: `giorni` si vede e si modifica anche da qui (prima solo da
+// Contratti Operatore): chi apriva la scheda leggeva "Pause obbligatorie" senza
+// sapere in quali giorni valessero. Il salvataggio riscrive pause_config per
+// intero, quindi il campo va comunque dichiarato o si perderebbe.
 interface PauseConfig { durata_min: number; pagata: boolean; fasce: PausaFascia[]; giorni?: number[]; decorrenza?: string }
 
 interface Contratto {
@@ -1029,6 +1032,23 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                     <Flag label="Lavora festivi" on={contratto.lavora_festivi} />
                     <Flag label="Notifiche attive" on={contratto.notifiche_attive} />
                     <Flag label="Vede fatturato" on={contratto.visibilita_fatturato} />
+                    {/* Pause obbligatorie in chiaro: durata, fasce e i GIORNI scritti
+                        in italiano. Prima la scheda mostrava le pause solo in
+                        modifica e senza dire in quali giorni valessero. */}
+                    <div className="col-span-full">
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Pause obbligatorie</div>
+                        <div className="text-xs text-theme-text-primary">
+                            {(() => {
+                                const pc = contratto.pause_config
+                                const fasce = (pc?.fasce ?? []).filter(f => f.da && f.a)
+                                const pezzi: string[] = []
+                                if (pc?.durata_min) pezzi.push(`${pc.durata_min} min al giorno`)
+                                if (fasce.length > 0) pezzi.push(fasce.map(f => `${f.da}–${f.a}`).join(', '))
+                                if (pezzi.length === 0) return 'Nessuna pausa da contratto'
+                                return `${pezzi.join(' + ')} · ${descriviGiorniPausa(pc?.giorni)}${pc?.pagata ? ' · pagata' : ''}${pc?.decorrenza ? ` · in vigore dal ${pc.decorrenza.split('-').reverse().join('/')}` : ''}`
+                            })()}
+                        </div>
+                    </div>
                     {contratto.note && (
                         <div className="col-span-full">
                             <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Note</div>
@@ -1185,6 +1205,37 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                             <button type="button"
                                 onClick={() => setPause({ fasce: [...(draft.pause_config?.fasce ?? []), { da: '13:00', a: '14:00' }] })}
                                 className="text-[11px] text-dr7-gold hover:opacity-80 font-medium">+ Aggiungi fascia</button>
+                        </div>
+                        {/* Giorni in cui vale la pausa, scritti in italiano: le sole
+                            pillole non dicono se "nessuna selezione" = nessun giorno
+                            o tutti i giorni. */}
+                        <div className="space-y-1.5">
+                            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Giorni in cui vale</div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {GIORNI_SETTIMANA_IT.map(({ n, breve, lungo }) => {
+                                    const sel = draft.pause_config?.giorni ?? []
+                                    const attivo = sel.includes(n)
+                                    const vale = sel.length === 0 || attivo
+                                    return (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            onClick={() => {
+                                                const cur = [...(draft.pause_config?.giorni ?? [])]
+                                                const i = cur.indexOf(n)
+                                                if (i >= 0) cur.splice(i, 1); else cur.push(n)
+                                                setPause({ giorni: cur.sort((a, b) => a - b) })
+                                            }}
+                                            title={`${lungo}: ${vale ? 'pausa attiva' : 'nessuna pausa'}`}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${attivo ? 'bg-emerald-500 text-white border-emerald-500' : vale ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' : 'bg-theme-bg-primary text-theme-text-muted border-theme-border'}`}
+                                        >{breve}</button>
+                                    )
+                                })}
+                            </div>
+                            <p className="text-xs text-theme-text-primary">
+                                La pausa vale: <strong>{descriviGiorniPausa(draft.pause_config?.giorni)}</strong>
+                            </p>
+                            <p className="text-[10px] text-theme-text-muted">Nessun giorno selezionato = vale tutti i giorni.</p>
                         </div>
                     </fieldset>
 

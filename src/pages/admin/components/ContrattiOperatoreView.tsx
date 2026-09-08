@@ -5,6 +5,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import Input from './Input'
 import Select from './Select'
+import { GIORNI_SETTIMANA_IT, descriviGiorniPausa } from '../../../utils/pauseObbligatorie'
 
 // Sezione "Contratti" dentro Operatori. Direzione + ophe selezionano un
 // operatore, vedono il contratto attivo (se esiste), e lo modificano
@@ -424,7 +425,7 @@ export default function ContrattiOperatoreView() {
                             <div className="space-y-2">
                                 <div className="text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Giorni in cui vale</div>
                                 <div className="flex flex-wrap gap-1.5">
-                                    {[{ g: 1, l: 'Lun' }, { g: 2, l: 'Mar' }, { g: 3, l: 'Mer' }, { g: 4, l: 'Gio' }, { g: 5, l: 'Ven' }, { g: 6, l: 'Sab' }, { g: 0, l: 'Dom' }].map(({ g, l }) => {
+                                    {GIORNI_SETTIMANA_IT.map(({ n: g, breve: l, lungo }) => {
                                         const sel = contratto.pause_config?.giorni ?? []
                                         const on = sel.length === 0 || sel.includes(g)
                                         const active = sel.includes(g)
@@ -439,12 +440,17 @@ export default function ContrattiOperatoreView() {
                                                     setPause({ giorni: cur.sort((a, b) => a - b) })
                                                 }}
                                                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${active ? 'bg-emerald-500 text-white border-emerald-500' : on ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}
-                                                title={active ? 'Attivo' : (contratto.pause_config?.giorni?.length ? 'Non attivo' : 'Tutti i giorni')}
+                                                title={`${lungo}: ${active ? 'pausa attiva' : (contratto.pause_config?.giorni?.length ? 'nessuna pausa' : 'pausa attiva (vale tutti i giorni)')}`}
                                             >{l}</button>
                                         )
                                     })}
                                 </div>
-                                <p className="text-[11px] text-theme-text-muted">Nessun giorno selezionato = vale tutti i giorni. Es. seleziona Lun–Ven per la pausa solo nei feriali.</p>
+                                {/* Il giorno scritto per esteso: le pillole da sole non dicono se
+                                    "nessuna selezione" vuol dire nessun giorno o tutti. */}
+                                <p className="text-xs text-theme-text-primary">
+                                    La pausa vale: <strong>{descriviGiorniPausa(contratto.pause_config?.giorni)}</strong>
+                                </p>
+                                <p className="text-[11px] text-theme-text-muted">Nessun giorno selezionato = vale tutti i giorni. Es. seleziona da Lunedì a Venerdì per la pausa solo nei feriali.</p>
                             </div>
                         </fieldset>
 

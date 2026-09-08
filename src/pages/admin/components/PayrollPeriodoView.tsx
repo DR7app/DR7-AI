@@ -81,7 +81,11 @@ export default function PayrollPeriodoView() {
     // 2026-06-20: operatori "solo miei dati" (Salvatore, lavaggisti) vedono la
     // propria busta paga (ore ordinarie/straordinari/paga), MAI quella altrui.
     const isRestrictedToOwn = REPORT_RESTRICTED_EMAILS.has(lowerAdminEmail)
-    const isDirezione = (hasRole('direzione') || hasRole('developer')) && !isRestrictedToOwn
+    // 08/09/2026: stesso gate della barra Operatori (direzione / developer /
+    // stipendio-editor). Prima la tab si vedeva con `stipendio-editor` ma questa
+    // vista rispondeva "Accesso riservato alla direzione": si apriva una pagina
+    // che non mostrava niente.
+    const isDirezione = (hasRole('direzione') || hasRole('developer') || hasRole('stipendio-editor')) && !isRestrictedToOwn
     // Chi puo' aprire la pagina: direzione (team) oppure operatore self (solo se stesso).
     const canSeePayroll = isDirezione || isRestrictedToOwn
 
@@ -92,6 +96,11 @@ export default function PayrollPeriodoView() {
     })
     const [to, setTo] = useState<string>(() => toRomeDate(new Date()))
     const [loading, setLoading] = useState(true)
+    // 08/09/2026: gli errori delle query non si vedevano piu' (venivano scartati
+    // insieme a `error`): una lettura bloccata dalla RLS restituisce lista vuota
+    // SENZA eccezione, e la pagina sembrava semplicemente vuota. Ora si dice
+    // sempre cosa e' andato storto.
+    const [loadError, setLoadError] = useState<string | null>(null)
     const [rows, setRows] = useState<PayrollRow[]>([])
     const [profileOp, setProfileOp] = useState<Operatore | null>(null)
     const [sortKey, setSortKey] = useState<'name' | 'hours' | 'total'>('total')
@@ -100,13 +109,15 @@ export default function PayrollPeriodoView() {
     const load = useCallback(async () => {
         if (!canSeePayroll) { setLoading(false); return }
         setLoading(true)
+        setLoadError(null)
         try {
             // 1. Operatori attivi
-            const { data: ops } = await supabase
+            const { data: ops, error: errOps } = await supabase
                 .from('operatori_persone')
                 .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url, ore_a_recuperare_min, attivo')
                 .eq('attivo', true)
                 .order('cognome', { ascending: true })
+            if (errOps) throw new Error(`Operatori: ${errOps.message}`)
             let opList = (ops || []) as Operatore[]
             // Operatore self: solo la propria busta paga, mai quella degli altri.
             if (isRestrictedToOwn) {
@@ -118,22 +129,24 @@ export default function PayrollPeriodoView() {
             // del contratto. Servono per calcolare la soglia straordinari
             // effettiva quando l'admin ha inserito SOLO 47h/settimana (es.):
             //   soglia_giornaliera_implicita = settimanali/5 = 9.4h
-            const { data: contracts } = await supabase
+            const { data: contracts, error: errContracts } = await supabase
                 .from('operatore_contratto')
                 .select('operatore_id, stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, attivo')
                 .eq('attivo', true)
+            if (errContracts) throw new Error(`Contratti: ${errContracts.message}`)
             const contractByOp = new Map<string, Contratto & { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null }>()
             for (const c of (contracts || []) as Array<Contratto & { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null }>) {
                 contractByOp.set(c.operatore_id, c)
             }
 
             // 3. Timesheet del range
-            const { data: entries } = await supabase
+            const { data: entries, error: errEntries } = await supabase
                 .from('timesheet_entries')
                 .select('operatore_id, tipo, timestamp, data')
                 .gte('data', from)
                 .lte('data', to)
                 .order('timestamp', { ascending: true })
+            if (errEntries) throw new Error(`Timbrature: ${errEntries.message}`)
 
             // Group entries by operator → day
             const byOpDay = new Map<string, Map<string, { entrata: string | null; uscita: string | null; pi: string[]; pf: string[] }>>()
@@ -282,6 +295,8 @@ export default function PayrollPeriodoView() {
             setRows(result)
         } catch (err) {
             console.error('[PayrollPeriodoView] load error', err)
+            setLoadError(err instanceof Error ? err.message : String(err))
+            setRows([])
         } finally {
             setLoading(false)
         }
@@ -420,6 +435,15 @@ export default function PayrollPeriodoView() {
                 </div>
             </div>
 
+            {/* Perche' la pagina e' vuota: errore di lettura scritto in chiaro,
+                invece di una tabella senza righe da interpretare. */}
+            {loadError && (
+                <div className="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 text-xs text-rose-300">
+                    <strong>Buste paga non caricate.</strong> {loadError}
+                    <button onClick={() => load()} className="ml-2 underline hover:no-underline">Riprova</button>
+                </div>
+            )}
+
             {/* Grand totals */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
                 <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
@@ -471,7 +495,11 @@ export default function PayrollPeriodoView() {
                             <ScheletroRigheTabella righe={5} colonne={10} />
                         )}
                         {!loading && sortedRows.length === 0 && (
-                            <tr><td colSpan={10} className="text-center py-4 text-theme-text-muted">Nessun operatore</td></tr>
+                            <tr><td colSpan={10} className="text-center py-4 text-theme-text-muted">
+                                {loadError
+                                    ? 'Nessun dato: la lettura non è riuscita (vedi il messaggio qui sopra).'
+                                    : 'Nessun operatore attivo nel periodo selezionato.'}
+                            </td></tr>
                         )}
                         {!loading && sortedRows.map(r => {
                             const tone = avatarTone(r.operatore.email || r.operatore.id)

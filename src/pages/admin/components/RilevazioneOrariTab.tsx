@@ -914,11 +914,19 @@ export default function RilevazioneOrariTab() {
                         <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
                             <tr>
                                 <th className="text-left px-3 py-2 sticky left-0 bg-theme-bg-tertiary">Operatore</th>
-                                {periodRange.days.map(d => (
-                                    <th key={d} className="text-center px-2 py-2 text-xs">
-                                        {new Date(d).toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: '2-digit' })}
-                                    </th>
-                                ))}
+                                {/* 08/09/2026: sopra la data c'e' il giorno in italiano (Lun, Mar...).
+                                    Con le sole cifre 05/09 non si capiva a che giorno appartenessero
+                                    ore e pause, e la domenica non si distingueva. */}
+                                {periodRange.days.map(d => {
+                                    const giorno = new Date(d).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'short' })
+                                    const domenica = new Date(`${d}T12:00:00`).getDay() === 0
+                                    return (
+                                        <th key={d} className="text-center px-2 py-2 text-xs">
+                                            <span className={`block text-[10px] uppercase ${domenica ? 'text-rose-400' : 'text-theme-text-muted'}`}>{giorno}</span>
+                                            {new Date(d).toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: '2-digit' })}
+                                        </th>
+                                    )
+                                })}
                                 <th className="text-right px-3 py-2">Tot</th>
                                 <th className="text-right px-3 py-2">Saldo</th>
                             </tr>
