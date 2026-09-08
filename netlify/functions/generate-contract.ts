@@ -1364,6 +1364,46 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             },
         }
         const kaskoTestoContratto = String(opzionePro?.kasko_testo || '')
+
+        // 08/09/2026 — Tabella "PENALI E ADDEBITI": ogni penale di Centralina
+        // Pro > Danni & Penali puo' dichiarare la casella del contratto che
+        // riempie (`campo_contratto`, es. PenaleFumo). Si leggono le penali
+        // della categoria del veicolo: cosi' Hypercar stampa i suoi importi e
+        // Urban i suoi, senza testo fisso nel codice.
+        const penaliContratto: Record<string, string> = {}
+        let penaliListaTesto = ''
+        try {
+            const tuttePenali = (cpCfg?.config as { penali?: Record<string, unknown> })?.penali || {}
+            const cat = String(vehicleCategory || '').toLowerCase()
+            const alias = cat === 'exotic' ? 'supercars' : cat === 'supercars' ? 'exotic' : ''
+            const chiave = Object.keys(tuttePenali).find(k => {
+                const kk = k.toLowerCase()
+                return kk === cat || (alias && kk === alias)
+            })
+            const lista = chiave ? tuttePenali[chiave] : null
+            if (Array.isArray(lista)) {
+                for (const voce of lista as { campo_contratto?: string; amount?: unknown; enabled?: boolean }[]) {
+                    const campo = String(voce?.campo_contratto || '').trim()
+                    if (!campo || voce?.enabled === false) continue
+                    const n = Number(voce?.amount)
+                    // Casella vuota in Centralina = cella vuota sul contratto.
+                    penaliContratto[campo] = (voce?.amount === '' || voce?.amount === null || voce?.amount === undefined || !Number.isFinite(n))
+                        ? ''
+                        : n.toLocaleString('it-IT', { maximumFractionDigits: 2 })
+                }
+            }
+            // Stessa tabella in UN campo solo (PenaliLista), per chi non vuole
+            // creare una casella per riga nel PDF.
+            if (Array.isArray(lista)) {
+                penaliListaTesto = (lista as { label?: string; amount?: unknown; enabled?: boolean }[])
+                    .filter(v => v?.enabled !== false && v?.amount !== '' && v?.amount !== null && v?.amount !== undefined && Number.isFinite(Number(v?.amount)))
+                    .map(v => `${v.label || ''}: €${Number(v.amount).toLocaleString('it-IT', { maximumFractionDigits: 2 })}`)
+                    .join('\n')
+            }
+            console.log(`[generate-contract] Penali contratto: ${Object.keys(penaliContratto).length} caselle per categoria "${vehicleCategory}"`)
+        } catch (penErr: any) {
+            console.warn('[generate-contract] Penali lookup failed:', penErr?.message)
+        }
         // Stessa tabella in UN solo campo, per chi preferisce una casella unica
         // nel PDF invece di una riga per garanzia. Le voci vuote non compaiono.
         const franchigieLista = ([
@@ -1553,6 +1593,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'FranchigiaKasko': franchigieContratto.kasko.eur,
             'ScopertoKasko': franchigieContratto.kasko.perc,
             'FranchigieLista': franchigieLista,
+
+            // Tabella PENALI E ADDEBITI: una casella per riga, presa dalle
+            // penali della categoria (Centralina Pro > Danni & Penali).
+            'PenaliLista': penaliListaTesto,
+            ...penaliContratto,
             // Cauzione amount resolution.
             // - cauzione_auto = true means the customer pledged THEIR OWN vehicle
             //   as deposit; the field becomes the targa instead of an amount.

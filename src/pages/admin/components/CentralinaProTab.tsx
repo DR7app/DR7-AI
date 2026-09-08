@@ -1184,7 +1184,92 @@ type PenaliItem = {
   amount: number | ''
   description: string
   enabled?: boolean
+  /**
+   * 08/09/2026: casella della tabella "PENALI E ADDEBITI" del contratto che
+   * questa voce riempie (es. `PenaleFumo`). Vuoto = la voce resta interna al
+   * gestionale e non finisce sul contratto.
+   */
+  campo_contratto?: string
 }
+
+/**
+ * Le righe della tabella "PENALI E ADDEBITI" del contratto, nell'ordine in cui
+ * si leggono. `campo` e' il nome del campo AcroForm nel PDF: il contratto ci
+ * scrive SOLO il numero (€, % e "/giorno" sono gia' stampati nella cella).
+ * Da qui nasce il pulsante "Aggiungi le voci del contratto": l'elenco si crea
+ * da solo e alla direzione resta da scrivere gli importi.
+ */
+const VOCI_PENALI_CONTRATTO: ReadonlyArray<{ campo: string; label: string; unita?: string }> = [
+  { campo: 'PenaleFermoTecnico', label: 'Fermo tecnico del veicolo', unita: '€/giorno' },
+  { campo: 'PenaleFumo', label: "Fumo all'interno del veicolo" },
+  { campo: 'PenaleBruciatura', label: 'Bruciatura/foro da sigaretta o similari', unita: '€ cad.' },
+  { campo: 'PenaleConducenteNonAutorizzato', label: 'Conducente non autorizzato' },
+  { campo: 'PenaleGuidaSenzaRequisiti', label: 'Guida da soggetto privo dei requisiti previsti' },
+  { campo: 'PenaleSubnoleggio', label: 'Subnoleggio, cessione o affidamento non autorizzato' },
+  { campo: 'PenaleCarburanteMancante', label: 'Carburante mancante' },
+  { campo: 'PenaleCarburanteErrato', label: 'Rifornimento con carburante errato', unita: '+ costi di ripristino' },
+  { campo: 'PenaleMancataRicarica', label: 'Mancata ricarica veicolo elettrico al livello previsto' },
+  { campo: 'PenaleKitPneumatici', label: 'Utilizzo non autorizzato kit/bomboletta pneumatici', unita: '€/pneumatico' },
+  { campo: 'PenalePneumaticoDanneggiato', label: 'Pneumatico danneggiato per utilizzo improprio', unita: '+ eventuale ripristino' },
+  { campo: 'PenalePuliziaStraordinaria', label: 'Pulizia straordinaria' },
+  { campo: 'PenaleAnimali', label: 'Presenza non autorizzata di animali/peli' },
+  { campo: 'PenaleSporcoInterni', label: 'Macchie, liquidi, residui o sporco eccezionale negli interni' },
+  { campo: 'PenaleOdori', label: 'Odori persistenti che richiedano trattamento specifico' },
+  { campo: 'PenaleManomissioneGps', label: 'Manomissione/disattivazione del localizzatore GPS' },
+  { campo: 'PenaleRimozioneGps', label: 'Rimozione o danneggiamento del localizzatore GPS', unita: '+ ripristino' },
+  { campo: 'PenaleManomissioneElettronica', label: 'Manomissione dei sistemi elettronici del veicolo' },
+  { campo: 'PenaleManomissioneSicurezza', label: 'Disattivazione/manomissione dei sistemi di sicurezza o assistenza' },
+  { campo: 'PenaleManomissioneCentralina', label: 'Manomissione centralina, software o configurazioni del veicolo' },
+  { campo: 'PenaleDispositiviNonAutorizzati', label: 'Installazione/collegamento di dispositivi non autorizzati' },
+  { campo: 'PenaleChiave', label: 'Smarrimento/danneggiamento chiave' },
+  { campo: 'PenaleSecondaChiave', label: 'Smarrimento seconda chiave' },
+  { campo: 'PenaleDocumenti', label: 'Smarrimento documenti del veicolo' },
+  { campo: 'PenaleAccessori', label: 'Smarrimento/danneggiamento accessori consegnati' },
+  { campo: 'PenaleCavoRicarica', label: 'Smarrimento cavo di ricarica' },
+  { campo: 'PenaleTelepass', label: 'Smarrimento Telepass/dispositivo pedaggio' },
+  { campo: 'PenaleRitardoCheckout', label: 'Ritardo al check-out' },
+  { campo: 'PenaleRitardoMinuto', label: 'Ritardo nella riconsegna', unita: '€/minuto' },
+  { campo: 'PenaleRitardoOra', label: 'Ritardo nella riconsegna', unita: '€/ora' },
+  { campo: 'PenaleRitardoGiornata', label: 'Superamento della soglia massima di ritardo', unita: '€/giornata aggiuntiva' },
+  { campo: 'PenaleRiconsegnaFuoriOrario', label: "Riconsegna fuori dall'orario concordato" },
+  { campo: 'PenaleRiconsegnaLuogoDiverso', label: 'Riconsegna in luogo diverso da quello concordato' },
+  { campo: 'PenaleRecuperoVeicolo', label: 'Recupero del veicolo', unita: '+ costi di trasporto' },
+  { campo: 'PenaleSforoKm', label: 'Superamento chilometraggio incluso', unita: '€/km' },
+  { campo: 'PenaleLimiteTerritoriale', label: 'Superamento del limite territoriale autorizzato' },
+  { campo: 'PenaleUscitaSardegna', label: 'Uscita dalla Sardegna/territorio autorizzato senza consenso' },
+  { campo: 'PenaleEspatrio', label: 'Espatrio non autorizzato' },
+  { campo: 'PenalePista', label: 'Utilizzo del veicolo in pista/circuito' },
+  { campo: 'PenaleGare', label: 'Utilizzo per gare, competizioni, prove di velocita' },
+  { campo: 'PenaleStradeNonIdonee', label: 'Utilizzo su strade/percorsi non idonei alla categoria' },
+  { campo: 'PenaleTraino', label: 'Traino o utilizzo del veicolo per finalita non autorizzate' },
+  { campo: 'PenaleUsoCommerciale', label: 'Uso commerciale/professionale non autorizzato' },
+  { campo: 'PenaleMancataComunicazioneSinistro', label: 'Mancata comunicazione tempestiva di incidente/sinistro' },
+  { campo: 'PenaleDocumentazioneSinistro', label: 'Mancata compilazione/consegna della documentazione del sinistro' },
+  { campo: 'PenaleCollaborazioneSinistro', label: 'Mancata collaborazione nella gestione del sinistro' },
+  { campo: 'PenaleRiparazioneNonAutorizzata', label: 'Spostamento/riparazione dopo un sinistro senza autorizzazione' },
+  { campo: 'PenaleAbbandono', label: 'Abbandono del veicolo', unita: '+ costi di recupero' },
+  { campo: 'PenaleSpeseMulta', label: 'Spese amministrative gestione multa/sanzione', unita: '€/pratica' },
+  { campo: 'PenaleGestionePedaggi', label: 'Pedaggi/parcheggi non corrisposti', unita: '€ di gestione' },
+  { campo: 'PenaleRimozioneSequestro', label: 'Rimozione, sequestro o fermo per condotta del Cliente', unita: '+ relativi costi' },
+  { campo: 'NoShowPercentuale', label: 'Mancata presentazione (No Show)', unita: '%' },
+  { campo: 'NoShowImporto', label: 'Mancata presentazione (No Show)', unita: '€' },
+  { campo: 'CancellazioneGiorni', label: 'Cancellazione: giorni prima del ritiro', unita: 'giorni' },
+  { campo: 'CancellazioneEntroPercentuale', label: 'Cancellazione entro il termine', unita: '%' },
+  { campo: 'CancellazioneOltrePercentuale', label: 'Cancellazione oltre il termine previsto', unita: '%' },
+  { campo: 'QuotaOrganizzativaPercentuale', label: 'Quota organizzativa trattenuta', unita: '%' },
+  { campo: 'QuotaOrganizzativaImporto', label: 'Quota organizzativa trattenuta', unita: '€' },
+  { campo: 'VoucherPercentuale', label: 'Voucher riconosciuto', unita: '%' },
+  { campo: 'VoucherValiditaMesi', label: 'Validita voucher', unita: 'mesi' },
+  { campo: 'PenaleMancataRestituzioneDotazioni', label: 'Mancata restituzione di dotazioni/accessori' },
+  { campo: 'PenaleDanneggiamentoDotazioni', label: 'Danneggiamento di dotazioni/accessori' },
+  { campo: 'PenaleRimozioneAdesivi', label: 'Rimozione di adesivi, sigilli o identificativi del veicolo' },
+  { campo: 'PenaleApplicazioneAdesivi', label: 'Applicazione di adesivi, pellicole o modifiche non autorizzate' },
+  { campo: 'PenaleModificheNonAutorizzate', label: 'Modifiche estetiche, meccaniche o elettroniche non autorizzate' },
+  { campo: 'PenaleTrasportoVietato', label: 'Trasporto di materiali o sostanze vietate' },
+  { campo: 'PenaleViolazioneRestrizioni', label: "Violazione di specifiche restrizioni d'uso" },
+  { campo: 'TolleranzaRitardoMinuti', label: 'Tolleranza ritardo', unita: 'minuti' },
+  { campo: 'TolleranzaCheckoutMinuti', label: 'Tolleranza check-out', unita: 'minuti' },
+]
 type PenaliConfig = Record<PenaliCategoryKey, PenaliItem[]>
 
 // Default seed only — the active list comes from the live `categories` array
@@ -6299,6 +6384,7 @@ function DanniPenaliSection({
         titleNoun={titleNoun}
         itemNoun={itemNoun}
         categories={categories}
+        vociContratto={kind === 'penali'}
       />
     </div>
   )
@@ -6310,12 +6396,15 @@ function FeeListEditor({
   titleNoun,
   itemNoun,
   categories,
+  vociContratto = false,
 }: {
   config: PenaliConfig
   setConfig: (next: PenaliConfig) => void
   titleNoun: string
   itemNoun: string
   categories: Category[]
+  /** Mostra il legame con la tabella del contratto (solo Penali). */
+  vociContratto?: boolean
 }) {
   const categoryList = categories.length > 0
     ? categories.map(c => ({ id: c.id, label: c.label }))
@@ -6347,6 +6436,29 @@ function FeeListEditor({
       ],
     })
   }
+  /**
+   * Crea in un colpo solo le righe della tabella del contratto che mancano,
+   * gia' legate alla loro casella: cosi' non si scrive nessun nome a mano,
+   * restano solo gli importi da mettere. Le voci gia' presenti non si toccano.
+   */
+  function aggiungiVociContratto() {
+    const gia = new Set(items.map(i => i.campo_contratto).filter(Boolean))
+    const mancanti = VOCI_PENALI_CONTRATTO
+      .filter(v => !gia.has(v.campo))
+      .map(v => ({
+        id: uid(),
+        label: v.unita ? `${v.label} (${v.unita})` : v.label,
+        amount: '' as number | '',
+        description: '',
+        enabled: true,
+        campo_contratto: v.campo,
+      }))
+    if (mancanti.length === 0) return
+    setConfig({ ...config, [activeCategory]: [...items, ...mancanti] })
+  }
+  const mancantiContratto = vociContratto
+    ? VOCI_PENALI_CONTRATTO.filter(v => !items.some(i => i.campo_contratto === v.campo)).length
+    : 0
 
   return (
     <div className="space-y-6">
@@ -6409,6 +6521,22 @@ function FeeListEditor({
                     className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                 </div>
+                {vociContratto && (
+                  /* A quale casella del contratto va questo importo. Le voci
+                     create dal pulsante arrivano gia' collegate: si tocca solo
+                     per correggere. */
+                  <select
+                    value={it.campo_contratto || ''}
+                    onChange={(e) => patchItem(idx, { campo_contratto: e.target.value || undefined })}
+                    title="Casella della tabella PENALI E ADDEBITI del contratto"
+                    className={`flex-shrink-0 w-52 bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${it.campo_contratto ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
+                  >
+                    <option value="">Non sul contratto</option>
+                    {VOCI_PENALI_CONTRATTO.map(v => (
+                      <option key={v.campo} value={v.campo}>{v.unita ? `${v.label} (${v.unita})` : v.label}</option>
+                    ))}
+                  </select>
+                )}
                 <button
                   onClick={() => removeItem(idx)}
                   className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors"
@@ -6438,6 +6566,15 @@ function FeeListEditor({
             </svg>
             Aggiungi {itemNoun}
           </button>
+          {vociContratto && mancantiContratto > 0 && (
+            <button
+              onClick={aggiungiVociContratto}
+              className="ml-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+              title="Crea le righe della tabella PENALI E ADDEBITI del contratto, gia' collegate. Restano da scrivere solo gli importi."
+            >
+              Aggiungi le {mancantiContratto} voci del contratto che mancano
+            </button>
+          )}
         </footer>
       </section>
     </div>
