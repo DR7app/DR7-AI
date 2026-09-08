@@ -5,6 +5,7 @@ import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import { supabase } from '../../../supabaseClient'
 
 /**
  * Modal "Accetta preventivo" — same UX pattern as PreventivoRejectModal:
@@ -331,15 +332,41 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                                     onSelectCustomer={(id) => {
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         const c: any = customers.find((x: any) => x.id === id)
+                                        const parti = String(c?.full_name || '').trim().split(' ')
                                         setSecondoGuidatore(prev => ({
                                             ...prev,
                                             customer_id: id || null,
-                                            name: c?.first_name || c?.nome || (c?.full_name || '').split(' ')[0] || prev.name,
-                                            surname: c?.last_name || c?.cognome || (c?.full_name || '').split(' ').slice(1).join(' ') || prev.surname,
+                                            name: parti[0] || prev.name,
+                                            surname: parti.slice(1).join(' ') || prev.surname,
                                             email: c?.email || prev.email,
                                             phone: c?.phone || prev.phone,
-                                            codice_fiscale: c?.codice_fiscale || prev.codice_fiscale,
                                         }))
+                                        if (!id) return
+                                        // La scheda completa arriva subito dopo: CF, indirizzo, patente.
+                                        schedaCliente(id).then(sc => {
+                                            if (!sc) return
+                                            setSecondoGuidatore(prev => ({
+                                                ...prev,
+                                                name: sc.nome || prev.name,
+                                                surname: sc.cognome || prev.surname,
+                                                email: sc.email || prev.email,
+                                                phone: sc.telefono || prev.phone,
+                                                codice_fiscale: sc.codice_fiscale || prev.codice_fiscale,
+                                                sesso: sc.sesso || prev.sesso,
+                                                indirizzo: sc.indirizzo || prev.indirizzo,
+                                                cap: sc.cap || prev.cap,
+                                                citta: sc.citta || prev.citta,
+                                                provincia: sc.provincia || prev.provincia,
+                                                birth_date: sc.data_nascita || prev.birth_date,
+                                                birth_place: sc.luogo_nascita || prev.birth_place,
+                                                birth_provincia: sc.provincia_nascita || prev.birth_provincia,
+                                                license_type: sc.tipo_patente || prev.license_type,
+                                                license_number: sc.numero_patente || prev.license_number,
+                                                license_issued_by: sc.emessa_da || prev.license_issued_by,
+                                                license_issue_date: sc.data_rilascio_patente || prev.license_issue_date,
+                                                license_expiry: sc.scadenza_patente || prev.license_expiry,
+                                            }))
+                                        })
                                     }}
                                     placeholder="Cerca per nome, email o telefono..."
                                 />
@@ -432,6 +459,43 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                                     Rimuovi
                                 </button>
                             </div>
+                            <div className="mb-3">
+                                <label className="block text-xs text-theme-text-muted mb-1">Cliente gia' registrato (facoltativo)</label>
+                                <CustomerAutocomplete
+                                    customers={customers}
+                                    selectedCustomerId={''}
+                                    onSelectCustomer={(id) => {
+                                        if (!id) return
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const c: any = customers.find((x: any) => x.id === id)
+                                        setGaranti(l => l.map((x, j) => j === i ? {
+                                            ...x,
+                                            nome_cognome: c?.full_name || x.nome_cognome,
+                                            email: c?.email || x.email,
+                                            telefono: c?.phone || x.telefono,
+                                        } : x))
+                                        schedaCliente(id).then(sc => {
+                                            if (!sc) return
+                                            setGaranti(l => l.map((x, j) => j === i ? {
+                                                ...x,
+                                                nome_cognome: `${sc.nome} ${sc.cognome}`.trim() || x.nome_cognome,
+                                                codice_fiscale: sc.codice_fiscale || x.codice_fiscale,
+                                                sesso: sc.sesso || x.sesso,
+                                                indirizzo: sc.indirizzo || x.indirizzo,
+                                                cap: sc.cap || x.cap,
+                                                citta: sc.citta || x.citta,
+                                                provincia: sc.provincia || x.provincia,
+                                                data_nascita: sc.data_nascita || x.data_nascita,
+                                                citta_nascita: sc.luogo_nascita || x.citta_nascita,
+                                                provincia_nascita: sc.provincia_nascita || x.provincia_nascita,
+                                                telefono: sc.telefono || x.telefono,
+                                                email: sc.email || x.email,
+                                            } : x))
+                                        })
+                                    }}
+                                    placeholder="Cerca per nome, email o telefono..."
+                                />
+                            </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <CampoModale label="Nome e cognome" value={g.nome_cognome} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, nome_cognome: v } : x))} />
                                 <CampoModale label="Codice fiscale" value={g.codice_fiscale} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, codice_fiscale: v.toUpperCase() } : x))} />
@@ -488,6 +552,48 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
     )
 
     return createPortal(modal, document.body)
+}
+
+/**
+ * Scheda cliente completa -> campi del modale. L'elenco del picker ha solo
+ * nome/email/telefono (17 colonne, il resto pesava 5 MB): per codice fiscale,
+ * indirizzo e patente si legge la riga vera, altrimenti la direzione doveva
+ * ricopiare a mano dati che il gestionale ha gia'.
+ */
+async function schedaCliente(customerId: string): Promise<Record<string, string> | null> {
+    try {
+        const { data } = await supabase
+            .from('customers_extended')
+            .select('nome, cognome, email, telefono, codice_fiscale, sesso, indirizzo, numero_civico, codice_postale, citta_residenza, provincia_residenza, data_nascita, luogo_nascita, provincia_nascita, tipo_patente, numero_patente, emessa_da, data_rilascio_patente, scadenza_patente')
+            .eq('id', customerId)
+            .maybeSingle()
+        if (!data) return null
+        const c = data as Record<string, unknown>
+        const testo = (v: unknown) => (v == null ? '' : String(v))
+        const indirizzo = [testo(c.indirizzo), testo(c.numero_civico)].filter(Boolean).join(' ').trim()
+        return {
+            nome: testo(c.nome),
+            cognome: testo(c.cognome),
+            email: testo(c.email),
+            telefono: testo(c.telefono),
+            codice_fiscale: testo(c.codice_fiscale),
+            sesso: testo(c.sesso),
+            indirizzo,
+            cap: testo(c.codice_postale),
+            citta: testo(c.citta_residenza),
+            provincia: testo(c.provincia_residenza),
+            data_nascita: testo(c.data_nascita).slice(0, 10),
+            luogo_nascita: testo(c.luogo_nascita),
+            provincia_nascita: testo(c.provincia_nascita),
+            tipo_patente: testo(c.tipo_patente),
+            numero_patente: testo(c.numero_patente),
+            emessa_da: testo(c.emessa_da),
+            data_rilascio_patente: testo(c.data_rilascio_patente).slice(0, 10),
+            scadenza_patente: testo(c.scadenza_patente).slice(0, 10),
+        }
+    } catch {
+        return null
+    }
 }
 
 /** Campo di testo compatto del modale (stessa grafica degli altri input qui). */
