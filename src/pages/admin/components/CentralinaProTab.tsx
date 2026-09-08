@@ -3083,6 +3083,14 @@ function diffInsuranceList(
     if (prev.mandatory_deposit !== o.mandatory_deposit) out.push(`${prefix} / ${o.name}: deposito ${prev.mandatory_deposit} → ${o.mandatory_deposit}`)
     if (prev.deductible_fixed !== o.deductible_fixed) out.push(`${prefix} / ${o.name}: franchigia ${prev.deductible_fixed} → ${o.deductible_fixed}`)
     if (prev.deductible_percent !== o.deductible_percent) out.push(`${prefix} / ${o.name}: scoperto % ${prev.deductible_percent} → ${o.deductible_percent}`)
+    // Franchigie del contratto: senza queste righe la barra diceva "0 modifiche
+    // da salvare" dopo averle toccate (la save le scriveva comunque).
+    VOCI_FRANCHIGIA.forEach(({ k, label }) => {
+      const a = prev.franchigie?.[k] ?? ''
+      const b = o.franchigie?.[k] ?? ''
+      if (a !== b) out.push(`${prefix} / ${o.name}: ${label} ${a === '' ? '—' : a} → ${b === '' ? '—' : b}`)
+    })
+    if ((prev.kasko_testo ?? '') !== (o.kasko_testo ?? '')) out.push(`${prefix} / ${o.name}: testo Kasko del contratto aggiornato`)
   })
 }
 
@@ -3358,6 +3366,20 @@ function NumberField({
 
 // ========== ASSICURAZIONI (Punto 2) ==========
 
+/**
+ * Franchigie stampate sul contratto, una per garanzia. Sono legate alla
+ * SINGOLA opzione assicurativa: il cliente sceglie il suo Kasko al booking e
+ * il contratto stampa la lista di QUELLA opzione, per quella categoria e
+ * quella fascia. Valori in euro; vuoto = riga non stampata.
+ */
+type FranchigieContratto = {
+  incendio: number | ''
+  furto: number | ''
+  eventi_naturali: number | ''
+  eventi_sociopolitici: number | ''
+  atti_vandalici: number | ''
+}
+
 type InsuranceOption = {
   id: string
   name: string
@@ -3365,6 +3387,10 @@ type InsuranceOption = {
   mandatory_deposit: number | ''
   deductible_fixed: number | ''
   deductible_percent: number | ''
+  /** 08/09/2026: franchigie per garanzia, stampate sul contratto. */
+  franchigie?: FranchigieContratto
+  /** Testo libero della Kasko per il contratto (ogni Kasko ha il suo). */
+  kasko_testo?: string
   // 2026-05-15: ON/OFF toggle. When false l'opzione non appare in nuove
   // prenotazioni / preventivi (admin + website). Default true per
   // backwards compat (entries seedate prima del flag = sempre attive).
@@ -3590,6 +3616,17 @@ function InsuranceList({
               <FieldBox label="Franchigia €" value={opt.deductible_fixed} onChange={(v) => patch(opt.id, { deductible_fixed: v })} />
               <FieldBox label="Scoperto %" value={opt.deductible_percent} onChange={(v) => patch(opt.id, { deductible_percent: v })} />
             </div>
+
+            {/* 08/09/2026: franchigie per garanzia + testo Kasko, stampati sul
+                contratto. Stanno sulla singola opzione perche' il contratto
+                deve riportare la lista della Kasko scelta al booking, per
+                questa categoria e questa fascia. */}
+            <FranchigieContrattoBox
+              value={opt.franchigie}
+              testo={opt.kasko_testo}
+              onChange={(franchigie) => patch(opt.id, { franchigie })}
+              onTesto={(kasko_testo) => patch(opt.id, { kasko_testo })}
+            />
           </div>
         ))}
         {items.length === 0 && (
@@ -3608,6 +3645,76 @@ function InsuranceList({
         </svg>
         Aggiungi opzione
       </button>
+    </div>
+  )
+}
+
+/**
+ * Le franchigie che finiscono sul contratto, una casella per garanzia, piu' il
+ * testo libero della Kasko. Chiuso di default: la maggior parte delle volte si
+ * lavora sui prezzi, non sulle franchigie.
+ */
+const VOCI_FRANCHIGIA: ReadonlyArray<{ k: keyof FranchigieContratto; label: string }> = [
+  { k: 'incendio', label: 'Incendio' },
+  { k: 'furto', label: 'Furto' },
+  { k: 'eventi_naturali', label: 'Eventi naturali' },
+  { k: 'eventi_sociopolitici', label: 'Eventi sociopolitici' },
+  { k: 'atti_vandalici', label: 'Atti vandalici' },
+]
+
+function FranchigieContrattoBox({
+  value,
+  testo,
+  onChange,
+  onTesto,
+}: {
+  value?: FranchigieContratto
+  testo?: string
+  onChange: (v: FranchigieContratto) => void
+  onTesto: (v: string) => void
+}) {
+  const vuoto: FranchigieContratto = { incendio: '', furto: '', eventi_naturali: '', eventi_sociopolitici: '', atti_vandalici: '' }
+  const cur = { ...vuoto, ...(value || {}) }
+  const compilate = VOCI_FRANCHIGIA.filter(v => cur[v.k] !== '' && cur[v.k] !== undefined).length
+  const [aperto, setAperto] = useState(false)
+  return (
+    <div className="mt-3 border-t border-black/[0.06] pt-3">
+      <button
+        type="button"
+        onClick={() => setAperto(a => !a)}
+        className="flex items-center gap-2 text-[12px] font-medium text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+      >
+        <span className={`inline-block transition-transform ${aperto ? 'rotate-90' : ''}`}>›</span>
+        Franchigie e testo per il contratto
+        <span className="text-theme-text-muted">
+          {compilate > 0 ? `${compilate}/${VOCI_FRANCHIGIA.length} compilate` : 'non compilate'}
+          {testo ? ' · testo Kasko' : ''}
+        </span>
+      </button>
+      {aperto && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {VOCI_FRANCHIGIA.map(({ k, label }) => (
+              <FieldBox key={k} label={`${label} €`} value={cur[k]} onChange={(v) => onChange({ ...cur, [k]: v })} />
+            ))}
+          </div>
+          <label className="block">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
+              Kasko — testo del contratto
+            </span>
+            <textarea
+              value={testo ?? ''}
+              onChange={(e) => onTesto(e.target.value)}
+              rows={3}
+              placeholder="Es. Kasko DR7: RCA, Furto (solo in caso di restituzione chiave), atti vandalici, agenti atmosferici, incendio, distruzione totale: da risarcire 30% del valore del danno."
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="block text-[11px] text-theme-text-muted mt-1">
+              Finisce nel contratto quando il cliente sceglie questa opzione. Ogni Kasko ha il suo testo.
+            </span>
+          </label>
+        </div>
+      )}
     </div>
   )
 }

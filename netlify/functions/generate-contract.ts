@@ -1251,41 +1251,109 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'KASKO_SIGNATURE': 'Signature',
             'DR7': 'DR7'
         }
-        let insuranceLabel = legacyInsuranceLabels[insuranceOptionId] || ''
-        if (!insuranceLabel) {
-            // New bookings: resolve name from centralina_pro_config
-            try {
-                const { data: cfg } = await supabase
-                    .from('centralina_pro_config')
-                    .select('config')
-                    .eq('id', 'main')
-                    .maybeSingle()
-                const proInsurance: any[] = (cfg as any)?.config?.insurance || []
-                console.log(`[generate-contract] Loaded ${proInsurance.length} insurance categories from centralina for id="${insuranceOptionId}"`)
-                outer: for (const catIns of proInsurance) {
-                    const pools: any[][] = []
-                    if (Array.isArray(catIns?.all)) pools.push(catIns.all)
-                    if (catIns?.byFascia && typeof catIns.byFascia === 'object') {
-                        for (const key of Object.keys(catIns.byFascia)) {
-                            const arr = catIns.byFascia[key]
-                            if (Array.isArray(arr)) pools.push(arr)
-                        }
+
+        // 08/09/2026 — Franchigie sul contratto (Incendio, Furto, Eventi
+        // naturali, Eventi sociopolitici, Atti vandalici) + testo Kasko.
+        // Stanno sull'OPZIONE assicurativa in Centralina Pro: il contratto deve
+        // riportare la lista della Kasko che il cliente ha scelto al booking,
+        // per la categoria del veicolo e la fascia del conducente.
+        type ProOpzione = {
+            id?: string
+            name?: string
+            franchigie?: Record<string, number | string | null>
+            kasko_testo?: string
+        }
+        // TIER_2 = Fascia A (esperto), TIER_1 = Fascia B (giovane/patente recente).
+        const driverTier: string = booking.booking_details?.driver_tier || ''
+        const fasciaPreferita = driverTier === 'TIER_1' ? 'B' : driverTier === 'TIER_2' ? 'A' : ''
+        const normalizzaNome = (v: unknown) => String(v ?? '')
+            .toLowerCase().replace(/kasko|compresa|\(.*?\)/g, '').replace(/[^a-z0-9]/g, '').trim()
+        const nomeLegacy = legacyInsuranceLabels[insuranceOptionId] || ''
+
+        function cercaOpzionePro(): ProOpzione | null {
+            const categorie = (cpCfg?.config as { insurance?: unknown })?.insurance
+            if (!Array.isArray(categorie)) return null
+            const cat = String(vehicleCategory || '').toLowerCase()
+            // supercars (Centralina) e exotic (anagrafica veicoli) sono la
+            // stessa categoria: senza l'alias la lista non si trova mai.
+            const alias = cat === 'exotic' ? 'supercars' : cat === 'supercars' ? 'exotic' : ''
+            const pooldi = (c: Record<string, unknown>): ProOpzione[][] => {
+                const out: ProOpzione[][] = []
+                const byFascia = c?.byFascia as Record<string, ProOpzione[]> | undefined
+                if (fasciaPreferita && Array.isArray(byFascia?.[fasciaPreferita])) out.push(byFascia![fasciaPreferita])
+                if (Array.isArray(c?.all)) out.push(c.all as ProOpzione[])
+                if (byFascia && typeof byFascia === 'object') {
+                    for (const k of Object.keys(byFascia)) {
+                        if (k === fasciaPreferita) continue
+                        if (Array.isArray(byFascia[k])) out.push(byFascia[k])
                     }
-                    for (const pool of pools) {
-                        for (const opt of pool) {
-                            if (opt?.id === insuranceOptionId && opt?.name) {
-                                insuranceLabel = opt.name
-                                break outer
-                            }
+                }
+                return out
+            }
+            const dellaCategoria = (categorie as Record<string, unknown>[]).filter(c => {
+                const id = String(c?.id ?? '').toLowerCase()
+                const label = String(c?.label ?? '').toLowerCase()
+                return id === cat || (alias && id === alias) || label === cat
+            })
+            // 1) id esatto nella categoria giusta, 2) stesso nome (booking legacy),
+            // 3) id esatto in qualunque categoria (l'id uid e' unico).
+            for (const gruppo of [dellaCategoria, categorie as Record<string, unknown>[]]) {
+                for (const c of gruppo) {
+                    for (const pool of pooldi(c)) {
+                        const perId = pool.find(o => o?.id === insuranceOptionId)
+                        if (perId) return perId
+                    }
+                }
+                if (gruppo === dellaCategoria && nomeLegacy) {
+                    for (const c of gruppo) {
+                        for (const pool of pooldi(c)) {
+                            const perNome = pool.find(o => normalizzaNome(o?.name) === normalizzaNome(nomeLegacy))
+                            if (perNome) return perNome
                         }
                     }
                 }
-            } catch (cfgErr: any) {
-                console.warn('[generate-contract] Insurance label lookup failed:', cfgErr.message)
             }
+            return null
         }
+
+        let opzionePro: ProOpzione | null = null
+        try {
+            opzionePro = cercaOpzionePro()
+        } catch (cfgErr: any) {
+            console.warn('[generate-contract] Insurance lookup failed:', cfgErr?.message)
+        }
+
+        let insuranceLabel = nomeLegacy || opzionePro?.name || ''
         if (!insuranceLabel) insuranceLabel = insuranceOptionId
-        console.log(`[generate-contract] Insurance resolution: id="${insuranceOptionId}" → label="${insuranceLabel}"`)
+
+        // Franchigie in euro formattate all'italiana. Casella vuota in
+        // Centralina = campo vuoto sul contratto (non "€0").
+        const euroContratto = (v: unknown): string => {
+            if (v === '' || v === null || v === undefined) return ''
+            const n = Number(v)
+            if (!Number.isFinite(n)) return ''
+            return `€${n.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
+        }
+        const franchigieContratto = {
+            incendio: euroContratto(opzionePro?.franchigie?.incendio),
+            furto: euroContratto(opzionePro?.franchigie?.furto),
+            eventi_naturali: euroContratto(opzionePro?.franchigie?.eventi_naturali),
+            eventi_sociopolitici: euroContratto(opzionePro?.franchigie?.eventi_sociopolitici),
+            atti_vandalici: euroContratto(opzionePro?.franchigie?.atti_vandalici),
+        }
+        const kaskoTestoContratto = String(opzionePro?.kasko_testo || '')
+        // Stessa lista in UN solo campo, per chi preferisce una casella unica
+        // nel PDF invece di una riga per garanzia. Le voci vuote non compaiono.
+        const franchigieLista = [
+            ['Incendio', franchigieContratto.incendio],
+            ['Furto', franchigieContratto.furto],
+            ['Eventi naturali', franchigieContratto.eventi_naturali],
+            ['Eventi sociopolitici', franchigieContratto.eventi_sociopolitici],
+            ['Atti vandalici', franchigieContratto.atti_vandalici],
+        ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`)
+            .concat(kaskoTestoContratto ? [`Kasko: ${kaskoTestoContratto}`] : [])
+            .join('\n')
+        console.log(`[generate-contract] Insurance resolution: id="${insuranceOptionId}" → label="${insuranceLabel}" (categoria=${vehicleCategory}, fascia=${fasciaPreferita || 'n/d'}, franchigie=${opzionePro?.franchigie ? 'si' : 'no'})`)
 
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
@@ -1441,6 +1509,19 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Insurance and Financial
             'Insurance': insuranceLabel,
             'Assicurazione': insuranceLabel,
+
+            // FRANCHIGIE E ASSICURAZIONI — una casella per garanzia, riempite
+            // con la lista della Kasko scelta al booking (Centralina Pro >
+            // Assicurazioni, per categoria e per fascia). Campo assente nel
+            // PDF = riga saltata senza errore.
+            'KaskoNome': insuranceLabel,
+            'KaskoTesto': kaskoTestoContratto,
+            'FranchigiaIncendio': franchigieContratto.incendio,
+            'FranchigiaFurto': franchigieContratto.furto,
+            'FranchigiaEventiNaturali': franchigieContratto.eventi_naturali,
+            'FranchigiaEventiSociopolitici': franchigieContratto.eventi_sociopolitici,
+            'FranchigiaAttiVandalici': franchigieContratto.atti_vandalici,
+            'FranchigieLista': franchigieLista,
             // Cauzione amount resolution.
             // - cauzione_auto = true means the customer pledged THEIR OWN vehicle
             //   as deposit; the field becomes the targa instead of an amount.
