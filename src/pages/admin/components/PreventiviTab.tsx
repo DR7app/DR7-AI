@@ -21,7 +21,7 @@ import ItinerarioTappe from './ItinerarioTappe'
 import { formattaDurata, itinerarioVuoto, type ItinerarioValore } from '../../../utils/itinerario'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
-import PreventivoAcceptModal, { openPreventivoAcceptModal } from './PreventivoAcceptModal'
+import PreventivoAcceptModal, { openPreventivoAcceptModal, type SecondoGuidatoreArgs, type GaranteArgs } from './PreventivoAcceptModal'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -3545,8 +3545,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     payment_status: 'pending' | 'paid'
     amount_paid_eur: number
     confirm_booking: boolean
+    second_driver?: SecondoGuidatoreArgs | null
+    guarantors?: GaranteArgs[]
   }) {
     const { preventivo, customer_id, payment_method, payment_status, amount_paid_eur, confirm_booking } = args
+    const secondoGuidatore = args.second_driver || null
+    const garanti = (args.guarantors || []).filter(g => (g.nome_cognome || '').trim() !== '')
 
     const p = preventivi.find(x => x.id === preventivo.id)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3694,6 +3698,47 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         // 2026-07-18: importo cauzione (EURO) dal Reparto Cauzione del preventivo.
         // Letto da ReservationsTab (Cauzione:) e da contratto/fattura.
         deposit: (p.no_cauzione_total || 0) > 0 ? 0 : (Number(p.deposit_amount) || 0),
+        // 09/09/2026: secondo guidatore e garanti scelti alla conversione.
+        // Stessa forma di ReservationsTab, cosi' generate-contract riempie i
+        // campi SecondDriver*/garante_N_* e signature-init crea un link di
+        // firma per ognuno senza altro codice.
+        second_driver: secondoGuidatore ? {
+          customer_id: secondoGuidatore.customer_id || null,
+          name: secondoGuidatore.name,
+          surname: secondoGuidatore.surname,
+          codice_fiscale: secondoGuidatore.codice_fiscale,
+          sesso: secondoGuidatore.sesso,
+          indirizzo: secondoGuidatore.indirizzo,
+          cap: secondoGuidatore.cap,
+          citta: secondoGuidatore.citta,
+          provincia: secondoGuidatore.provincia,
+          birth_date: secondoGuidatore.birth_date || null,
+          birth_place: secondoGuidatore.birth_place,
+          birth_provincia: secondoGuidatore.birth_provincia,
+          phone: secondoGuidatore.phone,
+          email: secondoGuidatore.email,
+          license_type: secondoGuidatore.license_type,
+          license_number: secondoGuidatore.license_number,
+          license_issued_by: secondoGuidatore.license_issued_by,
+          license_issue_date: secondoGuidatore.license_issue_date || null,
+          license_expiry: secondoGuidatore.license_expiry || null,
+        } : null,
+        garante_count: garanti.length,
+        guarantors: garanti.map((g, i) => ({
+          index: i + 1,
+          [`garante_${i + 1}_nome_cognome`]: g.nome_cognome,
+          [`garante_${i + 1}_codice_fiscale`]: g.codice_fiscale,
+          [`garante_${i + 1}_sesso`]: g.sesso,
+          [`garante_${i + 1}_indirizzo`]: g.indirizzo,
+          [`garante_${i + 1}_cap`]: g.cap,
+          [`garante_${i + 1}_citta`]: g.citta,
+          [`garante_${i + 1}_provincia`]: g.provincia,
+          [`garante_${i + 1}_data_nascita`]: g.data_nascita || null,
+          [`garante_${i + 1}_citta_nascita`]: g.citta_nascita,
+          [`garante_${i + 1}_provincia_nascita`]: g.provincia_nascita,
+          [`garante_${i + 1}_telefono`]: g.telefono,
+          [`garante_${i + 1}_email`]: g.email,
+        })),
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -3874,28 +3919,45 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         '{expiry}': '1 ora',
       }
 
-      // 1) Conferma WhatsApp al cliente — rental_new_customer (pagato) oppure
+      // 1) Conferma WhatsApp — rental_new_customer (pagato) oppure
       //    booking_confirmed_da_saldare (da saldare), come ReservationsTab.
-      if (customerPhone) {
+      //    09/09/2026: la conferma va a TUTTI quelli che stanno sul contratto
+      //    (intestatario, secondo guidatore, garanti), non solo al cliente.
+      //    Doppioni tolti sul numero normalizzato: spesso il garante lascia lo
+      //    stesso telefono del guidatore.
+      {
         const tplKey = isPaid ? 'rental_new_customer' : 'booking_confirmed_da_saldare'
-        fetch('/.netlify/functions/send-whatsapp-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customPhone: customerPhone,
-            booking: {
-              id: bookingId,
-              service_type: 'car_rental',
-              vehicle_name: p.vehicle_name,
-              vehicle_plate: p.vehicle_plate,
-              pickup_location: pickupLocationLabel,
-              dropoff_location: dropoffLocationLabel,
-              price_total: totalCents,
-            },
-            templateKey: tplKey,
-            templateVars,
-          }),
-        }).catch(() => {})
+        const destinatari: string[] = []
+        const visti = new Set<string>()
+        const aggiungi = (tel: string | null | undefined) => {
+          const pulito = String(tel || '').replace(/\D/g, '')
+          if (pulito.length < 8 || visti.has(pulito)) return
+          visti.add(pulito)
+          destinatari.push(String(tel))
+        }
+        aggiungi(customerPhone)
+        aggiungi(secondoGuidatore?.phone)
+        garanti.forEach(g => aggiungi(g.telefono))
+        for (const tel of destinatari) {
+          fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customPhone: tel,
+              booking: {
+                id: bookingId,
+                service_type: 'car_rental',
+                vehicle_name: p.vehicle_name,
+                vehicle_plate: p.vehicle_plate,
+                pickup_location: pickupLocationLabel,
+                dropoff_location: dropoffLocationLabel,
+                price_total: totalCents,
+              },
+              templateKey: tplKey,
+              templateVars,
+            }),
+          }).catch(() => {})
+        }
       }
 
       // 2) Notifica admin (opt-in → admin_whatsapp_phone server-side)

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import CalcolaCFButton from '../../../components/CalcolaCFButton'
 
 /**
  * Modal "Accetta preventivo" — same UX pattern as PreventivoRejectModal:
@@ -25,6 +27,61 @@ export interface AcceptModalPreventivo {
     customer_phone?: string | null
 }
 
+/**
+ * Secondo guidatore — stessi campi del modale prenotazione, cosi' finisce
+ * uguale nel contratto (SecondDriver*) e nella firma (ruolo 2_guidatore).
+ */
+export interface SecondoGuidatoreArgs {
+    customer_id: string | null
+    name: string
+    surname: string
+    codice_fiscale: string
+    sesso: string
+    indirizzo: string
+    cap: string
+    citta: string
+    provincia: string
+    birth_date: string
+    birth_place: string
+    birth_provincia: string
+    phone: string
+    email: string
+    license_type: string
+    license_number: string
+    license_issued_by: string
+    license_issue_date: string
+    license_expiry: string
+}
+
+/** Garante / fideiussore solidale: fino a 3, come nel modale prenotazione. */
+export interface GaranteArgs {
+    nome_cognome: string
+    codice_fiscale: string
+    sesso: string
+    indirizzo: string
+    cap: string
+    citta: string
+    provincia: string
+    data_nascita: string
+    citta_nascita: string
+    provincia_nascita: string
+    telefono: string
+    email: string
+}
+
+const GUIDATORE_VUOTO: SecondoGuidatoreArgs = {
+    customer_id: null, name: '', surname: '', codice_fiscale: '', sesso: '',
+    indirizzo: '', cap: '', citta: '', provincia: '', birth_date: '', birth_place: '',
+    birth_provincia: '', phone: '', email: '', license_type: '', license_number: '',
+    license_issued_by: '', license_issue_date: '', license_expiry: '',
+}
+
+const GARANTE_VUOTO: GaranteArgs = {
+    nome_cognome: '', codice_fiscale: '', sesso: '', indirizzo: '', cap: '', citta: '',
+    provincia: '', data_nascita: '', citta_nascita: '', provincia_nascita: '',
+    telefono: '', email: '',
+}
+
 export interface AcceptConfirmArgs {
     preventivo: AcceptModalPreventivo
     customer_id: string
@@ -35,6 +92,14 @@ export interface AcceptConfirmArgs {
     // la booking non scade dopo 1h, appare in rosso col nome cliente in
     // calendario e fa partire conferma + contratto come una prenotazione.
     confirm_booking: boolean
+    /**
+     * 09/09/2026: chi guida e chi garantisce si aggiungono QUI, alla
+     * conversione. Prima si potevano mettere solo riaprendo la prenotazione,
+     * quindi il primo contratto partiva col solo intestatario e la firma non
+     * arrivava agli altri.
+     */
+    second_driver: SecondoGuidatoreArgs | null
+    guarantors: GaranteArgs[]
 }
 
 /** Imperative open helper. Call from anywhere — no React state involved. */
@@ -60,6 +125,11 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
     const [confirmBooking, setConfirmBooking] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // Secondo guidatore e garanti: chiusi finche' non servono, cosi' la
+    // conversione normale resta corta com'era.
+    const [conSecondoGuidatore, setConSecondoGuidatore] = useState(false)
+    const [secondoGuidatore, setSecondoGuidatore] = useState<SecondoGuidatoreArgs>({ ...GUIDATORE_VUOTO })
+    const [garanti, setGaranti] = useState<GaranteArgs[]>([])
 
     useEffect(() => {
         function handleOpen(e: Event) {
@@ -73,6 +143,9 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
             setConfirmBooking(false)
             setSubmitting(false)
             setError(null)
+            setConSecondoGuidatore(false)
+            setSecondoGuidatore({ ...GUIDATORE_VUOTO })
+            setGaranti([])
         }
         window.addEventListener(OPEN_EVENT, handleOpen)
         return () => window.removeEventListener(OPEN_EVENT, handleOpen)
@@ -99,6 +172,14 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
             setError('Seleziona un metodo di pagamento')
             return
         }
+        if (conSecondoGuidatore && !secondoGuidatore.name.trim() && !secondoGuidatore.surname.trim()) {
+            setError('Secondo guidatore: manca il nome. Compila o togli la spunta.')
+            return
+        }
+        if (garanti.some(g => g.nome_cognome.trim() === '')) {
+            setError('Garante senza nome: compila o rimuovilo.')
+            return
+        }
         setSubmitting(true)
         setError(null)
         try {
@@ -111,6 +192,10 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                 amount_paid_eur: paymentStatus === 'paid' ? (preventivo.total_final ?? 0) : amt,
                 // Paid → sempre confermata. Da saldare → solo se la red box è spuntata.
                 confirm_booking: paymentStatus === 'paid' ? true : confirmBooking,
+                second_driver: conSecondoGuidatore && (secondoGuidatore.name.trim() || secondoGuidatore.surname.trim())
+                    ? secondoGuidatore
+                    : null,
+                guarantors: garanti.filter(g => g.nome_cognome.trim() !== ''),
             })
             setPreventivo(null)
         } catch (err: unknown) {
@@ -128,7 +213,7 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
 
     const modal = (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" onClick={() => !submitting && setPreventivo(null)}>
-            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-semibold text-theme-text-primary">Accetta preventivo</h3>
                     <button onClick={() => !submitting && setPreventivo(null)} className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary">×</button>
@@ -222,6 +307,158 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                     </div>
                 )}
 
+                {/* === Secondo guidatore === */}
+                <div className={`rounded-lg border mb-4 ${conSecondoGuidatore ? 'border-dr7-gold/40' : 'border-theme-border'}`}>
+                    <label className="flex items-start gap-2 p-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={conSecondoGuidatore}
+                            onChange={(e) => setConSecondoGuidatore(e.target.checked)}
+                            className="w-4 h-4 mt-0.5"
+                        />
+                        <span className="text-sm text-theme-text-secondary">
+                            <span className="font-semibold text-theme-text-primary">Secondo guidatore</span>
+                            <span className="block text-xs text-theme-text-muted mt-0.5">Finisce nel contratto e riceve la sua firma. Puoi anche sceglierlo fra i clienti gia' registrati.</span>
+                        </span>
+                    </label>
+                    {conSecondoGuidatore && (
+                        <div className="px-3 pb-3 space-y-3">
+                            <div>
+                                <label className="block text-xs text-theme-text-muted mb-1">Cliente gia' registrato (facoltativo)</label>
+                                <CustomerAutocomplete
+                                    customers={customers}
+                                    selectedCustomerId={secondoGuidatore.customer_id || ''}
+                                    onSelectCustomer={(id) => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const c: any = customers.find((x: any) => x.id === id)
+                                        setSecondoGuidatore(prev => ({
+                                            ...prev,
+                                            customer_id: id || null,
+                                            name: c?.first_name || c?.nome || (c?.full_name || '').split(' ')[0] || prev.name,
+                                            surname: c?.last_name || c?.cognome || (c?.full_name || '').split(' ').slice(1).join(' ') || prev.surname,
+                                            email: c?.email || prev.email,
+                                            phone: c?.phone || prev.phone,
+                                            codice_fiscale: c?.codice_fiscale || prev.codice_fiscale,
+                                        }))
+                                    }}
+                                    placeholder="Cerca per nome, email o telefono..."
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <CampoModale label="Nome" value={secondoGuidatore.name} onChange={v => setSecondoGuidatore(p => ({ ...p, name: v }))} />
+                                <CampoModale label="Cognome" value={secondoGuidatore.surname} onChange={v => setSecondoGuidatore(p => ({ ...p, surname: v }))} />
+                                <div>
+                                    <label className="block text-xs text-theme-text-muted mb-1">Codice fiscale</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            value={secondoGuidatore.codice_fiscale}
+                                            onChange={(e) => setSecondoGuidatore(p => ({ ...p, codice_fiscale: e.target.value.toUpperCase() }))}
+                                            className="flex-1 min-w-0 bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary uppercase focus:outline-none focus:border-dr7-gold"
+                                        />
+                                        <CalcolaCFButton
+                                            className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap"
+                                            config={{
+                                                getCognome: () => secondoGuidatore.surname,
+                                                getNome: () => secondoGuidatore.name,
+                                                getDataNascita: () => secondoGuidatore.birth_date,
+                                                getSesso: () => secondoGuidatore.sesso,
+                                                getLuogoNascita: () => secondoGuidatore.birth_place,
+                                                getCodiceFiscale: () => secondoGuidatore.codice_fiscale,
+                                                setCodiceFiscale: (v: string) => setSecondoGuidatore(p => ({ ...p, codice_fiscale: v })),
+                                                setSesso: (v: string) => setSecondoGuidatore(p => ({ ...p, sesso: v })),
+                                                setDataNascita: (v: string) => setSecondoGuidatore(p => ({ ...p, birth_date: v })),
+                                                setLuogoNascita: (v: string) => setSecondoGuidatore(p => ({ ...p, birth_place: v })),
+                                                setProvinciaNascita: (v: string) => setSecondoGuidatore(p => ({ ...p, birth_provincia: v })),
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                                <SessoModale value={secondoGuidatore.sesso} onChange={v => setSecondoGuidatore(p => ({ ...p, sesso: v }))} />
+                                <CampoModale label="Data di nascita" type="date" value={secondoGuidatore.birth_date} onChange={v => setSecondoGuidatore(p => ({ ...p, birth_date: v }))} />
+                                <CampoModale label="Luogo di nascita" value={secondoGuidatore.birth_place} onChange={v => setSecondoGuidatore(p => ({ ...p, birth_place: v }))} />
+                                <CampoModale label="Provincia di nascita" value={secondoGuidatore.birth_provincia} onChange={v => setSecondoGuidatore(p => ({ ...p, birth_provincia: v.toUpperCase() }))} maxLength={2} />
+                                <CampoModale label="Indirizzo" value={secondoGuidatore.indirizzo} onChange={v => setSecondoGuidatore(p => ({ ...p, indirizzo: v }))} />
+                                <CampoModale label="CAP" value={secondoGuidatore.cap} onChange={v => setSecondoGuidatore(p => ({ ...p, cap: v }))} />
+                                <CampoModale label="Citta" value={secondoGuidatore.citta} onChange={v => setSecondoGuidatore(p => ({ ...p, citta: v }))} />
+                                <CampoModale label="Provincia" value={secondoGuidatore.provincia} onChange={v => setSecondoGuidatore(p => ({ ...p, provincia: v.toUpperCase() }))} maxLength={2} />
+                                <div>
+                                    <label className="block text-xs text-theme-text-muted mb-1">Telefono</label>
+                                    <TelefonoConPrefisso
+                                        value={secondoGuidatore.phone}
+                                        onChange={(v: string) => setSecondoGuidatore(p => ({ ...p, phone: v }))}
+                                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        selectClassName="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-sm text-theme-text-primary"
+                                        mostraAnteprima={false}
+                                    />
+                                    <p className="text-[11px] text-theme-text-muted mt-1">Senza numero non riceve il link della firma.</p>
+                                </div>
+                                <CampoModale label="Email" type="email" value={secondoGuidatore.email} onChange={v => setSecondoGuidatore(p => ({ ...p, email: v }))} />
+                                <CampoModale label="Tipo patente" value={secondoGuidatore.license_type} onChange={v => setSecondoGuidatore(p => ({ ...p, license_type: v }))} />
+                                <CampoModale label="Numero patente" value={secondoGuidatore.license_number} onChange={v => setSecondoGuidatore(p => ({ ...p, license_number: v }))} />
+                                <CampoModale label="Rilasciata da" value={secondoGuidatore.license_issued_by} onChange={v => setSecondoGuidatore(p => ({ ...p, license_issued_by: v }))} />
+                                <CampoModale label="Data rilascio" type="date" value={secondoGuidatore.license_issue_date} onChange={v => setSecondoGuidatore(p => ({ ...p, license_issue_date: v }))} />
+                                <CampoModale label="Scadenza patente" type="date" value={secondoGuidatore.license_expiry} onChange={v => setSecondoGuidatore(p => ({ ...p, license_expiry: v }))} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* === Garanti / fideiussori solidali (max 3) === */}
+                <div className="rounded-lg border border-theme-border mb-4 p-3">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-theme-text-primary">Garante / Fideiussore</p>
+                            <p className="text-xs text-theme-text-muted">Va nel contratto e firma anche lui. Fino a 3.</p>
+                        </div>
+                        {garanti.length < 3 && (
+                            <button
+                                type="button"
+                                onClick={() => setGaranti(g => [...g, { ...GARANTE_VUOTO }])}
+                                className="px-3 py-1.5 rounded-full bg-theme-bg-tertiary border border-theme-border text-xs font-semibold text-theme-text-primary hover:border-dr7-gold"
+                            >
+                                + Aggiungi garante
+                            </button>
+                        )}
+                    </div>
+                    {garanti.map((g, i) => (
+                        <div key={i} className="mt-3 pt-3 border-t border-theme-border">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs uppercase tracking-wide text-theme-text-muted">Garante {i + 1}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setGaranti(list => list.filter((_, j) => j !== i))}
+                                    className="text-[#ff3b30] text-xs hover:underline"
+                                >
+                                    Rimuovi
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <CampoModale label="Nome e cognome" value={g.nome_cognome} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, nome_cognome: v } : x))} />
+                                <CampoModale label="Codice fiscale" value={g.codice_fiscale} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, codice_fiscale: v.toUpperCase() } : x))} />
+                                <SessoModale value={g.sesso} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, sesso: v } : x))} />
+                                <CampoModale label="Data di nascita" type="date" value={g.data_nascita} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, data_nascita: v } : x))} />
+                                <CampoModale label="Citta di nascita" value={g.citta_nascita} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, citta_nascita: v } : x))} />
+                                <CampoModale label="Provincia di nascita" value={g.provincia_nascita} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, provincia_nascita: v.toUpperCase() } : x))} maxLength={2} />
+                                <CampoModale label="Indirizzo" value={g.indirizzo} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, indirizzo: v } : x))} />
+                                <CampoModale label="CAP" value={g.cap} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, cap: v } : x))} />
+                                <CampoModale label="Citta" value={g.citta} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, citta: v } : x))} />
+                                <CampoModale label="Provincia" value={g.provincia} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, provincia: v.toUpperCase() } : x))} maxLength={2} />
+                                <div>
+                                    <label className="block text-xs text-theme-text-muted mb-1">Telefono</label>
+                                    <TelefonoConPrefisso
+                                        value={g.telefono}
+                                        onChange={(v: string) => setGaranti(l => l.map((x, j) => j === i ? { ...x, telefono: v } : x))}
+                                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        selectClassName="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-sm text-theme-text-primary"
+                                        mostraAnteprima={false}
+                                    />
+                                </div>
+                                <CampoModale label="Email" type="email" value={g.email} onChange={v => setGaranti(l => l.map((x, j) => j === i ? { ...x, email: v } : x))} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
                 {error && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded p-2 mb-3 text-red-300 text-sm">
                         {error}
@@ -251,6 +488,47 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
     )
 
     return createPortal(modal, document.body)
+}
+
+/** Campo di testo compatto del modale (stessa grafica degli altri input qui). */
+function CampoModale({
+    label, value, onChange, type = 'text', maxLength,
+}: {
+    label: string
+    value: string
+    onChange: (v: string) => void
+    type?: string
+    maxLength?: number
+}) {
+    return (
+        <label className="block">
+            <span className="block text-xs text-theme-text-muted mb-1">{label}</span>
+            <input
+                type={type}
+                value={value}
+                maxLength={maxLength}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+            />
+        </label>
+    )
+}
+
+function SessoModale({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    return (
+        <label className="block">
+            <span className="block text-xs text-theme-text-muted mb-1">Sesso</span>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+            >
+                <option value="">Seleziona...</option>
+                <option value="M">Maschio</option>
+                <option value="F">Femmina</option>
+            </select>
+        </label>
+    )
 }
 
 export default memo(PreventivoAcceptModal)
