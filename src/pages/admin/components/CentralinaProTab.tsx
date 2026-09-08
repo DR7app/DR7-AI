@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { CONTRATTO_VOCI as VOCI, CONTRATTO_DEFAULT as VOCI_DEFAULT, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import toast from 'react-hot-toast'
@@ -3086,9 +3086,10 @@ function diffInsuranceList(
     // Franchigie del contratto: senza queste righe la barra diceva "0 modifiche
     // da salvare" dopo averle toccate (la save le scriveva comunque).
     VOCI_FRANCHIGIA.forEach(({ k, label }) => {
-      const a = prev.franchigie?.[k] ?? ''
-      const b = o.franchigie?.[k] ?? ''
-      if (a !== b) out.push(`${prefix} / ${o.name}: ${label} ${a === '' ? '—' : a} → ${b === '' ? '—' : b}`)
+      const a = voceFranchigia(prev.franchigie?.[k])
+      const b = voceFranchigia(o.franchigie?.[k])
+      if (a.eur !== b.eur) out.push(`${prefix} / ${o.name}: ${label} franchigia ${a.eur === '' ? '—' : a.eur} → ${b.eur === '' ? '—' : b.eur}`)
+      if (a.perc !== b.perc) out.push(`${prefix} / ${o.name}: ${label} scoperto ${a.perc === '' ? '—' : a.perc} → ${b.perc === '' ? '—' : b.perc}`)
     })
     if ((prev.kasko_testo ?? '') !== (o.kasko_testo ?? '')) out.push(`${prefix} / ${o.name}: testo Kasko del contratto aggiornato`)
   })
@@ -3367,17 +3368,24 @@ function NumberField({
 // ========== ASSICURAZIONI (Punto 2) ==========
 
 /**
- * Franchigie stampate sul contratto, una per garanzia. Sono legate alla
- * SINGOLA opzione assicurativa: il cliente sceglie il suo Kasko al booking e
- * il contratto stampa la lista di QUELLA opzione, per quella categoria e
- * quella fascia. Valori in euro; vuoto = riga non stampata.
+ * Franchigie stampate sul contratto, una riga per garanzia, con i DUE valori
+ * della tabella "FRANCHIGIE E ASSICURAZIONI": franchigia in euro e scoperto in
+ * percentuale. Sono legate alla SINGOLA opzione assicurativa: il cliente
+ * sceglie il suo Kasko al booking e il contratto stampa la lista di QUELLA
+ * opzione, per quella categoria e quella fascia. Casella vuota = cella vuota.
+ *
+ * La riga "Kasko" della tabella NON sta qui: sono i campi Franchigia €/
+ * Scoperto % che l'opzione ha gia', cosi' lo stesso numero non si scrive due
+ * volte.
  */
+type FranchigiaVoce = { eur: number | ''; perc: number | '' }
+
 type FranchigieContratto = {
-  incendio: number | ''
-  furto: number | ''
-  eventi_naturali: number | ''
-  eventi_sociopolitici: number | ''
-  atti_vandalici: number | ''
+  incendio: FranchigiaVoce
+  furto: FranchigiaVoce
+  eventi_naturali: FranchigiaVoce
+  eventi_sociopolitici: FranchigiaVoce
+  atti_vandalici: FranchigiaVoce
 }
 
 type InsuranceOption = {
@@ -3624,6 +3632,8 @@ function InsuranceList({
             <FranchigieContrattoBox
               value={opt.franchigie}
               testo={opt.kasko_testo}
+              kaskoEur={opt.deductible_fixed}
+              kaskoPerc={opt.deductible_percent}
               onChange={(franchigie) => patch(opt.id, { franchigie })}
               onTesto={(kasko_testo) => patch(opt.id, { kasko_testo })}
             />
@@ -3662,20 +3672,56 @@ const VOCI_FRANCHIGIA: ReadonlyArray<{ k: keyof FranchigieContratto; label: stri
   { k: 'atti_vandalici', label: 'Atti vandalici' },
 ]
 
+const VOCE_VUOTA: FranchigiaVoce = { eur: '', perc: '' }
+
+/**
+ * Normalizza una voce salvata: la prima versione (08/09/2026, mattina) teneva
+ * solo il numero in euro. Una config vecchia non deve rompere la scheda.
+ */
+function voceFranchigia(raw: unknown): FranchigiaVoce {
+  if (typeof raw === 'number') return { eur: raw, perc: '' }
+  if (raw && typeof raw === 'object') {
+    const o = raw as { eur?: unknown; perc?: unknown }
+    return {
+      eur: typeof o.eur === 'number' ? o.eur : '',
+      perc: typeof o.perc === 'number' ? o.perc : '',
+    }
+  }
+  return { ...VOCE_VUOTA }
+}
+
+function franchigieComplete(raw: unknown): FranchigieContratto {
+  const o = (raw || {}) as Record<string, unknown>
+  return {
+    incendio: voceFranchigia(o.incendio),
+    furto: voceFranchigia(o.furto),
+    eventi_naturali: voceFranchigia(o.eventi_naturali),
+    eventi_sociopolitici: voceFranchigia(o.eventi_sociopolitici),
+    atti_vandalici: voceFranchigia(o.atti_vandalici),
+  }
+}
+
+/**
+ * La tabella "FRANCHIGIE E ASSICURAZIONI" del contratto, riga per riga.
+ * Chiuso di default: la maggior parte delle volte si lavora sui prezzi.
+ */
 function FranchigieContrattoBox({
   value,
   testo,
+  kaskoEur,
+  kaskoPerc,
   onChange,
   onTesto,
 }: {
   value?: FranchigieContratto
   testo?: string
+  kaskoEur: number | ''
+  kaskoPerc: number | ''
   onChange: (v: FranchigieContratto) => void
   onTesto: (v: string) => void
 }) {
-  const vuoto: FranchigieContratto = { incendio: '', furto: '', eventi_naturali: '', eventi_sociopolitici: '', atti_vandalici: '' }
-  const cur = { ...vuoto, ...(value || {}) }
-  const compilate = VOCI_FRANCHIGIA.filter(v => cur[v.k] !== '' && cur[v.k] !== undefined).length
+  const cur = franchigieComplete(value)
+  const compilate = VOCI_FRANCHIGIA.filter(v => cur[v.k].eur !== '' || cur[v.k].perc !== '').length
   const [aperto, setAperto] = useState(false)
   return (
     <div className="mt-3 border-t border-black/[0.06] pt-3">
@@ -3685,37 +3731,68 @@ function FranchigieContrattoBox({
         className="flex items-center gap-2 text-[12px] font-medium text-theme-text-secondary hover:text-theme-text-primary transition-colors"
       >
         <span className={`inline-block transition-transform ${aperto ? 'rotate-90' : ''}`}>›</span>
-        Franchigie e testo per il contratto
+        Franchigie del contratto
         <span className="text-theme-text-muted">
-          {compilate > 0 ? `${compilate}/${VOCI_FRANCHIGIA.length} compilate` : 'non compilate'}
-          {testo ? ' · testo Kasko' : ''}
+          {compilate > 0 ? `${compilate}/${VOCI_FRANCHIGIA.length} garanzie` : 'non compilate'}
         </span>
       </button>
       {aperto && (
-        <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] text-theme-text-muted">
+            La tabella "Franchigie e assicurazioni" del contratto: franchigia in euro e scoperto in percentuale, riga per riga.
+            Vengono stampate quando il cliente sceglie QUESTA opzione.
+          </p>
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-2 items-center">
+            <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Garanzia</span>
+            <span className="text-[11px] uppercase tracking-wide text-theme-text-muted text-right w-24">Franchigia €</span>
+            <span className="text-[11px] uppercase tracking-wide text-theme-text-muted text-right w-24">Scoperto %</span>
             {VOCI_FRANCHIGIA.map(({ k, label }) => (
-              <FieldBox key={k} label={`${label} €`} value={cur[k]} onChange={(v) => onChange({ ...cur, [k]: v })} />
+              <Fragment key={k}>
+                <span className="text-[13px] text-theme-text-primary">{label}</span>
+                <NumeroCella value={cur[k].eur} onChange={(v) => onChange({ ...cur, [k]: { ...cur[k], eur: v } })} />
+                <NumeroCella value={cur[k].perc} onChange={(v) => onChange({ ...cur, [k]: { ...cur[k], perc: v } })} />
+              </Fragment>
             ))}
+            {/* La riga Kasko della tabella esce dai campi qui sopra: si mostra
+                in sola lettura per non far scrivere lo stesso numero due volte. */}
+            <span className="text-[13px] text-theme-text-primary">Kasko</span>
+            <span className="text-[13px] text-right tabular-nums text-theme-text-secondary w-24 px-3 py-2">{kaskoEur === '' ? '—' : kaskoEur}</span>
+            <span className="text-[13px] text-right tabular-nums text-theme-text-secondary w-24 px-3 py-2">{kaskoPerc === '' ? '—' : kaskoPerc}</span>
           </div>
-          <label className="block">
+          <p className="text-[11px] text-theme-text-muted">
+            La riga Kasko prende i campi "Franchigia €" e "Scoperto %" qui sopra: si cambiano li'.
+          </p>
+          <label className="block pt-1">
             <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
-              Kasko — testo del contratto
+              Kasko — testo del contratto (facoltativo)
             </span>
             <textarea
               value={testo ?? ''}
               onChange={(e) => onTesto(e.target.value)}
-              rows={3}
-              placeholder="Es. Kasko DR7: RCA, Furto (solo in caso di restituzione chiave), atti vandalici, agenti atmosferici, incendio, distruzione totale: da risarcire 30% del valore del danno."
+              rows={2}
+              placeholder="Solo se il contratto ha una casella di testo per la Kasko oltre alla tabella."
               className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <span className="block text-[11px] text-theme-text-muted mt-1">
-              Finisce nel contratto quando il cliente sceglie questa opzione. Ogni Kasko ha il suo testo.
-            </span>
           </label>
         </div>
       )}
     </div>
+  )
+}
+
+/** Casella numerica stretta per le celle della tabella franchigie. */
+function NumeroCella({ value, onChange }: { value: number | ''; onChange: (v: number | '') => void }) {
+  return (
+    <input
+      type="number"
+      min={0}
+      value={value}
+      onChange={(e) => {
+        const v = e.target.value
+        onChange(v === '' ? '' : Number(v))
+      }}
+      className="w-24 bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+    />
   )
 }
 

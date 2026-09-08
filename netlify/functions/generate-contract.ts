@@ -1326,32 +1326,56 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         let insuranceLabel = nomeLegacy || opzionePro?.name || ''
         if (!insuranceLabel) insuranceLabel = insuranceOptionId
 
-        // Franchigie in euro formattate all'italiana. Casella vuota in
-        // Centralina = campo vuoto sul contratto (non "€0").
-        const euroContratto = (v: unknown): string => {
+        // Tabella "FRANCHIGIE E ASSICURAZIONI": due numeri per riga, franchigia
+        // in euro e scoperto in percentuale. Nel PDF il simbolo € e il % sono
+        // gia' stampati nella cella, quindi qui si scrive il NUMERO e basta.
+        // Casella vuota in Centralina = cella vuota sul contratto (non "0").
+        const numeroContratto = (v: unknown): string => {
             if (v === '' || v === null || v === undefined) return ''
             const n = Number(v)
             if (!Number.isFinite(n)) return ''
-            return `€${n.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
+            return n.toLocaleString('it-IT', { maximumFractionDigits: 2 })
+        }
+        // La prima versione salvava solo l'euro come numero: si accetta ancora.
+        const voceFranchigia = (raw: unknown): { eur: unknown; perc: unknown } => {
+            if (typeof raw === 'number') return { eur: raw, perc: '' }
+            if (raw && typeof raw === 'object') {
+                const o = raw as { eur?: unknown; perc?: unknown }
+                return { eur: o.eur, perc: o.perc }
+            }
+            return { eur: '', perc: '' }
+        }
+        const fr = opzionePro?.franchigie || {}
+        const rigaFranchigia = (k: string) => {
+            const v = voceFranchigia((fr as Record<string, unknown>)[k])
+            return { eur: numeroContratto(v.eur), perc: numeroContratto(v.perc) }
         }
         const franchigieContratto = {
-            incendio: euroContratto(opzionePro?.franchigie?.incendio),
-            furto: euroContratto(opzionePro?.franchigie?.furto),
-            eventi_naturali: euroContratto(opzionePro?.franchigie?.eventi_naturali),
-            eventi_sociopolitici: euroContratto(opzionePro?.franchigie?.eventi_sociopolitici),
-            atti_vandalici: euroContratto(opzionePro?.franchigie?.atti_vandalici),
+            incendio: rigaFranchigia('incendio'),
+            furto: rigaFranchigia('furto'),
+            eventi_naturali: rigaFranchigia('eventi_naturali'),
+            eventi_sociopolitici: rigaFranchigia('eventi_sociopolitici'),
+            atti_vandalici: rigaFranchigia('atti_vandalici'),
+            // La riga Kasko sono i campi Franchigia €/Scoperto % dell'opzione
+            // scelta: lo stesso numero non si scrive due volte in Centralina.
+            kasko: {
+                eur: numeroContratto((opzionePro as { deductible_fixed?: unknown } | null)?.deductible_fixed),
+                perc: numeroContratto((opzionePro as { deductible_percent?: unknown } | null)?.deductible_percent),
+            },
         }
         const kaskoTestoContratto = String(opzionePro?.kasko_testo || '')
-        // Stessa lista in UN solo campo, per chi preferisce una casella unica
+        // Stessa tabella in UN solo campo, per chi preferisce una casella unica
         // nel PDF invece di una riga per garanzia. Le voci vuote non compaiono.
-        const franchigieLista = [
+        const franchigieLista = ([
             ['Incendio', franchigieContratto.incendio],
             ['Furto', franchigieContratto.furto],
             ['Eventi naturali', franchigieContratto.eventi_naturali],
             ['Eventi sociopolitici', franchigieContratto.eventi_sociopolitici],
             ['Atti vandalici', franchigieContratto.atti_vandalici],
-        ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`)
-            .concat(kaskoTestoContratto ? [`Kasko: ${kaskoTestoContratto}`] : [])
+            ['Kasko', franchigieContratto.kasko],
+        ] as [string, { eur: string; perc: string }][])
+            .filter(([, v]) => v.eur || v.perc)
+            .map(([k, v]) => `${k}: ${v.eur ? `€${v.eur}` : ''}${v.eur && v.perc ? ' + ' : ''}${v.perc ? `${v.perc}%` : ''}`)
             .join('\n')
         console.log(`[generate-contract] Insurance resolution: id="${insuranceOptionId}" → label="${insuranceLabel}" (categoria=${vehicleCategory}, fascia=${fasciaPreferita || 'n/d'}, franchigie=${opzionePro?.franchigie ? 'si' : 'no'})`)
 
@@ -1516,11 +1540,18 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // PDF = riga saltata senza errore.
             'KaskoNome': insuranceLabel,
             'KaskoTesto': kaskoTestoContratto,
-            'FranchigiaIncendio': franchigieContratto.incendio,
-            'FranchigiaFurto': franchigieContratto.furto,
-            'FranchigiaEventiNaturali': franchigieContratto.eventi_naturali,
-            'FranchigiaEventiSociopolitici': franchigieContratto.eventi_sociopolitici,
-            'FranchigiaAttiVandalici': franchigieContratto.atti_vandalici,
+            'FranchigiaIncendio': franchigieContratto.incendio.eur,
+            'ScopertoIncendio': franchigieContratto.incendio.perc,
+            'FranchigiaFurto': franchigieContratto.furto.eur,
+            'ScopertoFurto': franchigieContratto.furto.perc,
+            'FranchigiaEventiNaturali': franchigieContratto.eventi_naturali.eur,
+            'ScopertoEventiNaturali': franchigieContratto.eventi_naturali.perc,
+            'FranchigiaEventiSociopolitici': franchigieContratto.eventi_sociopolitici.eur,
+            'ScopertoEventiSociopolitici': franchigieContratto.eventi_sociopolitici.perc,
+            'FranchigiaAttiVandalici': franchigieContratto.atti_vandalici.eur,
+            'ScopertoAttiVandalici': franchigieContratto.atti_vandalici.perc,
+            'FranchigiaKasko': franchigieContratto.kasko.eur,
+            'ScopertoKasko': franchigieContratto.kasko.perc,
             'FranchigieLista': franchigieLista,
             // Cauzione amount resolution.
             // - cauzione_auto = true means the customer pledged THEIR OWN vehicle
