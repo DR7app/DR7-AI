@@ -1666,7 +1666,10 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   footer_logo_height: 48,
   chatbot_enabled: true,
   chatbot_avatar_url: '/Valerio.jpg',
-  auto_booking_popup_enabled: true,
+  // Spento di fabbrica: il riquadro "Prenota Ora" che si apriva da solo
+  // copriva la home ai visitatori. L'interruttore resta in Aspetto &
+  // Funzionalita' se un giorno lo si vuole riaccendere.
+  auto_booking_popup_enabled: false,
   heli_tour_popup_enabled: true,
   tema_bg: '#08090A',
   tema_surface: '#131416',
@@ -2475,7 +2478,7 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   field_notes_label_it: 'Esigenze o richieste particolari (facoltativo)', field_notes_label_en: 'Any particular needs or requests (optional)',
   field_notes_placeholder_it: 'Inserisci eventuali necessità, preferenze o servizi aggiuntivi. (opzionale)',
   field_notes_placeholder_en: 'Tell us about any needs, preferences or extra services.',
-  submit_idle_it: 'RICHIEDI IL TUO PREVENTIVO', submit_idle_en: 'REQUEST YOUR QUOTE',
+  submit_idle_it: 'SALVA PREVENTIVO', submit_idle_en: 'SAVE QUOTE',
   submit_submitting_it: 'Invio in corso...', submit_submitting_en: 'Submitting...',
   disclaimer_it: 'Verrai reindirizzato su WhatsApp. Ti contatteremo entro 24 ore con un preventivo personalizzato.',
   disclaimer_en: 'You\'ll be redirected to WhatsApp. We\'ll contact you within 24 hours with a personalized quote.',
