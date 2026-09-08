@@ -45,8 +45,6 @@ interface Operatore {
     email: string
     ruolo: string | null
     ore_target_giornaliere: number
-    ore_target_settimanali: number | null
-    ore_target_mensili: number | null
     avatar_url: string | null
     ore_a_recuperare_min: number | null
 }
@@ -114,7 +112,12 @@ export default function PayrollPeriodoView() {
             // 1. Operatori attivi
             const { data: ops, error: errOps } = await supabase
                 .from('operatori_persone')
-                .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url, ore_a_recuperare_min, attivo')
+                // Le ore target SETTIMANALI/MENSILI stanno su `operatore_contratto`,
+                // non sull'anagrafica: chiederle qui faceva fallire tutta la query
+                // (PostgREST: "column operatori_persone.ore_target_settimanali does
+                // not exist") e la pagina restava vuota dal 18/05/2026. Il calcolo
+                // le legge gia' dal contratto piu' sotto.
+                .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, ore_a_recuperare_min, attivo')
                 .eq('attivo', true)
                 .order('cognome', { ascending: true })
             if (errOps) throw new Error(`Operatori: ${errOps.message}`)
