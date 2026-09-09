@@ -1754,6 +1754,40 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore }:
   locatore: Required<LocatoreConfig>
   setLocatore: (l: Required<LocatoreConfig>) => void
 }) {
+  const [logoInCaricamento, setLogoInCaricamento] = useState(false)
+
+  /**
+   * Carica il logo nel bucket `templates`, accanto al modello del contratto,
+   * e salva l'indirizzo pubblico. Nome fisso: il file nuovo sostituisce il
+   * vecchio, cosi' non si accumulano loghi orfani. Il `?v=` in coda serve a
+   * far vedere subito il logo nuovo invece di quello in cache.
+   */
+  async function caricaLogo(file: File) {
+    if (!file.type.includes('png')) {
+      toast.error('Il logo deve essere un PNG')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo troppo grande: massimo 2 MB')
+      return
+    }
+    setLogoInCaricamento(true)
+    try {
+      const nome = 'logo_contratto.png'
+      const { error } = await supabase.storage
+        .from('templates')
+        .upload(nome, file, { contentType: 'image/png', upsert: true, cacheControl: '0' })
+      if (error) throw error
+      const pubblico = supabase.storage.from('templates').getPublicUrl(nome).data.publicUrl
+      setLocatore({ ...locatore, logo_url: `${pubblico}?v=${Date.now()}` })
+      toast.success('Logo caricato — ricordati di salvare')
+    } catch (e) {
+      toast.error('Caricamento fallito: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setLogoInCaricamento(false)
+    }
+  }
+
   const campoLoc = (k: keyof LocatoreConfig, etichetta: string, segnaposto?: string) => (
     <label className="block">
       <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">{etichetta}</span>
@@ -1787,18 +1821,41 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore }:
           {campoLoc('sede_legale', 'Sede legale')}
           {campoLoc('telefono', 'Telefono')}
           {campoLoc('partita_iva', 'Codice fiscale / partita IVA')}
-          {campoLoc('logo_url', 'Logo (indirizzo dell\'immagine)', 'https://dr7.app/DR7logo1.png')}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Anteprima logo</span>
-          <img
-            src={locatore.logo_url || LOCATORE_DEFAULT.logo_url}
-            alt="Logo del contratto"
-            className="h-10 w-auto object-contain bg-black/80 rounded px-2 py-1"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = '0.25' }}
-          />
+
+        {/* Il logo si carica, non si scrive: un indirizzo da incollare era una
+            trappola (basta un file spostato e il contratto esce senza logo). */}
+        <div className="rounded-lg border border-theme-border bg-theme-bg-secondary p-3 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Logo del contratto</span>
+            <img
+              src={locatore.logo_url || LOCATORE_DEFAULT.logo_url}
+              alt="Logo del contratto"
+              className="h-12 w-auto object-contain bg-black/80 rounded px-2 py-1"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = '0.25' }}
+            />
+          </div>
+          <label className={`px-3 py-2 rounded-lg text-[12px] font-semibold cursor-pointer transition-colors ${logoInCaricamento ? 'bg-theme-bg-tertiary text-theme-text-muted' : 'bg-[#007aff] text-white hover:bg-[#0069d9]'}`}>
+            {logoInCaricamento ? 'Caricamento...' : 'Carica logo'}
+            <input
+              type="file"
+              accept="image/png"
+              className="hidden"
+              disabled={logoInCaricamento}
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) caricaLogo(f) }}
+            />
+          </label>
+          {locatore.logo_url && locatore.logo_url !== LOCATORE_DEFAULT.logo_url && (
+            <button
+              type="button"
+              onClick={() => setLocatore({ ...locatore, logo_url: '' })}
+              className="text-[12px] text-theme-text-secondary hover:text-theme-text-primary underline"
+            >
+              Torna al logo predefinito
+            </button>
+          )}
           <span className="text-[11px] text-theme-text-muted">
-            PNG. Se l&apos;indirizzo non risponde, il contratto esce senza logo invece di non uscire.
+            PNG, sfondo trasparente. Entra nel riquadro in testa alla prima pagina rispettandone le proporzioni.
           </span>
         </div>
       </div>
