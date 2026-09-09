@@ -152,6 +152,11 @@ function formatDateTime(iso: string) {
 function formatDay(iso: string) {
   return new Date(iso).toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: 'short' })
 }
+/** Come formatDay ma con il giorno scritto: "martedì 09 set". Per le frasi,
+ *  non per il CSV (li' la colonna Data resta una data e basta). */
+function formatGiorno(iso: string) {
+  return new Date(iso).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: '2-digit', month: 'short' })
+}
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('it-IT', { timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit' })
 }
@@ -1364,7 +1369,7 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
             </Section>
 
             {/* SECTION 4 — PRODUTTIVITÀ */}
-            <Section title="Produttività" subtitle={stats.peakDay ? `Picco: ${formatDay(stats.peakDay.day + 'T12:00:00')} con ${stats.peakDay.count} attività` : 'Distribuzione attività per giorno'}>
+            <Section title="Produttività" subtitle={stats.peakDay ? `Picco: ${formatGiorno(stats.peakDay.day + 'T12:00:00')} con ${stats.peakDay.count} attività` : 'Distribuzione attività per giorno'}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-xs">
                 <StatTile label="Media giornaliera" value={stats.activeDays > 0 ? (stats.totalActivities / stats.activeDays).toFixed(1) : '0.0'} hint="attività/giorno" />
                 <StatTile label="Vs media team" value={teamAvg > 0 ? `${((myCount / teamAvg - 1) * 100).toFixed(0)}%` : '—'} hint={`team: ${teamAvg.toFixed(0)} att.`} />

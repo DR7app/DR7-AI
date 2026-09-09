@@ -73,6 +73,19 @@ function fmtDate(s: string): string {
     const d = new Date(s + 'T12:00:00')
     return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
 }
+/**
+ * La stessa data con il giorno scritto: "Martedì 09 set 2026".
+ *
+ * Chi controlla le ore ragiona per giorni della settimana ("il sabato non
+ * c'era"), non per numeri: una colonna di sole date costringe a contare sul
+ * calendario. Si usa dove la riga E' una giornata; negli intervalli
+ * (dal ... al ...) resta la forma corta.
+ */
+function fmtGiorno(s: string): string {
+    const d = new Date(s + 'T12:00:00')
+    const testo = d.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })
+    return testo.charAt(0).toUpperCase() + testo.slice(1)
+}
 function toRomeDate(d: Date): string {
     return d.toLocaleDateString('en-CA', { timeZone: ROME_TZ })
 }
@@ -327,7 +340,7 @@ export default function OperatorProfileModal({
     // Chart data
     const trendData = useMemo(() => days.map(d => ({
         day: d.data.slice(-2),
-        label: new Date(d.data + 'T12:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }),
+        label: new Date(d.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' }),
         minutes: d.minutiLavorati,
     })), [days])
 
@@ -450,7 +463,7 @@ export default function OperatorProfileModal({
                     <KpiCard label="Completamento" value={`${stats.completion}%`} tone={stats.completion >= 100 ? 'emerald' : stats.completion >= 75 ? 'amber' : 'rose'} />
                     <KpiCard label="Pause Totali" value={fmtMin(stats.totMinPausa)} sub={`${stats.totPause} pause`} tone="amber" />
                     <KpiCard label="Pausa Media" value={stats.avgPausa > 0 ? `${stats.avgPausa} min` : '—'} tone="muted" />
-                    <KpiCard label="Pausa Max" value={stats.maxPausa > 0 ? `${stats.maxPausa} min` : '—'} sub={stats.giornoMaxPause ? fmtDate(stats.giornoMaxPause.data) : ''} tone="muted" />
+                    <KpiCard label="Pausa Max" value={stats.maxPausa > 0 ? `${stats.maxPausa} min` : '—'} sub={stats.giornoMaxPause ? fmtGiorno(stats.giornoMaxPause.data) : ''} tone="muted" />
                 </div>
 
                 {/* Trend chart */}
@@ -537,7 +550,7 @@ export default function OperatorProfileModal({
                                 >
                                     <div className="mb-2 flex items-baseline justify-between gap-3">
                                         <div className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
-                                            {fmtDate(d.data)}
+                                            {fmtGiorno(d.data)}
                                             <span className="text-[10px] font-normal text-dr7-gold/70">modifica</span>
                                         </div>
                                         <div className="text-right">
