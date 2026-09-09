@@ -154,6 +154,75 @@ function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Re
     }
 }
 
+/**
+ * Il LOCATORE: DR7 stessa. Sul modello uniforme la sezione "DATI LOCATORE"
+ * e' vuota come tutte le altre, quindi va riempita a ogni contratto invece di
+ * essere stampata nel PDF.
+ *
+ * I valori si possono cambiare da Centralina Pro (`config.locatore`) senza
+ * toccare il codice; senza quella chiave valgono questi, gli stessi che
+ * stampa la fattura.
+ */
+interface DatiLocatore {
+    ragione_sociale: string
+    email: string
+    sede_legale: string
+    telefono: string
+    piva: string
+}
+const LOCATORE_PREDEFINITO: DatiLocatore = {
+    ragione_sociale: 'DR7 S.p.A.',
+    email: 'info@dr7.app',
+    sede_legale: 'Via del Fangario 25, 09122 Cagliari (CA)',
+    telefono: '+39 345 790 5205',
+    piva: '04104640927',
+}
+function datiLocatore(config: Record<string, unknown> | null | undefined): DatiLocatore {
+    const l = (config?.locatore || {}) as Partial<DatiLocatore>
+    return {
+        ragione_sociale: String(l.ragione_sociale || LOCATORE_PREDEFINITO.ragione_sociale),
+        email: String(l.email || LOCATORE_PREDEFINITO.email),
+        sede_legale: String(l.sede_legale || LOCATORE_PREDEFINITO.sede_legale),
+        telefono: String(l.telefono || LOCATORE_PREDEFINITO.telefono),
+        piva: String(l.piva || LOCATORE_PREDEFINITO.piva),
+    }
+}
+
+/** Rettangolo di una casella del modulo, con la pagina su cui sta. */
+interface Riquadro { pagina: number; x: number; y: number; w: number; h: number }
+
+/**
+ * I riquadri di un campo del modulo, dall'alto in basso.
+ *
+ * Serve perche' sul modello uniforme alcune caselle hanno un nome inventato
+ * dall'editor PDF (`Testo4`, `text_59ujqk`) e, peggio, `Testo4` e' UN campo
+ * ripetuto su TRE caselle diverse: riempirlo dal modulo scriverebbe lo stesso
+ * testo in tutte e tre. Si prendono quindi le coordinate e si scrive sopra,
+ * casella per casella.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function riquadriDelCampo(pdfDoc: any, form: any, nome: string): Riquadro[] {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const campo = form.getFields().find((f: any) => f.getName() === nome)
+        if (!campo) return []
+        const pagine = pdfDoc.getPages()
+        const out: Riquadro[] = []
+        for (const w of campo.acroField.getWidgets()) {
+            const r = w.getRectangle()
+            const pRef = w.P()
+            let idx = 0
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            pagine.forEach((pg: any, i: number) => { if (pg.ref === pRef) idx = i })
+            out.push({ pagina: idx, x: r.x, y: r.y, w: r.width, h: r.height })
+        }
+        return out.sort((a, b) => (a.pagina - b.pagina) || (b.y - a.y))
+    } catch (e) {
+        console.warn(`[generate-contract] riquadri di '${nome}' non letti:`, (e as Error).message)
+        return []
+    }
+}
+
 // Helper function to sanitize text for WinAnsi encoding
 // Transliterates Cyrillic and other non-Latin characters to Latin equivalents
 function sanitizeForPDF(text: string): string {
@@ -1419,6 +1488,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .join('\n')
         console.log(`[generate-contract] Insurance resolution: id="${insuranceOptionId}" → label="${insuranceLabel}" (categoria=${vehicleCategory}, fascia=${fasciaPreferita || 'n/d'}, franchigie=${opzionePro?.franchigie ? 'si' : 'no'})`)
 
+        // Il locatore e' DR7: i suoi dati non dipendono dalla prenotazione ma
+        // dalla configurazione, cosi' un cambio di sede non impone un deploy.
+        const locatore = datiLocatore(cpCfg?.config)
+
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
         // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
@@ -1841,6 +1914,18 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
 
             // Additional Terms/Penalties (Second large text area)
             'AdditionalTerms': additionalTermsText,
+
+            // ─── DATI LOCATORE (DR7) ──────────────────────────────────
+            // Sul modello uniforme queste caselle hanno nomi inventati
+            // dall'editor PDF (Testo4/Testo5/text_59ujqk) e una di esse e'
+            // ripetuta su tre righe: vengono scritte piu' sotto sulle
+            // coordinate. Questi nomi "puliti" valgono per il giorno in cui
+            // il modello verra' rinominato — allora bastera' il modulo.
+            'LocatoreName': locatore.ragione_sociale,
+            'LocatoreEmail': locatore.email,
+            'LocatoreAddress': locatore.sede_legale,
+            'LocatorePhone': locatore.telefono,
+            'LocatoreVAT': locatore.piva,
         }
 
         // Pre-compute the exact set of text field names actually present in
@@ -1940,6 +2025,18 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 }
             }
 
+            // Coordinate delle caselle da scrivere a mano: vanno lette PRIMA
+            // di appiattire il modulo, che le fa sparire.
+            const rqLocatoreNome = riquadriDelCampo(pdfDoc, form, 'Testo4')
+            const rqLocatoreTel = riquadriDelCampo(pdfDoc, form, 'Testo5')
+            const rqLocatoreEmail = riquadriDelCampo(pdfDoc, form, 'text_59ujqk')
+            const rqLuogoStipula = riquadriDelCampo(pdfDoc, form, 'Testo1')
+            const rqLogo = riquadriDelCampo(pdfDoc, form, 'Immagine2_af_image')[0]
+            // `Testo4` esiste solo sul modello uniforme, dove la sezione
+            // "DATI LOCATORE" e' vuota. Sul modello vecchio quei dati sono
+            // gia' stampati: riscriverli li raddoppierebbe.
+            const modelloUniforme = rqLocatoreNome.length > 0
+
             try {
                 form.flatten()
                 console.log('[generate-contract] Form flattened successfully — PDF is now read-only')
@@ -1950,6 +2047,76 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                     try { field.enableReadOnly() } catch (_) { }
                 }
                 console.log('[generate-contract] Fields marked read-only as fallback')
+            }
+
+            // ─── Logo e DATI LOCATORE ─────────────────────────────────
+            // Dopo l'appiattimento: quel che si disegna qui resta sopra, e
+            // nessuna casella vuota puo' coprirlo.
+            try {
+                const fontLoc = await pdfDoc.embedFont(StandardFonts.Helvetica)
+                const pagine = pdfDoc.getPages()
+                const scrivi = (r: Riquadro | undefined, testo: string) => {
+                    if (!r || !testo) return
+                    const pg = pagine[r.pagina]
+                    if (!pg) return
+                    const size = 7
+                    pg.drawText(sanitizeForPDF(testo), {
+                        x: r.x + 1,
+                        y: r.y + (r.h - size) / 2 + 1,
+                        size,
+                        font: fontLoc,
+                        color: rgb(0, 0, 0),
+                    })
+                }
+
+                if (modelloUniforme) {
+                    // Le tre righe di Testo4, dall'alto: ragione sociale,
+                    // sede legale, codice fiscale / partita iva.
+                    scrivi(rqLocatoreNome[0], locatore.ragione_sociale)
+                    scrivi(rqLocatoreNome[1], locatore.sede_legale)
+                    scrivi(rqLocatoreNome[2], locatore.piva)
+                    scrivi(rqLocatoreTel[0], locatore.telefono)
+                    scrivi(rqLocatoreEmail[0], locatore.email)
+                    scrivi(rqLuogoStipula[0], 'Cagliari')
+                    console.log('[generate-contract] Dati locatore scritti sul modello uniforme')
+                }
+
+                // Il logo: il modello uniforme lascia un riquadro vuoto in
+                // testa alla prima pagina. Va messo a ogni contratto, altrimenti
+                // esce un documento anonimo.
+                if (rqLogo) {
+                    try {
+                        const risp = await fetch('https://dr7.app/DR7logo1.png')
+                        if (risp.ok) {
+                            const logo = await pdfDoc.embedPng(new Uint8Array(await risp.arrayBuffer()))
+                            const pg = pdfDoc.getPages()[rqLogo.pagina]
+                            if (pg) {
+                                // Dentro il riquadro, proporzioni intatte, centrato.
+                                const margine = 6
+                                const maxW = rqLogo.w - margine * 2
+                                const maxH = rqLogo.h - margine * 2
+                                const scala = Math.min(maxW / logo.width, maxH / logo.height)
+                                const w = logo.width * scala
+                                const h = logo.height * scala
+                                pg.drawImage(logo, {
+                                    x: rqLogo.x + (rqLogo.w - w) / 2,
+                                    y: rqLogo.y + (rqLogo.h - h) / 2,
+                                    width: w,
+                                    height: h,
+                                })
+                                console.log('[generate-contract] Logo disegnato sul contratto')
+                            }
+                        } else {
+                            console.warn('[generate-contract] logo non scaricato:', risp.status)
+                        }
+                    } catch (logoErr) {
+                        // Un contratto senza logo si manda lo stesso: meglio
+                        // del contratto che non parte.
+                        console.warn('[generate-contract] logo non disegnato:', (logoErr as Error).message)
+                    }
+                }
+            } catch (disegnoErr) {
+                console.warn('[generate-contract] logo/locatore non disegnati:', (disegnoErr as Error).message)
             }
         }
 
