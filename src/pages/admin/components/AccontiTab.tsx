@@ -20,6 +20,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import { vedeTuttiGliAcconti } from '../../../utils/accontiBustaPaga'
 
 interface AdminOption {
   id: string
@@ -79,9 +80,9 @@ export default function AccontiTab() {
   // vale SOLO la spunta "Acconti: vede tutti", piu' il failsafe di Valerio e
   // Ilenia (che non devono poter restare chiusi fuori dalla propria cassa).
   // Stessa identica regola della funzione dr7_can_see_all_acconti in database.
-  const ACCONTI_FAILSAFE = ['valerio@dr7.app', 'ilenia@dr7.app']
-  const canSeeAll = hasRole('acconti-tutti')
-    || ACCONTI_FAILSAFE.includes((adminEmail || '').toLowerCase())
+  // Regola unica (failsafe compreso) in utils/accontiBustaPaga.ts: la stessa
+  // che usano le Buste Paga per dire se il netto ha scalato tutti gli acconti.
+  const canSeeAll = vedeTuttiGliAcconti(hasRole, adminEmail)
   const me = useMemo(
     () => ({ id: adminId, nome: adminName || (adminEmail || '').split('@')[0] || '' }),
     [adminId, adminName, adminEmail]
@@ -255,6 +256,11 @@ export default function AccontiTab() {
           <p className="text-sm text-theme-text-muted mt-1">
             Registra gli acconti incassati nella giornata. Operatore: <span className="text-theme-text-secondary font-medium">{me.nome || '—'}</span>
             {!canSeeAll && <span className="ml-1">· vedi solo i tuoi</span>}
+          </p>
+          {/* 09/09/2026: gli acconti non restano un registro a parte — vengono
+              scalati dalla busta paga dell'intestatario nel periodo. */}
+          <p className="text-xs text-theme-text-muted mt-1">
+            Ogni acconto viene scalato dalla busta paga dell&apos;operatore intestatario (Operatori &rarr; Buste Paga del Periodo).
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">

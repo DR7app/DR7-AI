@@ -29,6 +29,7 @@ import {
 } from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import MoneyInput from '../../../components/MoneyInput'
 
 interface Operatore {
@@ -442,6 +443,7 @@ export default function OperatorProfileModal({
                 <div className="px-4 sm:px-6 pt-3">
                     <CalcolaPagaSection
                         operatoreId={operatore.id}
+                        anagrafica={{ email: operatore.email, nome: operatore.nome, cognome: operatore.cognome }}
                         oreTargetGiornaliere={dailyHoursForOvertime}
                         days={days}
                         rangeLabel={`${fmtDate(range.start)} → ${fmtDate(range.end)}`}
@@ -1506,6 +1508,7 @@ interface CalcolaPagaContract {
 
 function CalcolaPagaSection({
     operatoreId,
+    anagrafica,
     oreTargetGiornaliere,
     days,
     rangeLabel,
@@ -1515,6 +1518,8 @@ function CalcolaPagaSection({
     onChangeTo,
 }: {
     operatoreId: string
+    /** Serve ad abbinare gli acconti: la tab Acconti li intesta a `admins`. */
+    anagrafica: { email: string; nome: string; cognome: string | null }
     oreTargetGiornaliere: number
     days: DayBreakdown[]
     rangeLabel: string
@@ -1527,8 +1532,13 @@ function CalcolaPagaSection({
     onChangeFrom: (iso: string) => void
     onChangeTo: (iso: string) => void
 }) {
-    const { hasRole } = useAdminRole()
+    const { hasRole, adminEmail } = useAdminRole()
     const isDirezione = hasRole('direzione') || hasRole('developer')
+    // 09/09/2026: acconti gia' consegnati nel periodo, scalati dal totale.
+    const vedeAcconti = vedeTuttiGliAcconti(hasRole, adminEmail)
+    const [acconti, setAcconti] = useState<AccontoBustaPaga[]>([])
+    const [accontiErrore, setAccontiErrore] = useState<string | null>(null)
+    const [accontiFonte, setAccontiFonte] = useState<'rpc' | 'tabella'>('rpc')
     const [contract, setContract] = useState<CalcolaPagaContract | null>(null)
     const [oreRecMin, setOreRecMin] = useState<number>(0)
     const [oreRecInput, setOreRecInput] = useState<string>('0')
@@ -1560,6 +1570,24 @@ function CalcolaPagaSection({
         })()
         return () => { cancelled = true }
     }, [operatoreId, isDirezione])
+
+    // Acconti del periodo selezionato. Cambiano con le date della card, cosi'
+    // il netto segue sempre il periodo che si sta calcolando.
+    useEffect(() => {
+        if (!isDirezione) return
+        let cancelled = false
+        ;(async () => {
+            const res = await caricaAccontiPeriodo(
+                [{ id: operatoreId, email: anagrafica.email, nome: anagrafica.nome, cognome: anagrafica.cognome }],
+                customFrom, customTo
+            )
+            if (cancelled) return
+            setAcconti(res.perOperatore.get(operatoreId) || [])
+            setAccontiErrore(res.errore)
+            setAccontiFonte(res.fonte)
+        })()
+        return () => { cancelled = true }
+    }, [operatoreId, isDirezione, anagrafica.email, anagrafica.nome, anagrafica.cognome, customFrom, customTo])
 
     const calc = useMemo(() => {
         // 2026-05-23: SOGLIA STRAORD per-PERIODO, non piu' solo per-giorno.
@@ -1727,6 +1755,10 @@ function CalcolaPagaSection({
     // a derivare l'oraria proporzionalmente.
     const noContract = !contract || (!contract.paga_oraria_eur && !contract.stipendio_mensile_eur)
     const eur = (n: number) => `€${n.toFixed(2)}`
+    // Acconto = paga gia' consegnata: si scala dal totale maturato.
+    const accontiEur = totaleAcconti(acconti)
+    const netto = calc.totale - accontiEur
+    const itDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('it-IT')
 
     return (
         <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
@@ -1791,7 +1823,7 @@ function CalcolaPagaSection({
                             </span>
                         )}
                     </div>
-                    <div className={`grid grid-cols-2 ${calc.straordEnabled ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-2 mb-3`}>
+                    <div className={`grid grid-cols-2 ${calc.straordEnabled ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2 mb-3`}>
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
                             <div className="text-[10px] uppercase text-theme-text-muted">Ore Ordinarie</div>
                             <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minOrdinari)}</div>
@@ -1809,9 +1841,17 @@ function CalcolaPagaSection({
                             <div className="text-sm font-semibold text-theme-text-primary">{oreRecMin === 0 ? '—' : fmtMin(Math.abs(oreRecMin))}</div>
                             <div className={`text-[10px] mt-0.5 tabular-nums ${calc.correzione < 0 ? 'text-rose-400' : calc.correzione > 0 ? 'text-emerald-400' : 'text-theme-text-muted'}`}>{calc.correzione === 0 ? '—' : eur(calc.correzione)}</div>
                         </div>
+                        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                            <div className="text-[10px] uppercase text-theme-text-muted">Acconti Dati</div>
+                            <div className="text-sm font-semibold text-theme-text-primary">{acconti.length === 0 ? '—' : `${acconti.length} ${acconti.length === 1 ? 'acconto' : 'acconti'}`}</div>
+                            <div className={`text-[10px] mt-0.5 tabular-nums ${accontiEur > 0 ? 'text-amber-400' : 'text-theme-text-muted'}`}>{accontiEur > 0 ? `-${eur(accontiEur)}` : '—'}</div>
+                        </div>
                         <div className="bg-dr7-gold/10 border border-dr7-gold/40 rounded-lg px-3 py-2">
-                            <div className="text-[10px] uppercase text-theme-text-muted">Totale</div>
-                            <div className="text-lg font-bold text-dr7-gold tabular-nums">{eur(calc.totale)}</div>
+                            <div className="text-[10px] uppercase text-theme-text-muted">Netto da Pagare</div>
+                            <div className="text-lg font-bold text-dr7-gold tabular-nums">{eur(netto)}</div>
+                            {accontiEur > 0 && (
+                                <div className="text-[9px] text-theme-text-muted mt-0.5">Maturato {eur(calc.totale)} − acconti {eur(accontiEur)}</div>
+                            )}
                             {contract?.stipendio_mensile_eur && (
                                 <div className="text-[9px] text-theme-text-muted mt-0.5">Stipendio fisso: {eur(Number(contract.stipendio_mensile_eur))} / {contract.stipendio_frequenza || 'mese'}</div>
                             )}
@@ -1841,6 +1881,40 @@ function CalcolaPagaSection({
                     </div>
                 </>
             )}
+
+            {/* Acconti del periodo: si vedono riga per riga, non solo come
+                totale scalato. La direzione deve poter dire al collaboratore
+                "il 12/09 hai preso 300 €" senza aprire un'altra tab. */}
+            <div className="mt-3 border-t border-theme-border pt-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                    <h4 className="text-xs font-semibold text-theme-text-primary">Acconti del periodo</h4>
+                    <span className={`text-xs font-semibold tabular-nums ${accontiEur > 0 ? 'text-amber-400' : 'text-theme-text-muted'}`}>
+                        {accontiEur > 0 ? `-${eur(accontiEur)}` : '—'}
+                    </span>
+                </div>
+                {accontiErrore ? (
+                    <p className="text-[11px] text-rose-400">Acconti non letti: {accontiErrore}. Il netto qui sopra non ha scalato nessun acconto.</p>
+                ) : acconti.length === 0 ? (
+                    <p className="text-[11px] text-theme-text-muted">Nessun acconto registrato in questo periodo.</p>
+                ) : (
+                    <ul className="space-y-1">
+                        {acconti.map(a => (
+                            <li key={a.id} className="flex items-center justify-between gap-2 text-[11px] bg-theme-bg-secondary border border-theme-border rounded px-2 py-1">
+                                <span className="text-theme-text-primary whitespace-nowrap">{itDate(a.data)}</span>
+                                <span className="flex-1 text-theme-text-muted truncate">
+                                    {a.causale || 'Acconto'}{a.metodo_pagamento ? ` · ${a.metodo_pagamento}` : ''}
+                                </span>
+                                <span className="text-amber-400 font-semibold tabular-nums whitespace-nowrap">-{eur(a.importo_cents / 100)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+                {!accontiErrore && accontiFonte === 'tabella' && !vedeAcconti && (
+                    <p className="text-[10px] text-amber-400 mt-1">
+                        Senza la spunta &laquo;Acconti: vede tutti&raquo; nella tua scheda operatore vedi solo i tuoi acconti: qui potrebbero mancarne.
+                    </p>
+                )}
+            </div>
         </div>
     )
 }

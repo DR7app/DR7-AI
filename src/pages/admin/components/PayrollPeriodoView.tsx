@@ -3,6 +3,7 @@ import { ScheletroRigheTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
+import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -70,11 +71,21 @@ interface PayrollRow {
     pagaStraord: number
     correzione: number
     totale: number
+    /** Acconti gia' consegnati nel periodo (euro, sempre >= 0). */
+    acconti: number
+    accontiRighe: AccontoBustaPaga[]
+    /** Quello che resta da dare a busta paga: totale - acconti. */
+    netto: number
     hasContract: boolean
 }
 
 export default function PayrollPeriodoView() {
     const { hasRole, adminEmail } = useAdminRole()
+    // 09/09/2026 (richiesta direzione): gli acconti consegnati al collaboratore
+    // si vedono qui e si scalano dal totale. Chi non ha la spunta
+    // "Acconti: vede tutti" legge solo i propri (RLS): in quel caso il numero
+    // va dichiarato incompleto invece di spacciarlo per netto.
+    const vedeAcconti = vedeTuttiGliAcconti(hasRole, adminEmail)
     const lowerAdminEmail = (adminEmail || '').toLowerCase()
     // 2026-06-20: operatori "solo miei dati" (Salvatore, lavaggisti) vedono la
     // propria busta paga (ore ordinarie/straordinari/paga), MAI quella altrui.
@@ -99,6 +110,11 @@ export default function PayrollPeriodoView() {
     // SENZA eccezione, e la pagina sembrava semplicemente vuota. Ora si dice
     // sempre cosa e' andato storto.
     const [loadError, setLoadError] = useState<string | null>(null)
+    const [accontiErrore, setAccontiErrore] = useState<string | null>(null)
+    const [accontiNonAbbinati, setAccontiNonAbbinati] = useState<number>(0)
+    // 'tabella' = la funzione dr7_acconti_busta_paga non e' ancora sul database
+    // e si e' letta la tabella con la RLS della tab Acconti: elenco parziale.
+    const [accontiFonte, setAccontiFonte] = useState<'rpc' | 'tabella'>('rpc')
     const [rows, setRows] = useState<PayrollRow[]>([])
     const [profileOp, setProfileOp] = useState<Operatore | null>(null)
     const [sortKey, setSortKey] = useState<'name' | 'hours' | 'total'>('total')
@@ -170,7 +186,18 @@ export default function PayrollPeriodoView() {
             // mostrato in Rilevazione Orari / Report Operatori.
             const pauseCfgByOp = await fetchPauseConfigAttive(opList.map(o => o.id))
 
-            // 4. Calcolo per ogni operatore
+            // 4. Acconti gia' consegnati nel periodo (tab Acconti).
+            // Non e' un costo in piu': e' una parte della paga gia' data in
+            // mano al collaboratore, quindi si scala dal totale del periodo.
+            const acconti = await caricaAccontiPeriodo(
+                opList.map(o => ({ id: o.id, email: o.email, nome: o.nome, cognome: o.cognome, user_id: o.user_id })),
+                from, to
+            )
+            setAccontiErrore(acconti.errore)
+            setAccontiNonAbbinati(acconti.nonAbbinati.length)
+            setAccontiFonte(acconti.fonte)
+
+            // 5. Calcolo per ogni operatore
             const result: PayrollRow[] = opList.map(op => {
                 const c = contractByOp.get(op.id) || null
                 const dayMap = byOpDay.get(op.id)
@@ -284,6 +311,8 @@ export default function PayrollPeriodoView() {
                 const oreRec = Number(op.ore_a_recuperare_min || 0)
                 const correzione = -(oreRec / 60) * oraria
                 const totale = pagaOrd + pagaStraord + correzione
+                const accontiRighe = acconti.perOperatore.get(op.id) || []
+                const accontiEur = totaleAcconti(accontiRighe)
 
                 return {
                     operatore: op,
@@ -292,6 +321,9 @@ export default function PayrollPeriodoView() {
                     minOrdinari, minStraord,
                     pagaOrd, pagaStraord, correzione,
                     totale,
+                    acconti: accontiEur,
+                    accontiRighe,
+                    netto: totale - accontiEur,
                     hasContract: !!c && (oraria > 0 || (Number(c?.stipendio_mensile_eur) || 0) > 0),
                 }
             })
@@ -300,6 +332,9 @@ export default function PayrollPeriodoView() {
             console.error('[PayrollPeriodoView] load error', err)
             setLoadError(err instanceof Error ? err.message : String(err))
             setRows([])
+            setAccontiErrore(null)
+            setAccontiNonAbbinati(0)
+            setAccontiFonte('rpc')
         } finally {
             setLoading(false)
         }
@@ -318,7 +353,8 @@ export default function PayrollPeriodoView() {
             } else if (sortKey === 'hours') {
                 cmp = a.minLavorati - b.minLavorati
             } else {
-                cmp = a.totale - b.totale
+                // L'ordinamento segue il netto: e' la cifra che si consegna.
+                cmp = a.netto - b.netto
             }
             return sortDir === 'asc' ? cmp : -cmp
         })
@@ -332,6 +368,8 @@ export default function PayrollPeriodoView() {
         pagaStraord: rows.reduce((s, r) => s + r.pagaStraord, 0),
         correzione: rows.reduce((s, r) => s + r.correzione, 0),
         totale: rows.reduce((s, r) => s + r.totale, 0),
+        acconti: rows.reduce((s, r) => s + r.acconti, 0),
+        netto: rows.reduce((s, r) => s + r.netto, 0),
         senzaContratto: rows.filter(r => !r.hasContract).length,
     }), [rows])
 
@@ -362,7 +400,7 @@ export default function PayrollPeriodoView() {
     }
 
     function exportCsv() {
-        const headers = ['Operatore', 'Ruolo', 'Ore Lavorate', 'Ore Ord.', 'Ore Straord.', 'Paga Ord.', 'Paga Straord.', 'Correzione', 'Totale']
+        const headers = ['Operatore', 'Ruolo', 'Ore Lavorate', 'Ore Ord.', 'Ore Straord.', 'Paga Ord.', 'Paga Straord.', 'Correzione', 'Totale', 'Acconti', 'Netto da Pagare']
         const data = sortedRows.map(r => [
             `${r.operatore.nome} ${r.operatore.cognome || ''}`.trim(),
             r.operatore.ruolo || '',
@@ -373,6 +411,8 @@ export default function PayrollPeriodoView() {
             r.pagaStraord.toFixed(2),
             r.correzione.toFixed(2),
             r.totale.toFixed(2),
+            r.acconti.toFixed(2),
+            r.netto.toFixed(2),
         ])
         const csv = [headers, ...data].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')
         const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
@@ -447,8 +487,23 @@ export default function PayrollPeriodoView() {
                 </div>
             )}
 
+            {/* Acconti: dire sempre se il netto ha scalato tutto o solo una parte.
+                Senza la spunta "Acconti: vede tutti" la RLS restituisce solo i
+                propri acconti: il netto degli altri operatori resterebbe pari al
+                lordo senza che si veda il perche'. */}
+            {accontiErrore && (
+                <div className="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 text-xs text-rose-300">
+                    <strong>Acconti non letti.</strong> {accontiErrore} — il netto mostrato non ha scalato nessun acconto.
+                </div>
+            )}
+            {!accontiErrore && accontiFonte === 'tabella' && !vedeAcconti && !isRestrictedToOwn && (
+                <div className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-300">
+                    <strong>Acconti parziali.</strong> Senza la spunta &laquo;Acconti: vede tutti&raquo; nella tua scheda operatore vedi solo i tuoi acconti: il netto degli altri operatori non ha scalato niente.
+                </div>
+            )}
+
             {/* Grand totals */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
                     <div className="text-[10px] uppercase text-theme-text-muted">Operatori</div>
                     <div className="text-2xl font-bold text-theme-text-primary">{grandTotal.operatori}</div>
@@ -470,9 +525,18 @@ export default function PayrollPeriodoView() {
                     <div className="text-[10px] uppercase text-theme-text-muted">Correzioni</div>
                     <div className={`text-lg font-bold tabular-nums ${grandTotal.correzione < 0 ? 'text-rose-400' : grandTotal.correzione > 0 ? 'text-emerald-400' : 'text-theme-text-muted'}`}>{grandTotal.correzione === 0 ? '—' : eur(grandTotal.correzione)}</div>
                 </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
+                    <div className="text-[10px] uppercase text-theme-text-muted">Acconti Dati</div>
+                    <div className={`text-lg font-bold tabular-nums ${grandTotal.acconti > 0 ? 'text-amber-400' : 'text-theme-text-muted'}`}>{grandTotal.acconti > 0 ? '-' + eur(grandTotal.acconti) : '—'}</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
+                    <div className="text-[10px] uppercase text-theme-text-muted">Totale Maturato</div>
+                    <div className="text-lg font-bold text-theme-text-primary tabular-nums">{eur(grandTotal.totale)}</div>
+                </div>
                 <div className="bg-dr7-gold/10 border border-dr7-gold/40 rounded-lg p-3">
-                    <div className="text-[10px] uppercase text-theme-text-muted">Totale da Pagare</div>
-                    <div className="text-xl font-bold text-dr7-gold tabular-nums">{eur(grandTotal.totale)}</div>
+                    <div className="text-[10px] uppercase text-theme-text-muted">Netto da Pagare</div>
+                    <div className="text-xl font-bold text-dr7-gold tabular-nums">{eur(grandTotal.netto)}</div>
+                    {grandTotal.acconti > 0 && <div className="text-[10px] text-theme-text-muted">acconti gia&apos; scalati</div>}
                 </div>
             </div>
 
@@ -490,15 +554,17 @@ export default function PayrollPeriodoView() {
                             <th className="text-right py-2 px-3">Paga Ord.</th>
                             <th className="text-right py-2 px-3">Paga Straord.</th>
                             <th className="text-right py-2 px-3">Corr.</th>
-                            <th onClick={() => sortBy('total')} className="text-right py-2 px-3 cursor-pointer hover:text-theme-text-primary">Totale {sortKey === 'total' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+                            <th className="text-right py-2 px-3">Totale</th>
+                            <th className="text-right py-2 px-3" title="Acconti consegnati nel periodo (tab Acconti), gia' scalati dal netto">Acconti</th>
+                            <th onClick={() => sortBy('total')} className="text-right py-2 px-3 cursor-pointer hover:text-theme-text-primary">Netto {sortKey === 'total' && (sortDir === 'asc' ? '↑' : '↓')}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <ScheletroRigheTabella righe={5} colonne={10} />
+                            <ScheletroRigheTabella righe={5} colonne={12} />
                         )}
                         {!loading && sortedRows.length === 0 && (
-                            <tr><td colSpan={10} className="text-center py-4 text-theme-text-muted">
+                            <tr><td colSpan={12} className="text-center py-4 text-theme-text-muted">
                                 {loadError
                                     ? 'Nessun dato: la lettura non è riuscita (vedi il messaggio qui sopra).'
                                     : 'Nessun operatore attivo nel periodo selezionato.'}
@@ -533,7 +599,12 @@ export default function PayrollPeriodoView() {
                                     <td className="py-1.5 px-3 text-right text-emerald-400 tabular-nums">{r.pagaOrd > 0 ? eur(r.pagaOrd) : '—'}</td>
                                     <td className="py-1.5 px-3 text-right text-sky-400 tabular-nums">{r.pagaStraord > 0 ? eur(r.pagaStraord) : '—'}</td>
                                     <td className={`py-1.5 px-3 text-right tabular-nums ${r.correzione < 0 ? 'text-rose-400' : r.correzione > 0 ? 'text-emerald-400' : 'text-theme-text-muted'}`}>{r.correzione === 0 ? '—' : eur(r.correzione)}</td>
-                                    <td className="py-1.5 px-3 text-right font-bold tabular-nums text-dr7-gold">{eur(r.totale)}</td>
+                                    <td className="py-1.5 px-3 text-right tabular-nums text-theme-text-primary">{eur(r.totale)}</td>
+                                    <td className="py-1.5 px-3 text-right tabular-nums text-amber-400"
+                                        title={r.accontiRighe.map(a => `${new Date(a.data + 'T00:00:00').toLocaleDateString('it-IT')} · ${eur(a.importo_cents / 100)}${a.causale ? ' · ' + a.causale : ''}`).join('\n')}>
+                                        {r.acconti > 0 ? '-' + eur(r.acconti) : '—'}
+                                    </td>
+                                    <td className="py-1.5 px-3 text-right font-bold tabular-nums text-dr7-gold">{eur(r.netto)}</td>
                                 </tr>
                             )
                         })}
@@ -544,6 +615,10 @@ export default function PayrollPeriodoView() {
             <div className="text-[10px] text-theme-text-muted">
                 Click su una riga per aprire il dettaglio completo dell'operatore (modale con ore per giorno, contratto, calcolatrice).
                 Le ore a recuperare aggiornate nel modale si riflettono qui al refresh.
+                Gli acconti arrivano dalla tab Acconti (per data dell&apos;acconto) e sono gia&apos; scalati dal Netto.
+                {!accontiErrore && accontiNonAbbinati > 0 && (
+                    <> {accontiNonAbbinati} {accontiNonAbbinati === 1 ? 'acconto del periodo non è intestato' : 'acconti del periodo non sono intestati'} a un operatore attivo: {accontiNonAbbinati === 1 ? 'non è stato scalato' : 'non sono stati scalati'} da nessuna busta paga.</>
+                )}
             </div>
 
             {profileOp && (
