@@ -9,6 +9,12 @@
  *
  * L'elenco e' quello delle CASELLE del contratto, non quello della fattura:
  * alla fattura non servono patente e nascita.
+ *
+ * 09/09/2026: l'e-mail e' uscita dall'elenco. Il popup "Dati mancanti" si
+ * apriva su contratti per il resto completi, e l'e-mail sul contratto e' una
+ * casella che puo' restare vuota. Stessa regola nel gestionale, dove sono
+ * usciti anche numero e tipo del documento d'identita': non li chiede nessun
+ * form, quindi erano vuoti su tutte le schede.
  */
 
 export type ClienteContratto = Record<string, unknown> | null | undefined
@@ -52,7 +58,6 @@ export function datiContrattoMancanti(cliente: ClienteContratto): string[] {
         if (!pieno(c.partita_iva) && !pieno(c.codice_fiscale)) mancanti.push('partita_iva')
         if (!pieno(c.sede_legale) && !pieno(c.sede_operativa) && !pieno(c.indirizzo)) mancanti.push('sede_legale')
         if (!pieno(c.telefono)) mancanti.push('telefono')
-        if (!pieno(c.email)) mancanti.push('email')
         return mancanti
     }
 
@@ -67,7 +72,6 @@ export function datiContrattoMancanti(cliente: ClienteContratto): string[] {
     if (!pieno(c.data_nascita)) mancanti.push('data_nascita')
     if (!pieno(c.luogo_nascita)) mancanti.push('luogo_nascita')
     if (!pieno(c.telefono)) mancanti.push('telefono')
-    if (!pieno(c.email)) mancanti.push('email')
     if (!pieno(c.numero_patente) && !pieno(c.patente) && !pieno(c.metadata?.patente?.numero)) mancanti.push('numero_patente')
     if (!pieno(c.emessa_da) && !pieno(c.metadata?.patente?.ente)) mancanti.push('emessa_da')
     if (!pieno(c.data_rilascio_patente) && !pieno(c.metadata?.patente?.rilascio)) mancanti.push('data_rilascio_patente')

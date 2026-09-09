@@ -3159,7 +3159,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     'nome', 'cognome', 'codice_fiscale', 'sesso',
     'indirizzo', 'citta_residenza', 'provincia_residenza', 'codice_postale',
     'data_nascita', 'luogo_nascita',
-    'telefono', 'email',
+    'telefono',
     'numero_patente', 'emessa_da', 'data_rilascio_patente', 'scadenza_patente',
   ]
 
@@ -3260,7 +3260,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
         if (!customer.partita_iva) missing.push('partita_iva')
         if (!customer.telefono) missing.push('telefono')
-        if (!customer.email) missing.push('email')
       }
     } else if (tipoCliente === 'pubblica_amministrazione') {
       // La PA salva l'indirizzo come citta dell'ente (NewClientModal), senza
@@ -3284,9 +3283,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // validazione contratto COMPLETA e chiedeva in loop infinito dati che la
       // fattura non usa (patente, luogo nascita, ecc.).
       if (!forInvoice) {
-      // Telefono e e-mail hanno una casella loro sul contratto.
+      // Telefono ha una casella sua sul contratto.
+      // 09/09/2026: l'e-mail non ferma piu' il contratto. Restava vuota su
+      // meta' delle schede e il popup "Dati mancanti" usciva sempre per un
+      // dato che il contratto stampa vuoto senza conseguenze.
       if (!customer.telefono) missing.push('telefono')
-      if (!customer.email) missing.push('email')
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
       if (!customer.sesso && !customer.metadata?.sesso) missing.push('sesso')
@@ -3364,8 +3365,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         }
       }
 
-      if (!customer.documento_numero) missing.push('documento_numero')
-      if (!customer.documento_tipo) missing.push('documento_tipo')
+      // 09/09/2026: numero e tipo del documento d'identita' NON li chiede
+      // nessun form del gestionale (NewClientModal ha solo i campi del
+      // rappresentante, per le aziende). Erano quindi vuoti su ogni scheda e
+      // il popup "Dati mancanti" si apriva su ogni contratto per due caselle
+      // che nessuno poteva compilare. Restano nel database, ma non bloccano.
       } // end !forInvoice (campi richiesti solo per il CONTRATTO/noleggio)
     }
 
