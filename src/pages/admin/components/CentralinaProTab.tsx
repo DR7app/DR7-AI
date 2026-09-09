@@ -3878,11 +3878,12 @@ function InsuranceList({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Franchigia e scoperto NON stanno piu' qui: si scrivono nella
+                tabella qui sotto, sulla riga dell'opzione, insieme alle altre
+                garanzie. Erano le stesse due caselle scritte due volte. */}
+            <div className="grid grid-cols-2 gap-3">
               <FieldBox label="€ / giorno" value={opt.daily_price} onChange={(v) => patch(opt.id, { daily_price: v })} />
               <FieldBox label="Deposito €" value={opt.mandatory_deposit} onChange={(v) => patch(opt.id, { mandatory_deposit: v })} />
-              <FieldBox label="Franchigia €" value={opt.deductible_fixed} onChange={(v) => patch(opt.id, { deductible_fixed: v })} />
-              <FieldBox label="Scoperto %" value={opt.deductible_percent} onChange={(v) => patch(opt.id, { deductible_percent: v })} />
             </div>
 
             {/* 08/09/2026: franchigie per garanzia + testo Kasko, stampati sul
@@ -3895,6 +3896,7 @@ function InsuranceList({
               kaskoEur={opt.deductible_fixed}
               kaskoPerc={opt.deductible_percent}
               onChange={(franchigie) => patch(opt.id, { franchigie })}
+              onKasko={(campo, v) => patch(opt.id, { [campo]: v })}
             />
           </div>
         ))}
@@ -3970,6 +3972,7 @@ function FranchigieContrattoBox({
   kaskoEur,
   kaskoPerc,
   onChange,
+  onKasko,
 }: {
   value?: FranchigieContratto
   /** Nome dell'opzione: e' quello che il contratto stampa accanto a "Kasko". */
@@ -3977,6 +3980,8 @@ function FranchigieContrattoBox({
   kaskoEur: number | ''
   kaskoPerc: number | ''
   onChange: (v: FranchigieContratto) => void
+  /** L'ultima riga scrive sui campi dell'opzione, non nelle franchigie. */
+  onKasko: (campo: 'deductible_fixed' | 'deductible_percent', v: number | '') => void
 }) {
   const cur = franchigieComplete(value)
   const compilate = VOCI_FRANCHIGIA.filter(v => cur[v.k].eur !== '' || cur[v.k].perc !== '').length
@@ -4011,17 +4016,15 @@ function FranchigieContrattoBox({
                 <NumeroCella value={cur[k].perc} onChange={(v) => onChange({ ...cur, [k]: { ...cur[k], perc: v } })} />
               </Fragment>
             ))}
-            {/* La riga Kasko della tabella esce dai campi qui sopra: si mostra
-                in sola lettura per non far scrivere lo stesso numero due volte.
-                Il nome e' quello dell'opzione, come il contratto lo stampa
-                nella casella accanto alla parola "Kasko". */}
+            {/* L'ultima riga e' l'opzione stessa: si scrive qui come tutte le
+                altre. Il nome e' quello dell'opzione, come il contratto lo
+                stampa nella casella accanto alla parola "Kasko". */}
             <span className="text-[13px] text-theme-text-primary">{nomeOpzione?.trim() || 'Kasko'}</span>
-            <span className="text-[13px] text-right tabular-nums text-theme-text-secondary w-24 px-3 py-2">{kaskoEur === '' ? '—' : kaskoEur}</span>
-            <span className="text-[13px] text-right tabular-nums text-theme-text-secondary w-24 px-3 py-2">{kaskoPerc === '' ? '—' : kaskoPerc}</span>
+            <NumeroCella value={kaskoEur} onChange={(v) => onKasko('deductible_fixed', v)} />
+            <NumeroCella value={kaskoPerc} onChange={(v) => onKasko('deductible_percent', v)} />
           </div>
           <p className="text-[11px] text-theme-text-muted">
-            L'ultima riga prende i campi "Franchigia €" e "Scoperto %" qui sopra: si cambiano li'.
-            Sul contratto, accanto a "Kasko", viene stampato il nome dell'opzione scelta dal cliente.
+            Sul contratto, accanto a &quot;Kasko&quot;, viene stampato il nome dell&apos;opzione scelta dal cliente.
           </p>
         </div>
       )}
