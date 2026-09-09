@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
+import ModificaKaskoModal from '../../../components/ModificaKaskoModal'
+import { getInsuranceOptionById } from '../../../utils/configLookup'
+import { leggiKaskoUnaVolta, modificaAttiva, prezzoKaskoDelGiorno, type KaskoUnaVolta } from '../../../utils/kaskoUnaVolta'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -519,6 +522,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   const isValerio = hasRole('preventivi-admin')
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [kaskoDaModificare, setKaskoDaModificare] = useState(false)
   // Pagination for the list view (10/page, matches the redesign screenshot).
   const [listPage, setListPage] = useState(1)
   const LIST_PAGE_SIZE = 10
@@ -662,6 +666,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     residente_sardegna: true,
     maggiorazione_pct: String(configOverlay.maggiorazionePct),
     insurance_option: '',
+    // Accordo valido solo per questo preventivo (prezzo/franchigie Kasko).
+    kasko_una_volta: null as KaskoUnaVolta | null,
     // Extras
     include_lavaggio: true,
     include_no_cauzione: false,
@@ -1386,7 +1392,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     const listRentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
 
     const selectedIns = insuranceOptions.find(i => i.id === form.insurance_option)
-    const insuranceDailyPrice = selectedIns?.pricePerDay ?? 0
+    const insuranceDailyPrice = prezzoKaskoDelGiorno(
+      selectedIns?.pricePerDay ?? 0,
+      form.insurance_option,
+      form.kasko_una_volta,
+    )
     const insuranceTotal = Math.round(insuranceDailyPrice * rentalDays * 100) / 100
 
     const lavaggioFee = form.include_lavaggio ? proLavaggioFee : 0
@@ -2485,6 +2495,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           // l'id sopravvive, visto che vehicle_id resta NULL.
           asset_id: isAltroBusiness ? (form.vehicle_id || null) : null,
           residente_sardegna: form.residente_sardegna,
+          // Prezzo/franchigie Kasko concordati per questo preventivo: se
+          // l'opzione e' cambiata dopo, l'accordo non vale piu'.
+          kasko_una_volta: modificaAttiva(form.insurance_option, form.kasko_una_volta)
+            ? form.kasko_una_volta
+            : null,
           include_lavaggio: form.include_lavaggio,
           include_no_cauzione: form.include_no_cauzione,
           include_unlimited_km: form.include_unlimited_km,
@@ -2632,6 +2647,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       residente_sardegna: extras.residente_sardegna !== undefined ? !!extras.residente_sardegna : true,
       maggiorazione_pct: String(p.maggiorazione_pct || 0),
       insurance_option: p.insurance_option || '',
+      kasko_una_volta: leggiKaskoUnaVolta((p.extras_detail as Record<string, unknown> | null)?.kasko_una_volta),
       include_lavaggio: !!extras.include_lavaggio || p.lavaggio_fee > 0,
       include_no_cauzione: !!extras.include_no_cauzione || p.no_cauzione_total > 0,
       include_unlimited_km: !!extras.include_unlimited_km || p.unlimited_km_total > 0,
@@ -2685,6 +2701,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       return_date: '',
       return_time: '09:00', // default: pickup 10:30 − 1h30 = 09:00
       driver_tier: 'TIER_2',
+      kasko_una_volta: null,
       residente_sardegna: true,
       maggiorazione_pct: String(configOverlay.maggiorazionePct),
       insurance_option: '',
@@ -3685,6 +3702,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         // (tappe, km, tempo, costo) non si perde alla conversione.
         itinerario: (pExtras.itinerario && typeof pExtras.itinerario === 'object') ? pExtras.itinerario : undefined,
         no_cauzione: (p.no_cauzione_total || 0) > 0,
+        // L'accordo sulla Kasko preso in fase di preventivo segue la
+        // prenotazione: il contratto stampera' quei numeri, non il listino.
+        kasko_una_volta: pExtras.kasko_una_volta || null,
         include_lavaggio: (p.lavaggio_fee || 0) > 0,
         driver_tier: p.driver_tier,
         // 2026-05-18: persist No Cauzione fields so contract gen
@@ -6210,6 +6230,41 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
               )
             })}
           </div>
+          {/* Accordo diverso con questo cliente: vale solo per questo
+              preventivo (e per la prenotazione che ne nasce). */}
+          {form.insurance_option && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setKaskoDaModificare(true)}
+                className="text-[12px] text-dr7-gold hover:underline"
+              >
+                Modifica prezzo e franchigie
+              </button>
+              {modificaAttiva(form.insurance_option, form.kasko_una_volta) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[11px]">
+                  modificata solo per questa volta
+                </span>
+              )}
+            </div>
+          )}
+          {kaskoDaModificare && (() => {
+            const scelta = insuranceOptions.find(i => i.id === form.insurance_option)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const proOpt = rentalConfig ? (getInsuranceOptionById(rentalConfig as any, form.insurance_option) as any) : null
+            return (
+              <ModificaKaskoModal
+                opzioneId={String(form.insurance_option)}
+                opzioneNome={scelta?.label || proOpt?.name || String(form.insurance_option)}
+                prezzoListino={scelta?.pricePerDay ?? proOpt?.daily_price ?? 0}
+                franchigiaListino={proOpt?.deductible_fixed ?? ''}
+                scopertoListino={proOpt?.deductible_percent ?? ''}
+                valore={modificaAttiva(form.insurance_option, form.kasko_una_volta) ? form.kasko_una_volta : null}
+                onClose={() => setKaskoDaModificare(false)}
+                onSalva={(v) => { setForm(prev => ({ ...prev, kasko_una_volta: v })); setKaskoDaModificare(false) }}
+              />
+            )
+          })()}
         </div>
       )}
 
