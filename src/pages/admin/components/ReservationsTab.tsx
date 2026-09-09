@@ -3135,6 +3135,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   // Validate customer data before contract generation
   // Uses save-customer Netlify function to read (bypasses RLS)
+  /**
+   * I campi che il CONTRATTO stampa per una persona fisica. Non e' la stessa
+   * lista della fattura (che vuole solo CF e indirizzo): qui dentro c'e'
+   * tutto quello che finisce nelle caselle del PDF, patente e nascita
+   * comprese. Se manca qualcosa la casella resta bianca.
+   */
+  const CAMPI_CONTRATTO_PERSONA = [
+    'nome', 'cognome', 'codice_fiscale', 'sesso',
+    'indirizzo', 'citta_residenza', 'provincia_residenza', 'codice_postale',
+    'data_nascita', 'luogo_nascita',
+    'telefono', 'email',
+    'numero_patente', 'emessa_da', 'data_rilascio_patente', 'scadenza_patente',
+  ]
+
   async function validateCustomerData(booking: Booking, forInvoice = false): Promise<string[]> {
     const customerId = booking.user_id ||
       booking.booking_details?.customer?.customerId ||
@@ -3199,8 +3213,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
     if (!customer) {
       if (resolvedEmail || resolvedPhone) {
-        logger.log('[validateCustomerData] No customer record found, but booking has contact info. Backend will handle fallback.')
-        return []
+        // Prima si tirava dritto ("il backend ha i fallback"): ma senza scheda
+        // cliente il backend ha solo nome, email e telefono della
+        // prenotazione, e il contratto esce senza codice fiscale, indirizzo,
+        // nascita e patente. Meglio dirlo e farla compilare.
+        logger.warn('[validateCustomerData] Nessuna scheda cliente collegata: il contratto uscirebbe quasi vuoto')
+        return forInvoice
+          ? ['codice_fiscale', 'indirizzo', 'citta_residenza', 'provincia_residenza', 'codice_postale']
+          : CAMPI_CONTRATTO_PERSONA
       }
       console.error('[validateCustomerData] ❌ No customer found by any method')
       throw new Error('Impossibile recuperare i dati del cliente dal database. Verifica che il cliente esista nella tab Clienti.')
@@ -3220,6 +3240,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     const tipoCliente = customer.tipo_cliente || 'persona_fisica'
     if (tipoCliente === 'azienda') {
       if (!customer.sede_legale && !customer.sede_operativa) missing.push('sede_legale')
+      // Il contratto ha una sezione DATI AZIENDALI intera: senza questi campi
+      // resta bianca. Alla fattura invece basta la sede legale.
+      if (!forInvoice) {
+        if (!customer.denominazione && !customer.ragione_sociale) missing.push('denominazione')
+        if (!customer.partita_iva) missing.push('partita_iva')
+        if (!customer.telefono) missing.push('telefono')
+        if (!customer.email) missing.push('email')
+      }
     } else if (tipoCliente === 'pubblica_amministrazione') {
       // La PA salva l'indirizzo come citta dell'ente (NewClientModal), senza
       // CAP ne' provincia: chiederli bloccherebbe allo stesso modo.
@@ -3242,6 +3270,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // validazione contratto COMPLETA e chiedeva in loop infinito dati che la
       // fattura non usa (patente, luogo nascita, ecc.).
       if (!forInvoice) {
+      // Telefono e e-mail hanno una casella loro sul contratto.
+      if (!customer.telefono) missing.push('telefono')
+      if (!customer.email) missing.push('email')
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
       if (!customer.sesso && !customer.metadata?.sesso) missing.push('sesso')
@@ -3556,13 +3587,22 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           datiCliente = { id: idCliente }
         }
       } else {
+        // Nessuna scheda collegata: non c'e' niente da "completare", c'e' da
+        // crearla. Si apre la scheda cliente intera, gia' con quel poco che
+        // la prenotazione sa; alla creazione la prenotazione si aggancia al
+        // cliente nuovo e il contratto riparte da solo.
         const parti = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
-        datiCliente = {
+        setCustomerToEdit({
           nome: parti[0] || '',
           cognome: parti.slice(1).join(' ') || '',
           email: booking.customer_email || '',
           telefono: booking.customer_phone || '',
-        }
+        })
+        setValidationContext('contract')
+        setCurrentValidationBooking(booking)
+        setEditModalOpen(true)
+        toast('Questa prenotazione non ha una scheda cliente: compilala e il contratto riparte', { duration: 8000 })
+        return
       }
       setMissingFields(missing)
       setTempCustomerData(datiCliente)
