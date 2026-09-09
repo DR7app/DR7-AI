@@ -1966,6 +1966,16 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 if (field) {
                     const sanitizedValue = sanitizeForPDF(value)
                     field.setFontSize(7)
+                    // Alcuni campi tengono il proprio aspetto sul WIDGET e non
+                    // sul campo: li' setFontSize non arriva e il testo resta a
+                    // 12pt, esce dalla casella e viene tagliato. Era il caso di
+                    // "Insurance", il nome della Kasko accanto alla riga della
+                    // tabella franchigie.
+                    try {
+                        for (const w of field.acroField.getWidgets()) {
+                            w.dict.set(PDFName.of('DA'), PDFString.of('/Helvetica 7 Tf 0 g'))
+                        }
+                    } catch { /* il campo tiene gia' l'aspetto sul campo */ }
                     field.setText(sanitizedValue)
                     filledFields++
 
