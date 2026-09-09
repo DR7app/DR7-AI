@@ -168,6 +168,69 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 const INVOICETRONIC_API_KEY = process.env.INVOICETRONIC_API_KEY || ''
 const INVOICETRONIC_BASE_URL = process.env.INVOICETRONIC_BASE_URL || 'https://api.invoicetronic.com/v1'
 
+/**
+ * L'invio del PDF su WhatsApp si PRENOTA, non si ripete.
+ *
+ * 2026-09-09. Sulla stessa prenotazione arrivano piu' chiamate a questa
+ * function: la pagina di successo del sito (Sito/pages/PaymentSuccessPage.tsx),
+ * il callback Nexi — che Nexi ripete finche' non riceve un 200 —,
+ * post-booking-webhook, il cron di riconciliazione e il "segna pagato"
+ * dell'operatore. La FATTURA resta una sola (indice unico + ramo
+ * `existingInvoice`), ma il blocco finale che genera il PDF e lo manda su
+ * WhatsApp veniva eseguito da TUTTE: una riga in Fatture, tanti messaggi al
+ * cliente. L'unico freno che c'era — la fattura gia' uscita verso SDI —
+ * copre solo chi ha codice fiscale o P.IVA: un privato senza codice fiscale
+ * resta 'draft' per sempre e riceveva il PDF ad ogni chiamata.
+ *
+ * Prenotare = scrivere `pdf_whatsapp_inviato_at` SOLO se e' ancora NULL.
+ * Chi si prende la riga manda, gli altri saltano. L'idempotenza sta qui
+ * dentro, non nei chiamanti, che sono troppi per fidarsi.
+ *
+ * Se la colonna non esiste ancora (migrazione 20260909_fattura_whatsapp_una_volta
+ * non passata) si manda comunque: meglio un doppione che una fattura che non
+ * arriva mai al cliente.
+ */
+async function riservaInvioWhatsappFattura(invoiceId: string): Promise<boolean> {
+    try {
+        const { data, error } = await supabase
+            .from('fatture')
+            .update({ pdf_whatsapp_inviato_at: new Date().toISOString() })
+            .eq('id', invoiceId)
+            .is('pdf_whatsapp_inviato_at', null)
+            .select('id')
+
+        if (error) {
+            if (String((error as any).code) === '42703') {
+                console.warn('[Invoice] colonna pdf_whatsapp_inviato_at assente — invio senza protezione dai doppioni')
+                return true
+            }
+            console.error('[Invoice] Prenotazione invio WhatsApp fallita:', error.message)
+            return true
+        }
+
+        if (!data || data.length === 0) {
+            console.log(`[Invoice] PDF gia' inviato su WhatsApp per la fattura ${invoiceId} — non lo rimando`)
+            return false
+        }
+        return true
+    } catch (err: any) {
+        console.error('[Invoice] Prenotazione invio WhatsApp, errore inatteso:', err?.message)
+        return true
+    }
+}
+
+/**
+ * Invio fallito: si rilascia la prenotazione, altrimenti la fattura resterebbe
+ * marcata come inviata e il cliente non riceverebbe mai il PDF.
+ */
+async function rilasciaInvioWhatsappFattura(invoiceId: string): Promise<void> {
+    try {
+        await supabase.from('fatture').update({ pdf_whatsapp_inviato_at: null }).eq('id', invoiceId)
+    } catch {
+        // Il rilascio e' un di piu': se fallisce si perde solo un rinvio.
+    }
+}
+
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return {
@@ -1244,29 +1307,41 @@ export const handler: Handler = async (event) => {
 
                 // Send PDF via WhatsApp to customer
                 const customerPhone = invoice.customer_phone || resolvedPhone || ''
-                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    // Normalize phone: strip +, spaces, dashes, parens → remove leading 00 → if 10 digits prepend 39
-                    let cleanPhone = customerPhone.replace(/\D/g, '')
-                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
-                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+                // Una sola volta per fattura, chiunque sia il chiamante.
+                const puoInviare = customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN
+                    ? await riservaInvioWhatsappFattura(invoice.id)
+                    : false
+                if (puoInviare) {
+                    try {
+                        // Normalize phone: strip +, spaces, dashes, parens → remove leading 00 → if 10 digits prepend 39
+                        let cleanPhone = customerPhone.replace(/\D/g, '')
+                        if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                        if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
-                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
-                    const waResponse = await fetch(greenApiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chatId: `${cleanPhone}@c.us`,
-                            urlFile: pdfUrl,
-                            fileName: `Fattura_${invoice.numero_fattura}.pdf`,
-                            caption: (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                        const waResponse = await fetch(greenApiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chatId: `${cleanPhone}@c.us`,
+                                urlFile: pdfUrl,
+                                fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                                caption: (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                            })
                         })
-                    })
 
-                    const waResult = await waResponse.json()
-                    if (waResponse.ok && !waResult.error) {
-                        console.log('[Invoice] Fattura PDF sent via WhatsApp:', waResult.idMessage)
-                    } else {
-                        console.error('[Invoice] WhatsApp send failed:', waResult)
+                        const waResult = await waResponse.json()
+                        if (waResponse.ok && !waResult.error) {
+                            console.log('[Invoice] Fattura PDF sent via WhatsApp:', waResult.idMessage)
+                        } else {
+                            console.error('[Invoice] WhatsApp send failed:', waResult)
+                            await rilasciaInvioWhatsappFattura(invoice.id)
+                        }
+                    } catch (waErr: any) {
+                        // Senza il rilascio la fattura resterebbe marcata come
+                        // inviata e nessuna chiamata successiva la manderebbe.
+                        console.error('[Invoice] WhatsApp send error:', waErr?.message)
+                        await rilasciaInvioWhatsappFattura(invoice.id)
                     }
                 } else {
                     if (!customerPhone) console.log('[Invoice] No customer phone — skipping WhatsApp PDF send')
@@ -1788,6 +1863,7 @@ async function sendWalletFatturaPdfAndWhatsApp(
     invoice: any,
     customerData: any
 ): Promise<string | null> {
+    let prenotato = false
     try {
         const pdfBytes = await generateInvoicePDF(invoice)
         const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
@@ -1818,6 +1894,14 @@ async function sendWalletFatturaPdfAndWhatsApp(
             return publicUrl
         }
 
+        // Stessa protezione del ramo prenotazione: la pagina di successo del
+        // sito e il callback Nexi chiamano ENTRAMBI, e il backfill qui sopra
+        // rientra da capo quando `pdf_url` manca.
+        if (!(await riservaInvioWhatsappFattura(invoice.id))) {
+            return publicUrl
+        }
+        prenotato = true
+
         let cleanPhone = String(customerPhone).replace(/\D/g, '')
         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
@@ -1839,10 +1923,14 @@ async function sendWalletFatturaPdfAndWhatsApp(
             console.log('[Wallet Fattura PDF] Sent via WhatsApp:', waResult.idMessage)
         } else {
             console.error('[Wallet Fattura PDF] WhatsApp send failed:', waResult)
+            await rilasciaInvioWhatsappFattura(invoice.id)
         }
         return publicUrl
     } catch (err: any) {
         console.error('[Wallet Fattura PDF] Helper failed (non-blocking):', err.message)
+        // Se l'errore e' arrivato dopo la prenotazione dell'invio va rilasciata,
+        // altrimenti il PDF non partirebbe piu' per nessun tentativo.
+        if (prenotato && invoice?.id) await rilasciaInvioWhatsappFattura(invoice.id)
         return null
     }
 }
