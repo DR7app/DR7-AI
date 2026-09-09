@@ -88,6 +88,8 @@ import { getProvinciaByCity } from '../../../data/sardegnaProvince'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import ModificaKaskoModal from '../../../components/ModificaKaskoModal'
+import { leggiKaskoUnaVolta, modificaAttiva, prezzoKaskoDelGiorno, type KaskoUnaVolta } from '../../../utils/kaskoUnaVolta'
 import UscitaStraordinariaModal from './UscitaStraordinariaModal'
 import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlottaAuto, luogoUscita } from '../../../utils/uscitaStraordinaria'
 import NumeroTelefono from '../../../components/NumeroTelefono'
@@ -948,6 +950,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // La prenotazione su cui si e' fermato il contratto per dati mancanti:
   // serve al bottone "Genera comunque" del popup.
   const [contrattoDaGenerareComunque, setContrattoDaGenerareComunque] = useState<{ booking: Booking; opts?: { reconduct?: boolean; resign?: boolean } } | null>(null)
+  const [kaskoDaModificare, setKaskoDaModificare] = useState(false)
 
 
   // Delete Confirmation Modal State
@@ -1098,6 +1101,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     garante_3_email: '',
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
+    // Prezzo e franchigie concordati per QUESTA prenotazione: non toccano il
+    // listino di Centralina Pro. Vedi utils/kaskoUnaVolta.ts.
+    kasko_una_volta: null as KaskoUnaVolta | null,
     deposit: '0',
     deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
     // Canonical id of the Centralina Pro option chosen by the admin. Drives
@@ -1584,9 +1590,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // Fallback all-tier: se l'id selezionato non e' nella lista della
               // fascia di default, recuperiamo comunque il prezzo dell'opzione
               // dal config (evita assicurazione = €0 per mismatch di fascia).
-              const insurancePerDay = selectedKasko?.pricePerDay
-                ?? (rentalConfig ? getInsuranceOptionById(rentalConfig, prev.insurance_option)?.daily_price : undefined)
-                ?? 0
+              const insurancePerDay = prezzoKaskoDelGiorno(
+                selectedKasko?.pricePerDay
+                  ?? (rentalConfig ? getInsuranceOptionById(rentalConfig, prev.insurance_option)?.daily_price : undefined)
+                  ?? 0,
+                prev.insurance_option,
+                prev.kasko_una_volta,
+              )
               const insuranceTotal = insurancePerDay * data.rentalDays
               // Stesso comportamento di PreventiviTab: il fee tipato
               // dall'admin entra SEMPRE nel totale (niente gate su
@@ -1768,9 +1778,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       // Fallback all-tier (vedi nota path auto_apply): evita assicurazione €0
       // quando l'id selezionato non e' nella lista della fascia di default.
-      const insurancePerDay = selectedKasko?.pricePerDay
-        ?? (rentalConfig ? getInsuranceOptionById(rentalConfig, formData.insurance_option)?.daily_price : undefined)
-        ?? 0
+      const insurancePerDay = prezzoKaskoDelGiorno(
+        selectedKasko?.pricePerDay
+          ?? (rentalConfig ? getInsuranceOptionById(rentalConfig, formData.insurance_option)?.daily_price : undefined)
+          ?? 0,
+        formData.insurance_option,
+        formData.kasko_una_volta,
+      )
       const insuranceTotal = insurancePerDay * revenueSuggestion.rentalDays
       // Stesso comportamento di PreventiviTab — il fee viene contato
       // ogni volta che ha un valore > 0, senza dipendere da checkbox
@@ -4563,6 +4577,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       insurance_option: (booking as { insurance_option?: string }).insurance_option
         || booking.booking_details?.insuranceOption
         || 'KASKO_BASE',
+      kasko_una_volta: leggiKaskoUnaVolta((booking.booking_details as { kasko_una_volta?: unknown } | undefined)?.kasko_una_volta),
       // Cauzione amount + status — read in TWO shapes:
       //  • admin-shape (created via this form): booking_details.deposit + booking_details.deposit_status
       //  • website-shape (CarBookingWizard): top-level booking.deposit_amount
@@ -6900,6 +6915,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           driver_license_years: customerTier?.licenseYears || null,
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
+          // Accordo valido solo per questa prenotazione (prezzo/franchigie).
+          // Se nel frattempo si e' cambiata opzione, l'accordo non vale piu'.
+          kasko_una_volta: modificaAttiva(formData.insurance_option, formData.kasko_una_volta)
+            ? formData.kasko_una_volta
+            : null,
           deposit: formData.deposit,
           deposit_status: formData.deposit_status,
           // 2026-05-18: persist depositOption + noDepositSurcharge for contract gen
@@ -7547,6 +7567,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               dropoff_date: returnDateTime,
               pickup_location: pickupLocationLabel,
               insurance_option: 'KASKO_BASE',
+              kasko_una_volta: null,
               price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
               payment_status: paymentStatus,
               payment_method: formData.payment_method || '',
@@ -8498,6 +8519,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       second_driver_license_expiry: '',
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
+      kasko_una_volta: null,
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
       deposit_option_id: '',
@@ -10504,6 +10526,25 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       )
                     })()}
                   </select>
+                  {/* Accordo diverso con QUESTO cliente: prezzo e franchigie
+                      valgono solo per questa prenotazione, il listino di
+                      Centralina Pro non si tocca. */}
+                  {formData.insurance_option && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setKaskoDaModificare(true)}
+                        className="text-[12px] text-dr7-gold hover:underline"
+                      >
+                        Modifica prezzo e franchigie
+                      </button>
+                      {modificaAttiva(formData.insurance_option, formData.kasko_una_volta) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[11px]">
+                          modificata solo per questa volta
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {formData.insurance_option === 'RCA' && (
                     <p className="text-xs text-yellow-400 mt-1">
                       ⚠️ Senza Kasko: cauzione obbligatoria €{customerTier?.tier === 'TIER_2' ? '10.000' : '15.000'}
@@ -12532,6 +12573,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             </div>
           </div>
         )}
+
+        {/* Kasko modificata per questa volta: prezzo e franchigie concordati */}
+        {kaskoDaModificare && (() => {
+          const veicolo = vehicles.find(v => v.id === formData.vehicle_id)
+          const opzioni = getInsuranceOptions(veicolo, customerTier?.tier, configOverlay, rentalConfig)
+          const scelta = opzioni.find(o => o.id === formData.insurance_option)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const proOpt = rentalConfig ? (getInsuranceOptionById(rentalConfig as any, formData.insurance_option) as any) : null
+          return (
+            <ModificaKaskoModal
+              opzioneId={String(formData.insurance_option)}
+              opzioneNome={scelta?.label || proOpt?.name || String(formData.insurance_option)}
+              prezzoListino={scelta?.pricePerDay ?? proOpt?.daily_price ?? 0}
+              franchigiaListino={proOpt?.deductible_fixed ?? ''}
+              scopertoListino={proOpt?.deductible_percent ?? ''}
+              valore={modificaAttiva(formData.insurance_option, formData.kasko_una_volta) ? formData.kasko_una_volta : null}
+              onClose={() => setKaskoDaModificare(false)}
+              onSalva={(v) => { setFormData(prev => ({ ...prev, kasko_una_volta: v })); setKaskoDaModificare(false) }}
+            />
+          )
+        })()}
 
         {/* Missing Fields Modal - Shows only the missing fields */}
         {showMissingDataModal && tempCustomerData && (tempCustomerData.id || currentValidationBooking?.user_id) && (

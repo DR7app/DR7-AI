@@ -1451,18 +1451,47 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             const v = voceFranchigia((fr as Record<string, unknown>)[k])
             return { eur: numeroContratto(v.eur), perc: numeroContratto(v.perc) }
         }
+        // Accordo preso con QUESTO cliente, valido solo per questa
+        // prenotazione (bottone "Modifica" accanto alla Kasko): sovrascrive i
+        // numeri di Centralina senza toccarli. Vale solo se e' della stessa
+        // opzione scelta adesso: un prezzo pattuito sulla Kasko DR7 non vale
+        // per la Kasko Base.
+        const kaskoUnaVolta = (() => {
+            const raw = (booking.booking_details as { kasko_una_volta?: unknown } | undefined)?.kasko_una_volta
+            if (!raw || typeof raw !== 'object') return null
+            const k = raw as Record<string, unknown>
+            const stessaOpzione = String(k.opzione_id || '') === String(insuranceOptionId || '')
+            return stessaOpzione ? k : null
+        })()
+        const pieno = (v: unknown) => v !== undefined && v !== null && String(v).trim() !== ''
+        const rigaConAccordo = (chiave: string) => {
+            const base = rigaFranchigia(chiave)
+            const acc = kaskoUnaVolta?.[chiave] as { eur?: unknown; perc?: unknown } | undefined
+            if (!acc) return base
+            return {
+                eur: pieno(acc.eur) ? numeroContratto(acc.eur) : base.eur,
+                perc: pieno(acc.perc) ? numeroContratto(acc.perc) : base.perc,
+            }
+        }
         const franchigieContratto = {
-            incendio: rigaFranchigia('incendio'),
-            furto: rigaFranchigia('furto'),
-            eventi_naturali: rigaFranchigia('eventi_naturali'),
-            eventi_sociopolitici: rigaFranchigia('eventi_sociopolitici'),
-            atti_vandalici: rigaFranchigia('atti_vandalici'),
+            incendio: rigaConAccordo('incendio'),
+            furto: rigaConAccordo('furto'),
+            eventi_naturali: rigaConAccordo('eventi_naturali'),
+            eventi_sociopolitici: rigaConAccordo('eventi_sociopolitici'),
+            atti_vandalici: rigaConAccordo('atti_vandalici'),
             // La riga Kasko sono i campi Franchigia €/Scoperto % dell'opzione
             // scelta: lo stesso numero non si scrive due volte in Centralina.
             kasko: {
-                eur: numeroContratto((opzionePro as { deductible_fixed?: unknown } | null)?.deductible_fixed),
-                perc: numeroContratto((opzionePro as { deductible_percent?: unknown } | null)?.deductible_percent),
+                eur: pieno(kaskoUnaVolta?.franchigia_eur)
+                    ? numeroContratto(kaskoUnaVolta?.franchigia_eur)
+                    : numeroContratto((opzionePro as { deductible_fixed?: unknown } | null)?.deductible_fixed),
+                perc: pieno(kaskoUnaVolta?.scoperto_perc)
+                    ? numeroContratto(kaskoUnaVolta?.scoperto_perc)
+                    : numeroContratto((opzionePro as { deductible_percent?: unknown } | null)?.deductible_percent),
             },
+        }
+        if (kaskoUnaVolta) {
+            console.log('[generate-contract] Kasko modificata per questa prenotazione:', JSON.stringify(franchigieContratto))
         }
 
         // 08/09/2026 — Tabella "PENALI E ADDEBITI": ogni penale di Centralina
