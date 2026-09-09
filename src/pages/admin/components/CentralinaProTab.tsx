@@ -3176,7 +3176,6 @@ function diffInsuranceList(
       if (a.eur !== b.eur) out.push(`${prefix} / ${o.name}: ${label} franchigia ${a.eur === '' ? '—' : a.eur} → ${b.eur === '' ? '—' : b.eur}`)
       if (a.perc !== b.perc) out.push(`${prefix} / ${o.name}: ${label} scoperto ${a.perc === '' ? '—' : a.perc} → ${b.perc === '' ? '—' : b.perc}`)
     })
-    if ((prev.kasko_testo ?? '') !== (o.kasko_testo ?? '')) out.push(`${prefix} / ${o.name}: testo Kasko del contratto aggiornato`)
   })
 }
 
@@ -3483,7 +3482,6 @@ type InsuranceOption = {
   /** 08/09/2026: franchigie per garanzia, stampate sul contratto. */
   franchigie?: FranchigieContratto
   /** Testo libero della Kasko per il contratto (ogni Kasko ha il suo). */
-  kasko_testo?: string
   // 2026-05-15: ON/OFF toggle. When false l'opzione non appare in nuove
   // prenotazioni / preventivi (admin + website). Default true per
   // backwards compat (entries seedate prima del flag = sempre attive).
@@ -3716,11 +3714,9 @@ function InsuranceList({
                 questa categoria e questa fascia. */}
             <FranchigieContrattoBox
               value={opt.franchigie}
-              testo={opt.kasko_testo}
               kaskoEur={opt.deductible_fixed}
               kaskoPerc={opt.deductible_percent}
               onChange={(franchigie) => patch(opt.id, { franchigie })}
-              onTesto={(kasko_testo) => patch(opt.id, { kasko_testo })}
             />
           </div>
         ))}
@@ -3792,18 +3788,14 @@ function franchigieComplete(raw: unknown): FranchigieContratto {
  */
 function FranchigieContrattoBox({
   value,
-  testo,
   kaskoEur,
   kaskoPerc,
   onChange,
-  onTesto,
 }: {
   value?: FranchigieContratto
-  testo?: string
   kaskoEur: number | ''
   kaskoPerc: number | ''
   onChange: (v: FranchigieContratto) => void
-  onTesto: (v: string) => void
 }) {
   const cur = franchigieComplete(value)
   const compilate = VOCI_FRANCHIGIA.filter(v => cur[v.k].eur !== '' || cur[v.k].perc !== '').length
@@ -3847,18 +3839,6 @@ function FranchigieContrattoBox({
           <p className="text-[11px] text-theme-text-muted">
             La riga Kasko prende i campi "Franchigia €" e "Scoperto %" qui sopra: si cambiano li'.
           </p>
-          <label className="block pt-1">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
-              Kasko — testo del contratto (facoltativo)
-            </span>
-            <textarea
-              value={testo ?? ''}
-              onChange={(e) => onTesto(e.target.value)}
-              rows={2}
-              placeholder="Solo se il contratto ha una casella di testo per la Kasko oltre alla tabella."
-              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-            />
-          </label>
         </div>
       )}
     </div>

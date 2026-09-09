@@ -1330,7 +1330,6 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             id?: string
             name?: string
             franchigie?: Record<string, number | string | null>
-            kasko_testo?: string
         }
         // TIER_2 = Fascia A (esperto), TIER_1 = Fascia B (giovane/patente recente).
         const driverTier: string = booking.booking_details?.driver_tier || ''
@@ -1432,7 +1431,6 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 perc: numeroContratto((opzionePro as { deductible_percent?: unknown } | null)?.deductible_percent),
             },
         }
-        const kaskoTestoContratto = String(opzionePro?.kasko_testo || '')
 
         // 08/09/2026 — Tabella "PENALI E ADDEBITI": ogni penale di Centralina
         // Pro > Danni & Penali puo' dichiarare la casella del contratto che
@@ -1652,7 +1650,6 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Assicurazioni, per categoria e per fascia). Campo assente nel
             // PDF = riga saltata senza errore.
             'KaskoNome': insuranceLabel,
-            'KaskoTesto': kaskoTestoContratto,
             'FranchigiaIncendio': franchigieContratto.incendio.eur,
             'ScopertoIncendio': franchigieContratto.incendio.perc,
             'FranchigiaFurto': franchigieContratto.furto.eur,

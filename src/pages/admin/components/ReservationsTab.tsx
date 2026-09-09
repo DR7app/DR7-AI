@@ -945,6 +945,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [tempCustomerData, setTempCustomerData] = useState<any>(null)
   const [currentValidationBooking, setCurrentValidationBooking] = useState<Booking | null>(null)
   const [validationContext, setValidationContext] = useState<'contract' | 'invoice' | 'booking'>('contract')
+  // La prenotazione su cui si e' fermato il contratto per dati mancanti:
+  // serve al bottone "Genera comunque" del popup.
+  const [contrattoDaGenerareComunque, setContrattoDaGenerareComunque] = useState<{ booking: Booking; opts?: { reconduct?: boolean; resign?: boolean } } | null>(null)
 
 
   // Delete Confirmation Modal State
@@ -3493,7 +3496,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // riconduce il contratto (ristampa la firma sulle nuove date + invio WhatsApp del
   // firmato) invece di invalidarla. Ritorna { reconducted } così il chiamante sa se
   // deve ancora mandare il link di firma. Vedi handleConfirmExtend / handleResendContract.
-  async function handleGenerateContract(booking: Booking, auto?: boolean, opts?: { reconduct?: boolean; resign?: boolean }) {
+  async function handleGenerateContract(booking: Booking, auto?: boolean, opts?: { reconduct?: boolean; resign?: boolean; ignoraDatiMancanti?: boolean }) {
     logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
@@ -3531,11 +3534,43 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       return
     }
 
-    if (missing.length > 0) {
-      logger.warn('⚠️ Missing fields for contract:', missing)
-      // Don't block — generate-contract backend has extensive fallbacks
-      // Just log it, contract will be generated with available data
-      logger.log('[handleGenerateContract] Proceeding despite missing fields — backend handles fallbacks')
+    if (missing.length > 0 && !opts?.ignoraDatiMancanti) {
+      logger.warn('Campi mancanti per il contratto:', missing)
+      // Prima si andava avanti in silenzio e il PDF usciva con le caselle
+      // vuote: nessuno se ne accorgeva finche' il cliente non aveva in mano
+      // un contratto a meta'. Ora si dice cosa manca e lo si completa qui,
+      // sulla scheda del cliente. Non e' un blocco: "Genera comunque" resta.
+      const idCliente = booking.user_id
+        || booking.booking_details?.customer?.customerId
+        || booking.booking_details?.customer?.id
+        || booking.booking_details?.customer_id
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let datiCliente: any = {}
+      if (idCliente) {
+        try {
+          const resp = await authFetch(`/.netlify/functions/get-customer?id=${idCliente}`)
+          const result = resp.ok ? await resp.json() : null
+          datiCliente = result?.customer || { id: idCliente }
+        } catch (e) {
+          console.error('[handleGenerateContract] get-customer error:', e)
+          datiCliente = { id: idCliente }
+        }
+      } else {
+        const parti = (booking.customer_name || booking.booking_details?.customer?.fullName || '').split(' ')
+        datiCliente = {
+          nome: parti[0] || '',
+          cognome: parti.slice(1).join(' ') || '',
+          email: booking.customer_email || '',
+          telefono: booking.customer_phone || '',
+        }
+      }
+      setMissingFields(missing)
+      setTempCustomerData(datiCliente)
+      setCurrentValidationBooking(booking)
+      setValidationContext('contract')
+      setContrattoDaGenerareComunque({ booking, opts })
+      setShowMissingDataModal(true)
+      return
     }
 
     setGeneratingContract(true)
@@ -3907,6 +3942,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       setTempCustomerData(customerData)
       setCurrentValidationBooking(booking)
       setValidationContext('invoice')
+      // Il "Genera comunque" e' del contratto: qui non deve comparire.
+      setContrattoDaGenerareComunque(null)
       setShowMissingDataModal(true)
       return
     }
@@ -12434,7 +12471,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             customerId={tempCustomerData.id || currentValidationBooking?.user_id}
             customerData={tempCustomerData}
             missingFields={missingFields}
-            onClose={() => setShowMissingDataModal(false)}
+            contesto={validationContext === 'contract' ? 'contratto' : validationContext === 'invoice' ? 'fattura' : 'prenotazione'}
+            onProsegui={contrattoDaGenerareComunque ? () => {
+              const richiesta = contrattoDaGenerareComunque
+              setShowMissingDataModal(false)
+              setContrattoDaGenerareComunque(null)
+              handleGenerateContract(richiesta.booking, true, { ...(richiesta.opts || {}), ignoraDatiMancanti: true })
+            } : undefined}
+            onClose={() => { setShowMissingDataModal(false); setContrattoDaGenerareComunque(null) }}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onSave={async (updatedData: any) => {
               try {
@@ -12452,6 +12496,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 // Reload data to refresh customer list
                 await loadData()
                 setShowMissingDataModal(false)
+                setContrattoDaGenerareComunque(null)
 
                 // If in booking context, automatically continue with booking submission
                 if (validationContext === 'booking') {

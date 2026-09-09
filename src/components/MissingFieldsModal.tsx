@@ -14,6 +14,15 @@ interface MissingFieldsModalProps {
     missingFields: string[]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSave: (updatedData: any) => void
+    /** Cosa si sta cercando di fare: cambia solo il sottotitolo. */
+    contesto?: 'contratto' | 'fattura' | 'prenotazione'
+    /**
+     * Uscita di servizio: prosegue senza compilare. Il gestionale non
+     * blocca mai per davvero (le caselle scoperte restano vuote sul PDF),
+     * ma prima di lasciar passare deve almeno dire cosa manca.
+     * Senza questa prop il bottone non compare.
+     */
+    onProsegui?: () => void
 }
 
 // Field labels in Italian
@@ -52,7 +61,9 @@ export default function MissingFieldsModal({
     customerId,
     customerData,
     missingFields,
-    onSave
+    onSave,
+    contesto,
+    onProsegui
 }: MissingFieldsModalProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [formData, setFormData] = useState<Record<string, any>>({})
@@ -307,9 +318,13 @@ export default function MissingFieldsModal({
                 {/* Header */}
                 <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center z-10">
                     <div>
-                        <h2 className="text-2xl font-bold text-theme-text-primary">Completa Dati Cliente</h2>
+                        <h2 className="text-2xl font-bold text-theme-text-primary">Dati mancanti — completa la scheda</h2>
                         <p className="text-sm text-theme-text-muted mt-1">
-                            Compila i campi mancanti per continuare
+                            {contesto === 'contratto'
+                                ? 'Senza questi dati il contratto esce con le caselle vuote'
+                                : contesto === 'fattura'
+                                    ? 'Servono per emettere la fattura'
+                                    : 'Compila i campi mancanti per continuare'}
                         </p>
                     </div>
                     <button
@@ -324,7 +339,8 @@ export default function MissingFieldsModal({
                 <div className="p-6">
                     <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
                         <p className="text-blue-300 text-sm">
-                            ℹ️ Sono richiesti {missingFields.length} campi per completare il profilo del cliente
+                            Mancano {missingFields.length} camp{missingFields.length === 1 ? 'o' : 'i'} nella scheda del cliente.
+                            Quello che scrivi qui viene salvato sulla scheda, non solo su questo documento.
                         </p>
                     </div>
 
@@ -342,6 +358,16 @@ export default function MissingFieldsModal({
                     >
                         Annulla
                     </button>
+                    {onProsegui && (
+                        <button
+                            onClick={onProsegui}
+                            disabled={isSaving}
+                            className="px-6 py-2.5 border border-amber-500/40 text-amber-500 rounded-full hover:bg-amber-500/10 transition-colors font-medium disabled:opacity-50"
+                            title="Il documento esce con le caselle mancanti vuote"
+                        >
+                            Genera comunque
+                        </button>
+                    )}
                     <button
                         onClick={handleSave}
                         disabled={isSaving}
