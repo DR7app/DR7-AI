@@ -1940,6 +1940,21 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         }
         const skippedAbsentFields: string[] = []
 
+        // "Indirizzo + CAP" e' UNA casella sola per i garanti: se il modello
+        // non ha il campo del CAP, il CAP finisce in coda all'indirizzo
+        // invece di perdersi. Se un giorno la casella esistera', questa
+        // riga non fa niente e il CAP va al suo posto.
+        {
+            const mappa = dataMap as unknown as Record<string, string>
+            for (let n = 1; n <= 3; n++) {
+                const kCap = `garante_${n}_cap`
+                const kInd = `garante_${n}_indirizzo`
+                if (!existingFieldNames.has(kCap) && mappa[kCap] && mappa[kInd]) {
+                    mappa[kInd] = `${mappa[kInd]} ${mappa[kCap]}`.trim()
+                }
+            }
+        }
+
         let filledFields = 0
         for (const [key, value] of Object.entries(dataMap)) {
             if (!existingFieldNames.has(key)) {
