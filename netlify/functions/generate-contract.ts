@@ -4,6 +4,7 @@ import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString,
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 import { loadBusinessConfig, businessRowForServiceType } from './utils/businessConfig'
+import { datiContrattoMancanti, elencoLeggibile } from './utils/datiContrattoMancanti'
 import { createHash } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -425,7 +426,12 @@ export const handler: Handler = async (event) => {
         // configurazione Contratto & Modifiche, impongono la RIFIRMA. In quel
         // caso il contratto vecchio non vale piu' per NESSUNO dei firmatari —
         // vedi il blocco 8a-bis.
-        const { bookingId, reconduct, motivo, resign } = JSON.parse(event.body || '{}')
+        // `verificaDati`: chi chiama dal gestionale chiede di NON stampare un
+        // contratto con le caselle vuote — si torna l'elenco di cosa manca e
+        // il tab apre la scheda cliente. Le generazioni automatiche (webhook,
+        // pagamento) non lo passano: li' un contratto incompleto e' comunque
+        // meglio di nessun contratto.
+        const { bookingId, reconduct, motivo, resign, verificaDati } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing bookingId' }) }
@@ -669,6 +675,27 @@ export const handler: Handler = async (event) => {
         const isAzienda = customer?.tipo_cliente === 'azienda' || customer?.tipo_cliente === 'pubblica_amministrazione'
 
         console.log('[generate-contract] Resolved contract data:', { clientName, clientAddress, clientVat, driverLicense })
+
+        // ─── Dati mancanti ────────────────────────────────────────────────
+        // Il controllo sta QUI e non nei tab: il contratto si genera da
+        // Prenotazioni, da Contratti ("Rigenera"), dai Preventivi accettati e
+        // dal salvataggio della prenotazione, e ognuno se n'era dimenticato
+        // almeno una volta. Un punto solo, quello che stampa.
+        const campiMancanti = datiContrattoMancanti(customer)
+        if (campiMancanti.length > 0) {
+            console.warn(`[generate-contract] Scheda cliente incompleta (${campiMancanti.length}):`, campiMancanti.join(', '))
+            if (verificaDati) {
+                return {
+                    statusCode: 422,
+                    body: JSON.stringify({
+                        error: `Dati mancanti sulla scheda cliente: ${elencoLeggibile(campiMancanti)}`,
+                        datiMancanti: campiMancanti,
+                        customerId: customer?.id || null,
+                        customerName: clientName || booking.customer_name || '',
+                    }),
+                }
+            }
+        }
 
         // Vehicle Data Prep
         const vehicleName = vehicleData?.display_name || booking.vehicle_name || ''

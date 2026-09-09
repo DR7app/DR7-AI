@@ -10,6 +10,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import { useSelezioneMultipla } from '../../../utils/selezioneMultipla'
 import { BarraSelezioneMultipla, CasellaSelezione } from '../../../components/SelezioneMultipla'
 import { romeIsoFromParts } from '../../../utils/timezoneUtils'
@@ -170,6 +171,45 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   const [contracts, setContracts] = useStatoTab<Contract[]>(`contratti:${serviceType || 'rental'}`, [])
   const [loading, setLoading] = useState(() => !statoPronto(`contratti:${serviceType || 'rental'}`))
   const [showForm, setShowForm] = useState(false)
+  // Scheda cliente incompleta: il server rifiuta di stampare e dice cosa
+  // manca, qui si apre il popup per completarla e si riprova.
+  const [datiMancanti, setDatiMancanti] = useState<{ bookingId: string; campi: string[]; cliente: Record<string, unknown> } | null>(null)
+
+  /** Apre il popup dei campi mancanti sulla scheda del cliente. */
+  async function apriDatiMancanti(bookingId: string, campi: string[], customerId?: string | null) {
+    let cliente: Record<string, unknown> = customerId ? { id: customerId } : {}
+    if (customerId) {
+      try {
+        const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        if (resp.ok) cliente = (await resp.json()).customer || cliente
+      } catch { /* si apre lo stesso con il solo id */ }
+    }
+    setDatiMancanti({ bookingId, campi, cliente })
+  }
+
+  /** Rigenera dopo aver completato la scheda (o forzando, se si e' scelto). */
+  async function rigeneraContratto(bookingId: string, ignoraDatiMancanti = false) {
+    try {
+      toast.loading('Rigenerazione contratto...', { id: 'regen' })
+      const res = await authFetch('/.netlify/functions/generate-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId, ...(ignoraDatiMancanti ? {} : { verificaDati: true }) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 422 && Array.isArray(data.datiMancanti)) {
+        toast.dismiss('regen')
+        await apriDatiMancanti(bookingId, data.datiMancanti, data.customerId)
+        return
+      }
+      if (!res.ok) throw new Error(data.error || data.message || res.statusText)
+      toast.success('Contratto rigenerato!', { id: 'regen' })
+      if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
+      loadContracts()
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: 'regen' })
+    }
+  }
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A — su created_at del contratto.
@@ -1400,9 +1440,16 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
                           const res = await authFetch('/.netlify/functions/generate-contract', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bookingId: contract.booking_id })
+                            // Il server non stampa un contratto con le caselle
+                            // vuote: risponde 422 con l'elenco di cosa manca.
+                            body: JSON.stringify({ bookingId: contract.booking_id, verificaDati: true })
                           })
                           const data = await res.json().catch(() => ({}))
+                          if (res.status === 422 && Array.isArray(data.datiMancanti)) {
+                            toast.dismiss('regen')
+                            await apriDatiMancanti(contract.booking_id, data.datiMancanti, data.customerId)
+                            return
+                          }
                           if (!res.ok) {
                             throw new Error(data.error || data.message || res.statusText)
                           }
@@ -1447,6 +1494,28 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
             etichetta="contratti"
           />
         </div>
+      )}
+
+      {/* Scheda cliente incompleta: si completa qui e il contratto riparte. */}
+      {datiMancanti && (datiMancanti.cliente.id as string | undefined) && (
+        <MissingFieldsModal
+          isOpen
+          customerId={datiMancanti.cliente.id as string}
+          customerData={datiMancanti.cliente}
+          missingFields={datiMancanti.campi}
+          contesto="contratto"
+          onClose={() => setDatiMancanti(null)}
+          onProsegui={() => {
+            const b = datiMancanti.bookingId
+            setDatiMancanti(null)
+            rigeneraContratto(b, true)
+          }}
+          onSave={() => {
+            const b = datiMancanti.bookingId
+            setDatiMancanti(null)
+            rigeneraContratto(b)
+          }}
+        />
       )}
     </div>
   )

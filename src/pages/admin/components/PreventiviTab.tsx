@@ -3990,9 +3990,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         const cRes = await authFetch('/.netlify/functions/generate-contract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId }),
+          // Scheda cliente incompleta: il server non stampa un contratto a
+          // meta' e dice cosa manca. Qui la prenotazione e' gia' creata, quindi
+          // si avvisa e si rimanda a Prenotazioni, dove la scheda si completa.
+          body: JSON.stringify({ bookingId, verificaDati: true }),
         })
-        if (cRes.ok) {
+        if (cRes.status === 422) {
+          const d = await cRes.json().catch(() => ({} as { error?: string }))
+          toast.error(
+            `Prenotazione creata, contratto NON generato. ${d.error || 'Dati cliente mancanti.'} Completa la scheda da Prenotazioni e rigenera.`,
+            { duration: 14000 },
+          )
+        } else if (cRes.ok) {
           const { data: contractRow } = await supabase
             .from('contracts')
             .select('id')

@@ -3619,10 +3619,39 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const response = await authFetch('/.netlify/functions/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id, ...(opts?.reconduct ? { reconduct: true } : {}), ...(opts?.resign ? { resign: true } : {}) })
+        body: JSON.stringify({
+          bookingId: booking.id,
+          // Il server rifiuta di stampare un contratto con le caselle vuote e
+          // dice cosa manca: e' l'ultima rete, sotto al controllo qui sopra.
+          ...(opts?.ignoraDatiMancanti ? {} : { verificaDati: true }),
+          ...(opts?.reconduct ? { reconduct: true } : {}),
+          ...(opts?.resign ? { resign: true } : {}),
+        })
       })
 
       const data = await response.json().catch(() => ({} as Record<string, unknown>))
+
+      // 422 = scheda cliente incompleta. Il server ha gia' l'elenco: si apre
+      // il popup invece di lasciare un errore rosso senza spiegazione.
+      if (response.status === 422 && Array.isArray((data as { datiMancanti?: unknown }).datiMancanti)) {
+        const mancanti = (data as { datiMancanti: string[] }).datiMancanti
+        const idCliente = (data as { customerId?: string }).customerId
+        let scheda: Record<string, unknown> = { id: idCliente }
+        if (idCliente) {
+          try {
+            const resp = await authFetch(`/.netlify/functions/get-customer?id=${idCliente}`)
+            if (resp.ok) scheda = (await resp.json()).customer || scheda
+          } catch { /* si apre lo stesso con l'id */ }
+        }
+        setMissingFields(mancanti)
+        setTempCustomerData(scheda)
+        setCurrentValidationBooking(booking)
+        setValidationContext('contract')
+        setContrattoDaGenerareComunque({ booking, opts })
+        setShowMissingDataModal(true)
+        setGeneratingContract(false)
+        return
+      }
 
       if (!response.ok) {
         throw new Error((data.error as string) || (data.message as string) || `HTTP ${response.status}`)
