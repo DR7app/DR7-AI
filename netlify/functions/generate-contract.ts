@@ -208,20 +208,59 @@ interface Riquadro { pagina: number; x: number; y: number; w: number; h: number 
  * casella per casella.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Su quale pagina sta davvero una casella.
+ *
+ * 09/09/2026 — Non si guarda il suo `/P`: prima di appiattire il modulo il
+ * codice riscrive `/P` su tutti i widget e, per i campi con piu' di un widget
+ * (`Testo4`, `Insurance`: il nome sta sul padre, non sull'annotazione), non
+ * trovava la pagina e ripiegava sulla prima. Cosi' i dati del locatore
+ * finivano stampati sopra al logo della prima pagina e il nome della Kasko in
+ * mezzo alla riga della patente. La pagina vera e' quella che ha il widget
+ * nei propri `/Annots`; `/P` resta come ultima spiaggia.
+ */
+/** L'indice della pagina che ha questo widget nei propri /Annots, o null. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function paginaDagliAnnots(pdfDoc: any, w: any): number | null {
+    const pagine = pdfDoc.getPages()
+    for (let i = 0; i < pagine.length; i++) {
+        const annotsRaw = pagine[i].node.get(PDFName.of('Annots'))
+        if (!annotsRaw) continue
+        const annots = pdfDoc.context.lookup(annotsRaw)
+        if (!(annots instanceof PDFArray)) continue
+        for (let j = 0; j < annots.size(); j++) {
+            if (pdfDoc.context.lookup(annots.get(j)) === w.dict) return i
+        }
+    }
+    return null
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function paginaDelWidget(pdfDoc: any, w: any): number {
+    const pagine = pdfDoc.getPages()
+    const daAnnots = paginaDagliAnnots(pdfDoc, w)
+    if (daAnnots !== null) return daAnnots
+    try {
+        const pRef = w.P()
+        let idx = 0
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pagine.forEach((pg: any, i: number) => { if (pg.ref === pRef) idx = i })
+        return idx
+    } catch {
+        return 0
+    }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function riquadriDelCampo(pdfDoc: any, form: any, nome: string): Riquadro[] {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const campo = form.getFields().find((f: any) => f.getName() === nome)
         if (!campo) return []
-        const pagine = pdfDoc.getPages()
         const out: Riquadro[] = []
         for (const w of campo.acroField.getWidgets()) {
             const r = w.getRectangle()
-            const pRef = w.P()
-            let idx = 0
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            pagine.forEach((pg: any, i: number) => { if (pg.ref === pRef) idx = i })
-            out.push({ pagina: idx, x: r.x, y: r.y, w: r.width, h: r.height })
+            out.push({ pagina: paginaDelWidget(pdfDoc, w), x: r.x, y: r.y, w: r.width, h: r.height })
         }
         return out.sort((a, b) => (a.pagina - b.pagina) || (b.y - a.y))
     } catch (e) {
@@ -2101,10 +2140,19 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             }
 
             // Set P on each widget (fallback to page 1 for any unmatched fields)
+            //
+            // 09/09/2026 — La pagina si cerca PER WIDGET, non per nome del
+            // campo: `Testo4` e `Insurance` tengono il nome sul padre e le
+            // loro annotazioni non hanno `/T`, quindi per nome non si
+            // trovavano e finivano tutte sulla prima pagina. Appiattendo, il
+            // loro contenuto veniva disegnato li'.
             const firstPageRef = allPages[0].ref
             for (const field of allFields) {
-                const pageRef = fieldNameToPageRef.get(field.getName()) || firstPageRef
                 for (const widget of field.acroField.getWidgets()) {
+                    const daAnnots = paginaDagliAnnots(pdfDoc, widget)
+                    const pageRef = (daAnnots !== null ? allPages[daAnnots]?.ref : undefined)
+                        || fieldNameToPageRef.get(field.getName())
+                        || firstPageRef
                     widget.dict.set(PDFName.of('P'), pageRef)
                 }
             }
