@@ -555,6 +555,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // checkbox is checked.
   const [includeCoefficienti, setIncludeCoefficienti] = useState<boolean>(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  // Chi l'ha fatto: il cliente da dr7.app o qualcuno in ufficio.
+  const [origineFiltro, setOrigineFiltro] = useState<'tutte' | 'sito' | 'gestionale'>('tutte')
   // ─── Eliminazione preventivi (02/09/2026) ───────────────────────────────
   // Prima non esisteva alcun modo di cancellare: 776 righe accumulate, di cui
   // 426 scadute, senza pulizia possibile. Tre strade, un solo flusso di
@@ -1688,7 +1690,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     loadPreventivi().finally(() => { void loadCustomers() })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminRoleLoading, isPreventivoOnly, adminEmail,
-      statusFilter, dateFilter, dateRange.from, dateRange.to, ricerca,
+      statusFilter, origineFiltro, dateFilter, dateRange.from, dateRange.to, ricerca,
       sortField, sortDir, listPage])
 
   // I preventivi spediti e scaduti si segnano una volta all'apertura. Se
@@ -1711,7 +1713,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // Cambiare filtro, ricerca o ordinamento riporta alla prima pagina.
   useEffect(() => {
     setListPage(1)
-  }, [ricerca, statusFilter, dateFilter, dateRange.from, dateRange.to, sortField, sortDir])
+  }, [ricerca, statusFilter, origineFiltro, dateFilter, dateRange.from, dateRange.to, sortField, sortDir])
 
   async function loadCustomers() {
     try {
@@ -1807,6 +1809,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   interface FiltriLista {
     soloDi: string | null
     stato: string
+    /** 'sito' = fatto dal cliente su dr7.app; 'gestionale' = fatto in ufficio. */
+    origine?: 'tutte' | 'sito' | 'gestionale'
     giorno: string
     da: string
     a: string
@@ -1826,6 +1830,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     if (f.stato && f.stato !== 'all' && f.stato !== '__no_cauzione__') {
       query = query.eq('status', f.stato)
     }
+    // Origine: i preventivi del sito hanno source 'website' / 'website_no_cauzione'.
+    if (f.origine === 'sito') query = query.like('source', 'website%')
+    if (f.origine === 'gestionale') query = query.or('source.is.null,source.not.like.website%')
     // Giorno esatto e periodo Da/A: entrambi su `created_at`, letto in
     // Europe/Rome. Convivono, come prima in memoria.
     if (f.giorno) {
@@ -1885,6 +1892,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     return {
       soloDi: isPreventivoOnly && adminEmail ? adminEmail : null,
       stato: statusFilter,
+      // Senza questa riga "Elimina risultati" ed "Esporta" avrebbero preso
+      // anche i preventivi che il filtro origine sta nascondendo.
+      origine: origineFiltro,
       giorno: dateFilter,
       da: dateRange.from,
       a: dateRange.to,
@@ -1947,6 +1957,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       const f: FiltriLista = {
         soloDi,
         stato: statusFilter,
+        origine: origineFiltro,
         giorno: dateFilter,
         da: dateRange.from,
         a: dateRange.to,
@@ -4780,6 +4791,22 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
               </button>
             )
           })}
+          {/* Da dove arriva il preventivo. I preventivi fatti dal cliente su
+              dr7.app portano source 'website'; quelli fatti in ufficio no. */}
+          <span className="mx-1 h-5 w-px bg-theme-border" aria-hidden />
+          {([['tutte', 'Tutte le origini'], ['sito', 'Dal sito'], ['gestionale', 'Dal gestionale']] as const).map(([val, etichetta]) => (
+            <button
+              key={val}
+              onClick={() => { setOrigineFiltro(val); setListPage(1) }}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ring-1 ${
+                origineFiltro === val
+                  ? 'bg-blue-500/15 text-blue-200 ring-blue-500/40'
+                  : 'bg-theme-bg-tertiary text-theme-text-muted ring-transparent hover:text-theme-text-primary hover:ring-theme-border'
+              }`}
+            >
+              {etichetta}
+            </button>
+          ))}
           <div className="ml-auto flex items-center gap-2">
             {/* Pulizia in blocco: cancella esattamente quello che il filtro
                 sta mostrando (stato + ricerca + periodo), non "tutti". */}
@@ -5270,7 +5297,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-[13px] font-bold text-theme-text-primary truncate max-w-[180px]">{p.vehicle_name}</span>
                                 {isNoCauzione && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-orange-600 text-white">No Cauzione</span>}
-                                {p.source === 'website' && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40">SITO</span>}
+                                {/* Ogni preventivo nato su dr7.app porta il bollino,
+                                    anche quelli "no cauzione": prima solo
+                                    source === 'website' lo mostrava e meta' dei
+                                    preventivi del sito sembravano fatti in ufficio. */}
+                                {p.source?.startsWith('website') && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40">SITO</span>}
                               </div>
                               {p.vehicle_plate && <div className="text-[10px] font-mono text-theme-text-muted truncate">{p.vehicle_plate}</div>}
                               <div className="text-[9px] text-theme-text-muted/70 truncate">
