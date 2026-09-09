@@ -1809,10 +1809,15 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore }:
           modello. */}
       <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-4 space-y-4">
         <div>
-          <h3 className="text-lg font-semibold text-theme-text-primary">Dati aziendali sul contratto</h3>
+          <h3 className="text-lg font-semibold text-theme-text-primary">Dati del locatore</h3>
           <p className="text-sm text-theme-text-muted mt-1">
-            La sezione <strong>DATI LOCATORE</strong> e il logo in testa al contratto: si compilano da soli a ogni
-            stampa con quello che scrivi qui. Lasciando un campo vuoto vale il valore predefinito mostrato in grigio.
+            I dati di <strong>DR7</strong>: la sezione <strong>LOCATORE</strong> della seconda pagina del contratto e
+            il logo in testa alla prima si compilano da soli a ogni stampa con quello che scrivi qui. Lasciando un
+            campo vuoto vale il valore predefinito mostrato in grigio.
+          </p>
+          <p className="text-sm text-theme-text-muted mt-1">
+            Non sono i <strong>DATI AZIENDALI</strong> della prima pagina: quelli sono dell'azienda che noleggia e
+            arrivano dalla sua scheda cliente, una prenotazione per volta.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2246,7 +2251,7 @@ export default function CentralinaProTab() {
           if (prima !== dopo) out.push(`Contratto & Modifiche / ${v.label}: ${etichetta(prima)} -> ${etichetta(dopo)}`)
         }
       }
-      // Dati aziendali stampati sul contratto.
+      // Dati del locatore (DR7) stampati sul contratto.
       {
         const nomi: Record<keyof LocatoreConfig, string> = {
           ragione_sociale: 'Ragione sociale',
@@ -2257,7 +2262,7 @@ export default function CentralinaProTab() {
           logo_url: 'Logo',
         }
         for (const k of Object.keys(nomi) as (keyof LocatoreConfig)[]) {
-          if ((locatore[k] || '') !== (savedLocatore[k] || '')) out.push(`Dati aziendali sul contratto / ${nomi[k]} aggiornato`)
+          if ((locatore[k] || '') !== (savedLocatore[k] || '')) out.push(`Dati del locatore / ${nomi[k]} aggiornato`)
         }
       }
       return out
