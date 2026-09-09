@@ -1343,14 +1343,23 @@ const INITIAL_PENALI: PenaliConfig = {
   ],
 }
 
+// 09/09/2026 — questa funzione teneva SOLO supercars, urban e aziendali e
+// buttava via tutte le altre categorie a ogni caricamento della pagina. Le
+// liste di Urban, Flotta Aziendale, Moto e Scooter erano scritte nel database
+// ma la Centralina le mostrava vuote, e al primo Salva le riscriveva vuote
+// davvero. Stesso difetto, stessa cura di migrateDeposits: si tiene TUTTO
+// quello che c'e' nella riga e si aggiungono solo le tre storiche se mancano.
 function migratePenali(raw: unknown): PenaliConfig {
   if (!raw || typeof raw !== 'object') return INITIAL_PENALI
   const obj = raw as Record<string, unknown>
-  return {
-    supercars: Array.isArray(obj.supercars) ? (obj.supercars as PenaliItem[]) : INITIAL_PENALI.supercars,
-    urban: Array.isArray(obj.urban) ? (obj.urban as PenaliItem[]) : INITIAL_PENALI.urban,
-    aziendali: Array.isArray(obj.aziendali) ? (obj.aziendali as PenaliItem[]) : INITIAL_PENALI.aziendali,
+  const out: PenaliConfig = {}
+  for (const [catId, items] of Object.entries(obj)) {
+    if (Array.isArray(items)) out[catId] = items as PenaliItem[]
   }
+  for (const [catId, defaults] of Object.entries(INITIAL_PENALI)) {
+    if (!out[catId]) out[catId] = defaults
+  }
+  return out
 }
 
 // Danni use the same per-category list shape as Penali. No defaults shipped —
@@ -1364,11 +1373,14 @@ const INITIAL_DANNI: DanniConfig = {
 function migrateDanni(raw: unknown): DanniConfig {
   if (!raw || typeof raw !== 'object') return INITIAL_DANNI
   const obj = raw as Record<string, unknown>
-  return {
-    supercars: Array.isArray(obj.supercars) ? (obj.supercars as PenaliItem[]) : [],
-    urban: Array.isArray(obj.urban) ? (obj.urban as PenaliItem[]) : [],
-    aziendali: Array.isArray(obj.aziendali) ? (obj.aziendali as PenaliItem[]) : [],
+  const out: DanniConfig = {}
+  for (const [catId, items] of Object.entries(obj)) {
+    if (Array.isArray(items)) out[catId] = items as PenaliItem[]
   }
+  for (const catId of Object.keys(INITIAL_DANNI)) {
+    if (!out[catId]) out[catId] = []
+  }
+  return out
 }
 
 const INITIAL_FASCE: Fascia[] = [
