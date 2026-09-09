@@ -3714,6 +3714,7 @@ function InsuranceList({
                 questa categoria e questa fascia. */}
             <FranchigieContrattoBox
               value={opt.franchigie}
+              nomeOpzione={opt.name}
               kaskoEur={opt.deductible_fixed}
               kaskoPerc={opt.deductible_percent}
               onChange={(franchigie) => patch(opt.id, { franchigie })}
@@ -3788,11 +3789,14 @@ function franchigieComplete(raw: unknown): FranchigieContratto {
  */
 function FranchigieContrattoBox({
   value,
+  nomeOpzione,
   kaskoEur,
   kaskoPerc,
   onChange,
 }: {
   value?: FranchigieContratto
+  /** Nome dell'opzione: e' quello che il contratto stampa accanto a "Kasko". */
+  nomeOpzione?: string
   kaskoEur: number | ''
   kaskoPerc: number | ''
   onChange: (v: FranchigieContratto) => void
@@ -3831,13 +3835,16 @@ function FranchigieContrattoBox({
               </Fragment>
             ))}
             {/* La riga Kasko della tabella esce dai campi qui sopra: si mostra
-                in sola lettura per non far scrivere lo stesso numero due volte. */}
-            <span className="text-[13px] text-theme-text-primary">Kasko</span>
+                in sola lettura per non far scrivere lo stesso numero due volte.
+                Il nome e' quello dell'opzione, come il contratto lo stampa
+                nella casella accanto alla parola "Kasko". */}
+            <span className="text-[13px] text-theme-text-primary">{nomeOpzione?.trim() || 'Kasko'}</span>
             <span className="text-[13px] text-right tabular-nums text-theme-text-secondary w-24 px-3 py-2">{kaskoEur === '' ? '—' : kaskoEur}</span>
             <span className="text-[13px] text-right tabular-nums text-theme-text-secondary w-24 px-3 py-2">{kaskoPerc === '' ? '—' : kaskoPerc}</span>
           </div>
           <p className="text-[11px] text-theme-text-muted">
-            La riga Kasko prende i campi "Franchigia €" e "Scoperto %" qui sopra: si cambiano li'.
+            L'ultima riga prende i campi "Franchigia €" e "Scoperto %" qui sopra: si cambiano li'.
+            Sul contratto, accanto a "Kasko", viene stampato il nome dell'opzione scelta dal cliente.
           </p>
         </div>
       )}
