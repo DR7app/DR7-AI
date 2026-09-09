@@ -2092,6 +2092,17 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // gia' stampati: riscriverli li raddoppierebbe.
             const modelloUniforme = rqLocatoreNome.length > 0
 
+            // 09/09/2026 — Ultima riga della tabella franchigie. Il modello ha
+            // la parola "Kasko" stampata e, accanto, la casella `Insurance`
+            // col nome dell'opzione scelta: usciva "Kasko   Kasko DR7". La
+            // parola non serve — la riga deve portare il nome dell'opzione —
+            // ma sta nel disegno del PDF, non in una casella: si copre e il
+            // nome si scrive al suo posto, allineato alle altre garanzie.
+            const rqKaskoNome = modelloUniforme ? riquadriDelCampo(pdfDoc, form, 'Insurance')[0] : undefined
+            if (rqKaskoNome) {
+                try { form.getTextField('Insurance').setText('') } catch { /* non e' un campo di testo: si lascia com'e' */ }
+            }
+
             try {
                 form.flatten()
                 console.log('[generate-contract] Form flattened successfully — PDF is now read-only')
@@ -2134,6 +2145,34 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                     scrivi(rqLocatoreEmail[0], locatore.email)
                     scrivi(rqLuogoStipula[0], 'Cagliari')
                     console.log('[generate-contract] Dati locatore scritti sul modello uniforme')
+                }
+
+                // La parola "Kasko" della tabella franchigie sparisce sotto un
+                // rettangolo bianco e al suo posto va il nome dell'opzione. Il
+                // rettangolo si ferma prima della casella e prima del bordo
+                // della cella: copre la parola, non la riga.
+                if (rqKaskoNome) {
+                    const pg = pagine[rqKaskoNome.pagina]
+                    if (pg) {
+                        const size = 7
+                        pg.drawRectangle({
+                            x: rqKaskoNome.x - 28,
+                            y: rqKaskoNome.y,
+                            width: 28,
+                            height: rqKaskoNome.h,
+                            color: rgb(1, 1, 1),
+                        })
+                        if (insuranceLabel) {
+                            pg.drawText(sanitizeForPDF(insuranceLabel), {
+                                x: rqKaskoNome.x - 23,
+                                y: rqKaskoNome.y + (rqKaskoNome.h - size) / 2 + 1,
+                                size,
+                                font: fontLoc,
+                                color: rgb(0, 0, 0),
+                            })
+                        }
+                        console.log(`[generate-contract] Riga franchigie: "${insuranceLabel}" al posto della parola Kasko`)
+                    }
                 }
 
                 // Il logo: il modello uniforme lascia un riquadro vuoto in
