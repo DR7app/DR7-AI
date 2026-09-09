@@ -1451,6 +1451,32 @@ const blankTariffa = (cat: { id: string; label: string }): TariffaGiornaliera =>
 
 const STORAGE_KEY = 'centralina_pro_v2'
 
+/**
+ * DATI LOCATORE: chi affitta, cioe' DR7.
+ *
+ * Sul modello uniforme queste caselle sono vuote (prima erano stampate dentro
+ * il PDF) e il contratto le riempie a ogni stampa. Stanno qui e non nel codice
+ * perche' un cambio di sede o di numero non deve passare da un deploy.
+ */
+export type LocatoreConfig = {
+  ragione_sociale?: string
+  partita_iva?: string
+  sede_legale?: string
+  telefono?: string
+  email?: string
+  /** Immagine stampata nel riquadro in testa alla prima pagina. */
+  logo_url?: string
+}
+
+export const LOCATORE_DEFAULT: Required<LocatoreConfig> = {
+  ragione_sociale: 'DR7 S.p.A.',
+  partita_iva: '04104640927',
+  sede_legale: 'Via del Fangario 25, 09122 Cagliari (CA)',
+  telefono: '+39 345 790 5205',
+  email: 'info@dr7.app',
+  logo_url: 'https://dr7.app/DR7logo1.png',
+}
+
 type PersistedSnapshot = {
   categories: Category[]
   fasce: Fascia[]
@@ -1472,6 +1498,8 @@ type PersistedSnapshot = {
   // cio' che non si applica (es. Mare non ha "Assicurazioni"/"Fascia patente").
   sezioni_off?: string[]
   contratto_modifica?: Record<string, string>
+  /** Dati di DR7 stampati sul contratto (sezione DATI LOCATORE + logo). */
+  locatore?: LocatoreConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1720,12 +1748,61 @@ export type { ContrattoAzione } from '../../../utils/contrattoModifiche'
 // firma o COSA ha accettato in termini di responsabilita' (veicolo, guidatore,
 // garanti, copertura assicurativa); si RICONDUCE quando cambiano importi,
 // date o condizioni gia' coperte dalla clausola di riconduzione.
-function ContrattoModificheSection({ regole, setRegole }: {
+function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore }: {
   regole: Record<string, ContrattoAzione>
   setRegole: (r: Record<string, ContrattoAzione>) => void
+  locatore: Required<LocatoreConfig>
+  setLocatore: (l: Required<LocatoreConfig>) => void
 }) {
+  const campoLoc = (k: keyof LocatoreConfig, etichetta: string, segnaposto?: string) => (
+    <label className="block">
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">{etichetta}</span>
+      <input
+        type="text"
+        value={locatore[k] ?? ''}
+        placeholder={segnaposto || LOCATORE_DEFAULT[k]}
+        onChange={(e) => setLocatore({ ...locatore, [k]: e.target.value })}
+        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+      />
+    </label>
+  )
   return (
     <div className="space-y-4">
+      {/* ── Dati del locatore ──────────────────────────────────────────
+          Quello che il contratto stampa di DR7: la sezione DATI LOCATORE in
+          testa alla seconda pagina e il logo nel riquadro della prima. Prima
+          erano disegnati dentro il PDF, quindi cambiarli voleva dire rifare il
+          modello. */}
+      <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-4 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-theme-text-primary">Dati aziendali sul contratto</h3>
+          <p className="text-sm text-theme-text-muted mt-1">
+            La sezione <strong>DATI LOCATORE</strong> e il logo in testa al contratto: si compilano da soli a ogni
+            stampa con quello che scrivi qui. Lasciando un campo vuoto vale il valore predefinito mostrato in grigio.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {campoLoc('ragione_sociale', 'Ragione sociale')}
+          {campoLoc('email', 'E-mail aziendale')}
+          {campoLoc('sede_legale', 'Sede legale')}
+          {campoLoc('telefono', 'Telefono')}
+          {campoLoc('partita_iva', 'Codice fiscale / partita IVA')}
+          {campoLoc('logo_url', 'Logo (indirizzo dell\'immagine)', 'https://dr7.app/DR7logo1.png')}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Anteprima logo</span>
+          <img
+            src={locatore.logo_url || LOCATORE_DEFAULT.logo_url}
+            alt="Logo del contratto"
+            className="h-10 w-auto object-contain bg-black/80 rounded px-2 py-1"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = '0.25' }}
+          />
+          <span className="text-[11px] text-theme-text-muted">
+            PNG. Se l&apos;indirizzo non risponde, il contratto esce senza logo invece di non uscire.
+          </span>
+        </div>
+      </div>
+
       <div>
         <h3 className="text-lg font-semibold text-theme-text-primary">Contratto & Modifiche</h3>
         <p className="text-sm text-theme-text-muted mt-1">
@@ -1846,6 +1923,8 @@ export default function CentralinaProTab() {
   const [deposits, setDeposits] = useState<DepositsConfig>(initialDeposits)
   // Regole "cosa fa una modifica al contratto gia' firmato" — vedi CONTRATTO_VOCI.
   const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione>>(VOCI_DEFAULT)
+  const [locatore, setLocatore] = useState<Required<LocatoreConfig>>(LOCATORE_DEFAULT)
+  const [savedLocatore, setSavedLocatore] = useState<Required<LocatoreConfig>>(LOCATORE_DEFAULT)
   // 26/08/2026: senza la copia "salvata", questa sezione restava fuori da
   // TUTTO il meccanismo delle modifiche: la barra diceva "0 modifiche da
   // salvare" anche dopo aver scelto Rifirma/Ricondotto, Annulla non la
@@ -1932,6 +2011,8 @@ export default function CentralinaProTab() {
     { const so = Array.isArray(remote.sezioni_off) ? remote.sezioni_off : []; setSezioniOff(so); setSavedSezioniOff(so) }
     { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null
       const v = { ...VOCI_DEFAULT, ...(cm || {}) }; setContrattoRegole(v); setSavedContrattoRegole(v) }
+    { const l = (remote.locatore && typeof remote.locatore === 'object') ? remote.locatore : {}
+      const v = { ...LOCATORE_DEFAULT, ...l }; setLocatore(v); setSavedLocatore(v) }
   }
 
   // (buildSnapshot e' stato rimosso il 2026-08-25: serviva SOLO a copiare Terra
@@ -2108,6 +2189,20 @@ export default function CentralinaProTab() {
           if (prima !== dopo) out.push(`Contratto & Modifiche / ${v.label}: ${etichetta(prima)} -> ${etichetta(dopo)}`)
         }
       }
+      // Dati aziendali stampati sul contratto.
+      {
+        const nomi: Record<keyof LocatoreConfig, string> = {
+          ragione_sociale: 'Ragione sociale',
+          partita_iva: 'Codice fiscale / partita IVA',
+          sede_legale: 'Sede legale',
+          telefono: 'Telefono',
+          email: 'E-mail aziendale',
+          logo_url: 'Logo',
+        }
+        for (const k of Object.keys(nomi) as (keyof LocatoreConfig)[]) {
+          if ((locatore[k] || '') !== (savedLocatore[k] || '')) out.push(`Dati aziendali sul contratto / ${nomi[k]} aggiornato`)
+        }
+      }
       return out
     },
     [
@@ -2115,6 +2210,7 @@ export default function CentralinaProTab() {
       savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations, savedMarketing, savedLavaggioHours, savedNoleggioHours,
       sezioniOff, savedSezioniOff,
       contrattoRegole, savedContrattoRegole,
+      locatore, savedLocatore,
     ]
   )
 
@@ -2151,7 +2247,8 @@ export default function CentralinaProTab() {
     setSavedNoleggioHours(noleggioHours)
     setSavedSezioniOff(sezioniOff)
     setSavedContrattoRegole(contrattoRegole)
-    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole }, businessRow(businessId))
+    setSavedLocatore(locatore)
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole, locatore }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
@@ -2194,6 +2291,7 @@ export default function CentralinaProTab() {
     setNoleggioHours(savedNoleggioHours)
     setSezioniOff(savedSezioniOff)
     setContrattoRegole(savedContrattoRegole)
+    setLocatore(savedLocatore)
   }
 
   // Attiva/disattiva una sezione per il business corrente (roadmap 17: ON/OFF).
@@ -2313,7 +2411,12 @@ export default function CentralinaProTab() {
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
             {section === 'contratto-modifica' && (
-              <ContrattoModificheSection regole={contrattoRegole} setRegole={setContrattoRegole} />
+              <ContrattoModificheSection
+                regole={contrattoRegole}
+                setRegole={setContrattoRegole}
+                locatore={locatore}
+                setLocatore={setLocatore}
+              />
             )}
             {section === 'p4' && (
               isCauzioniViewOnly ? (

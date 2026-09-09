@@ -170,6 +170,7 @@ interface DatiLocatore {
     sede_legale: string
     telefono: string
     piva: string
+    logo_url: string
 }
 const LOCATORE_PREDEFINITO: DatiLocatore = {
     ragione_sociale: 'DR7 S.p.A.',
@@ -177,15 +178,20 @@ const LOCATORE_PREDEFINITO: DatiLocatore = {
     sede_legale: 'Via del Fangario 25, 09122 Cagliari (CA)',
     telefono: '+39 345 790 5205',
     piva: '04104640927',
+    logo_url: 'https://dr7.app/DR7logo1.png',
 }
 function datiLocatore(config: Record<string, unknown> | null | undefined): DatiLocatore {
-    const l = (config?.locatore || {}) as Partial<DatiLocatore>
+    // `partita_iva` e' il nome che usa Centralina Pro; `piva` resta accettato
+    // per le righe salvate prima che la sezione esistesse.
+    const l = (config?.locatore || {}) as Partial<DatiLocatore> & { partita_iva?: string }
+    const primoPieno = (...v: (string | undefined)[]) => v.find(x => typeof x === 'string' && x.trim() !== '') || ''
     return {
-        ragione_sociale: String(l.ragione_sociale || LOCATORE_PREDEFINITO.ragione_sociale),
-        email: String(l.email || LOCATORE_PREDEFINITO.email),
-        sede_legale: String(l.sede_legale || LOCATORE_PREDEFINITO.sede_legale),
-        telefono: String(l.telefono || LOCATORE_PREDEFINITO.telefono),
-        piva: String(l.piva || LOCATORE_PREDEFINITO.piva),
+        ragione_sociale: primoPieno(l.ragione_sociale, LOCATORE_PREDEFINITO.ragione_sociale),
+        email: primoPieno(l.email, LOCATORE_PREDEFINITO.email),
+        sede_legale: primoPieno(l.sede_legale, LOCATORE_PREDEFINITO.sede_legale),
+        telefono: primoPieno(l.telefono, LOCATORE_PREDEFINITO.telefono),
+        piva: primoPieno(l.partita_iva, l.piva, LOCATORE_PREDEFINITO.piva),
+        logo_url: primoPieno(l.logo_url, LOCATORE_PREDEFINITO.logo_url),
     }
 }
 
@@ -2135,7 +2141,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 // esce un documento anonimo.
                 if (rqLogo) {
                     try {
-                        const risp = await fetch('https://dr7.app/DR7logo1.png')
+                        const risp = await fetch(locatore.logo_url)
                         if (risp.ok) {
                             const logo = await pdfDoc.embedPng(new Uint8Array(await risp.arrayBuffer()))
                             const pg = pdfDoc.getPages()[rqLogo.pagina]
