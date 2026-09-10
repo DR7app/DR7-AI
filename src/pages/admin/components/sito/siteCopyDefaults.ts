@@ -1492,6 +1492,22 @@ export interface PressCopy {
 export interface ContactCopy {
   page_title_it: string; page_title_en: string;
   subtitle_it: string; subtitle_en: string;
+  /** Riga sotto al sottotitolo (10/09/2026, nuova impaginazione). */
+  intro_it?: string; intro_en?: string;
+  /** Le quattro firme del marchio agli angoli della schermata. Uguali nelle
+   *  due lingue: sono voce di marca, non testo da tradurre. Gli a capo si
+   *  scrivono a mano e si vedono. */
+  corner_top_left?: string;
+  corner_top_right?: string;
+  corner_bottom_left?: string;
+  corner_bottom_right?: string;
+  /** Didascalie sotto ai riquadri. */
+  phone_note_it?: string; phone_note_en?: string;
+  whatsapp_note_it?: string; whatsapp_note_en?: string;
+  email_note_it?: string; email_note_en?: string;
+  /** Bottone "Indicazioni": dove porta e come si chiama. */
+  maps_url?: string;
+  maps_button_it?: string; maps_button_en?: string;
   phone_label_it: string; phone_label_en: string;
   phone_display: string;
   phone_tel_url: string;
@@ -3026,6 +3042,17 @@ export const INITIAL_CONTACT: ContactCopy = {
   office_address_it: 'Viale Marconi, 229 – 09131 Cagliari (CA), Italia',
   office_address_en: 'Viale Marconi, 229 – 09131 Cagliari (CA), Italy',
   office_piva: 'P.IVA / C.F.: 04104640927',
+  intro_it: 'Il nostro team è a disposizione per informazioni, prenotazioni e assistenza dedicata.',
+  intro_en: 'Our team is here for information, bookings and dedicated assistance.',
+  corner_top_left: 'Sardinia\nItaly\nA higher standard',
+  corner_top_right: 'Beyond\nthe ordinary',
+  corner_bottom_left: 'Luxury\nRental\nExperience',
+  corner_bottom_right: 'Cars\nYachts\nJets\nBeyond',
+  phone_note_it: 'Assistenza immediata', phone_note_en: 'Immediate assistance',
+  whatsapp_note_it: 'Risposta rapida', whatsapp_note_en: 'Quick reply',
+  email_note_it: 'Richieste commerciali', email_note_en: 'Business enquiries',
+  maps_url: 'https://maps.google.com/?q=Viale+Marconi+229+09131+Cagliari',
+  maps_button_it: 'Indicazioni', maps_button_en: 'Directions',
 };
 
 // ─── Default Footer seed ────────────────────────────────────────────────────

@@ -3508,6 +3508,23 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                     <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
                     <FieldTextArea label="Sottotitolo (IT)" value={copy.subtitle_it} onChange={v => update('subtitle_it', v)} />
                     <FieldTextArea label="Sottotitolo (EN)" value={copy.subtitle_en} onChange={v => update('subtitle_en', v)} />
+                    <FieldTextArea label="Riga sotto (IT)" value={copy.intro_it ?? ''} onChange={v => update('intro_it', v)} />
+                    <FieldTextArea label="Riga sotto (EN)" value={copy.intro_en ?? ''} onChange={v => update('intro_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Firme agli angoli</h3>
+                <p className="text-[11px] text-theme-text-secondary">
+                    Le quattro scritte piccole negli angoli della schermata Contattaci. Uguali in
+                    italiano e in inglese: sono voce di marca. Ogni riga a capo si vede anche sul
+                    sito. Da telefono non compaiono.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="In alto a sinistra" value={copy.corner_top_left ?? ''} onChange={v => update('corner_top_left', v)} />
+                    <FieldTextArea label="In alto a destra" value={copy.corner_top_right ?? ''} onChange={v => update('corner_top_right', v)} />
+                    <FieldTextArea label="In basso a sinistra" value={copy.corner_bottom_left ?? ''} onChange={v => update('corner_bottom_left', v)} />
+                    <FieldTextArea label="In basso a destra" value={copy.corner_bottom_right ?? ''} onChange={v => update('corner_bottom_right', v)} />
                 </div>
             </section>
 
@@ -3518,6 +3535,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                     <FieldText label="Etichetta (EN)" value={copy.phone_label_en} onChange={v => update('phone_label_en', v)} />
                     <FieldText label="Numero visualizzato" value={copy.phone_display} onChange={v => update('phone_display', v)} />
                     <FieldText label='URL "tel:" (es. tel:+393457905205)' value={copy.phone_tel_url} onChange={v => update('phone_tel_url', v)} />
+                    <FieldText label="Didascalia (IT)" value={copy.phone_note_it ?? ''} onChange={v => update('phone_note_it', v)} />
+                    <FieldText label="Didascalia (EN)" value={copy.phone_note_en ?? ''} onChange={v => update('phone_note_en', v)} />
                 </div>
             </section>
 
@@ -3530,6 +3549,10 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                     <FieldText label="Bottone (EN)" value={copy.whatsapp_button_en} onChange={v => update('whatsapp_button_en', v)} />
                 </div>
                 <FieldText label="URL WhatsApp" value={copy.whatsapp_url} onChange={v => update('whatsapp_url', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Didascalia (IT)" value={copy.whatsapp_note_it ?? ''} onChange={v => update('whatsapp_note_it', v)} />
+                    <FieldText label="Didascalia (EN)" value={copy.whatsapp_note_en ?? ''} onChange={v => update('whatsapp_note_en', v)} />
+                </div>
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
@@ -3539,6 +3562,10 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                     <FieldText label="Etichetta (EN)" value={copy.email_label_en} onChange={v => update('email_label_en', v)} />
                 </div>
                 <FieldText label="Indirizzo email" value={copy.email_address} onChange={v => update('email_address', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Didascalia (IT)" value={copy.email_note_it ?? ''} onChange={v => update('email_note_it', v)} />
+                    <FieldText label="Didascalia (EN)" value={copy.email_note_en ?? ''} onChange={v => update('email_note_en', v)} />
+                </div>
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
@@ -3565,6 +3592,11 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                     <FieldText label="Address (EN)" value={copy.office_address_en} onChange={v => update('office_address_en', v)} />
                 </div>
                 <FieldText label="P.IVA / C.F." value={copy.office_piva} onChange={v => update('office_piva', v)} />
+                <FieldText label="Bottone indicazioni: indirizzo della mappa" value={copy.maps_url ?? ''} onChange={v => update('maps_url', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Bottone (IT)" value={copy.maps_button_it ?? ''} onChange={v => update('maps_button_it', v)} />
+                    <FieldText label="Bottone (EN)" value={copy.maps_button_en ?? ''} onChange={v => update('maps_button_en', v)} />
+                </div>
             </section>
         </div>
     )
