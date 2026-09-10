@@ -298,10 +298,55 @@ function sanitizeForPDF(text: string): string {
     }
 
     // Remove any remaining non-WinAnsi characters
-    result = result.replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
+    result = result.replace(/[^\x20-\x7E\xA0-\xFF\u20AC]/g, '')
 
     // Normalize whitespace
     return result.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * 10/09/2026 — Riempie una casella "elenco" del contratto: il testo arriva gia'
+ * su piu' righe (una penale per riga) e deve restare cosi'. `sanitizeForPDF`
+ * schiaccerebbe tutto su una riga sola, quindi qui si ripulisce riga per riga.
+ * Il corpo del testo si abbassa da 8 a 4 punti finche' l'elenco non ci sta
+ * dentro il riquadro disegnato nel PDF: una categoria con quaranta penali
+ * stampa piccolo, ma stampa tutto.
+ */
+function riempiCasellaMultiriga(field: any, testo: string): void {
+    const righe = testo.split('\n').map(r => sanitizeForPDF(r)).filter(r => r !== '')
+    const pulito = righe.join('\n')
+    try { field.enableMultiline() } catch { /* il modello la dichiara gia' */ }
+    try { field.disableRichFormatting() } catch { /* non e' un campo rich text */ }
+
+    // Misure del riquadro: senza widget si resta sul corpo 7 di default.
+    let larghezza = 0
+    let altezza = 0
+    try {
+        for (const w of field.acroField.getWidgets()) {
+            const r = w.getRectangle()
+            larghezza = Math.max(larghezza, r.width)
+            altezza = Math.max(altezza, r.height)
+        }
+    } catch { /* misure non leggibili */ }
+
+    let corpo = 7
+    if (larghezza > 12 && altezza > 12) {
+        for (const prova of [8, 7, 6.5, 6, 5.5, 5, 4.5, 4]) {
+            // Helvetica: una lettera occupa circa mezzo corpo in larghezza.
+            const perRiga = Math.max(1, Math.floor((larghezza - 6) / (prova * 0.5)))
+            const totale = righe.reduce((n, r) => n + Math.max(1, Math.ceil(r.length / perRiga)), 0)
+            if (totale * prova * 1.15 <= altezza - 4) { corpo = prova; break }
+            corpo = prova
+        }
+    }
+
+    try { field.setFontSize(corpo) } catch { /* il campo tiene l'aspetto sul widget */ }
+    try {
+        for (const w of field.acroField.getWidgets()) {
+            w.dict.set(PDFName.of('DA'), PDFString.of(`/Helvetica ${corpo} Tf 0 g`))
+        }
+    } catch { /* il campo tiene gia' l'aspetto sul campo */ }
+    field.setText(pulito)
 }
 
 // 2026-07-13: Riconduzione contratto per ESTENSIONE (nessuna nuova firma).
@@ -1533,12 +1578,12 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             console.log('[generate-contract] Kasko modificata per questa prenotazione:', JSON.stringify(franchigieContratto))
         }
 
-        // 08/09/2026 — Tabella "PENALI E ADDEBITI": ogni penale di Centralina
-        // Pro > Danni & Penali puo' dichiarare la casella del contratto che
-        // riempie (`campo_contratto`, es. PenaleFumo). Si leggono le penali
-        // della categoria del veicolo: cosi' Hypercar stampa i suoi importi e
-        // Urban i suoi, senza testo fisso nel codice.
-        const penaliContratto: Record<string, string> = {}
+        // 10/09/2026 — La tabella "PENALI E ADDEBITI" del contratto non ha piu'
+        // una casella per voce: e' UNA sola casella grande (`PenaliLista`) che
+        // stampa, riga per riga, le penali scritte in Centralina Pro > Danni &
+        // Penali per la categoria del mezzo. Cosi' Hypercar stampa le sue voci
+        // e Urban le sue, e aggiungere una penale non richiede piu' di toccare
+        // il PDF.
         let penaliListaTesto = ''
         try {
             const tuttePenali = (cpCfg?.config as { penali?: Record<string, unknown> })?.penali || {}
@@ -1550,25 +1595,21 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             })
             const lista = chiave ? tuttePenali[chiave] : null
             if (Array.isArray(lista)) {
-                for (const voce of lista as { campo_contratto?: string; amount?: unknown; enabled?: boolean }[]) {
-                    const campo = String(voce?.campo_contratto || '').trim()
-                    if (!campo || voce?.enabled === false) continue
-                    const n = Number(voce?.amount)
-                    // Casella vuota in Centralina = cella vuota sul contratto.
-                    penaliContratto[campo] = (voce?.amount === '' || voce?.amount === null || voce?.amount === undefined || !Number.isFinite(n))
-                        ? ''
-                        : n.toLocaleString('it-IT', { maximumFractionDigits: 2 })
-                }
+                const righe = (lista as { label?: string; amount?: unknown; enabled?: boolean }[])
+                    .filter(v => v?.enabled !== false && String(v?.label || '').trim() !== '')
+                    .map(v => {
+                        const nome = String(v.label || '').trim()
+                        const n = Number(v?.amount)
+                        // Importo vuoto in Centralina = si stampa solo il nome
+                        // della penale, senza inventare uno zero.
+                        const vuoto = v?.amount === '' || v?.amount === null || v?.amount === undefined || !Number.isFinite(n)
+                        return vuoto ? nome : `${nome}: €${n.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
+                    })
+                penaliListaTesto = righe.join('\n')
+                console.log(`[generate-contract] Penali contratto: ${righe.length} righe per categoria "${vehicleCategory}"`)
+            } else {
+                console.warn(`[generate-contract] Nessuna penale in Centralina Pro per la categoria "${vehicleCategory}"`)
             }
-            // Stessa tabella in UN campo solo (PenaliLista), per chi non vuole
-            // creare una casella per riga nel PDF.
-            if (Array.isArray(lista)) {
-                penaliListaTesto = (lista as { label?: string; amount?: unknown; enabled?: boolean }[])
-                    .filter(v => v?.enabled !== false && v?.amount !== '' && v?.amount !== null && v?.amount !== undefined && Number.isFinite(Number(v?.amount)))
-                    .map(v => `${v.label || ''}: €${Number(v.amount).toLocaleString('it-IT', { maximumFractionDigits: 2 })}`)
-                    .join('\n')
-            }
-            console.log(`[generate-contract] Penali contratto: ${Object.keys(penaliContratto).length} caselle per categoria "${vehicleCategory}"`)
         } catch (penErr: any) {
             console.warn('[generate-contract] Penali lookup failed:', penErr?.message)
         }
@@ -1765,10 +1806,13 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'ScopertoKasko': franchigieContratto.kasko.perc,
             'FranchigieLista': franchigieLista,
 
-            // Tabella PENALI E ADDEBITI: una casella per riga, presa dalle
-            // penali della categoria (Centralina Pro > Danni & Penali).
+            // Tabella PENALI E ADDEBITI: UNA sola casella grande nel PDF, con
+            // dentro tutte le penali della categoria del mezzo (Centralina Pro
+            // > Danni & Penali). Nomi accettati nel modello, uno vale l'altro.
             'PenaliLista': penaliListaTesto,
-            ...penaliContratto,
+            'Penali': penaliListaTesto,
+            'TabellaPenali': penaliListaTesto,
+            'PenaliEAddebiti': penaliListaTesto,
             // Cauzione amount resolution.
             // - cauzione_auto = true means the customer pledged THEIR OWN vehicle
             //   as deposit; the field becomes the targa instead of an amount.
@@ -2065,6 +2109,14 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             try {
                 const field = form.getTextField(key)
                 if (field) {
+                    // Caselle "elenco" (penali, franchigie): il testo e' gia' su
+                    // piu' righe e va lasciato tale, con il corpo ridotto quanto
+                    // basta per non uscire dal riquadro.
+                    if (typeof value === 'string' && value.includes('\n')) {
+                        riempiCasellaMultiriga(field, value)
+                        filledFields++
+                        continue
+                    }
                     const sanitizedValue = sanitizeForPDF(value)
                     field.setFontSize(7)
                     // Alcuni campi tengono il proprio aspetto sul WIDGET e non
