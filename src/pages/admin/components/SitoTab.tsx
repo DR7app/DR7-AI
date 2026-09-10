@@ -4665,6 +4665,8 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Bottone "EXPLORE" (IT)' value={copy.explore_label_it} onChange={v => update('explore_label_it', v)} />
                     <FieldText label='Button "EXPLORE" (EN)' value={copy.explore_label_en} onChange={v => update('explore_label_en', v)} />
+                    <FieldText label='Voce "ACCOUNT" (IT)' value={copy.account_label_it ?? ''} onChange={v => update('account_label_it', v)} />
+                    <FieldText label='Item "ACCOUNT" (EN)' value={copy.account_label_en ?? ''} onChange={v => update('account_label_en', v)} />
                     <FieldText label='Pill "Credit Wallet" (IT)' value={copy.credit_wallet_label_it} onChange={v => update('credit_wallet_label_it', v)} />
                     <FieldText label='Pill "Credit Wallet" (EN)' value={copy.credit_wallet_label_en} onChange={v => update('credit_wallet_label_en', v)} />
                 </div>
