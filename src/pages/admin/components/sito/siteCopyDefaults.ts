@@ -1084,6 +1084,29 @@ export interface AspettoCopy {
   /** Popup del tour in elicottero. */
   heli_tour_popup_enabled?: boolean;
 
+  // ── Filmati delle pagine ────────────────────────────────────────────────
+  // 10/09/2026 — i filmati erano scritti dentro le pagine: cambiarne uno
+  // voleva dire toccare il codice. Ora ogni filmato e' un campo di Sito >
+  // Aspetto & Funzionalita': si incolla il percorso di un file caricato sul
+  // sito (es. /video-terra.mp4) o l'indirizzo completo di un file esterno.
+  // Il poster e' il fotogramma mostrato prima che il filmato parta, e quando
+  // il telefono nega la riproduzione automatica: senza, resta il nero.
+  /** Terra (pagina Flotta). */
+  video_terra_url?: string;
+  video_terra_poster?: string;
+  /** Noleggio Mare. */
+  video_mare_url?: string;
+  video_mare_poster?: string;
+  /** Noleggio Aria. */
+  video_aria_url?: string;
+  video_aria_poster?: string;
+  /** Soggiorni & Ospitalita'. */
+  video_soggiorni_url?: string;
+  video_soggiorni_poster?: string;
+  /** Lavaggio & Meccanica. */
+  video_lavaggio_url?: string;
+  video_lavaggio_poster?: string;
+
   // ── Tema ────────────────────────────────────────────────────────────────
   // I colori e la coppia tipografica del sito. Il sito li applica come
   // VARIABILI CSS, non come classi: una classe Tailwind composta a runtime
@@ -1675,6 +1698,19 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   // Funzionalita' se un giorno lo si vuole riaccendere.
   auto_booking_popup_enabled: false,
   heli_tour_popup_enabled: true,
+  // I filmati di fabbrica sono quelli gia' caricati in /public: finche'
+  // nessuno tocca i campi in Aspetto & Funzionalita', il sito si comporta
+  // esattamente come prima.
+  video_terra_url: '/video-terra.mp4',
+  video_terra_poster: '/video-terra-poster.jpg',
+  video_mare_url: '/video-mare.mp4',
+  video_mare_poster: '/video-mare-poster.jpg',
+  video_aria_url: '/video-aria.mp4',
+  video_aria_poster: '/video-aria-poster.jpg',
+  video_soggiorni_url: '/video-soggiorni.mp4',
+  video_soggiorni_poster: '/video-soggiorni-poster.jpg',
+  video_lavaggio_url: '/video-lavaggio.mp4',
+  video_lavaggio_poster: '/video-lavaggio-poster.jpg',
   tema_bg: '#08090A',
   tema_surface: '#131416',
   tema_ink: '#F6F3ED',

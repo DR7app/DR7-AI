@@ -6297,6 +6297,15 @@ function FieldPx({ label, value, onChange }: { label: string; value: number; onC
     )
 }
 
+/** Le sezioni del sito che si aprono con un filmato, nell'ordine del menu. */
+const FILMATI_PAGINE: Array<{ chiave: string; etichetta: string }> = [
+    { chiave: 'terra', etichetta: 'Terra (Flotta)' },
+    { chiave: 'mare', etichetta: 'Noleggio Mare' },
+    { chiave: 'aria', etichetta: 'Noleggio Aria' },
+    { chiave: 'soggiorni', etichetta: 'Soggiorni & Ospitalita\'' },
+    { chiave: 'lavaggio', etichetta: 'Lavaggio & Meccanica' },
+]
+
 function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy: (next: Required<AspettoCopy>) => void }) {
     const update = <K extends keyof AspettoCopy>(key: K, value: Required<AspettoCopy>[K]) => setCopy({ ...copy, [key]: value })
     return (
@@ -6431,6 +6440,36 @@ function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy
                         </div>
                     </div>
                 </div>
+            </section>
+
+            {/* Filmati delle pagine — 10/09/2026. Prima stavano scritti dentro
+                il codice del sito: cambiarne uno voleva dire una riga di
+                codice e un rilascio. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div>
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Filmati delle pagine</h3>
+                    <p className="text-[11px] text-theme-text-secondary mt-1">
+                        Il filmato che si apre dietro al titolo di ogni sezione. Si incolla il percorso di
+                        un file gia' caricato sul sito (es. <b>/video-terra.mp4</b>) oppure l'indirizzo
+                        completo di un file esterno. Il <b>poster</b> e' il fotogramma mostrato prima che
+                        il filmato parta e quando il telefono nega la riproduzione automatica: senza
+                        poster resta il nero.
+                    </p>
+                </div>
+                {FILMATI_PAGINE.map(f => (
+                    <div key={f.chiave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FieldText
+                            label={`${f.etichetta} — filmato`}
+                            value={(copy as unknown as Record<string, string>)[`video_${f.chiave}_url`] || ''}
+                            onChange={v => update(`video_${f.chiave}_url` as keyof AspettoCopy, v as never)}
+                        />
+                        <FieldText
+                            label={`${f.etichetta} — poster`}
+                            value={(copy as unknown as Record<string, string>)[`video_${f.chiave}_poster`] || ''}
+                            onChange={v => update(`video_${f.chiave}_poster` as keyof AspettoCopy, v as never)}
+                        />
+                    </div>
+                ))}
             </section>
 
             {/* Widget di ogni pagina */}
