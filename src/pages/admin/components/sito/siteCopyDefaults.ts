@@ -1124,6 +1124,9 @@ export interface AspettoCopy {
   /** Il mio account. */
   video_account_url?: string;
   video_account_poster?: string;
+  /** Contattaci. */
+  video_contatti_url?: string;
+  video_contatti_poster?: string;
 
   // ── Tema ────────────────────────────────────────────────────────────────
   // I colori e la coppia tipografica del sito. Il sito li applica come
@@ -1745,6 +1748,8 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   video_privilege_poster: '/poster/video-privilege.jpg',
   video_account_url: '/video-account.mp4',
   video_account_poster: '/poster/video-account.jpg',
+  video_contatti_url: '/video-contatti.mp4',
+  video_contatti_poster: '/poster/video-contatti.jpg',
   tema_bg: '#08090A',
   tema_surface: '#131416',
   tema_ink: '#F6F3ED',

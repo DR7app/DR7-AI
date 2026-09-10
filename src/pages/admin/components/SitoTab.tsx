@@ -6317,6 +6317,7 @@ const FILMATI_PAGINE: Array<{ chiave: string; etichetta: string }> = [
     { chiave: 'business', etichetta: 'Business (Franchising)' },
     { chiave: 'digitale', etichetta: 'Innovazione Digitale' },
     { chiave: 'account', etichetta: 'Area cliente' },
+    { chiave: 'contatti', etichetta: 'Contattaci' },
 ]
 
 function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy: (next: Required<AspettoCopy>) => void }) {
