@@ -1556,6 +1556,10 @@ export interface FooterCopy {
   reviews_title_en?: string;
   reviews_text_it: string;
   reviews_text_en: string;
+  /** La scena sotto le recensioni: percorso di un'immagine gia' sul sito
+   *  (es. /recensioni-scena.jpg) o indirizzo completo. Vuota = nessuna
+   *  fascia. */
+  reviews_image?: string;
   // Contact band
   contact_title: string;
   contact_whatsapp_number: string;     // displayed text, e.g. "+39 345 790 5205"
@@ -3008,6 +3012,7 @@ export const INITIAL_FOOTER: FooterCopy = {
   reviews_title_en: 'One standard only.',
   reviews_text_it: 'Clienti da tutto il mondo. Storie reali, esperienze che parlano per noi.',
   reviews_text_en: 'Guests from all over the world. Real stories, experiences that speak for us.',
+  reviews_image: '/recensioni-scena.jpg',
   contact_title: 'Contact',
   contact_whatsapp_number: '+39 345 790 5205',
   contact_whatsapp_url: 'https://wa.me/393457905205',
