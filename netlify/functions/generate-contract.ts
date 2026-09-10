@@ -1672,7 +1672,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                         // Importo vuoto in Centralina = si stampa solo il nome
                         // della penale, senza inventare uno zero.
                         const vuoto = v?.amount === '' || v?.amount === null || v?.amount === undefined || !Number.isFinite(n)
-                        return vuoto ? nome : `${nome}: €${n.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
+                        return vuoto ? nome : `${nome}: € ${n.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
                     })
                 penaliListaTesto = righe.join('\n')
                 const meta = Math.ceil(righe.length / 2)
