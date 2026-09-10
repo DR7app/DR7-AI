@@ -164,6 +164,10 @@ export default function AccontiTab() {
   async function registra() {
     const cents = Math.round(parseFloat((importo || '').replace(',', '.')) * 100)
     if (!Number.isFinite(cents) || cents <= 0) { toast.error('Inserisci un importo valido'); return }
+    // La causale e' obbligatoria: e' l'unica riga del messaggio al
+    // collaboratore che dice PERCHE' ha ricevuto quei soldi. Senza, arrivava
+    // un importo secco e nessuno sapeva a cosa si riferisse.
+    if (!causale.trim()) { toast.error('Scrivi la causale: finisce nel messaggio al collaboratore'); return }
     // Solo direzione puo' intestare l'acconto a un altro operatore; per tutti
     // gli altri (e in mancanza di scelta) resta l'utente loggato. `created_by`
     // e' sempre chi ha materialmente inserito la riga, cosi' resta la traccia.
@@ -324,7 +328,7 @@ export default function AccontiTab() {
                 {METODI.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </label>
-            <label className="text-xs text-theme-text-muted sm:col-span-1">Causale
+            <label className="text-xs text-theme-text-muted sm:col-span-1">Causale *
               <input value={causale} onChange={e => setCausale(e.target.value)} placeholder="Es. Contanti noleggio" className="mt-1 w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm" />
             </label>
             <label className="text-xs text-theme-text-muted sm:col-span-2">Nota (facoltativa)

@@ -762,7 +762,8 @@ const handler: Handler = async (event) => {
         // Acconto Giornaliero (evento on_acconto): il "booking" e' sintetico e
         // porta i dati della riga acconti_giornalieri. Le variabili restano
         // vuote per tutti gli altri messaggi.
-        if (booking.acconto_data || booking.acconto_causale || booking.operatore_nome) {
+        const isAcconto = Boolean(booking.acconto_data || booking.acconto_causale || booking.acconto_note || booking.operatore_nome);
+        if (isAcconto) {
           vars.operatore = booking.operatore_nome || vars.customer_name;
           vars.collaboratore = vars.operatore;
           vars.causale = booking.acconto_causale || '';
@@ -771,6 +772,12 @@ const handler: Handler = async (event) => {
           vars.data_acconto = booking.acconto_data || '';
           vars.acconto = vars.total;
           vars.importo_acconto = vars.total;
+          // La nota scritta in tab Acconti viaggiava fino al sender e li' si
+          // fermava: {note}/{nota} restavano agganciate a booking_details, che
+          // per un acconto e' vuoto. Il collaboratore riceveva un importo senza
+          // il "perche'".
+          vars.note = booking.acconto_note || '';
+          vars.nota = vars.note;
         }
         vars.booking_ref = vars.booking_id;
         vars.bookingRef = vars.booking_id;
@@ -900,6 +907,17 @@ const handler: Handler = async (event) => {
         // Replace all {variable} placeholders
         for (const [k, v] of Object.entries(vars)) {
           finalMessage = finalMessage.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '');
+        }
+
+        // Acconto: causale e nota sono facoltative in tab Acconti. Quando
+        // mancano, la riga "Causale:" resterebbe monca nel messaggio, quindi
+        // si toglie tutta. Limitato all'acconto: altrove un rigo che finisce
+        // con ":" e' spesso un titolo con il contenuto sotto.
+        if (isAcconto) {
+          finalMessage = finalMessage
+            .replace(/^[ \t]*[•\-*]?[ \t]*\*?[^:\n]{1,40}\*?:[ \t]*$/gm, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
         }
       }
     } catch (e) {
