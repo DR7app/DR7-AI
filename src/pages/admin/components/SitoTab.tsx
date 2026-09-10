@@ -6311,6 +6311,12 @@ const FILMATI_PAGINE: Array<{ chiave: string; etichetta: string }> = [
     { chiave: 'aria', etichetta: 'Noleggio Aria' },
     { chiave: 'soggiorni', etichetta: 'Soggiorni & Ospitalita\'' },
     { chiave: 'lavaggio', etichetta: 'Lavaggio & Meccanica' },
+    { chiave: 'wallet', etichetta: 'Credit Wallet' },
+    { chiave: 'club', etichetta: 'DR7 Club' },
+    { chiave: 'privilege', etichetta: 'DR7 Club Privilege' },
+    { chiave: 'business', etichetta: 'Business (Franchising)' },
+    { chiave: 'digitale', etichetta: 'Innovazione Digitale' },
+    { chiave: 'account', etichetta: 'Area cliente' },
 ]
 
 function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy: (next: Required<AspettoCopy>) => void }) {

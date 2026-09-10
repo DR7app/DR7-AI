@@ -1106,6 +1106,24 @@ export interface AspettoCopy {
   /** Lavaggio & Meccanica. */
   video_lavaggio_url?: string;
   video_lavaggio_poster?: string;
+  /** Credit Wallet. */
+  video_wallet_url?: string;
+  video_wallet_poster?: string;
+  /** Business (Franchising). */
+  video_business_url?: string;
+  video_business_poster?: string;
+  /** Innovazione Digitale (Token). */
+  video_digitale_url?: string;
+  video_digitale_poster?: string;
+  /** DR7 Club. */
+  video_club_url?: string;
+  video_club_poster?: string;
+  /** DR7 Club Privilege. */
+  video_privilege_url?: string;
+  video_privilege_poster?: string;
+  /** Il mio account. */
+  video_account_url?: string;
+  video_account_poster?: string;
 
   // ── Tema ────────────────────────────────────────────────────────────────
   // I colori e la coppia tipografica del sito. Il sito li applica come
@@ -1715,6 +1733,18 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   video_soggiorni_poster: '/video-soggiorni-poster.jpg',
   video_lavaggio_url: '/video-lavaggio.mp4',
   video_lavaggio_poster: '/video-lavaggio-poster.jpg',
+  video_wallet_url: '/video-wallet.mp4',
+  video_wallet_poster: '/poster/video-wallet.jpg',
+  video_business_url: '/video-business.mp4',
+  video_business_poster: '/poster/video-business.jpg',
+  video_digitale_url: '/video-digitale.mp4',
+  video_digitale_poster: '/poster/video-digitale.jpg',
+  video_club_url: '/video-club.mp4',
+  video_club_poster: '/poster/video-club.jpg',
+  video_privilege_url: '/video-privilege.mp4',
+  video_privilege_poster: '/poster/video-privilege.jpg',
+  video_account_url: '/video-account.mp4',
+  video_account_poster: '/poster/video-account.jpg',
   tema_bg: '#08090A',
   tema_surface: '#131416',
   tema_ink: '#F6F3ED',
