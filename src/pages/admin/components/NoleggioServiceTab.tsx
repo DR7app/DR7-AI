@@ -515,7 +515,20 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {items.map(it => (
             <div key={it.id} className={`border rounded-lg overflow-hidden bg-theme-bg-secondary ${it.is_active ? 'border-theme-border' : 'border-theme-border opacity-60'}`}>
-              {it.image_url && <img src={it.image_url} alt={it.name} className="w-full h-44 object-contain bg-theme-bg-tertiary" />}
+              {/* 10/09/2026 — la copertina della scheda: se non c'e' una foto
+                  (schede caricate con il solo video) si mostra il primo
+                  elemento della galleria, video compreso. Prima restava un
+                  riquadro vuoto e sembrava che il caricamento non fosse
+                  andato a buon fine. */}
+              {(() => {
+                const copertina = it.image_url
+                  ? { tipo: 'image' as const, url: it.image_url }
+                  : (Array.isArray(it.media) ? it.media[0] : null)
+                if (!copertina) return null
+                return copertina.tipo === 'video'
+                  ? <video src={copertina.url} className="w-full h-44 object-contain bg-theme-bg-tertiary" muted playsInline preload="metadata" controls />
+                  : <img src={copertina.url} alt={it.name} className="w-full h-44 object-contain bg-theme-bg-tertiary" />
+              })()}
               <div className="p-3 space-y-1">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold text-theme-text-primary">{it.name}</div>
