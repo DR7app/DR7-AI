@@ -269,6 +269,71 @@ function riquadriDelCampo(pdfDoc: any, form: any, nome: string): Riquadro[] {
     }
 }
 
+/**
+ * 10/09/2026 — I nomi che il modello puo' dare al riquadro delle penali. Uno
+ * solo (`PenaliLista`) oppure due affiancati (`PenaliColonna1/2`), come la
+ * vecchia tabella a due colonne.
+ */
+const CASELLE_PENALI = new Set([
+    'PenaliLista', 'Penali', 'TabellaPenali', 'PenaliEAddebiti',
+    'PenaliColonna1', 'PenaliColonna2',
+])
+
+/**
+ * Disegna l'elenco delle penali dentro i riquadri del modello come una tabella:
+ * una penale per riga, righe alte uguali in tutte le colonne e un filetto di
+ * separazione sotto ciascuna, come la tabella stampata di prima. Corpo del
+ * testo e altezza riga si calcolano sul riquadro, cosi' una categoria con
+ * poche penali riempie lo spazio e una con tante rientra lo stesso.
+ */
+function disegnaTabellaPenali(
+    pagine: any[],
+    colonne: { rq: Riquadro; righe: string[] }[],
+    font: any,
+): void {
+    const nRighe = Math.max(...colonne.map(c => c.righe.length), 1)
+    const altezzaUtile = Math.min(...colonne.map(c => c.rq.h)) - 4
+    const larghezzaUtile = Math.min(...colonne.map(c => c.rq.w)) - 10
+
+    // L'elenco cambia da Centralina Pro: la riga si allarga fino a riempire il
+    // riquadro (mai oltre 18 punti, altrimenti le penali si perdono nel vuoto)
+    // e si stringe quanto serve quando le voci sono tante. Nessun minimo fisso:
+    // meglio scritto piccolo che scritto fuori dal riquadro.
+    const altezzaRiga = Math.min(18, altezzaUtile / nRighe)
+
+    // Il corpo segue l'altezza della riga e scende ancora finche' la penale col
+    // nome piu' lungo non sta nella colonna.
+    let corpo = Math.min(7.5, altezzaRiga * 0.68)
+    const piuLunga = colonne.flatMap(c => c.righe).reduce((a, b) => (a.length >= b.length ? a : b), '')
+    while (corpo > 3.5 && font.widthOfTextAtSize(piuLunga, corpo) > larghezzaUtile) corpo -= 0.25
+
+    for (const { rq, righe } of colonne) {
+        const pg = pagine[rq.pagina]
+        if (!pg) continue
+        const alto = rq.y + rq.h - 2
+        righe.forEach((riga, i) => {
+            const cima = alto - i * altezzaRiga
+            pg.drawText(riga, {
+                x: rq.x + 5,
+                y: cima - altezzaRiga + (altezzaRiga - corpo) / 2 + corpo * 0.22,
+                size: corpo,
+                font,
+                color: rgb(0, 0, 0),
+            })
+            // Filetto sotto la riga, tranne l'ultima: e' il bordo del riquadro.
+            if (i < righe.length - 1) {
+                pg.drawLine({
+                    start: { x: rq.x + 2, y: cima - altezzaRiga },
+                    end: { x: rq.x + rq.w - 2, y: cima - altezzaRiga },
+                    thickness: 0.4,
+                    color: rgb(0.72, 0.72, 0.72),
+                })
+            }
+        })
+    }
+    console.log(`[generate-contract] Penali: ${nRighe} righe, corpo ${corpo}, riga ${altezzaRiga.toFixed(1)}pt`)
+}
+
 // Helper function to sanitize text for WinAnsi encoding
 // Transliterates Cyrillic and other non-Latin characters to Latin equivalents
 function sanitizeForPDF(text: string): string {
@@ -2122,10 +2187,15 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                     // Caselle "elenco" (penali, franchigie): il testo e' gia' su
                     // piu' righe e va lasciato tale, con il corpo ridotto quanto
                     // basta per non uscire dal riquadro.
-                    const casellaElenco = key === 'PenaliLista' || key === 'Penali' || key === 'TabellaPenali'
-                        || key === 'PenaliEAddebiti' || key === 'PenaliColonna1' || key === 'PenaliColonna2'
-                        || key === 'FranchigieLista'
-                    if (typeof value === 'string' && (casellaElenco || value.includes('\n'))) {
+                    // L'elenco delle penali non passa dalla casella: il modulo
+                    // PDF non sa distanziare le righe e le stampa attaccate.
+                    // Si svuota qui e si disegna a mano dopo l'appiattimento,
+                    // con corpo e interlinea calcolati sul riquadro.
+                    if (CASELLE_PENALI.has(key)) {
+                        try { field.setText('') } catch { /* non e' un campo di testo */ }
+                        continue
+                    }
+                    if (typeof value === 'string' && (key === 'FranchigieLista' || value.includes('\n'))) {
                         riempiCasellaMultiriga(field, value)
                         filledFields++
                         continue
@@ -2229,6 +2299,21 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             const rqLocatoreEmail = riquadriDelCampo(pdfDoc, form, 'text_59ujqk')
             const rqLuogoStipula = riquadriDelCampo(pdfDoc, form, 'Testo1')
             const rqLogo = riquadriDelCampo(pdfDoc, form, 'Immagine2_af_image')[0]
+            // Riquadri della tabella penali: si leggono PRIMA di appiattire,
+            // che li fa sparire. Il testo si disegna dopo, sopra tutto.
+            const colonnePenali: { rq: Riquadro; righe: string[] }[] = []
+            for (const [nome, testo] of [
+                ['PenaliLista', penaliListaTesto],
+                ['Penali', penaliListaTesto],
+                ['TabellaPenali', penaliListaTesto],
+                ['PenaliEAddebiti', penaliListaTesto],
+                ['PenaliColonna1', penaliColonna1],
+                ['PenaliColonna2', penaliColonna2],
+            ] as [string, string][]) {
+                if (!testo) continue
+                const rq = riquadriDelCampo(pdfDoc, form, nome)[0]
+                if (rq) colonnePenali.push({ rq, righe: testo.split('\n').map(r => sanitizeForPDF(r)).filter(Boolean) })
+            }
             // `Testo4` esiste solo sul modello uniforme, dove la sezione
             // "DATI LOCATORE" e' vuota. Sul modello vecchio quei dati sono
             // gia' stampati: riscriverli li raddoppierebbe.
@@ -2314,6 +2399,15 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                             })
                         }
                         console.log(`[generate-contract] Riga franchigie: "${insuranceLabel}" al posto della parola Kasko`)
+                    }
+                }
+
+                // La tabella delle penali della categoria.
+                if (colonnePenali.length > 0) {
+                    try {
+                        disegnaTabellaPenali(pagine, colonnePenali, fontLoc)
+                    } catch (penDrawErr) {
+                        console.warn('[generate-contract] tabella penali non disegnata:', (penDrawErr as Error).message)
                     }
                 }
 
