@@ -1556,9 +1556,9 @@ export interface FooterCopy {
   reviews_title_en?: string;
   reviews_text_it: string;
   reviews_text_en: string;
-  /** La scena sotto le recensioni: percorso di un'immagine gia' sul sito
-   *  (es. /recensioni-scena.jpg) o indirizzo completo. Vuota = nessuna
-   *  fascia. */
+  /** La scena DIETRO le recensioni: percorso di un'immagine gia' sul sito
+   *  (es. /recensioni-scena.jpg) o indirizzo completo. Sta a destra e si
+   *  spegne verso sinistra, dove corre il testo. Vuota = solo il fondo. */
   reviews_image?: string;
   // Contact band
   contact_title: string;

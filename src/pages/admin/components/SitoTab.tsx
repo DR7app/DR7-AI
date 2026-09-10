@@ -2848,12 +2848,13 @@ function FooterEditor({
                     <FieldTextArea label="Testo (IT)" value={copy.reviews_text_it} onChange={v => updateField('reviews_text_it', v)} />
                     <FieldTextArea label="Testo (EN)" value={copy.reviews_text_en} onChange={v => updateField('reviews_text_en', v)} />
                 </div>
-                <FieldText label="Immagine sotto le recensioni (percorso o URL)" value={copy.reviews_image ?? ''} onChange={v => updateField('reviews_image', v)} />
+                <FieldText label="Immagine dietro le recensioni (percorso o URL)" value={copy.reviews_image ?? ''} onChange={v => updateField('reviews_image', v)} />
                 <p className="text-[11px] text-theme-text-secondary">
                     Il titolo e' la SECONDA riga: la prima la scrive il sito col numero vero delle
                     recensioni Google (es. "317 esperienze."). Quel numero, il voto e le schede
                     arrivano da Google a ogni apertura della pagina e non si scrivono qui.
-                    L'immagine chiude la sezione: lasciala vuota per non mostrarne nessuna.
+                    L'immagine sta dietro alla sezione, appoggiata a destra e spenta verso
+                    sinistra dove corre il testo: lasciala vuota per non mostrarne nessuna.
                 </p>
             </section>
 
