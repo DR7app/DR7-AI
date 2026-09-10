@@ -477,8 +477,12 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {form.media.map((m, i) => (
                 <div key={`${m.url}-${i}`} className="relative border border-theme-border rounded-lg overflow-hidden bg-theme-bg-tertiary">
+                  {/* 10/09/2026 — il riquadro del video parte da solo, senza
+                      audio, in ciclo: con il solo `preload="metadata"` restava
+                      un rettangolo nero e sembrava che il caricamento non
+                      fosse andato a buon fine. */}
                   {m.tipo === 'video'
-                    ? <video src={m.url} className="w-full h-20 object-cover" muted playsInline preload="metadata" />
+                    ? <video src={m.url} className="w-full h-20 object-cover" autoPlay muted loop playsInline preload="metadata" />
                     : <img src={m.url} alt="" className="w-full h-20 object-cover" />}
                   {i === 0 && m.tipo === 'image' && (
                     <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] uppercase tracking-wider text-white">Copertina</span>
@@ -515,18 +519,19 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {items.map(it => (
             <div key={it.id} className={`border rounded-lg overflow-hidden bg-theme-bg-secondary ${it.is_active ? 'border-theme-border' : 'border-theme-border opacity-60'}`}>
-              {/* 10/09/2026 — la copertina della scheda: se non c'e' una foto
-                  (schede caricate con il solo video) si mostra il primo
-                  elemento della galleria, video compreso. Prima restava un
-                  riquadro vuoto e sembrava che il caricamento non fosse
-                  andato a buon fine. */}
+              {/* 10/09/2026 — la copertina della scheda e' il PRIMO elemento
+                  della galleria, video compreso: e' l'ordine deciso qui
+                  dentro con le frecce, ed e' lo stesso che vede il cliente
+                  sul sito. Chi caricava un video e vedeva sempre e solo la
+                  foto pensava che il video non fosse arrivato. Le schede
+                  vecchie, senza galleria, restano sulla loro `image_url`. */}
               {(() => {
-                const copertina = it.image_url
-                  ? { tipo: 'image' as const, url: it.image_url }
-                  : (Array.isArray(it.media) ? it.media[0] : null)
+                const galleria = Array.isArray(it.media) ? it.media : []
+                const copertina = galleria[0]
+                  || (it.image_url ? { tipo: 'image' as const, url: it.image_url } : null)
                 if (!copertina) return null
                 return copertina.tipo === 'video'
-                  ? <video src={copertina.url} className="w-full h-44 object-contain bg-theme-bg-tertiary" muted playsInline preload="metadata" controls />
+                  ? <video src={copertina.url} className="w-full h-44 object-contain bg-theme-bg-tertiary" autoPlay muted loop playsInline preload="metadata" controls />
                   : <img src={copertina.url} alt={it.name} className="w-full h-44 object-contain bg-theme-bg-tertiary" />
               })()}
               <div className="p-3 space-y-1">
