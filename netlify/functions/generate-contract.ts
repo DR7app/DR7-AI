@@ -1585,6 +1585,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // e Urban le sue, e aggiungere una penale non richiede piu' di toccare
         // il PDF.
         let penaliListaTesto = ''
+        // Chi preferisce due riquadri affiancati come la vecchia tabella usa
+        // PenaliColonna1 / PenaliColonna2: l'elenco si divide a meta' da solo.
+        let penaliColonna1 = ''
+        let penaliColonna2 = ''
         try {
             const tuttePenali = (cpCfg?.config as { penali?: Record<string, unknown> })?.penali || {}
             const cat = String(vehicleCategory || '').toLowerCase()
@@ -1606,6 +1610,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                         return vuoto ? nome : `${nome}: €${n.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
                     })
                 penaliListaTesto = righe.join('\n')
+                const meta = Math.ceil(righe.length / 2)
+                penaliColonna1 = righe.slice(0, meta).join('\n')
+                penaliColonna2 = righe.slice(meta).join('\n')
                 console.log(`[generate-contract] Penali contratto: ${righe.length} righe per categoria "${vehicleCategory}"`)
             } else {
                 console.warn(`[generate-contract] Nessuna penale in Centralina Pro per la categoria "${vehicleCategory}"`)
@@ -1813,6 +1820,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'Penali': penaliListaTesto,
             'TabellaPenali': penaliListaTesto,
             'PenaliEAddebiti': penaliListaTesto,
+            // Due riquadri affiancati, come la vecchia tabella a due colonne.
+            'PenaliColonna1': penaliColonna1,
+            'PenaliColonna2': penaliColonna2,
             // Cauzione amount resolution.
             // - cauzione_auto = true means the customer pledged THEIR OWN vehicle
             //   as deposit; the field becomes the targa instead of an amount.
@@ -2112,7 +2122,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                     // Caselle "elenco" (penali, franchigie): il testo e' gia' su
                     // piu' righe e va lasciato tale, con il corpo ridotto quanto
                     // basta per non uscire dal riquadro.
-                    if (typeof value === 'string' && value.includes('\n')) {
+                    const casellaElenco = key === 'PenaliLista' || key === 'Penali' || key === 'TabellaPenali'
+                        || key === 'PenaliEAddebiti' || key === 'PenaliColonna1' || key === 'PenaliColonna2'
+                        || key === 'FranchigieLista'
+                    if (typeof value === 'string' && (casellaElenco || value.includes('\n'))) {
                         riempiCasellaMultiriga(field, value)
                         filledFields++
                         continue
