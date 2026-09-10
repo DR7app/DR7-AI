@@ -3000,11 +3000,14 @@ export const INITIAL_FOOTER: FooterCopy = {
     { id: 'ig', label: 'Instagram', href: 'https://www.instagram.com/dubai_rent_7.0_s_p_a_', icon: 'instagram' },
     { id: 'tt', label: 'Tiktok',    href: 'https://www.tiktok.com/@dr7luxuryempire',           icon: 'tiktok' },
   ],
-  reviews_title: 'A Global Standard of Excellence',
-  reviews_title_it: 'Uno Standard Globale di Eccellenza',
-  reviews_title_en: 'A Global Standard of Excellence',
-  reviews_text_it: 'DR7 Cagliari mantiene un rating impeccabile di 5.0/5.0 su più di 300 recensioni verificate, confermandosi un punto di riferimento nel settore della luxury mobility.',
-  reviews_text_en: 'DR7 Cagliari maintains a flawless 5.0/5.0 rating across more than 300 verified reviews, confirming itself as a benchmark in the luxury mobility sector.',
+  // 10/09/2026 — il titolo e' la SECONDA riga: la prima la scrive la vetrina
+  // col numero vero delle recensioni ("317 esperienze."). Percio' qui sta una
+  // frase corta che chiude, non un titolo intero.
+  reviews_title: 'One standard only.',
+  reviews_title_it: 'Un solo standard.',
+  reviews_title_en: 'One standard only.',
+  reviews_text_it: 'Clienti da tutto il mondo. Storie reali, esperienze che parlano per noi.',
+  reviews_text_en: 'Guests from all over the world. Real stories, experiences that speak for us.',
   contact_title: 'Contact',
   contact_whatsapp_number: '+39 345 790 5205',
   contact_whatsapp_url: 'https://wa.me/393457905205',
