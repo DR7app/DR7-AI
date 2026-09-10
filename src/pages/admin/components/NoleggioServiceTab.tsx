@@ -69,6 +69,15 @@ interface TourDurationOpt {
   description?: string
   best_value?: boolean
 }
+/**
+ * Una voce della galleria: foto o video dell'alloggio / del mezzo.
+ * L'ordine e' quello che si vede; la prima immagine e' la copertina.
+ */
+interface MediaCatalogo {
+  url: string
+  tipo: 'image' | 'video'
+}
+
 interface CatalogRow {
   id: string
   service_type: string
@@ -77,6 +86,8 @@ interface CatalogRow {
   price_per_day: number
   capacity: number | null
   image_url: string | null
+  /** Galleria completa. Assente finche' non e' stata eseguita la migration. */
+  media?: MediaCatalogo[] | null
   is_active: boolean
   sort_order: number
   tour_durations?: TourDurationOpt[]
@@ -258,7 +269,11 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
 /* ------------------------------- CATALOGO ------------------------------- */
 
-const EMPTY_CATALOG = { name: '', description: '', price_per_day: '', capacity: '', image_url: '', is_active: true }
+const EMPTY_CATALOG = { name: '', description: '', price_per_day: '', capacity: '', image_url: '', media: [] as MediaCatalogo[], is_active: true }
+
+/** Limiti del bucket `catalog-images` dopo la migration del 10/09/2026. */
+const MAX_MB_FOTO = 20
+const MAX_MB_VIDEO = 200
 
 function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const [items, setItems] = useState<CatalogRow[]>([])
@@ -271,32 +286,85 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
   const [uploadingImage, setUploadingImage] = useState(false)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Upload immagine come nel Catalogo Prime Wash: niente URL, solo file.
-  // Stesso bucket 'catalog-images', cartella dedicata al noleggio.
-  async function uploadImage(file: File) {
-    if (!file.type.startsWith('image/')) { setError('Solo file immagine (PNG, JPG, WEBP).'); return }
+  // 10/09/2026 — una casa non si racconta con una foto sola: si caricano
+  // tutte le foto che servono e anche il video della visita, in un colpo
+  // solo. Stesso bucket 'catalog-images' di prima, cartella del noleggio.
+  // La prima immagine della galleria resta la copertina (`image_url`), cosi'
+  // il sito e le altre schede continuano a vedere quello che vedevano.
+  async function uploadMedia(files: File[]) {
+    if (files.length === 0) return
     setUploadingImage(true); setError('')
+    const caricati: MediaCatalogo[] = []
+    const problemi: string[] = []
     try {
-      const ext = file.name.split('.').pop() || 'png'
-      const fileName = `noleggio-${serviceType}-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('catalog-images')
-        .upload(`noleggio-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
-      if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`noleggio-catalog/${fileName}`)
-      setForm(prev => ({ ...prev, image_url: urlData?.publicUrl || '' }))
+      for (const file of files) {
+        const isVideo = file.type.startsWith('video/')
+        const isImmagine = file.type.startsWith('image/')
+        if (!isVideo && !isImmagine) { problemi.push(`${file.name}: non è una foto né un video`); continue }
+        const maxMb = isVideo ? MAX_MB_VIDEO : MAX_MB_FOTO
+        if (file.size > maxMb * 1024 * 1024) { problemi.push(`${file.name}: troppo pesante (massimo ${maxMb} MB)`); continue }
+
+        const ext = file.name.split('.').pop() || (isVideo ? 'mp4' : 'png')
+        const fileName = `noleggio-${serviceType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('catalog-images')
+          .upload(`noleggio-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true, contentType: file.type })
+        if (upErr) {
+          // Il bucket nasce solo-immagini da 10 MB: finche' non e' stata
+          // eseguita la migration del 10/09/2026 i video li rifiuta, e
+          // scriverlo chiaro evita mezz'ora di prove.
+          problemi.push(`${file.name}: ${upErr.message}${isVideo ? ' — per i video serve la migration 20260910_noleggio_catalog_media.sql' : ''}`)
+          continue
+        }
+        const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`noleggio-catalog/${fileName}`)
+        if (urlData?.publicUrl) caricati.push({ url: urlData.publicUrl, tipo: isVideo ? 'video' : 'image' })
+      }
+
+      if (caricati.length > 0) {
+        setForm(prev => {
+          const media = [...prev.media, ...caricati]
+          const copertina = media.find(m => m.tipo === 'image')?.url || ''
+          return { ...prev, media, image_url: prev.image_url || copertina }
+        })
+      }
+      if (problemi.length > 0) setError(problemi.join(' · '))
     } catch (err: unknown) {
-      setError('Errore upload immagine: ' + (err as Error).message)
+      setError('Errore caricamento: ' + (err as Error).message)
     } finally {
       setUploadingImage(false)
     }
   }
 
+  /** Toglie una foto o un video dalla galleria (il file resta nel bucket). */
+  function rimuoviMedia(indice: number) {
+    setForm(prev => {
+      const media = prev.media.filter((_, i) => i !== indice)
+      const copertina = media.find(m => m.tipo === 'image')?.url || ''
+      return { ...prev, media, image_url: copertina }
+    })
+  }
+
+  /** Sposta una voce: l'ordine della galleria e' quello che vede il cliente. */
+  function spostaMedia(indice: number, verso: -1 | 1) {
+    setForm(prev => {
+      const media = [...prev.media]
+      const destinazione = indice + verso
+      if (destinazione < 0 || destinazione >= media.length) return prev
+      const [voce] = media.splice(indice, 1)
+      media.splice(destinazione, 0, voce)
+      const copertina = media.find(m => m.tipo === 'image')?.url || ''
+      return { ...prev, media, image_url: copertina }
+    })
+  }
+
   const load = useCallback(async () => {
     setLoading(true); setError('')
+    // `select('*')`: la galleria (`media`) arriva se la migration del
+    // 10/09/2026 e' stata eseguita, e il catalogo si apre lo stesso se non
+    // lo e' ancora. Con l'elenco esplicito la lettura sarebbe fallita.
     const { data, error: e } = await supabase
       .from('noleggio_catalog')
-      .select('id, service_type, name, description, price_per_day, capacity, image_url, is_active, sort_order')
+      .select('*')
       .eq('service_type', serviceType)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
@@ -309,26 +377,52 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
   function openNew() { setEditingId(null); setForm(EMPTY_CATALOG); setShowForm(true) }
   function openEdit(it: CatalogRow) {
     setEditingId(it.id)
-    setForm({ name: it.name, description: it.description || '', price_per_day: centsToEur(it.price_per_day), capacity: it.capacity != null ? String(it.capacity) : '', image_url: it.image_url || '', is_active: it.is_active })
+    // Schede vecchie: la sola copertina diventa il primo elemento della
+    // galleria, cosi' non si riparte da zero.
+    const galleria: MediaCatalogo[] = Array.isArray(it.media) && it.media.length > 0
+      ? it.media
+      : (it.image_url ? [{ url: it.image_url, tipo: 'image' as const }] : [])
+    setForm({ name: it.name, description: it.description || '', price_per_day: centsToEur(it.price_per_day), capacity: it.capacity != null ? String(it.capacity) : '', image_url: it.image_url || '', media: galleria, is_active: it.is_active })
     setShowForm(true)
   }
 
   async function save() {
     if (!form.name.trim()) { setError('Il nome è obbligatorio.'); return }
     setSaving(true); setError('')
+    // La copertina e' sempre la prima immagine della galleria: chi legge
+    // solo `image_url` (il sito, le altre schede) vede la stessa foto.
+    const copertina = form.media.find(m => m.tipo === 'image')?.url || form.image_url.trim()
     const payload = {
       service_type: serviceType,
       name: form.name.trim(),
       description: form.description.trim() || null,
       price_per_day: eurToCents(form.price_per_day),
       capacity: form.capacity ? parseInt(form.capacity, 10) : null,
-      image_url: form.image_url.trim() || null,
+      image_url: copertina || null,
+      media: form.media,
       is_active: form.is_active,
       updated_at: new Date().toISOString(),
     }
-    const { error: e } = editingId
-      ? await supabase.from('noleggio_catalog').update(payload).eq('id', editingId)
-      : await supabase.from('noleggio_catalog').insert(payload)
+    const scrivi = (dati: Record<string, unknown>) => editingId
+      ? supabase.from('noleggio_catalog').update(dati).eq('id', editingId)
+      : supabase.from('noleggio_catalog').insert(dati)
+
+    let { error: e } = await scrivi(payload)
+    // Finche' la migration non e' stata eseguita la colonna `media` non
+    // esiste: si salva tutto il resto invece di perdere il lavoro, e lo si
+    // dice. Senza questo ripiego il catalogo diventava di sola lettura.
+    if (e && /media/i.test(e.message) && (['42703', 'PGRST204'].includes((e as { code?: string }).code || '') || /column|schema cache/i.test(e.message))) {
+      const senzaMedia = { ...payload } as Record<string, unknown>
+      delete senzaMedia.media
+      const ripiego = await scrivi(senzaMedia)
+      e = ripiego.error
+      if (!e) {
+        setSaving(false)
+        setError('Salvato senza la galleria: esegui la migration 20260910_noleggio_catalog_media.sql per tenere piu' + "'" + ' foto e i video.')
+        setShowForm(false); load()
+        return
+      }
+    }
     setSaving(false)
     if (e) { setError(missingTableHint(e.message, (e as { code?: string }).code)); return }
     setShowForm(false); load()
@@ -364,19 +458,45 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
             <input className={INPUT_CLS} placeholder="Prezzo / giorno (€)" inputMode="decimal" value={form.price_per_day} onChange={e => setForm({ ...form, price_per_day: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Capienza (persone)" inputMode="numeric" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })} />
             <div className="flex items-center gap-2">
-              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); e.target.value = '' } }} />
+              <input ref={imageInputRef} type="file" multiple accept="image/png,image/jpeg,image/webp,image/avif,video/mp4,video/webm,video/quicktime" className="hidden"
+                onChange={e => { const scelti = Array.from(e.target.files || []); if (scelti.length) { uploadMedia(scelti); e.target.value = '' } }} />
               <button type="button" onClick={() => imageInputRef.current?.click()} disabled={uploadingImage} className={BTN_GHOST}>
-                {uploadingImage ? 'Invio…' : (form.image_url ? 'Cambia immagine' : 'Carica immagine')}
+                {uploadingImage ? 'Invio…' : (form.media.length > 0 ? 'Aggiungi foto o video' : 'Carica foto e video')}
               </button>
-              {form.image_url && (
-                <>
-                  <img src={form.image_url} alt="" className="w-10 h-10 object-cover rounded" />
-                  <button type="button" onClick={() => setForm({ ...form, image_url: '' })} className="text-red-400 text-xs">Rimuovi</button>
-                </>
-              )}
+              <span className="text-xs text-theme-text-muted">
+                {form.media.length > 0
+                  ? `${form.media.filter(m => m.tipo === 'image').length} foto · ${form.media.filter(m => m.tipo === 'video').length} video`
+                  : `Piu' file insieme · foto max ${MAX_MB_FOTO} MB, video max ${MAX_MB_VIDEO} MB`}
+              </span>
             </div>
           </div>
+
+          {/* La galleria: si trascina l'ordine con le frecce, la prima foto
+              e' la copertina (quella che il cliente vede per prima). */}
+          {form.media.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {form.media.map((m, i) => (
+                <div key={`${m.url}-${i}`} className="relative border border-theme-border rounded-lg overflow-hidden bg-theme-bg-tertiary">
+                  {m.tipo === 'video'
+                    ? <video src={m.url} className="w-full h-20 object-cover" muted playsInline preload="metadata" />
+                    : <img src={m.url} alt="" className="w-full h-20 object-cover" />}
+                  {i === 0 && m.tipo === 'image' && (
+                    <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] uppercase tracking-wider text-white">Copertina</span>
+                  )}
+                  {m.tipo === 'video' && (
+                    <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] uppercase tracking-wider text-white">Video</span>
+                  )}
+                  <div className="flex items-center justify-between px-1 py-1 bg-theme-bg-secondary">
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => spostaMedia(i, -1)} disabled={i === 0} className="px-1 text-xs text-theme-text-secondary disabled:opacity-30" title="Sposta prima">◀</button>
+                      <button type="button" onClick={() => spostaMedia(i, 1)} disabled={i === form.media.length - 1} className="px-1 text-xs text-theme-text-secondary disabled:opacity-30" title="Sposta dopo">▶</button>
+                    </div>
+                    <button type="button" onClick={() => rimuoviMedia(i)} className="px-1 text-xs text-red-400" title="Togli">Togli</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea className={INPUT_CLS} placeholder="Descrizione (opzionale)" rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
             <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} /> Attivo
@@ -402,6 +522,12 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
                   <div className="text-dr7-gold font-semibold text-sm whitespace-nowrap">{eur(it.price_per_day)}/g</div>
                 </div>
                 {it.capacity != null && <div className="text-xs text-theme-text-muted">{it.capacity} persone</div>}
+                {Array.isArray(it.media) && it.media.length > 0 && (
+                  <div className="text-xs text-theme-text-muted">
+                    {it.media.filter(m => m.tipo === 'image').length} foto
+                    {it.media.some(m => m.tipo === 'video') ? ` · ${it.media.filter(m => m.tipo === 'video').length} video` : ''}
+                  </div>
+                )}
                 {it.description && <div className="text-xs text-theme-text-secondary line-clamp-2">{it.description}</div>}
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => openEdit(it)} className={BTN_GHOST}>Modifica</button>
