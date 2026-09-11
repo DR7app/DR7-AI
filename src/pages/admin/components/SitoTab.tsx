@@ -112,6 +112,9 @@ import type {
     MechanicalHowStep,
     MembershipCopy,
     MembershipPrivilegeRow,
+    MembershipBenefit,
+    MembershipBenefitIcon,
+    MembershipGalleryItem,
     PaymentCancelCopy,
     PaymentCopy,
     PaymentSuccessCopy,
@@ -1838,6 +1841,43 @@ function MembershipEditor({
         })
     }
 
+    // Liste di parole (le colonne ai lati del titolo, la firma della carta,
+    // le righe in fondo): una per riga nella casella, le righe vuote cadono.
+    const listaDa = (v?: string[]) => (v || []).join('\n')
+    const setLista = (key: keyof MembershipCopy, v: string) => {
+        setCopy({ ...copy, [key]: v.split('\n').map(r => r.trim()).filter(r => r.length > 0) } as MembershipCopy)
+    }
+
+    // Fascia dei vantaggi: icona + una riga di testo.
+    const vantaggi = (): MembershipBenefit[] => copy.benefits || []
+    const updateBenefit = (idx: number, patch: Partial<MembershipBenefit>) => {
+        const next = [...vantaggi()]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, benefits: next })
+    }
+    const removeBenefit = (idx: number) => {
+        if (!confirm('Rimuovere questo vantaggio?')) return
+        setCopy({ ...copy, benefits: vantaggi().filter((_, i) => i !== idx) })
+    }
+    const addBenefit = () => {
+        setCopy({ ...copy, benefits: [...vantaggi(), { id: `b-${Date.now().toString(36)}`, icon: 'diamond', label_it: '', label_en: '' }] })
+    }
+
+    // Galleria dei servizi: fotografia, titolo, riga sotto.
+    const tessere = (): MembershipGalleryItem[] => copy.gallery_items || []
+    const updateTessera = (idx: number, patch: Partial<MembershipGalleryItem>) => {
+        const next = [...tessere()]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, gallery_items: next })
+    }
+    const removeTessera = (idx: number) => {
+        if (!confirm('Rimuovere questa tessera?')) return
+        setCopy({ ...copy, gallery_items: tessere().filter((_, i) => i !== idx) })
+    }
+    const addTessera = () => {
+        setCopy({ ...copy, gallery_items: [...tessere(), { id: `g-${Date.now().toString(36)}`, image: '', title_it: '', title_en: '', subtitle_it: '', subtitle_en: '' }] })
+    }
+
     // Righe dell'esempio Privilege (etichetta + valore).
     const righePrivilege = (): MembershipPrivilegeRow[] => copy.privilege_rows || []
     const updatePrivilegeRow = (idx: number, patch: Partial<MembershipPrivilegeRow>) => {
@@ -2037,6 +2077,130 @@ function MembershipEditor({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
                     <FieldText label="Footnote (IT)" value={copy.reward_footnote_it} onChange={v => updateField('reward_footnote_it', v)} />
                     <FieldText label="Footnote (EN)" value={copy.reward_footnote_en} onChange={v => updateField('reward_footnote_en', v)} />
+                </div>
+            </section>
+
+            {/* APERTURA — i contorni del titolo */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Apertura — colonne e bottone</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Le due colonne di parole ai lati del titolo si vedono solo da computer: sono un fregio,
+                    non un menu. Una parola per riga.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Colonna sinistra (IT) — una per riga" value={listaDa(copy.hero_side_left_it)} onChange={v => setLista('hero_side_left_it', v)} />
+                    <FieldTextArea label="Colonna sinistra (EN) — una per riga" value={listaDa(copy.hero_side_left_en)} onChange={v => setLista('hero_side_left_en', v)} />
+                    <FieldTextArea label="Colonna destra (IT) — una per riga" value={listaDa(copy.hero_side_right_it)} onChange={v => setLista('hero_side_right_it', v)} />
+                    <FieldTextArea label="Colonna destra (EN) — una per riga" value={listaDa(copy.hero_side_right_en)} onChange={v => setLista('hero_side_right_en', v)} />
+                    <FieldText label="Bottone dell'apertura (IT)" value={copy.hero_cta_it ?? ''} onChange={v => updateField('hero_cta_it', v)} />
+                    <FieldText label="Bottone dell'apertura (EN)" value={copy.hero_cta_en ?? ''} onChange={v => updateField('hero_cta_en', v)} />
+                    <FieldText label="Riga sotto il bottone (IT)" value={copy.hero_footer_it ?? ''} onChange={v => updateField('hero_footer_it', v)} />
+                    <FieldText label="Riga sotto il bottone (EN)" value={copy.hero_footer_en ?? ''} onChange={v => updateField('hero_footer_en', v)} />
+                </div>
+            </section>
+
+            {/* FASCIA DEI VANTAGGI */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Fascia dei vantaggi ({vantaggi().length})</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    La riga di simboli subito sotto l'apertura. Finche' la lista e' vuota la fascia non compare.
+                    Sei voci stanno su una riga sola; di piu' vanno a capo.
+                </p>
+                <ul className="space-y-3">
+                    {vantaggi().map((b, i) => (
+                        <li key={b.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-mono text-theme-text-secondary">{i + 1}</span>
+                                <button onClick={() => removeBenefit(i)} className="text-[11px] text-[#ff3b30] hover:underline">elimina</button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <label className="block">
+                                    <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Simbolo</span>
+                                    <select
+                                        value={b.icon}
+                                        onChange={(e) => updateBenefit(i, { icon: e.target.value as MembershipBenefitIcon })}
+                                        className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                                    >
+                                        <option value="diamond">Diamante</option>
+                                        <option value="crown">Corona</option>
+                                        <option value="coins">Monete</option>
+                                        <option value="star">Stella</option>
+                                        <option value="concierge">Persona</option>
+                                        <option value="gift">Regalo</option>
+                                    </select>
+                                </label>
+                                <FieldText label="Testo (IT)" value={b.label_it} onChange={v => updateBenefit(i, { label_it: v })} />
+                                <FieldText label="Testo (EN)" value={b.label_en} onChange={v => updateBenefit(i, { label_en: v })} />
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <button onClick={addBenefit} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">Aggiungi vantaggio</button>
+            </section>
+
+            {/* LA CARTA */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Blocco della carta</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Il racconto accanto alla fotografia della tessera, sopra al riquadro del prezzo.
+                    Nel titolo l'a capo si scrive andando a capo.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Occhiello (IT)" value={copy.card_eyebrow_it ?? ''} onChange={v => updateField('card_eyebrow_it', v)} />
+                    <FieldText label="Occhiello (EN)" value={copy.card_eyebrow_en ?? ''} onChange={v => updateField('card_eyebrow_en', v)} />
+                    <FieldTextArea label="Titolo (IT)" value={copy.card_title_it ?? ''} onChange={v => updateField('card_title_it', v)} />
+                    <FieldTextArea label="Titolo (EN)" value={copy.card_title_en ?? ''} onChange={v => updateField('card_title_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.card_body_it ?? ''} onChange={v => updateField('card_body_it', v)} />
+                    <FieldTextArea label="Testo (EN)" value={copy.card_body_en ?? ''} onChange={v => updateField('card_body_en', v)} />
+                    <FieldTextArea label="Firma (IT) — una per riga" value={listaDa(copy.card_signature_it)} onChange={v => setLista('card_signature_it', v)} />
+                    <FieldTextArea label="Firma (EN) — una per riga" value={listaDa(copy.card_signature_en)} onChange={v => setLista('card_signature_en', v)} />
+                    <FieldText label='Fotografia — es. "/menu-club.jpeg"' value={copy.card_image ?? ''} onChange={v => updateField('card_image', v)} />
+                </div>
+            </section>
+
+            {/* GALLERIA DEI SERVIZI */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Galleria dei servizi ({tessere().length})</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Attenzione alle fotografie: meta' degli scatti in cartella ha titoli e listini stampati
+                    dentro l'immagine, e sotto alla didascalia escono due testi sovrapposti. Guardare la foto
+                    prima di scriverne il percorso.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo della sezione (IT)" value={copy.gallery_title_it ?? ''} onChange={v => updateField('gallery_title_it', v)} />
+                    <FieldText label="Titolo della sezione (EN)" value={copy.gallery_title_en ?? ''} onChange={v => updateField('gallery_title_en', v)} />
+                </div>
+                <ul className="space-y-3">
+                    {tessere().map((g, i) => (
+                        <li key={g.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-mono text-theme-text-secondary">{i + 1}</span>
+                                <button onClick={() => removeTessera(i)} className="text-[11px] text-[#ff3b30] hover:underline">elimina</button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FieldText label='Fotografia — es. "/villa.jpeg"' value={g.image} onChange={v => updateTessera(i, { image: v })} />
+                                <div />
+                                <FieldText label="Titolo (IT)" value={g.title_it} onChange={v => updateTessera(i, { title_it: v })} />
+                                <FieldText label="Titolo (EN)" value={g.title_en} onChange={v => updateTessera(i, { title_en: v })} />
+                                <FieldText label="Riga sotto (IT)" value={g.subtitle_it} onChange={v => updateTessera(i, { subtitle_it: v })} />
+                                <FieldText label="Riga sotto (EN)" value={g.subtitle_en} onChange={v => updateTessera(i, { subtitle_en: v })} />
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <button onClick={addTessera} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">Aggiungi tessera</button>
+            </section>
+
+            {/* LA FIRMA IN FONDO */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Firma in fondo alla pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Frase (IT)" value={copy.closing_quote_it ?? ''} onChange={v => updateField('closing_quote_it', v)} />
+                    <FieldTextArea label="Frase (EN)" value={copy.closing_quote_en ?? ''} onChange={v => updateField('closing_quote_en', v)} />
+                    <FieldText label="Firma della frase" value={copy.closing_attrib ?? ''} onChange={v => updateField('closing_attrib', v)} />
+                    <FieldText label="Parola sotto al marchio" value={copy.closing_wordmark ?? ''} onChange={v => updateField('closing_wordmark', v)} />
+                    <FieldTextArea label="Righe a destra (IT) — una per riga" value={listaDa(copy.closing_lines_it)} onChange={v => setLista('closing_lines_it', v)} />
+                    <FieldTextArea label="Righe a destra (EN) — una per riga" value={listaDa(copy.closing_lines_en)} onChange={v => setLista('closing_lines_en', v)} />
                 </div>
             </section>
         </div>

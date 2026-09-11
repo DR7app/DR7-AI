@@ -146,6 +146,24 @@ export interface MembershipPrivilegeRow {
   value: string;        // "€1", "€30", ... — testo libero, lo scrive l'admin
 }
 
+/** Le icone di filo della fascia vantaggi, in cima alla pagina Club. */
+export type MembershipBenefitIcon =
+  | 'diamond' | 'crown' | 'coins' | 'star' | 'concierge' | 'gift';
+
+export interface MembershipBenefit {
+  id: string;
+  icon: MembershipBenefitIcon;
+  label_it: string; label_en: string;
+}
+
+/** Una tessera della galleria dei servizi: fotografia, titolo, riga sotto. */
+export interface MembershipGalleryItem {
+  id: string;
+  image: string;
+  title_it: string; title_en: string;
+  subtitle_it: string; subtitle_en: string;
+}
+
 export interface MembershipCopy {
   // Hero band
   hero_eyebrow_it: string; hero_eyebrow_en: string;
@@ -202,6 +220,33 @@ export interface MembershipCopy {
   privilege_usage_it?: string; privilege_usage_en?: string;
   privilege_closing_it?: string; privilege_closing_en?: string;
   privilege_link_it?: string; privilege_link_en?: string;
+
+  // ─── Restyling 11/09/2026 ─────────────────────────────────────────────
+  // Gli elementi che prima non c'erano: le due colonne ai lati del titolo,
+  // la fascia delle icone, il blocco della carta, la galleria dei servizi e
+  // la firma in fondo. Tutti opzionali, come i campi del Privilege e per lo
+  // stesso motivo: la riga gia' salvata in centralina_pro_config non li
+  // contiene e la pagina deve continuare a funzionare senza migrazione.
+  hero_side_left_it?: string[]; hero_side_left_en?: string[];
+  hero_side_right_it?: string[]; hero_side_right_en?: string[];
+  hero_cta_it?: string; hero_cta_en?: string;
+  hero_footer_it?: string; hero_footer_en?: string;
+
+  benefits?: MembershipBenefit[];
+
+  card_eyebrow_it?: string; card_eyebrow_en?: string;
+  card_title_it?: string; card_title_en?: string;
+  card_body_it?: string; card_body_en?: string;
+  card_signature_it?: string[]; card_signature_en?: string[];
+  card_image?: string;
+
+  gallery_title_it?: string; gallery_title_en?: string;
+  gallery_items?: MembershipGalleryItem[];
+
+  closing_quote_it?: string; closing_quote_en?: string;
+  closing_attrib?: string;
+  closing_wordmark?: string;
+  closing_lines_it?: string[]; closing_lines_en?: string[];
 }
 
 export interface MembershipPlaceholderValues {
@@ -3429,6 +3474,57 @@ export const INITIAL_MEMBERSHIP: MembershipCopy = {
   privilege_link_en: 'Access DR7 Club Privilege',
   privilege_closing_it: 'Il valore non aspetta. Matura ogni giorno.',
   privilege_closing_en: 'Value does not wait. It accrues every day.',
+
+  // ─── Restyling 11/09/2026 ─────────────────────────────────────────────
+  hero_side_left_it: ['Terra', 'Mare', 'Aria', 'Soggiorni', 'Luxury Wash'],
+  hero_side_left_en: ['Land', 'Sea', 'Air', 'Stays', 'Luxury Wash'],
+  hero_side_right_it: ['People', 'Places', 'Experiences', 'Privileges', 'Forever'],
+  hero_side_right_en: ['People', 'Places', 'Experiences', 'Privileges', 'Forever'],
+  hero_cta_it: 'Unisciti ora',
+  hero_cta_en: 'Join now',
+  hero_footer_it: 'Beyond the ordinary',
+  hero_footer_en: 'Beyond the ordinary',
+
+  benefits: [
+    { id: 'accesso',   icon: 'diamond',   label_it: 'Accesso prioritario',           label_en: 'Priority access' },
+    { id: 'cashback',  icon: 'crown',     label_it: 'Cashback 1% – 31%',             label_en: 'Cashback 1% – 31%' },
+    { id: 'interesse', icon: 'coins',     label_it: 'Interesse fino al 36% annuo',   label_en: 'Up to 36% annual interest' },
+    { id: 'eventi',    icon: 'star',      label_it: 'Eventi esclusivi',              label_en: 'Exclusive events' },
+    { id: 'concierge', icon: 'concierge', label_it: 'Concierge dedicato',            label_en: 'Dedicated concierge' },
+    { id: 'offerte',   icon: 'gift',      label_it: 'Offerte riservate',             label_en: 'Reserved offers' },
+  ],
+
+  card_eyebrow_it: 'DR7 Club Privilege',
+  card_eyebrow_en: 'DR7 Club Privilege',
+  card_title_it: 'Il tuo mondo\nin prima fila.',
+  card_title_en: 'Your world\nin the front row.',
+  card_body_it: 'Un solo abbonamento, infiniti vantaggi su auto, yacht, jet, ville, hotel, lavaggi e tutti i servizi DR7.',
+  card_body_en: 'One subscription, endless advantages across cars, yachts, jets, villas, hotels, washes and every DR7 service.',
+  card_signature_it: ['Exclusive people', 'Extraordinary places', 'One club'],
+  card_signature_en: ['Exclusive people', 'Extraordinary places', 'One club'],
+  card_image: '/menu-club.jpeg',
+
+  gallery_title_it: 'Vivi privilegi reali. Ogni giorno.',
+  gallery_title_en: 'Live real privileges. Every day.',
+  // Le fotografie: scelte fra quelle PULITE di public/. Meta' degli scatti
+  // in cartella sono locandine con titoli e listini stampati dentro
+  // (supercar, urus, luxury, luxurywash): sotto a una didascalia
+  // uscirebbero due testi sovrapposti nello stesso riquadro.
+  gallery_items: [
+    { id: 'auto',      image: '/collezione.jpeg',        title_it: 'Auto',        title_en: 'Cars',        subtitle_it: 'Noleggio esclusivo',      subtitle_en: 'Exclusive rental' },
+    { id: 'yacht',     image: '/yacht.jpeg',      title_it: 'Yacht',       title_en: 'Yachts',      subtitle_it: 'Esperienze senza confini', subtitle_en: 'Experiences without borders' },
+    { id: 'jet',       image: '/privatejet.jpeg', title_it: 'Jet',         title_en: 'Jets',        subtitle_it: 'Libertà su misura',       subtitle_en: 'Freedom made to measure' },
+    { id: 'ville',     image: '/villa.jpeg',      title_it: 'Ville',       title_en: 'Villas',      subtitle_it: 'Soggiorni da sogno',      subtitle_en: 'Dream stays' },
+    { id: 'elicotteri', image: '/helicopter.jpeg', title_it: 'Elicotteri',  title_en: 'Helicopters', subtitle_it: 'Emozioni in quota',       subtitle_en: 'Emotions at altitude' },
+    { id: 'lavaggi',   image: '/servizi-lavaggio.jpeg', title_it: 'Lavaggi',     title_en: 'Wash',        subtitle_it: 'Cura oltre lo standard',  subtitle_en: 'Care beyond the standard' },
+  ],
+
+  closing_quote_it: 'Non scegli semplicemente un servizio, accedi a un nuovo standard.',
+  closing_quote_en: 'You are not simply choosing a service, you are entering a new standard.',
+  closing_attrib: 'DR7',
+  closing_wordmark: 'Club Privilege',
+  closing_lines_it: ['A higher standard', 'A brighter tomorrow'],
+  closing_lines_en: ['A higher standard', 'A brighter tomorrow'],
 };
 
 // ─── Default Cancellazione seed ─────────────────────────────────────────────
