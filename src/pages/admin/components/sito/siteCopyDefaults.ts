@@ -698,16 +698,14 @@ export interface CreditWalletCopy {
   services_heading_it: string; services_heading_en: string;
   services_body_it: string; services_body_en: string;
   services_no_expiry_it: string; services_no_expiry_en: string;
+  // Il richiamo a destra della fascia: una riga per capoverso (a capo = riga)
+  services_tagline_it: string; services_tagline_en: string;
   // Package selection
   packages_section_label_it: string; packages_section_label_en: string;
   packages_filter_all_it: string; packages_filter_all_en: string;
   // Pacchetti di ricarica (serie, importi, bonus %) — editabili da admin
   packages: CreditPackage[];
-  // Promo footer slogans
-  promo_line1_it: string; promo_line1_en: string;
-  promo_line2_it: string; promo_line2_en: string;
-  // Advantages (4 cards — section header + 4× title/body)
-  advantages_heading_it: string; advantages_heading_en: string;
+  // Advantages (4 cards — la riga di chiusura, senza titolo di sezione)
   advantage_1_title_it: string; advantage_1_title_en: string;
   advantage_1_body_it: string; advantage_1_body_en: string;
   advantage_2_title_it: string; advantage_2_title_en: string;
@@ -716,15 +714,6 @@ export interface CreditWalletCopy {
   advantage_3_body_it: string; advantage_3_body_en: string;
   advantage_4_title_it: string; advantage_4_title_en: string;
   advantage_4_body_it: string; advantage_4_body_en: string;
-  // Transparency (title + 3 bullets)
-  transparency_heading_it: string; transparency_heading_en: string;
-  transparency_bullet_1_it: string; transparency_bullet_1_en: string;
-  transparency_bullet_2_it: string; transparency_bullet_2_en: string;
-  transparency_bullet_3_it: string; transparency_bullet_3_en: string;
-  // Bottom CTA block
-  cta_title_it: string; cta_title_en: string;
-  cta_subtitle_it: string; cta_subtitle_en: string;
-  cta_button_it: string; cta_button_en: string;
   // Package card
   card_popular_badge_it: string; card_popular_badge_en: string;
   card_recharge_label_it: string; card_recharge_label_en: string;
@@ -2139,10 +2128,10 @@ export const INITIAL_TOKEN: TokenCopy = {
 // ─── Default Credit Wallet seed ──────────────────────────────────────────
 export const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
   hero_title_eyebrow_it: 'DR7 CREDIT WALLET', hero_title_eyebrow_en: 'DR7 CREDIT WALLET',
-  hero_subtitle_it: 'Ricarica. Guadagna. Vivi l\'esperienza DR7.',
-  hero_subtitle_en: 'Top up. Earn. Live the DR7 experience.',
-  hero_intro_it: 'Il sistema di credito flessibile che premia la tua fiducia. Acquista crediti DR7 e ricevi bonus fino al 100%.',
-  hero_intro_en: 'The flexible credit system that rewards your trust. Buy DR7 credits and receive bonuses up to 100%.',
+  hero_subtitle_it: 'Ricarica. Guadagna. Vivi DR7.',
+  hero_subtitle_en: 'Top up. Earn. Live DR7.',
+  hero_intro_it: 'Il sistema di credito flessibile che premia la tua fiducia.\nAcquista crediti DR7 e ricevi bonus fino al 100%.',
+  hero_intro_en: 'The flexible credit system that rewards your trust.\nBuy DR7 credits and receive bonuses up to 100%.',
   benefit_extra_title_it: 'Fino al 100% Extra', benefit_extra_title_en: 'Up to 100% Extra',
   benefit_extra_body_it: 'Credito bonus a seconda del pacchetto scelto',
   benefit_extra_body_en: 'Bonus credit depending on the package you choose',
@@ -2158,15 +2147,11 @@ export const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
   services_body_en: 'Luxury car and vehicle rentals, premium washes, mechanical services, exclusive experiences — the entire DR7 offering.',
   services_no_expiry_it: 'Il credito non ha scadenza',
   services_no_expiry_en: 'The credit never expires',
+  services_tagline_it: 'Un unico\nwallet\ninfinite\nesperienze',
+  services_tagline_en: 'One single\nwallet\ninfinite\nexperiences',
   packages_section_label_it: 'SCEGLI IL TUO PACCHETTO:',
   packages_section_label_en: 'CHOOSE YOUR PACKAGE:',
   packages_filter_all_it: 'Tutti i Pacchetti', packages_filter_all_en: 'All Packages',
-  promo_line1_it: 'CREDITO IMMEDIATO. NESSUNA SCADENZA.',
-  promo_line1_en: 'INSTANT CREDIT. NO EXPIRATION.',
-  promo_line2_it: 'SOLO VANTAGGI. SOLO DR7.',
-  promo_line2_en: 'ONLY ADVANTAGES. ONLY DR7.',
-  advantages_heading_it: 'VANTAGGI DEL DR7 CREDIT WALLET',
-  advantages_heading_en: 'DR7 CREDIT WALLET BENEFITS',
   advantage_1_title_it: 'Risparmio Immediato', advantage_1_title_en: 'Instant Savings',
   advantage_1_body_it: 'Bonus credit aggiuntivo applicato istantaneamente al momento della ricarica.',
   advantage_1_body_en: 'Bonus credit applied instantly when you top up.',
@@ -2179,19 +2164,6 @@ export const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
   advantage_4_title_it: 'Storico Completo', advantage_4_title_en: 'Full History',
   advantage_4_body_it: 'Ogni ricarica e ogni utilizzo sono tracciati e consultabili dall\'account.',
   advantage_4_body_en: 'Every top-up and every charge is tracked and visible from your account.',
-  transparency_heading_it: 'TRASPARENZA E SICUREZZA',
-  transparency_heading_en: 'TRANSPARENCY & SECURITY',
-  transparency_bullet_1_it: 'Pagamenti gestiti tramite gateway certificato Nexi.',
-  transparency_bullet_1_en: 'Payments handled via the certified Nexi gateway.',
-  transparency_bullet_2_it: 'Crediti garantiti, sempre disponibili sul tuo profilo.',
-  transparency_bullet_2_en: 'Credits guaranteed, always available on your profile.',
-  transparency_bullet_3_it: 'Fatturazione automatica conforme alla normativa fiscale italiana.',
-  transparency_bullet_3_en: 'Automated invoicing compliant with Italian tax law.',
-  cta_title_it: 'ATTIVA ORA IL TUO WALLET DR7',
-  cta_title_en: 'ACTIVATE YOUR DR7 WALLET NOW',
-  cta_subtitle_it: 'Scegli il pacchetto più adatto a te e inizia subito a risparmiare sui servizi DR7.',
-  cta_subtitle_en: 'Choose the package that fits you best and start saving on DR7 services right away.',
-  cta_button_it: 'Scegli il Tuo Pacchetto', cta_button_en: 'Choose Your Package',
   card_popular_badge_it: 'PIÙ SCELTO', card_popular_badge_en: 'MOST POPULAR',
   card_recharge_label_it: 'Ricarichi', card_recharge_label_en: 'You recharge',
   card_receive_label_it: 'Ricevi', card_receive_label_en: 'You receive',

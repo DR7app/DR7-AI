@@ -5502,6 +5502,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                     <FieldTextArea label="Description (EN)" value={copy.services_body_en} onChange={v => update('services_body_en', v)} />
                     <FieldText label='"Credito non scade" (IT)' value={copy.services_no_expiry_it} onChange={v => update('services_no_expiry_it', v)} />
                     <FieldText label='"Credit never expires" (EN)' value={copy.services_no_expiry_en} onChange={v => update('services_no_expiry_en', v)} />
+                    <FieldTextArea label="Richiamo a destra (IT) — una riga per capoverso" value={copy.services_tagline_it} onChange={v => update('services_tagline_it', v)} />
+                    <FieldTextArea label="Side claim (EN) — one line per paragraph" value={copy.services_tagline_en} onChange={v => update('services_tagline_en', v)} />
                 </div>
             </section>
 
@@ -5619,20 +5621,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Slogan promo sotto i pacchetti</h3>
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Vantaggi (la riga in fondo alla pagina)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Riga 1 (IT)" value={copy.promo_line1_it} onChange={v => update('promo_line1_it', v)} />
-                    <FieldText label="Line 1 (EN)" value={copy.promo_line1_en} onChange={v => update('promo_line1_en', v)} />
-                    <FieldText label="Riga 2 (IT)" value={copy.promo_line2_it} onChange={v => update('promo_line2_it', v)} />
-                    <FieldText label="Line 2 (EN)" value={copy.promo_line2_en} onChange={v => update('promo_line2_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Vantaggi (4 card)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo sezione (IT)" value={copy.advantages_heading_it} onChange={v => update('advantages_heading_it', v)} />
-                    <FieldText label="Section heading (EN)" value={copy.advantages_heading_en} onChange={v => update('advantages_heading_en', v)} />
                     <FieldText label="Card 1 titolo (IT)" value={copy.advantage_1_title_it} onChange={v => update('advantage_1_title_it', v)} />
                     <FieldText label="Card 1 title (EN)" value={copy.advantage_1_title_en} onChange={v => update('advantage_1_title_en', v)} />
                     <FieldText label="Card 1 body (IT)" value={copy.advantage_1_body_it} onChange={v => update('advantage_1_body_it', v)} />
@@ -5649,32 +5639,6 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                     <FieldText label="Card 4 title (EN)" value={copy.advantage_4_title_en} onChange={v => update('advantage_4_title_en', v)} />
                     <FieldText label="Card 4 body (IT)" value={copy.advantage_4_body_it} onChange={v => update('advantage_4_body_it', v)} />
                     <FieldText label="Card 4 body (EN)" value={copy.advantage_4_body_en} onChange={v => update('advantage_4_body_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Trasparenza & sicurezza</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo (IT)" value={copy.transparency_heading_it} onChange={v => update('transparency_heading_it', v)} />
-                    <FieldText label="Heading (EN)" value={copy.transparency_heading_en} onChange={v => update('transparency_heading_en', v)} />
-                    <FieldText label="Bullet 1 (IT)" value={copy.transparency_bullet_1_it} onChange={v => update('transparency_bullet_1_it', v)} />
-                    <FieldText label="Bullet 1 (EN)" value={copy.transparency_bullet_1_en} onChange={v => update('transparency_bullet_1_en', v)} />
-                    <FieldText label="Bullet 2 (IT)" value={copy.transparency_bullet_2_it} onChange={v => update('transparency_bullet_2_it', v)} />
-                    <FieldText label="Bullet 2 (EN)" value={copy.transparency_bullet_2_en} onChange={v => update('transparency_bullet_2_en', v)} />
-                    <FieldText label="Bullet 3 (IT)" value={copy.transparency_bullet_3_it} onChange={v => update('transparency_bullet_3_it', v)} />
-                    <FieldText label="Bullet 3 (EN)" value={copy.transparency_bullet_3_en} onChange={v => update('transparency_bullet_3_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA finale</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo (IT)" value={copy.cta_title_it} onChange={v => update('cta_title_it', v)} />
-                    <FieldText label="Title (EN)" value={copy.cta_title_en} onChange={v => update('cta_title_en', v)} />
-                    <FieldText label="Sottotitolo (IT)" value={copy.cta_subtitle_it} onChange={v => update('cta_subtitle_it', v)} />
-                    <FieldText label="Subtitle (EN)" value={copy.cta_subtitle_en} onChange={v => update('cta_subtitle_en', v)} />
-                    <FieldText label="Bottone (IT)" value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
-                    <FieldText label="Button (EN)" value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
                 </div>
             </section>
 
