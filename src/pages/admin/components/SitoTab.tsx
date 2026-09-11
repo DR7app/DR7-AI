@@ -2573,9 +2573,17 @@ function HomeEditor({
                 <div className="pt-2">
                     <h4 className="text-[13px] font-semibold text-theme-text-primary">Numeri ({copy.metrics.length})</h4>
                     <p className="text-[12px] text-theme-text-secondary">
-                        Finche' la lista e' vuota la sezione non compare. Scrivere qui solo numeri verificati:
-                        un dato inventato in homepage e' peggio di nessun dato.
+                        La fascia sta in homepage fra la frase sul marmo e la Collezione. Scrivere qui solo
+                        numeri verificati: un dato inventato in homepage e' peggio di nessun dato.
                     </p>
+                    <p className="text-[12px] text-theme-text-secondary">
+                        Svuotare la lista <strong>non</strong> toglie la fascia: il sito ricade sui numeri di
+                        fabbrica. Un salvataggio fatto con la lista vuota li aveva fatti sparire dal sito vivo.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Riga sopra i numeri (IT)" value={copy.metrics_eyebrow_it} onChange={v => setCopy({ ...copy, metrics_eyebrow_it: v })} />
+                    <FieldText label="Line above the numbers (EN)" value={copy.metrics_eyebrow_en} onChange={v => setCopy({ ...copy, metrics_eyebrow_en: v })} />
                 </div>
                 <ul className="space-y-3">
                     {copy.metrics.map((m, i) => (

@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 73
+ * Sezioni generate: 36 — interfacce: 76
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -333,6 +333,10 @@ export interface HomeCopy {
   collection_cta_to: string;
   /** Etichetta della CTA sotto ogni veicolo in evidenza. */
 
+  // ── Atto 02b — I numeri ──────────────────────────────────────────────────
+  metrics_eyebrow_it: string; metrics_eyebrow_en: string;
+  metrics: HomeMetric[];
+
   // ── Atto 04 — Esperienze ─────────────────────────────────────────────────
   experiences_eyebrow_it: string; experiences_eyebrow_en: string;
   experiences_title_it: string; experiences_title_en: string;
@@ -341,7 +345,6 @@ export interface HomeCopy {
   // ── Atto 05 — Marca ──────────────────────────────────────────────────────
   brand_lines_it: string[]; brand_lines_en: string[];
   brand_paragraphs: BilingualParagraph[];
-  metrics: HomeMetric[];
 
   // ── Atto 06 — Accesso ────────────────────────────────────────────────────
   access_title_it: string; access_title_en: string;
@@ -1766,7 +1769,12 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   logo_height_desktop: 96,
   logo_height_mobile: 80,
   footer_logo_height: 48,
-  chatbot_enabled: true,
+  // Spento di fabbrica come il popup qui sotto. Era acceso, e bastava che la
+  // riga salvata perdesse il campo — una migrazione, un salvataggio fatto da
+  // una versione piu' vecchia della scheda — perche' il bottone della chat
+  // tornasse in basso a destra su tutte le pagine, telefono compreso.
+  // L'interruttore resta in Aspetto & Funzionalita'.
+  chatbot_enabled: false,
   chatbot_avatar_url: '/Valerio.jpg',
   // Spento di fabbrica: il riquadro "Prenota Ora" che si apriva da solo
   // copriva la home ai visitatori. L'interruttore resta in Aspetto &
@@ -2601,7 +2609,14 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   whatsapp_phone: '393457905205',
 };
 
-// ─── Default Franchising seed ──────────────────────────────────────────────
+/**
+ * I testi di fabbrica della pagina Business.
+ *
+ * Esportati perche' la pagina parte da QUESTI e non aspetta la rete: i numeri
+ * si vedono appena il programma e' in piedi, e la versione del gestionale --
+ * quando arriva -- prende il posto senza che nessuno resti davanti a
+ * "Caricamento". Stessa regola del filmato di sfondo (hooks/useFilmato.ts).
+ */
 export const INITIAL_FRANCHISING: FranchisingCopy = {
   hero_h2: 'Vuoi aprire la tua sede DR7 nella tua città?',
   hero_h2_it: 'Vuoi aprire la tua sede DR7 nella tua città?',
@@ -3244,6 +3259,24 @@ export const INITIAL_HOME: HomeCopy = {
   collection_cta_label_en: 'Explore the collection',
   collection_cta_to: '/flotta',
 
+  // ── Atto 02b — I numeri ────────────────────────────────────────────────
+  // I trenta mesi, detti in cifre. Sono gli stessi numeri della pagina
+  // Business: chi li cambia li cambia in due posti, perche' le due pagine
+  // hanno due schede diverse nel gestionale.
+  metrics_eyebrow_it: '30 mesi di crescita. Le fondamenta sono costruite.',
+  metrics_eyebrow_en: '30 months of growth. The foundations are built.',
+  metrics: [
+    { id: 'contratti',  value: '4.000+',  label_it: 'Contratti di noleggio firmati',    label_en: 'Signed rental contracts' },
+    { id: 'clienti',    value: '5.000+',  label_it: 'Clienti serviti nell\'ecosistema', label_en: 'Clients served in the ecosystem' },
+    { id: 'fatturato',  value: '\u20ac2,5M+',  label_it: 'Fatturato generato',               label_en: 'Revenue generated' },
+    { id: 'parco',      value: '\u20ac3M+',    label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
+    { id: 'patrimonio', value: '\u20ac6M+',    label_it: 'Patrimonio netto',                 label_en: 'Net equity' },
+    { id: 'capitale',   value: '\u20ac1M',     label_it: 'Capitale sociale',                 label_en: 'Share capital' },
+    { id: 'recensioni', value: '317+',    label_it: 'Recensioni a 5 stelle',            label_en: '5-star reviews' },
+    { id: 'brand',      value: '\u20ac5M',     label_it: 'Valutazione del brand',            label_en: 'Brand valuation' },
+    { id: 'azienda',    value: '\u20ac15M',    label_it: 'Valutazione aziendale',            label_en: 'Company valuation' },
+  ],
+
   // ── Atto 04 — Esperienze ───────────────────────────────────────────────
   // Solo servizi realmente attivi sul sito, con le stesse destinazioni del menu.
   experiences_eyebrow_it: '02 \u2014 Esperienza',
@@ -3285,9 +3318,6 @@ export const INITIAL_HOME: HomeCopy = {
     { text_it: 'Dalla selezione alla consegna, ogni dettaglio segue un unico principio: offrire un servizio impeccabile, personale e riconoscibile. Perch\u00e9 il vero lusso non \u00e8 avere di pi\u00f9. \u00c8 non dover accettare compromessi.',
       text_en: 'From selection to delivery, every detail follows one principle: an impeccable, personal and recognisable service. Because true luxury is not having more. It is never having to compromise.' },
   ],
-  // Vuoto di proposito: un numero si pubblica solo se verificato nei dati.
-  metrics: [],
-
   // ── Atto 06 — Accesso ──────────────────────────────────────────────────
   // Il titolo va a capo dove ci sono gli \n: la pagina rispetta le
   // interruzioni scritte qui, cosi' la spezzatura la decide chi scrive il
