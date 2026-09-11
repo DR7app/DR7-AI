@@ -2573,15 +2573,9 @@ function HomeEditor({
                 <div className="pt-2">
                     <h4 className="text-[13px] font-semibold text-theme-text-primary">Numeri ({copy.metrics.length})</h4>
                     <p className="text-[12px] text-theme-text-secondary">
-                        Stanno in homepage fra la frase sul marmo e la Collezione, e salgono da zero
-                        quando la fascia entra in campo. Finche' la lista e' vuota la sezione non compare.
-                        Scrivere qui solo numeri verificati: un dato inventato in homepage e' peggio di
-                        nessun dato.
+                        Finche' la lista e' vuota la sezione non compare. Scrivere qui solo numeri verificati:
+                        un dato inventato in homepage e' peggio di nessun dato.
                     </p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Riga sopra i numeri (IT)" value={copy.metrics_eyebrow_it} onChange={v => updateField('metrics_eyebrow_it', v)} />
-                    <FieldText label="Riga sopra i numeri (EN)" value={copy.metrics_eyebrow_en} onChange={v => updateField('metrics_eyebrow_en', v)} />
                 </div>
                 <ul className="space-y-3">
                     {copy.metrics.map((m, i) => (
