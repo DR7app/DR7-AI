@@ -4153,6 +4153,10 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
                     <FieldText label='Button "SELECT" (EN)' value={copy.seleziona_servizio_en ?? ''} onChange={v => update('seleziona_servizio_en', v)} />
                     <FieldText label='Bottone "AGGIUNGI AL CARRELLO" (IT)' value={copy.add_to_cart_it} onChange={v => update('add_to_cart_it', v)} />
                     <FieldText label='Button "ADD TO CART" (EN)' value={copy.add_to_cart_en} onChange={v => update('add_to_cart_en', v)} />
+                    <FieldText label='"da" prima del prezzo (IT)' value={copy.carta_da_it ?? ''} onChange={v => update('carta_da_it', v)} />
+                    <FieldText label='"from" before the price (EN)' value={copy.carta_da_en ?? ''} onChange={v => update('carta_da_en', v)} />
+                    <FieldText label='Bottone "Su preventivo" (IT)' value={copy.carta_preventivo_it ?? ''} onChange={v => update('carta_preventivo_it', v)} />
+                    <FieldText label='Button "On request" (EN)' value={copy.carta_preventivo_en ?? ''} onChange={v => update('carta_preventivo_en', v)} />
                 </div>
             </section>
 

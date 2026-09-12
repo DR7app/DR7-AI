@@ -1489,6 +1489,8 @@ export interface CarWashCopy {
   // gia' un testo salvato nel gestionale, che vincerebbe sul codice.
   carta_cosa_facciamo_it?: string; carta_cosa_facciamo_en?: string;
   carta_risultato_it?: string; carta_risultato_en?: string;
+  carta_da_it?: string; carta_da_en?: string;
+  carta_preventivo_it?: string; carta_preventivo_en?: string;
   // Upsell overlay
   upsell_review_cart_it: string; upsell_review_cart_en: string;
   upsell_step1_title_it: string; upsell_step1_title_en: string;
@@ -2859,6 +2861,8 @@ export const INITIAL_CARWASH: CarWashCopy = {
   cart_checkout_it: 'PROCEDI', cart_checkout_en: 'CHECKOUT',
   carta_cosa_facciamo_it: 'Cosa facciamo', carta_cosa_facciamo_en: 'What we do',
   carta_risultato_it: 'Risultato', carta_risultato_en: 'Result',
+  carta_da_it: 'da', carta_da_en: 'from',
+  carta_preventivo_it: 'Su preventivo', carta_preventivo_en: 'On request',
   upsell_review_cart_it: 'Rivedi carrello', upsell_review_cart_en: 'Review Cart',
   upsell_step1_title_it: 'Completa il tuo lavaggio', upsell_step1_title_en: 'Complete your wash',
   upsell_step1_text_it: 'Aggiungi un servizio Extra Care per ottenere il massimo dal tuo lavaggio.',

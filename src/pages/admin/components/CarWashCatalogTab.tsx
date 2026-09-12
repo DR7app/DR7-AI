@@ -70,6 +70,12 @@ export default function CarWashCatalogTab() {
   const [editDescription, setEditDescription] = useState('')
   const [editFeatures, setEditFeatures] = useState('')
   const [editBadge, setEditBadge] = useState('')
+  // Testi inglesi e unita' di prezzo: prima si potevano cambiare solo da
+  // database, e in inglese la card ripeteva l'italiano.
+  const [editNameEn, setEditNameEn] = useState('')
+  const [editDescriptionEn, setEditDescriptionEn] = useState('')
+  const [editFeaturesEn, setEditFeaturesEn] = useState('')
+  const [editPriceUnit, setEditPriceUnit] = useState('')
   const [saving, setSaving] = useState(false)
   const [showNewForm, setShowNewForm] = useState(false)
   const [newService, setNewService] = useState({
@@ -175,6 +181,10 @@ export default function CarWashCatalogTab() {
     setEditDescription(service.description || '')
     setEditFeatures((service.features || []).join('\n'))
     setEditBadge(service.badge || '')
+    setEditNameEn(service.name_en || '')
+    setEditDescriptionEn(service.description_en || '')
+    setEditFeaturesEn((service.features_en || []).join('\n'))
+    setEditPriceUnit(service.price_unit || '')
   }
 
   function cancelEditing() {
@@ -186,6 +196,10 @@ export default function CarWashCatalogTab() {
     setEditDescription('')
     setEditFeatures('')
     setEditBadge('')
+    setEditNameEn('')
+    setEditDescriptionEn('')
+    setEditFeaturesEn('')
+    setEditPriceUnit('')
   }
 
   async function saveEditing(service: CarWashService) {
@@ -201,6 +215,12 @@ export default function CarWashCatalogTab() {
         description: editDescription.trim() || service.description,
         features: editFeatures.split('\n').filter(f => f.trim()),
         badge: editBadge.trim() || null,
+        // L'inglese vuoto NON si salva come stringa vuota: il sito, quando
+        // manca, ricade sull'italiano. Salvarlo vuoto darebbe una card muta.
+        name_en: editNameEn.trim() || service.name_en || null,
+        description_en: editDescriptionEn.trim() || null,
+        features_en: editFeaturesEn.split('\n').filter(f => f.trim()),
+        price_unit: editPriceUnit.trim() || null,
       }
 
       if (service.price_options && service.price_options.length > 0) {
@@ -509,6 +529,14 @@ export default function CarWashCatalogTab() {
                   onEditFeatures={setEditFeatures}
                   editBadge={editBadge}
                   onEditBadge={setEditBadge}
+                  editNameEn={editNameEn}
+                  onEditNameEn={setEditNameEn}
+                  editDescriptionEn={editDescriptionEn}
+                  onEditDescriptionEn={setEditDescriptionEn}
+                  editFeaturesEn={editFeaturesEn}
+                  onEditFeaturesEn={setEditFeaturesEn}
+                  editPriceUnit={editPriceUnit}
+                  onEditPriceUnit={setEditPriceUnit}
                   onToggleActive={() => toggleActive(service)}
                 />
               ))}
@@ -542,6 +570,14 @@ interface ServiceCardProps {
   onEditFeatures: (v: string) => void
   editBadge: string
   onEditBadge: (v: string) => void
+  editNameEn: string
+  onEditNameEn: (v: string) => void
+  editDescriptionEn: string
+  onEditDescriptionEn: (v: string) => void
+  editFeaturesEn: string
+  onEditFeaturesEn: (v: string) => void
+  editPriceUnit: string
+  onEditPriceUnit: (v: string) => void
   onToggleActive: () => void
 }
 
@@ -566,6 +602,14 @@ function ServiceCard({
   onEditFeatures,
   editBadge,
   onEditBadge,
+  editNameEn,
+  onEditNameEn,
+  editDescriptionEn,
+  onEditDescriptionEn,
+  editFeaturesEn,
+  onEditFeaturesEn,
+  editPriceUnit,
+  onEditPriceUnit,
   onToggleActive,
 }: ServiceCardProps) {
   const inactive = !service.is_active
@@ -580,6 +624,17 @@ function ServiceCard({
             type="text"
             value={editName}
             onChange={e => onEditName(e.target.value)}
+            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+          />
+        </div>
+
+        {/* Nome in inglese. Vuoto = sul sito in inglese esce l'italiano. */}
+        <div className="mb-3">
+          <label className="block text-xs text-theme-text-muted mb-1">Nome (inglese)</label>
+          <input
+            type="text"
+            value={editNameEn}
+            onChange={e => onEditNameEn(e.target.value)}
             className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
           />
         </div>
@@ -603,7 +658,16 @@ function ServiceCard({
             <div className="space-y-2">
               {editPriceOptions.map((opt, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <span className="text-sm text-theme-text-muted min-w-[40px]">{opt.label}</span>
+                  <input
+                    type="text"
+                    value={opt.label}
+                    onChange={e => {
+                      const updated = [...editPriceOptions]
+                      updated[i] = { ...updated[i], label: e.target.value }
+                      onEditPriceOptions(updated)
+                    }}
+                    className="flex-1 min-w-[80px] px-2 py-1 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                  />
                   <div className="flex items-center gap-1">
                     <MoneyInput
                       value={opt.price}
@@ -631,6 +695,21 @@ function ServiceCard({
           </div>
         )}
 
+        {/* Unita' di prezzo: la parolina accanto al prezzo sul sito. */}
+        <div className="mb-3">
+          <label className="block text-xs text-theme-text-muted mb-1">Unita&apos; di prezzo (facoltativa)</label>
+          <input
+            type="text"
+            value={editPriceUnit}
+            onChange={e => onEditPriceUnit(e.target.value)}
+            placeholder="es. Qta, per 4 cerchi"
+            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+          />
+          <p className="text-[11px] text-theme-text-muted mt-1">
+            Attenzione: scrivendo <b>a sedile</b> il sito apre la pianta dell&apos;abitacolo e fa scegliere i posti.
+          </p>
+        </div>
+
         {/* Description */}
         <div className="mb-3">
           <label className="block text-xs text-theme-text-muted mb-1">Descrizione</label>
@@ -642,12 +721,34 @@ function ServiceCard({
           />
         </div>
 
+        {/* Descrizione in inglese (la riga "Risultato" della card). */}
+        <div className="mb-3">
+          <label className="block text-xs text-theme-text-muted mb-1">Descrizione (inglese)</label>
+          <textarea
+            value={editDescriptionEn}
+            onChange={e => onEditDescriptionEn(e.target.value)}
+            rows={2}
+            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+          />
+        </div>
+
         {/* Features */}
         <div className="mb-3">
           <label className="block text-xs text-theme-text-muted mb-1">Caratteristiche (una per riga)</label>
           <textarea
             value={editFeatures}
             onChange={e => onEditFeatures(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm font-mono focus:outline-none focus:border-dr7-gold"
+          />
+        </div>
+
+        {/* Caratteristiche in inglese. Vuote = esce la lista italiana. */}
+        <div className="mb-3">
+          <label className="block text-xs text-theme-text-muted mb-1">Caratteristiche in inglese (una per riga)</label>
+          <textarea
+            value={editFeaturesEn}
+            onChange={e => onEditFeaturesEn(e.target.value)}
             rows={4}
             className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm font-mono focus:outline-none focus:border-dr7-gold"
           />
