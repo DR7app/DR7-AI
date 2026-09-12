@@ -4139,9 +4139,35 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
             {/* Card servizio */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Card servizio</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    La card del servizio e' TESTO, non piu' una locandina: nome, durata,
+                    lavorazioni e risultato si scrivono nel tab <b>Catalogo Lavaggio &amp; Meccanica</b>.
+                    Qui si cambiano solo le due etichette che li introducono e i bottoni.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Etichetta lista lavorazioni (IT)' value={copy.carta_cosa_facciamo_it ?? ''} onChange={v => update('carta_cosa_facciamo_it', v)} />
+                    <FieldText label='Works list label (EN)' value={copy.carta_cosa_facciamo_en ?? ''} onChange={v => update('carta_cosa_facciamo_en', v)} />
+                    <FieldText label='Etichetta risultato (IT)' value={copy.carta_risultato_it ?? ''} onChange={v => update('carta_risultato_it', v)} />
+                    <FieldText label='Result label (EN)' value={copy.carta_risultato_en ?? ''} onChange={v => update('carta_risultato_en', v)} />
+                    <FieldText label='Bottone "SELEZIONA" (IT)' value={copy.seleziona_servizio_it ?? ''} onChange={v => update('seleziona_servizio_it', v)} />
+                    <FieldText label='Button "SELECT" (EN)' value={copy.seleziona_servizio_en ?? ''} onChange={v => update('seleziona_servizio_en', v)} />
                     <FieldText label='Bottone "AGGIUNGI AL CARRELLO" (IT)' value={copy.add_to_cart_it} onChange={v => update('add_to_cart_it', v)} />
                     <FieldText label='Button "ADD TO CART" (EN)' value={copy.add_to_cart_en} onChange={v => update('add_to_cart_en', v)} />
+                </div>
+            </section>
+
+            {/* Riga dei servizi scelti, sotto alla griglia */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Riga "I tuoi servizi"</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Titolo riga (IT)' value={copy.servizi_titolo_it ?? ''} onChange={v => update('servizi_titolo_it', v)} />
+                    <FieldText label='Row title (EN)' value={copy.servizi_titolo_en ?? ''} onChange={v => update('servizi_titolo_en', v)} />
+                    <FieldText label='Nessun servizio scelto (IT)' value={copy.servizi_vuoto_it ?? ''} onChange={v => update('servizi_vuoto_it', v)} />
+                    <FieldText label='No service selected (EN)' value={copy.servizi_vuoto_en ?? ''} onChange={v => update('servizi_vuoto_en', v)} />
+                    <FieldText label='Bottone data e ora (IT)' value={copy.servizi_procedi_it ?? ''} onChange={v => update('servizi_procedi_it', v)} />
+                    <FieldText label='Date and time button (EN)' value={copy.servizi_procedi_en ?? ''} onChange={v => update('servizi_procedi_en', v)} />
+                    <FieldText label='"Rivedi i servizi" (IT)' value={copy.servizi_rivedi_it ?? ''} onChange={v => update('servizi_rivedi_it', v)} />
+                    <FieldText label='"Review services" (EN)' value={copy.servizi_rivedi_en ?? ''} onChange={v => update('servizi_rivedi_en', v)} />
                 </div>
             </section>
 
