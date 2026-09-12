@@ -47,19 +47,34 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, operationId: inputOperationId, orderId, transactionId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, orderId: inputOrderId, transactionId } = JSON.parse(event.body || '{}');
 
         // Risolvi operationId attivo (le preauth auto-rinnovate hanno il
         // current_operation_id nel metadata della riga nexi_transactions).
         let operationId = inputOperationId as string | null
-        if (!operationId && transactionId) {
+        let orderId = (inputOrderId as string | null) || null
+        // Importo e data della transazione: servono a riconoscere l'operazione
+        // su Nexi anche quando la pre-auth NON e' legata a una cauzione
+        // (pre-auth standalone creata dal tab Nexi).
+        let txAmountCents: number | null = null
+        let txRefDate: string | null = null
+        if (transactionId) {
             const { data: tx } = await supabase
                 .from('nexi_transactions')
-                .select('metadata')
+                .select('metadata, order_id, amount_cents, created_at')
                 .eq('id', transactionId)
                 .maybeSingle()
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            operationId = ((tx?.metadata as any)?.current_operation_id) || null
+            const txAny = tx as any
+            if (!operationId) {
+                operationId = txAny?.metadata?.current_operation_id
+                    || txAny?.metadata?.operation_id
+                    || txAny?.metadata?.operationId
+                    || null
+            }
+            if (!orderId) orderId = txAny?.order_id || null
+            txAmountCents = txAny?.amount_cents != null ? Number(txAny.amount_cents) : null
+            txRefDate = txAny?.created_at || null
         }
 
         if (!operationId && !orderId) {
@@ -67,13 +82,6 @@ const handler: Handler = async (event) => {
                 statusCode: 400,
                 headers,
                 body: JSON.stringify({ error: 'operationId or orderId required' })
-            };
-        }
-        if (!operationId) {
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'operationId mancante (passa transactionId o operationId esplicito)' })
             };
         }
 
@@ -115,7 +123,7 @@ const handler: Handler = async (event) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let candidatiDiagnostica: any[] = []
         async function resolveOperationId(): Promise<string | null> {
-            const amountCents = cauzioneImporto != null ? Math.round(cauzioneImporto * 100) : null
+            const amountCents = cauzioneImporto != null ? Math.round(cauzioneImporto * 100) : txAmountCents
             const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
             const toTime = new Date().toISOString()
             const opsUrl = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500&operationType=AUTHORIZATION`
@@ -138,7 +146,8 @@ const handler: Handler = async (event) => {
             //    Mai indovinare: si rischia di sbloccare la cauzione di un altro.
             if (amountCents != null) {
                 const sameAmount = allOps.filter(op => isAuthorized(op) && Number(op.operationAmount) === amountCents)
-                const refMs = cauzioneRefDate ? new Date(cauzioneRefDate).getTime() : NaN
+                const refDate = cauzioneRefDate || txRefDate
+                const refMs = refDate ? new Date(refDate).getTime() : NaN
                 const sameDay = Number.isFinite(refMs)
                     ? sameAmount.filter(op => Math.abs(new Date(op.operationTime || 0).getTime() - refMs) <= 3 * 24 * 60 * 60 * 1000)
                     : sameAmount
@@ -190,6 +199,32 @@ const handler: Handler = async (event) => {
             try { d = JSON.parse(t); } catch { d = { raw: t }; }
             return { r, t, d };
         };
+
+        // 2026-09-12 — "operationId mancante (passa transactionId o operationId
+        // esplicito)": le pre-autorizzazioni nate da link hanno in casa SOLO
+        // l'orderId, quindi il bottone Annulla usciva con 400 senza nemmeno
+        // provare. Ora, quando l'operationId non c'e', lo si cerca su Nexi
+        // partendo dall'orderId (stessa ricerca gia' usata come ripiego sotto).
+        if (!operationId) {
+            console.log('[nexi-void-preauth] Nessun operationId in casa: cerco l\'operazione su Nexi per orderId', orderId);
+            const resolvedFirst = await resolveOperationId();
+            if (!resolvedFirst) {
+                const diagnostica = candidatiDiagnostica.length > 0
+                    ? ` Pre-autorizzazioni trovate su Nexi per questo importo: ${JSON.stringify(candidatiDiagnostica)}.`
+                    : ''
+                return {
+                    statusCode: 404,
+                    headers,
+                    body: JSON.stringify({
+                        error: `Nessuna pre-autorizzazione attiva trovata su Nexi per l'ordine ${orderId || '—'}.${diagnostica}`,
+                        orderId,
+                        candidates: candidatiDiagnostica,
+                    })
+                };
+            }
+            operationId = resolvedFirst;
+            console.log('[nexi-void-preauth] operationId risolto da orderId:', operationId);
+        }
 
         let { r: response, t: responseText, d: responseData } = await tryCancel(operationId, correlationId);
 
