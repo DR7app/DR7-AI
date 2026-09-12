@@ -28,11 +28,26 @@ export const handler: Handler = async (event) => {
 
         console.log(`[get-customer-documents] Fetching for ${userId}`)
 
+        // Un cliente ha DUE identificativi: quello dell'account (auth) e
+        // quello della scheda (customers_extended). Il sito carica i
+        // documenti sotto il primo, il gestionale sotto il secondo. Guardare
+        // solo uno dei due voleva dire non vedere meta' dei documenti.
+        const idCollegati = new Set<string>([userId])
+        const { data: schede } = await supabase
+            .from('customers_extended')
+            .select('id, user_id')
+            .or(`id.eq.${userId},user_id.eq.${userId}`)
+        for (const riga of schede || []) {
+            if (riga.id) idCollegati.add(riga.id)
+            if (riga.user_id) idCollegati.add(riga.user_id)
+        }
+        const identificativi = [...idCollegati]
+
         // 1. Fetch from 'user_documents' table (DB records)
         const { data: dbDocuments, error: dbError } = await supabase
             .from('user_documents')
             .select('*')
-            .eq('user_id', userId)
+            .in('user_id', identificativi)
 
         if (dbError) console.error('Error fetching user_documents:', dbError)
 
@@ -84,18 +99,21 @@ export const handler: Handler = async (event) => {
         // 2. Fetch from Storage Buckets (Direct list) to catch files not in DB
         const BUCKETS = ['driver-licenses', 'driver-ids', 'codice-fiscale', 'carta-identita', 'customer-documents']
 
-        await Promise.all(BUCKETS.map(async (bucket) => {
+        const coppie = BUCKETS.flatMap(bucket => identificativi.map(id => ({ bucket, id })))
+
+        await Promise.all(coppie.map(async ({ bucket, id }) => {
             const { data: files } = await supabase.storage
                 .from(bucket)
-                .list(userId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
+                .list(id, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
 
             if (files) {
                 for (const file of files) {
                     // Skip placeholders and already processed files
                     if (!file.id || file.name.includes('.emptyFolderPlaceholder')) continue
                     if (processedFileNames.has(file.name)) continue
+                    processedFileNames.add(file.name)
 
-                    const path = `${userId}/${file.name}`
+                    const path = `${id}/${file.name}`
                     const { data: signed } = await supabase.storage
                         .from(bucket)
                         .createSignedUrl(path, 86400)
