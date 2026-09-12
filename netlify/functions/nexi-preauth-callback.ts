@@ -87,17 +87,39 @@ const handler: Handler = async (event) => {
         // 2026-08-27: si caricano anche cliente/importo/veicolo perche' su
         // pre-autorizzazione riuscita parte il messaggio Pro al cliente
         // (evento `cauzione_preauth_completed`).
-        const { data: cauzione } = await supabase
-            .from('cauzioni')
-            .select('id, cliente_id, veicolo_id, importo, nexi_transaction_id, riferimento_contratto_id')
-            .eq('nexi_order_id', orderId)
-            .maybeSingle();
-
         const { data: txn } = await supabase
             .from('nexi_transactions')
             .select('id, metadata, customer_email')
             .eq('order_id', orderId)
             .maybeSingle();
+
+        const CAMPI_CAUZIONE = 'id, cliente_id, veicolo_id, importo, nexi_transaction_id, nexi_order_id, riferimento_contratto_id';
+
+        let { data: cauzione } = await supabase
+            .from('cauzioni')
+            .select(CAMPI_CAUZIONE)
+            .eq('nexi_order_id', orderId)
+            .maybeSingle();
+
+        // 12/09/2026: ripiego su `metadata.cauzione_id` della transazione.
+        // `cauzioni.nexi_order_id` tiene SOLO l'ultimo link creato: se il
+        // cliente paga un link precedente (succede ogni volta che il link si
+        // rimanda), la ricerca per nexi_order_id non trova niente, la pre-auth
+        // veniva trattata come "standalone" e la cauzione restava "Da
+        // incassare" con i fondi gia' bloccati sulla carta (caso Mercedes GLE
+        // 63 AMG - Roberto Portas, €1.000).
+        const idCauzioneDaTx = (txn?.metadata as Record<string, unknown> | null)?.cauzione_id as string | undefined;
+        if (!cauzione && idCauzioneDaTx) {
+            const { data: perTx } = await supabase
+                .from('cauzioni')
+                .select(CAMPI_CAUZIONE)
+                .eq('id', idCauzioneDaTx)
+                .maybeSingle();
+            if (perTx) {
+                cauzione = perTx;
+                console.log('[nexi-preauth-callback] Cauzione trovata via metadata.cauzione_id (link precedente):', idCauzioneDaTx);
+            }
+        }
 
         // 01/09/2026: la pre-autorizzazione puo' NON avere una cauzione dietro
         // (link creato dal tab Nexi o dal menu Gestisci del tab Clienti): in
@@ -212,6 +234,13 @@ const handler: Handler = async (event) => {
                 updateData.nexi_contract_id = effectiveContractId;
             }
             updateData.stato = 'Attiva'; // Pre-authorized and ready for SBLOCCA or INCASSA
+            // Il cliente ha pagato QUESTO link: se la cauzione ne teneva uno
+            // piu' recente, il riferimento va rimesso sull'ordine davvero
+            // autorizzato, altrimenti SBLOCCA e INCASSA lavorano sull'ordine
+            // sbagliato.
+            if (cauzione && cauzione.nexi_order_id !== orderId) {
+                updateData.nexi_order_id = orderId;
+            }
             updateData.metodo = 'preautorizzazione'; // 2026-07-18: badge mostra "Pre-autorizzata" (pre-auth completata)
             updateData.note = `Preautorizzazione completata (fondi bloccati) - OpId: ${effectiveOperationId || 'N/A'} - Auth: ${effectiveAuthCode || 'N/A'}${effectiveContractId ? ` - Carta registrata (${effectiveContractId})` : ''} - Importo: €${amountStr}`;
             txStatus = 'preauth_held';

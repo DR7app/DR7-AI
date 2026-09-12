@@ -133,6 +133,15 @@
 [functions."nexi-preauth-refresh-cron"]
   schedule = "30 3 * * *"
 
+# Rete di sicurezza cauzioni (12/09/2026): ogni 10 minuti confronta le
+# pre-autorizzazioni con lo stato REALE su Nexi e, solo se i fondi risultano
+# bloccati, porta la cauzione a "Pre-autorizzata" (stato Attiva). Serve quando
+# la notifica Nexi non arriva o arriva su un link precedente: i soldi sono
+# bloccati sulla carta ma la cauzione resta "Da incassare".
+# Non crea link, non incassa, non sblocca, non manda messaggi, non declassa nulla.
+[functions."nexi-preauth-allinea-cauzioni"]
+  schedule = "*/10 * * * *"
+
 # Marketing campaigns — every 2 min, materialise scheduled/recurring campaigns
 # whose scheduled_at has passed and pump the chunked send loop server-side.
 # 25s working budget per tick (out of the 30s scheduled-function timeout) so
