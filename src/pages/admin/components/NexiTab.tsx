@@ -405,6 +405,15 @@ export default function NexiTab() {
     const [preauthLinkSendWhatsApp, setPreauthLinkSendWhatsApp] = useState(true)
     // Il cliente si SCEGLIE dall'anagrafica, non si scrive a mano: un nome
     // digitato non aggancia la pre-autorizzazione a nessuna scheda cliente.
+    // 12/09/2026 — Prenotazione del link pre-autorizzazione. Se c'e' una
+    // prenotazione, la pre-auth E' la cauzione di quella prenotazione: il
+    // backend la collega (e la apre se manca). Senza, la riga restava orfana
+    // e allo sblocco mancavano importo e data per trovare l'operazione.
+    const [preauthLinkBookingId, setPreauthLinkBookingId] = useState('')
+    const [preauthLinkBookingLabel, setPreauthLinkBookingLabel] = useState('')
+    const [preauthLinkBookingSearch, setPreauthLinkBookingSearch] = useState('')
+    const [preauthLinkBookingRows, setPreauthLinkBookingRows] = useState<BookingLite[]>([])
+    const [preauthLinkBookingLoading, setPreauthLinkBookingLoading] = useState(false)
     const [preauthLinkCustomerId, setPreauthLinkCustomerId] = useState('')
     const [preauthLinkCustomers, setPreauthLinkCustomers] = useState<PreauthCustomerLite[]>([])
     const [showPreauthNewClient, setShowPreauthNewClient] = useState(false)
@@ -452,6 +461,35 @@ export default function NexiTab() {
         setPreauthLinkCustomerName(c.full_name || '')
         setPreauthLinkCustomerEmail(c.email || '')
         setPreauthLinkCustomerPhone(c.phone || '')
+        // Le prenotazioni del cliente appena scelto si cercano da sole: cosi'
+        // la pre-autorizzazione parte gia' agganciata alla cauzione giusta.
+        const termine = (c.full_name || c.email || '').trim()
+        setPreauthLinkBookingSearch(termine)
+        if (termine.length >= 2) void cercaPrenotazioniPreauth(termine)
+    }
+
+    async function cercaPrenotazioniPreauth(term: string) {
+        const q = term.trim()
+        if (q.length < 2) {
+            setPreauthLinkBookingRows([])
+            return
+        }
+        setPreauthLinkBookingLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_email, vehicle_name, pickup_date, dropoff_date, service_type, status')
+                .or(`customer_name.ilike.%${q}%,customer_email.ilike.%${q}%`)
+                .order('pickup_date', { ascending: false })
+                .limit(15)
+            if (error) throw error
+            setPreauthLinkBookingRows((data || []) as BookingLite[])
+        } catch (e) {
+            console.error('[NexiTab] cercaPrenotazioniPreauth error:', e)
+            toast.error('Ricerca prenotazioni fallita')
+        } finally {
+            setPreauthLinkBookingLoading(false)
+        }
     }
 
     function openPreauthModal(card: TokenizedCard) {
@@ -660,6 +698,10 @@ export default function NexiTab() {
 
     function openPreauthLinkModal() {
         setPreauthLinkAmount('')
+        setPreauthLinkBookingId('')
+        setPreauthLinkBookingLabel('')
+        setPreauthLinkBookingSearch('')
+        setPreauthLinkBookingRows([])
         setPreauthLinkCustomerId('')
         setPreauthLinkCustomerName('')
         setPreauthLinkCustomerEmail('')
@@ -692,6 +734,9 @@ export default function NexiTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     // cauzioneId omesso → backend genera orderId con prefisso "PA"
+                    // Con bookingId il backend aggancia la cauzione della
+                    // prenotazione (e la apre se non c'e' ancora).
+                    bookingId: preauthLinkBookingId || null,
                     amount: amt,
                     customerId: preauthLinkCustomerId || null,
                     customerEmail: preauthLinkCustomerEmail || null,
@@ -707,7 +752,11 @@ export default function NexiTab() {
                 return
             }
             setPreauthLinkResult({ url: data.paymentUrl, orderId: data.orderId })
-            toast.success('Link pre-autorizzazione creato')
+            if (data.avvisoCauzione) {
+                toast(data.message || 'Link pre-autorizzazione creato', { duration: 10000 })
+            } else {
+                toast.success(data.message || 'Link pre-autorizzazione creato')
+            }
 
             // Invio WhatsApp opzionale via Green API (template invio link)
             if (preauthLinkSendWhatsApp && preauthLinkCustomerPhone) {
@@ -2470,6 +2519,55 @@ export default function NexiTab() {
                                         </div>
                                     ) : (
                                         <span className="text-[10px] text-theme-text-muted">Seleziona il cliente dall'anagrafica: il nome non si scrive a mano.</span>
+                                    )}
+                                </div>
+
+                                <div className="block">
+                                    <span className="text-xs text-theme-text-muted">Prenotazione</span>
+                                    {preauthLinkBookingId ? (
+                                        <div className="mt-1 flex items-center justify-between gap-2 p-2 rounded-lg bg-dr7-gold/10 border border-dr7-gold/30 text-xs text-theme-text-secondary">
+                                            <span className="truncate">{preauthLinkBookingLabel}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setPreauthLinkBookingId(''); setPreauthLinkBookingLabel('') }}
+                                                className="shrink-0 text-theme-text-muted hover:text-theme-text-primary"
+                                            >Togli</button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <input
+                                                type="text"
+                                                value={preauthLinkBookingSearch}
+                                                onChange={e => { setPreauthLinkBookingSearch(e.target.value); void cercaPrenotazioniPreauth(e.target.value) }}
+                                                placeholder="Cerca la prenotazione per nome o email..."
+                                                className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                            />
+                                            {preauthLinkBookingLoading && (
+                                                <span className="text-[10px] text-theme-text-muted">Cerco...</span>
+                                            )}
+                                            {preauthLinkBookingRows.length > 0 && (
+                                                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-theme-border divide-y divide-theme-border">
+                                                    {preauthLinkBookingRows.map(b => (
+                                                        <button
+                                                            key={b.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setPreauthLinkBookingId(b.id)
+                                                                setPreauthLinkBookingLabel(`${b.customer_name || 'Cliente'} · ${b.vehicle_name || 'Mezzo'} · ${b.pickup_date ? new Date(b.pickup_date).toLocaleDateString('it-IT') : '—'}`)
+                                                                setPreauthLinkBookingRows([])
+                                                            }}
+                                                            className="w-full text-left px-3 py-2 text-xs text-theme-text-secondary hover:bg-theme-bg-hover"
+                                                        >
+                                                            <span className="text-theme-text-primary font-semibold">{b.customer_name || 'Cliente'}</span>
+                                                            {b.vehicle_name ? ` · ${b.vehicle_name}` : ''}
+                                                            {b.pickup_date ? ` · ${new Date(b.pickup_date).toLocaleDateString('it-IT')}` : ''}
+                                                            {b.status ? ` · ${b.status}` : ''}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <span className="text-[10px] text-theme-text-muted">Con la prenotazione la pre-autorizzazione diventa la cauzione di quella prenotazione.</span>
+                                        </>
                                     )}
                                 </div>
 

@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
 import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
 import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
+import { handler as syncCauzione } from './sync-booking-cauzione';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -33,7 +34,7 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, customerId, amount, customerEmail, customerName, description, expirationHours } = JSON.parse(event.body || '{}');
+        const { cauzioneId: inputCauzioneId, customerId, amount, customerEmail, customerName, description, expirationHours, bookingId } = JSON.parse(event.body || '{}');
 
         if (!amount) {
             return {
@@ -41,6 +42,76 @@ const handler: Handler = async (event) => {
                 headers,
                 body: JSON.stringify({ error: 'amount is required' })
             };
+        }
+
+        // 2026-09-12 — Una pre-autorizzazione nata dal tab Nexi restava senza
+        // cauzione: allo sblocco mancava tutto (importo, data, prenotazione) e
+        // usciva "operationId mancante". Regola: se c'e' una prenotazione, la
+        // pre-autorizzazione e' SEMPRE la cauzione di quella prenotazione.
+        let cauzioneId: string | null = inputCauzioneId || null;
+        let cauzioneCreata = false;
+        let avvisoCauzione: string | null = null;
+        if (!cauzioneId && bookingId) {
+            const { data: esistente } = await supabase
+                .from('cauzioni')
+                // Le cauzioni chiuse (Restituita/Incassata) restano per lo
+                // storico: una nuova pre-auth non deve riaprirle.
+                .select('id, stato, created_at')
+                .eq('riferimento_contratto_id', bookingId)
+                .not('stato', 'in', '("Restituita","Incassata")')
+                .order('created_at', { ascending: false })
+                .limit(1)
+            const riga = esistente?.[0]
+            if (riga?.id) {
+                cauzioneId = riga.id as string
+                console.log('[nexi-create-preauth] Cauzione della prenotazione trovata:', cauzioneId)
+            } else {
+                // Nessuna cauzione: la si crea con la stessa funzione usata
+                // dalle prenotazioni, cosi' scadenza e metodo seguono la
+                // Centralina invece di essere reinventati qui.
+                const { data: bk } = await supabase
+                    .from('bookings')
+                    .select('id, customer_id, vehicle_id, dropoff_date, customer_email, customer_phone, customer_name')
+                    .eq('id', bookingId)
+                    .maybeSingle()
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const bkAny = bk as any
+                if (!bkAny) {
+                    avvisoCauzione = 'Prenotazione non trovata: la pre-autorizzazione resta senza cauzione.'
+                } else {
+                    try {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const res: any = await syncCauzione({
+                            httpMethod: 'POST',
+                            body: JSON.stringify({
+                                bookingId,
+                                customerId: bkAny.customer_id || customerId || null,
+                                vehicleId: bkAny.vehicle_id || null,
+                                returnDate: bkAny.dropoff_date,
+                                depositAmount: amount,
+                                paymentMethod: 'preautorizzazione',
+                                depositPaid: false,
+                                guestEmail: bkAny.customer_email || customerEmail || undefined,
+                                guestPhone: bkAny.customer_phone || undefined,
+                                guestName: bkAny.customer_name || customerName || undefined,
+                            }),
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        } as any, {} as any, (() => undefined) as any)
+                        const body = res?.body ? JSON.parse(res.body) : null
+                        if (body?.cauzione?.id) {
+                            cauzioneId = body.cauzione.id as string
+                            cauzioneCreata = body.action === 'created'
+                            console.log('[nexi-create-preauth] Cauzione', body.action, 'per la prenotazione:', cauzioneId)
+                        } else {
+                            avvisoCauzione = body?.error || 'Cauzione non creata per questa prenotazione.'
+                        }
+                    } catch (e) {
+                        console.error('[nexi-create-preauth] Creazione cauzione fallita:', e)
+                        avvisoCauzione = 'Creazione della cauzione fallita: la pre-autorizzazione resta senza cauzione.'
+                    }
+                }
+                if (avvisoCauzione) console.warn('[nexi-create-preauth]', avvisoCauzione)
+            }
         }
 
         // Generate unique order ID (max 18 chars for Nexi).
@@ -189,6 +260,9 @@ const handler: Handler = async (event) => {
         // Also store in nexi_transactions for tracking
         await supabase.from('nexi_transactions').insert({
             order_id: orderId,
+            // La prenotazione si scrive subito: prima la riga restava orfana e
+            // andava ricollegata a mano dal tab Nexi.
+            booking_id: bookingId || null,
             amount_cents: amountCents,
             status: 'pending_preauth',
             payment_link: paymentUrl,
@@ -222,7 +296,17 @@ const handler: Handler = async (event) => {
                 success: true,
                 paymentUrl: paymentUrl,
                 orderId: orderId,
-                message: 'Link pre-autorizzazione creato (blocco fondi, no incasso)'
+                bookingId: bookingId || null,
+                cauzioneId: cauzioneId || null,
+                cauzioneCreata,
+                avvisoCauzione,
+                message: avvisoCauzione
+                    ? `Link pre-autorizzazione creato. ${avvisoCauzione}`
+                    : (cauzioneCreata
+                        ? 'Link pre-autorizzazione creato e cauzione della prenotazione aperta'
+                        : (cauzioneId
+                            ? 'Link pre-autorizzazione creato e collegato alla cauzione della prenotazione'
+                            : 'Link pre-autorizzazione creato (blocco fondi, no incasso)'))
             })
         };
 

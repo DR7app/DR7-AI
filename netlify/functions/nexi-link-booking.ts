@@ -56,7 +56,7 @@ const handler: Handler = async (event) => {
         const q = supabase
             .from('nexi_transactions')
             .update({ booking_id: bookingId || null })
-            .select('id, order_id, booking_id')
+            .select('id, order_id, booking_id, metadata')
 
         const { data: righe, error } = transactionId
             ? await q.eq('id', transactionId)
@@ -65,6 +65,50 @@ const handler: Handler = async (event) => {
         if (error) throw error
         if (!righe || righe.length === 0) {
             return { statusCode: 404, headers, body: JSON.stringify({ error: 'Transazione Nexi non trovata' }) };
+        }
+
+        // 2026-09-12 — Collegare la prenotazione non bastava: la cauzione di
+        // quella prenotazione restava estranea, e allo sblocco mancavano
+        // importo e data per riconoscere l'operazione su Nexi. Regola: la
+        // transazione segue la cauzione della prenotazione.
+        let cauzioneCollegata: string | null = null
+        if (bookingId) {
+            const { data: cauzioni } = await supabase
+                .from('cauzioni')
+                // Le cauzioni chiuse restano per lo storico: non si riaprono.
+                .select('id, nexi_order_id, nexi_transaction_id, created_at')
+                .eq('riferimento_contratto_id', bookingId)
+                .not('stato', 'in', '("Restituita","Incassata")')
+                .order('created_at', { ascending: false })
+                .limit(1)
+            const cauzione = cauzioni?.[0]
+            if (cauzione?.id) {
+                cauzioneCollegata = cauzione.id as string
+                for (const riga of righe) {
+                    // metadata e' jsonb: si riscrive INTERO, quindi va fuso con
+                    // quello che c'e' gia' o si perdono carta, cliente e stato.
+                    const meta = (riga.metadata as Record<string, unknown> | null) || {}
+                    await supabase
+                        .from('nexi_transactions')
+                        .update({ metadata: { ...meta, cauzione_id: cauzioneCollegata } })
+                        .eq('id', riga.id)
+                }
+                // L'ordine si scrive sulla cauzione solo se non ne ha gia' uno:
+                // un link piu' recente non va sovrascritto da questo raccordo.
+                const ordineRiga = righe[0]?.order_id || null
+                const opRiga = ((righe[0]?.metadata as Record<string, unknown> | null)?.current_operation_id
+                    || (righe[0]?.metadata as Record<string, unknown> | null)?.operation_id) as string | undefined
+                const patchCauzione: Record<string, unknown> = {}
+                if (ordineRiga && !cauzione.nexi_order_id) patchCauzione.nexi_order_id = ordineRiga
+                if (opRiga && !cauzione.nexi_transaction_id) patchCauzione.nexi_transaction_id = opRiga
+                if (Object.keys(patchCauzione).length > 0) {
+                    patchCauzione.updated_at = new Date().toISOString()
+                    await supabase.from('cauzioni').update(patchCauzione).eq('id', cauzione.id)
+                }
+                console.log('[nexi-link-booking] Cauzione collegata:', cauzioneCollegata)
+            } else {
+                console.log('[nexi-link-booking] La prenotazione', bookingId, 'non ha una cauzione aperta')
+            }
         }
 
         console.log('[nexi-link-booking] Collegate', righe.length, 'righe alla prenotazione', bookingId || '(scollegate)');
@@ -76,8 +120,11 @@ const handler: Handler = async (event) => {
                 success: true,
                 updated: righe.length,
                 booking,
+                cauzioneId: cauzioneCollegata,
                 message: bookingId
-                    ? `Transazione collegata alla prenotazione di ${booking?.customer_name || bookingId}`
+                    ? (cauzioneCollegata
+                        ? `Transazione collegata alla prenotazione di ${booking?.customer_name || bookingId} e alla sua cauzione`
+                        : `Transazione collegata alla prenotazione di ${booking?.customer_name || bookingId}. Attenzione: questa prenotazione non ha una cauzione aperta.`)
                     : 'Transazione scollegata dalla prenotazione',
             })
         };
