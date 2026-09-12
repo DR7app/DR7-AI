@@ -117,7 +117,6 @@ export default function ReviewManagementTab() {
   // Cambiare ricerca, categoria o motivo riporta le due liste a pagina 1:
   // restare a pagina 5 su un risultato da tre righe mostrerebbe il vuoto.
   useEffect(() => { setPaginaPronti(1); setPaginaEsclusi(1) }, [searchTerm, categoryFilter, motivoFilter, filterServiceType])
-  const [selectAll, setSelectAll] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSettings, setShowSettings] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
@@ -127,6 +126,9 @@ export default function ReviewManagementTab() {
   const [copyingId, setCopyingId] = useState<string | null>(null)
   const [generatingCodeId, setGeneratingCodeId] = useState<string | null>(null)
   const [bulkSending, setBulkSending] = useState(false)
+  // 12/09/2026: la selezione multipla esisteva ma non aveva azioni. Questo
+  // flag copre blocca/sblocca di gruppo sulle righe selezionate.
+  const [bulkBlocking, setBulkBlocking] = useState<null | 'BLOCCA' | 'SBLOCCA'>(null)
   const [evaluating, setEvaluating] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [savingTemplateKey, setSavingTemplateKey] = useState<string | null>(null)
@@ -808,13 +810,22 @@ export default function ReviewManagementTab() {
     }
   }
 
+  // 12/09/2026: se ci sono righe selezionate l'invio parte SOLO da quelle.
+  // Prima ignorava la selezione e inviava a tutti i candidati filtrati, quindi
+  // le caselle di spunta non servivano a niente.
   async function handleBulkSend() {
-    const eligibleToSend = filteredCandidates.filter(c => c.send_status === 'TO_SEND' && (c.customer_email || c.customer_phone))
+    const base = selectedIds.size > 0
+      ? filteredCandidates.filter(c => selectedIds.has(c.id))
+      : filteredCandidates
+    const eligibleToSend = base.filter(c => c.send_status === 'TO_SEND' && (c.customer_email || c.customer_phone))
     if (eligibleToSend.length === 0) {
-      toast.error('Nessun candidato idoneo da inviare')
+      toast.error(selectedIds.size > 0
+        ? 'Nessuna riga selezionata e pronta per l\'invio'
+        : 'Nessun candidato idoneo da inviare')
       return
     }
-    if (!confirm(`Inviare la richiesta di recensione a ${eligibleToSend.length} clienti idonei?`)) return
+    const ambito = selectedIds.size > 0 ? 'clienti selezionati' : 'clienti idonei'
+    if (!confirm(`Inviare la richiesta di recensione a ${eligibleToSend.length} ${ambito}?`)) return
 
     setBulkSending(true)
     let success = 0
@@ -852,7 +863,73 @@ export default function ReviewManagementTab() {
     toast.dismiss(toastId)
     toast.success(`Invio completato: ${success} riusciti, ${failed} falliti`)
     setBulkSending(false)
+    svuotaSelezione()
     await Promise.all([fetchCandidates(), fetchStats()])
+  }
+
+  // ── Azioni di gruppo sulle righe selezionate ──────────────────────────────
+
+  // Blocca / sblocca in blocco. Stessa scrittura del bottone per riga
+  // (send_status='BLOCKED' + ALREADY_REVIEWED), fatta con un solo update.
+  async function handleBulkBlocca() {
+    const ids = pronti.filter(c => selectedIds.has(c.id) && !isBloccatoManualmente(c)).map(c => c.id)
+    if (ids.length === 0) {
+      toast.error('Nessuna riga selezionata da bloccare')
+      return
+    }
+    if (!confirm(`Bloccare ${ids.length} client${ids.length === 1 ? 'e' : 'i'}? Non riceveranno la richiesta di recensione.`)) return
+    setBulkBlocking('BLOCCA')
+    try {
+      const { error } = await supabase
+        .from('review_candidates')
+        .update({
+          send_status: 'BLOCKED',
+          eligibility_status: 'ELIGIBLE',
+          exclusion_reason_code: 'ALREADY_REVIEWED',
+          exclusion_reason_text: 'Marcato manualmente: cliente ha gia\' lasciato la recensione',
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', ids)
+      if (error) throw error
+      toast.success(`${ids.length} client${ids.length === 1 ? 'e bloccato' : 'i bloccati'}`)
+      svuotaSelezione()
+      await Promise.all([fetchCandidates(), fetchStats()])
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setBulkBlocking(null)
+    }
+  }
+
+  async function handleBulkSblocca() {
+    const ids = pronti.filter(c => selectedIds.has(c.id) && c.send_status !== 'TO_SEND').map(c => c.id)
+    if (ids.length === 0) {
+      toast.error('Nessuna riga selezionata da sbloccare')
+      return
+    }
+    if (!confirm(`Sbloccare ${ids.length} client${ids.length === 1 ? 'e' : 'i'} per l'invio della recensione?`)) return
+    setBulkBlocking('SBLOCCA')
+    try {
+      const { error } = await supabase
+        .from('review_candidates')
+        .update({
+          eligibility_status: 'ELIGIBLE',
+          send_status: 'TO_SEND',
+          review_risk: 'GREEN',
+          exclusion_reason_code: null,
+          exclusion_reason_text: null,
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', ids)
+      if (error) throw error
+      toast.success(`${ids.length} recension${ids.length === 1 ? 'e sbloccata' : 'i sbloccate'}`)
+      svuotaSelezione()
+      await Promise.all([fetchCandidates(), fetchStats()])
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setBulkBlocking(null)
+    }
   }
 
   async function handleBulkEvaluate(forceReEvaluate = true) {
@@ -989,13 +1066,15 @@ export default function ReviewManagementTab() {
     })
   }
 
+  function svuotaSelezione() {
+    setSelectedIds(new Set())
+  }
+
+  // 12/09/2026: la casella sta nell'intestazione "Pronti", quindi seleziona le
+  // righe di quella lista (le sole che hanno una casella), non tutti i
+  // candidati filtrati: prima finivano dentro anche gli esclusi, invisibili.
   function toggleSelectAll() {
-    if (selectAll) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filteredCandidates.map(c => c.id)))
-    }
-    setSelectAll(!selectAll)
+    setSelectedIds(prontiTuttiSelezionati ? new Set() : new Set(pronti.map(c => c.id)))
   }
 
   // ── Filtering ─────────────────────────────────────────────────────────────
@@ -1127,6 +1206,11 @@ export default function ReviewManagementTab() {
   // costruiva oltre 22.000 nodi e restava ferma alcuni secondi.
   const prontiPagina = Math.min(paginaPronti, Math.max(1, Math.ceil(pronti.length / RECENSIONI_PER_PAGINA)))
   const prontiInPagina = pronti.slice((prontiPagina - 1) * RECENSIONI_PER_PAGINA, prontiPagina * RECENSIONI_PER_PAGINA)
+  const selezionatiPronti = pronti.filter(c => selectedIds.has(c.id))
+  const prontiTuttiSelezionati = pronti.length > 0 && selezionatiPronti.length === pronti.length
+  const selezionatiDaInviare = selezionatiPronti.filter(c => c.send_status === 'TO_SEND' && c.customer_phone).length
+  const selezionatiDaBloccare = selezionatiPronti.filter(c => !isBloccatoManualmente(c)).length
+  const selezionatiDaSbloccare = selezionatiPronti.filter(c => c.send_status !== 'TO_SEND').length
   const esclusiPagina = Math.min(paginaEsclusi, Math.max(1, Math.ceil(esclusi.length / RECENSIONI_PER_PAGINA)))
   const esclusiInPagina = esclusi.slice((esclusiPagina - 1) * RECENSIONI_PER_PAGINA, esclusiPagina * RECENSIONI_PER_PAGINA)
 
@@ -1196,7 +1280,7 @@ export default function ReviewManagementTab() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
             </svg>
-            {bulkSending ? 'Invio…' : 'Invia WhatsApp'}
+            {bulkSending ? 'Invio…' : selezionatiPronti.length > 0 ? `Invia WhatsApp (${selezionatiDaInviare})` : 'Invia WhatsApp'}
           </button>
           <button
             onClick={() => handleBulkEvaluate(true)}
@@ -1649,17 +1733,66 @@ export default function ReviewManagementTab() {
                   <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-theme-text-secondary">
                     <input
                       type="checkbox"
-                      checked={selectAll}
+                      checked={prontiTuttiSelezionati}
                       onChange={toggleSelectAll}
                       className="w-4 h-4 rounded accent-dr7-gold"
                     />
                     <span>Seleziona tutti</span>
-                    {selectedIds.size > 0 && (
-                      <span className="text-theme-text-secondary">— {selectedIds.size} selezionati</span>
+                    {selezionatiPronti.length > 0 && (
+                      <span className="text-theme-text-secondary">— {selezionatiPronti.length} selezionati</span>
                     )}
                   </label>
                 )}
               </header>
+              {/* 12/09/2026: barra azioni di gruppo. Le caselle di spunta
+                  esistevano senza nessuna azione collegata: qui la selezione
+                  diventa invio / blocco / sblocco in blocco. */}
+              {selezionatiPronti.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 bg-theme-bg-secondary border border-theme-border rounded-xl px-3 py-2">
+                  <span className="text-sm font-medium text-theme-text-primary">
+                    {selezionatiPronti.length} selezionat{selezionatiPronti.length === 1 ? 'o' : 'i'}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSend()}
+                      disabled={bulkSending || bulkBlocking !== null || selezionatiDaInviare === 0}
+                      title={selezionatiDaInviare === 0 ? 'Nessuna riga selezionata pronta per l\'invio (serve stato Pronto e numero WhatsApp)' : 'Invia la richiesta di recensione alle righe selezionate'}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-full hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                      {bulkSending ? 'Invio…' : `Invia WhatsApp (${selezionatiDaInviare})`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkBlocca()}
+                      disabled={bulkSending || bulkBlocking !== null || selezionatiDaBloccare === 0}
+                      title="Blocca le righe selezionate: non riceveranno la richiesta"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-full hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {bulkBlocking === 'BLOCCA' ? 'Blocco…' : `Blocca (${selezionatiDaBloccare})`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSblocca()}
+                      disabled={bulkSending || bulkBlocking !== null || selezionatiDaSbloccare === 0}
+                      title="Sblocca le righe selezionate e rimettile pronte per l'invio"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs font-semibold rounded-full hover:bg-theme-bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {bulkBlocking === 'SBLOCCA' ? 'Sblocco…' : `Sblocca (${selezionatiDaSbloccare})`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={svuotaSelezione}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-theme-text-secondary rounded-full hover:bg-theme-bg-hover transition-colors"
+                    >
+                      Annulla selezione
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
