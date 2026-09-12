@@ -122,6 +122,33 @@ const handler: Handler = async (event) => {
         })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let candidatiDiagnostica: any[] = []
+        // 2026-09-12 — Importo e stato REALI dell'operazione, letti da Nexi.
+        // Servono a due cose: mandare amount/currency nel corpo di cancels
+        // (senza, Nexi risponde "An internal error occurred") e capire se
+        // l'operazione e' ancora annullabile.
+        let opAmountCents: number | null = null
+        let opResult: string | null = null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async function fetchOperation(opId: string): Promise<any | null> {
+            try {
+                const r = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
+                    headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': randomCorrelation() }
+                })
+                if (!r.ok) {
+                    console.warn('[nexi-void-preauth] GET operation fallita:', r.status, (await r.text()).substring(0, 200))
+                    return null
+                }
+                const d = await r.json()
+                const op = d.operation || d
+                if (op?.operationAmount != null) opAmountCents = Number(op.operationAmount)
+                if (op?.operationResult) opResult = String(op.operationResult).toUpperCase()
+                console.log('[nexi-void-preauth] Operazione su Nexi:', opId, 'stato', opResult, 'importo', opAmountCents)
+                return op
+            } catch (e) {
+                console.warn('[nexi-void-preauth] GET operation errore:', e)
+                return null
+            }
+        }
         async function resolveOperationId(): Promise<string | null> {
             const amountCents = cauzioneImporto != null ? Math.round(cauzioneImporto * 100) : txAmountCents
             const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -141,7 +168,11 @@ const handler: Handler = async (event) => {
             // 1) per orderId, con importo coerente quando lo conosciamo
             const byOrder = allOps.filter(op => op.orderId === wantedOrder && (amountCents == null || !op.operationAmount || Number(op.operationAmount) === amountCents))
             const authByOrder = byOrder.find(op => isAuthorized(op) && (amountCents == null || Number(op.operationAmount) === amountCents)) || byOrder.find(isAuthorized)
-            if (authByOrder?.operationId) return authByOrder.operationId
+            if (authByOrder?.operationId) {
+                if (authByOrder.operationAmount != null) opAmountCents = Number(authByOrder.operationAmount)
+                opResult = String(authByOrder.operationResult || '').toUpperCase() || opResult
+                return authByOrder.operationId
+            }
             // 2) ripiego SICURO: stessa cifra e stesso giorno, e SOLO se e' unica.
             //    Mai indovinare: si rischia di sbloccare la cauzione di un altro.
             if (amountCents != null) {
@@ -151,7 +182,11 @@ const handler: Handler = async (event) => {
                 const sameDay = Number.isFinite(refMs)
                     ? sameAmount.filter(op => Math.abs(new Date(op.operationTime || 0).getTime() - refMs) <= 3 * 24 * 60 * 60 * 1000)
                     : sameAmount
-                if (sameDay.length === 1) return sameDay[0].operationId
+                if (sameDay.length === 1) {
+                    if (sameDay[0].operationAmount != null) opAmountCents = Number(sameDay[0].operationAmount)
+                    opResult = String(sameDay[0].operationResult || '').toUpperCase() || opResult
+                    return sameDay[0].operationId
+                }
                 candidatiDiagnostica = sameDay.slice(0, 10).map(op => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
             }
             if (candidatiDiagnostica.length === 0) {
@@ -170,13 +205,26 @@ const handler: Handler = async (event) => {
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
 
-        const cancelPayload = {
-            description: `Sblocco cauzione ${cauzioneId}`
-        };
+        // 2026-09-12: con una pre-auth del tab Nexi (senza cauzione) la
+        // descrizione diventava "Sblocco cauzione undefined".
+        const cancelDescription = `Sblocco pre-autorizzazione ${cauzioneId || orderId || operationId}`;
+        const importoCents = () => opAmountCents
+            ?? (cauzioneImporto != null ? Math.round(cauzioneImporto * 100) : txAmountCents);
 
         // First attempt: cancel (void pre-auth) con l'id che abbiamo in casa.
-        const tryCancel = async (opId: string, corr: string) => {
-            console.log('[nexi-void-preauth] Trying /cancels on', opId);
+        // 2026-09-12 — "An internal error occurred" sul tab Nexi: l'annullamento
+        // partiva con la sola description. Nexi vuole amount + currency nel
+        // corpo (come su captures) e senza risponde con l'errore generico.
+        // Se anche con l'importo fallisce, si ritenta con il corpo minimo.
+        const tryCancel = async (opId: string, corr: string, includeAmount = true) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cancelPayload: any = { description: cancelDescription };
+            const cents = importoCents();
+            if (includeAmount && cents != null) {
+                cancelPayload.amount = String(cents);
+                cancelPayload.currency = 'EUR';
+            }
+            console.log('[nexi-void-preauth] Trying /cancels on', opId, 'payload', JSON.stringify(cancelPayload));
             const r = await fetch(`${NEXI_BASE_URL}/operations/${opId}/cancels`, {
                 method: 'POST',
                 headers: {
@@ -226,7 +274,44 @@ const handler: Handler = async (event) => {
             console.log('[nexi-void-preauth] operationId risolto da orderId:', operationId);
         }
 
+        // Stato reale prima di provare: se e' gia' annullata non c'e' niente da
+        // fare, se e' gia' eseguita l'annullamento non e' possibile e si va
+        // direttamente al rimborso.
+        await fetchOperation(operationId);
+        if (opResult && /VOID|CANCEL/.test(opResult)) {
+            if (transactionId || orderId) {
+                const qv = supabase
+                    .from('nexi_transactions')
+                    .update({ status: 'preauth_voided', metadata: { void_operation_id: operationId, already_voided: true } })
+                if (transactionId) await qv.eq('id', transactionId); else await qv.eq('order_id', orderId)
+            }
+            if (cauzioneId) {
+                await supabase.from('cauzioni').update({
+                    stato: 'Sbloccata',
+                    data_sblocco: new Date().toISOString(),
+                    note: `Preautorizzazione gia' sbloccata su Nexi - Op: ${operationId}`,
+                    updated_at: new Date().toISOString(),
+                }).eq('id', cauzioneId)
+            }
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                    success: true,
+                    operationId,
+                    alreadyVoided: true,
+                    message: `Questa pre-autorizzazione risulta gia' sbloccata su Nexi (operazione ${operationId}). I fondi sono gia' tornati disponibili.`
+                })
+            };
+        }
+
         let { r: response, t: responseText, d: responseData } = await tryCancel(operationId, correlationId);
+
+        // Ritenta con il corpo minimo: alcune operazioni rifiutano l'importo.
+        if (!response.ok && importoCents() != null) {
+            console.log('[nexi-void-preauth] /cancels con importo fallita, ritento senza importo...');
+            ({ r: response, t: responseText, d: responseData } = await tryCancel(operationId, randomCorrelation(), false));
+        }
 
         // 2026-08-18: se fallisce, PRIMA di dichiarare l'errore proviamo a
         // risolvere l'operazione vera su Nexi (l'id salvato e' spesso un
@@ -238,6 +323,9 @@ const handler: Handler = async (event) => {
                 console.log('[nexi-void-preauth] operationId risolto:', resolved, '(era', operationId + ')');
                 operationId = resolved;
                 ({ r: response, t: responseText, d: responseData } = await tryCancel(operationId, randomCorrelation()));
+                if (!response.ok && importoCents() != null) {
+                    ({ r: response, t: responseText, d: responseData } = await tryCancel(operationId, randomCorrelation(), false));
+                }
             }
         }
 
@@ -249,18 +337,24 @@ const handler: Handler = async (event) => {
                 return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
             })
 
-            // Get the cauzione amount for refund
-            const { data: cauzione } = await supabase
-                .from('cauzioni')
-                .select('importo')
-                .eq('id', cauzioneId)
-                .single();
+            // 2026-09-12: la query partiva anche senza cauzioneId (pre-auth del
+            // tab Nexi) e il rimborso restava senza importo — rifiutato da Nexi.
+            let refundCents: number | null = importoCents();
+            if (cauzioneId) {
+                const { data: cauzione } = await supabase
+                    .from('cauzioni')
+                    .select('importo')
+                    .eq('id', cauzioneId)
+                    .maybeSingle();
+                if (cauzione?.importo) refundCents = Math.round(Number(cauzione.importo) * 100);
+            }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const refundPayload: any = {
-                description: `Sblocco cauzione ${cauzioneId}`
+                description: cancelDescription
             };
-            if (cauzione?.importo) {
-                refundPayload.amount = Math.round(Number(cauzione.importo) * 100).toString();
+            if (refundCents != null) {
+                refundPayload.amount = String(refundCents);
                 refundPayload.currency = 'EUR';
             }
 
@@ -306,6 +400,10 @@ const handler: Handler = async (event) => {
             const diagnostica = candidatiDiagnostica.length > 0
                 ? ` Pre-autorizzazioni trovate su Nexi per questo importo: ${JSON.stringify(candidatiDiagnostica)}.`
                 : ''
+            // Stato e importo letti su Nexi: senza, "internal error" non dice nulla.
+            const statoOp = opResult
+                ? ` Stato dell'operazione su Nexi: ${opResult}${opAmountCents != null ? ` (EUR ${(opAmountCents / 100).toFixed(2)})` : ''}. HTTP ${response.status}.`
+                : ` HTTP ${response.status}.`
             // Su 401 il problema non e' l'operazione ma l'autenticazione: si dice
             // subito quale chiave e' stata usata, cosi' non si cerca dove non c'e'.
             const authHint = response.status === 401
@@ -315,7 +413,7 @@ const handler: Handler = async (event) => {
                 statusCode: response.status,
                 headers,
                 body: JSON.stringify({
-                    error: `Nexi ha rifiutato lo sblocco dell'operazione ${operationId}: ${nexiMsg}.${diagnostica}${authHint}`,
+                    error: `Nexi ha rifiutato lo sblocco dell'operazione ${operationId}: ${nexiMsg}.${statoOp}${diagnostica}${authHint}`,
                     operationId,
                     keySource: NEXI_KEY_SOURCE,
                     candidates: candidatiDiagnostica,
