@@ -28,6 +28,9 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   // Synchronous lock: state updates are async, so a fast double-click would
   // slip past the `autoProntaSending` check below. The ref flips immediately.
   const autoProntaLock = useRef(false)
+  // Lavaggio e Meccanica sono lo stesso business (Prime Wash) e condividono
+  // l'evento Pro "Pronta / servizio finito".
+  const isPrimeWash = ['car_wash', 'mechanical'].includes(String(booking.service_type || '').toLowerCase())
 
   // 25/08/2026: Esc chiude il pannello. Aperto dal Calendario Giornaliero
   // (modale) l'unica via d'uscita era la X, che li' finiva sotto la barra in
@@ -40,9 +43,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   }, [onClose])
 
   // "Pronta": notifica WhatsApp al cliente che il mezzo è pronto al
-  // ritiro. Invia il template Pro agganciato all'evento "Pronta" (Noleggio)
+  // ritiro. Invia il template Pro agganciato all'evento "Pronta"
   // (legacy key rental_auto_pronta → resolver per handled_events/service_type).
-  // Stesso pattern del bottone Pronta di Prime Wash (CarWashBookingsTab).
+  // 12/09/2026: vale anche per Lavaggio e Meccanica, che dal Calendario
+  // Giornaliero si aprono in questo pannello e restavano senza bottone. Li'
+  // l'evento e' quello di Prime Wash (service_ready_customer → pro_auto_pronta),
+  // lo stesso che invia CarWashBookingsTab.
   async function handleAutoPronta() {
     if (autoProntaLock.current || autoProntaSending || autoProntaSent) return
     autoProntaLock.current = true
@@ -65,7 +71,8 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
     const custName = booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || 'Cliente'
     const firstName = String(custName).split(' ')[0] || 'Cliente'
     const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
-    const svcType = booking.service_type || 'car_rental'
+    const svcType = booking.service_type || (isPrimeWash ? 'car_wash' : 'car_rental')
+    const templateKey = isPrimeWash ? 'service_ready_customer' : 'rental_auto_pronta'
 
     setAutoProntaSending(true)
     const toastId = toast.loading('Invio notifica Pronta al cliente...')
@@ -75,14 +82,15 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
-          templateKey: 'rental_auto_pronta',
+          templateKey,
           booking: { service_type: svcType },
           templateVars: {
             customer_name: firstName,
             nome: firstName,
             booking_id: bookingRef,
             booking_ref: bookingRef,
-            vehicle_name: booking.vehicle_name || booking.booking_details?.vehicle?.name || '',
+            service_name: booking.service_name || '',
+            vehicle_name: booking.vehicle_name || booking.booking_details?.vehicle?.name || booking.booking_details?.vehicleMakeModel || '',
             vehicle_plate: booking.vehicle_plate || '',
             targa: booking.vehicle_plate || '',
           },
@@ -91,7 +99,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
       })
       const waResult = await waResp.json().catch(() => ({}))
       if (!waResp.ok || waResult?.skipped) {
-        toast.error('Nessun template "Pronta" (Noleggio) configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Pronta" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
+        toast.error(
+          isPrimeWash
+            ? 'Nessun template configurato in Messaggi di Sistema Pro per "Pronta / Servizio finito" (Lavaggio & Meccanica). Verifica: template ATTIVO, body non vuoto, evento "service_ready_customer" tra gli eventi gestiti, Tipo servizio = Lavaggio & Meccanica.'
+            : 'Nessun template "Pronta" (Noleggio) configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Pronta" tra gli eventi gestiti, Tipo servizio = Noleggio.',
+          { id: toastId, duration: 12000 },
+        )
         return
       }
       // Persisti il flag solo dopo invio riuscito (così un fallimento non
@@ -493,20 +506,19 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           </div>
 
           {/* Pronta — notifica WhatsApp al cliente che il mezzo è pronto.
-              Solo per noleggio (non lavaggio/meccanica, che hanno il loro bottone). */}
-          {!['car_wash', 'mechanical'].includes(String(booking.service_type || '').toLowerCase()) && (
-            <button
-              onClick={handleAutoPronta}
-              disabled={autoProntaSending || autoProntaSent}
-              className={`w-full px-4 py-2 rounded border font-medium transition-colors disabled:opacity-60 ${
-                autoProntaSent
-                  ? 'bg-green-600/20 text-green-600 dark:text-green-400 border-green-600/30 cursor-default'
-                  : 'bg-green-600 hover:bg-green-700 text-white border-green-700'
-              }`}
-            >
-              {autoProntaSent ? '✓ Cliente notificato (Pronta)' : autoProntaSending ? 'Invio in corso…' : 'Pronta'}
-            </button>
-          )}
+              Noleggio e Prime Wash (lavaggio/meccanica): cambia solo il
+              template Pro, il bottone e il flag auto_pronta_sent_at no. */}
+          <button
+            onClick={handleAutoPronta}
+            disabled={autoProntaSending || autoProntaSent}
+            className={`w-full px-4 py-2 rounded border font-medium transition-colors disabled:opacity-60 ${
+              autoProntaSent
+                ? 'bg-green-600/20 text-green-600 dark:text-green-400 border-green-600/30 cursor-default'
+                : 'bg-green-600 hover:bg-green-700 text-white border-green-700'
+            }`}
+          >
+            {autoProntaSent ? '✓ Cliente notificato (Pronta)' : autoProntaSending ? 'Invio in corso…' : 'Pronta'}
+          </button>
         </div>
       </motion.div>
     </div>,
