@@ -3,19 +3,20 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
 import FleetInventory from './FleetInventory'
-import RitagliaImmagineModal from './RitagliaImmagineModal'
-import { IMMAGINE_ACCEPT } from '../../../utils/immagineUpload'
 
 /**
- * Rapporto del riquadro in cui il sito mostra queste immagini.
- * 4:5 come le locandine del catalogo (1080x1350): cosi' riempiono il riquadro
- * esatto, senza bordi vuoti e senza tagliare logo, prezzo o lista servizi.
- * Se cambia qui va cambiato anche in `RIQUADRO_CATALOGO_CLASSE` del sito
- * (components/ui/RiquadroCatalogo.tsx).
+ * 12/09/2026 — da questo catalogo sono sparite le foto.
+ *
+ * Le immagini erano locandine con dentro, disegnati, titolo, prezzo, durata e
+ * lista delle lavorazioni: il sito adesso scrive quelle stesse informazioni in
+ * TESTO, prendendole dai campi qui sotto (nome, durata, descrizione,
+ * caratteristiche). Tenere anche la foto voleva dire mantenere due volte lo
+ * stesso listino e vederli litigare (24,90 sulla locandina, 25,00 nel campo
+ * prezzo).
+ *
+ * La colonna `image_url` resta nel database con i suoi valori: non si carica
+ * e non si mostra piu' da qui, ma niente e' stato cancellato.
  */
-const RITAGLIO_CATALOGO_RATIO = 4 / 5
-/** Lato lungo del file salvato: sopra questo il sito non guadagna nulla. */
-const CATALOGO_LATO_MAX = 1200
 
 interface PriceOption {
   label: string
@@ -32,6 +33,8 @@ interface CarWashService {
   description_en: string
   features: string[]
   features_en: string[]
+  /** Pastiglia mostrata sul sito sopra al nome (es. "CLASSICO"). */
+  badge?: string | null
   display_order: number
   is_active: boolean
   category: string
@@ -66,16 +69,14 @@ export default function CarWashCatalogTab() {
   const [editDuration, setEditDuration] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editFeatures, setEditFeatures] = useState('')
-  const [editImageUrl, setEditImageUrl] = useState('')
+  const [editBadge, setEditBadge] = useState('')
   const [saving, setSaving] = useState(false)
   const [showNewForm, setShowNewForm] = useState(false)
   const [newService, setNewService] = useState({
-    name: '', price: '', duration: '', description: '', features: '', image_url: '',
+    name: '', price: '', duration: '', description: '', features: '', badge: '',
     category: 'urban', main_tab: 'lavaggio' as 'lavaggio' | 'meccanica',
   })
 
-  const newImageRef = useRef<HTMLInputElement>(null)
-  const [uploadingImage, setUploadingImage] = useState(false)
   const primeFlexLockRef = useRef(false)
   const saveEditingLockRef = useRef(false)
 
@@ -86,37 +87,6 @@ export default function CarWashCatalogTab() {
   const [primeFlexPrice, setPrimeFlexPrice] = useState<string>(PRIME_FLEX_DEFAULT.toFixed(2))
   const [primeFlexSavedPrice, setPrimeFlexSavedPrice] = useState<number>(PRIME_FLEX_DEFAULT)
   const [primeFlexSaving, setPrimeFlexSaving] = useState(false)
-
-  /**
-   * Immagine scelta dall'operatore, in attesa di passare dalla finestra di
-   * ritaglio. Nello storage non finisce mai il file grezzo: prima era cosi' e
-   * sul sito le foto uscivano enormi e fuori dal riquadro.
-   */
-  const [immagineDaRitagliare, setImmagineDaRitagliare] = useState<{ file: File; target: 'new' | 'edit' } | null>(null)
-
-  /** Salva nello storage l'immagine gia' ridimensionata dalla finestra. */
-  async function caricaImmagine(blob: Blob, target: 'new' | 'edit') {
-    setUploadingImage(true)
-    try {
-      const fileName = `wash-service-${Date.now()}.jpg`
-      const { error: upErr } = await supabase.storage
-        .from('catalog-images')
-        .upload(`wash-catalog/${fileName}`, blob, { cacheControl: '31536000', upsert: true, contentType: 'image/jpeg' })
-      if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`wash-catalog/${fileName}`)
-      const url = urlData?.publicUrl || ''
-      if (target === 'new') {
-        setNewService(prev => ({ ...prev, image_url: url }))
-      } else {
-        setEditImageUrl(url)
-      }
-      toast.success('Immagine caricata')
-    } catch (err: unknown) {
-      toast.error('Errore upload: ' + (err as Error).message)
-    } finally {
-      setUploadingImage(false)
-    }
-  }
 
   useEffect(() => {
     loadServices()
@@ -204,7 +174,7 @@ export default function CarWashCatalogTab() {
     setEditDuration(service.duration || '')
     setEditDescription(service.description || '')
     setEditFeatures((service.features || []).join('\n'))
-    setEditImageUrl((service as any).image_url || '')
+    setEditBadge(service.badge || '')
   }
 
   function cancelEditing() {
@@ -215,7 +185,7 @@ export default function CarWashCatalogTab() {
     setEditDuration('')
     setEditDescription('')
     setEditFeatures('')
-    setEditImageUrl('')
+    setEditBadge('')
   }
 
   async function saveEditing(service: CarWashService) {
@@ -230,7 +200,7 @@ export default function CarWashCatalogTab() {
         duration: editDuration.trim() || service.duration,
         description: editDescription.trim() || service.description,
         features: editFeatures.split('\n').filter(f => f.trim()),
-        image_url: editImageUrl.trim() || null,
+        badge: editBadge.trim() || null,
       }
 
       if (service.price_options && service.price_options.length > 0) {
@@ -242,7 +212,20 @@ export default function CarWashCatalogTab() {
         .update(updates)
         .eq('id', service.id)
 
-      if (error) throw error
+      // `badge` e' una colonna nuova: finche' la migrazione non e' passata,
+      // PostgREST rifiuta TUTTO l'update e l'operatore non riesce piu' a
+      // cambiare nemmeno un prezzo. Si riprova senza l'etichetta.
+      if (error && /badge/i.test(error.message)) {
+        delete updates.badge
+        const { error: erroreSenzaBadge } = await supabase
+          .from('car_wash_services')
+          .update(updates)
+          .eq('id', service.id)
+        if (erroreSenzaBadge) throw erroreSenzaBadge
+        toast.error("Etichetta non salvata: manca la colonna `badge` sul database")
+      } else if (error) {
+        throw error
+      }
 
       cancelEditing()
       await loadServices()
@@ -268,7 +251,8 @@ export default function CarWashCatalogTab() {
       const maxOrder = services.filter(s => s.main_tab === newService.main_tab && s.category === newService.category)
         .reduce((max, s) => Math.max(max, s.display_order || 0), 0)
 
-      const { error } = await supabase.from('car_wash_services').insert({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const riga: Record<string, any> = {
         id,
         name: newService.name.trim(),
         name_en: newService.name.trim(),
@@ -280,13 +264,24 @@ export default function CarWashCatalogTab() {
         features_en: [],
         category: newService.category,
         main_tab: newService.main_tab,
-        image_url: newService.image_url.trim() || null,
+        badge: newService.badge.trim() || null,
         display_order: maxOrder + 10,
         is_active: true,
-      })
-      if (error) throw error
+      }
+
+      const { error } = await supabase.from('car_wash_services').insert(riga)
+      // Vedi la nota in saveEditing: senza la colonna `badge` l'inserimento
+      // fallirebbe in blocco e il servizio non nascerebbe affatto.
+      if (error && /badge/i.test(error.message)) {
+        delete riga.badge
+        const { error: erroreSenzaBadge } = await supabase.from('car_wash_services').insert(riga)
+        if (erroreSenzaBadge) throw erroreSenzaBadge
+        toast.error("Etichetta non salvata: manca la colonna `badge` sul database")
+      } else if (error) {
+        throw error
+      }
       setShowNewForm(false)
-      setNewService({ name: '', price: '', duration: '', description: '', features: '', image_url: '', category: 'urban', main_tab: 'lavaggio' })
+      setNewService({ name: '', price: '', duration: '', description: '', features: '', badge: '', category: 'urban', main_tab: 'lavaggio' })
       await loadServices()
     } catch (err: unknown) {
       alert('Errore: ' + (err as Error).message)
@@ -454,27 +449,11 @@ export default function CarWashCatalogTab() {
               className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" />
           </div>
           <div>
-            <label className="block text-xs text-theme-text-muted mb-1">Immagine</label>
-            <div className="flex items-center gap-2">
-              <input ref={newImageRef} type="file" accept={IMMAGINE_ACCEPT} className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0]
-                  // Azzero il valore: senza questo riscegliere la STESSA foto
-                  // non fa scattare l'onChange e la finestra non si riapre.
-                  e.target.value = ''
-                  if (file) setImmagineDaRitagliare({ file, target: 'new' })
-                }} />
-              <button type="button" onClick={() => newImageRef.current?.click()} disabled={uploadingImage}
-                className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
-                {uploadingImage ? 'Invio…' : 'Carica PNG'}
-              </button>
-              {newService.image_url && (
-                <div className="flex items-center gap-2">
-                  <img src={newService.image_url} alt="" className="w-10 h-10 object-cover rounded" />
-                  <button type="button" onClick={() => setNewService(prev => ({ ...prev, image_url: '' }))} className="text-red-400 text-xs">X</button>
-                </div>
-              )}
-            </div>
+            <label className="block text-xs text-theme-text-muted mb-1">Etichetta (facoltativa)</label>
+            <input type="text" value={newService.badge} onChange={e => setNewService(prev => ({ ...prev, badge: e.target.value }))}
+              placeholder="es. CLASSICO"
+              className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" />
+            <p className="text-[11px] text-theme-text-muted mt-1">Compare sulla card del sito, sopra al nome. Vuoto = nessuna etichetta.</p>
           </div>
           <div>
             <label className="block text-xs text-theme-text-muted mb-1">Caratteristiche (una per riga)</label>
@@ -528,10 +507,8 @@ export default function CarWashCatalogTab() {
                   onEditDuration={setEditDuration}
                   onEditDescription={setEditDescription}
                   onEditFeatures={setEditFeatures}
-                  editImageUrl={editImageUrl}
-                  onEditImageUrl={setEditImageUrl}
-                  onScegliImmagine={file => setImmagineDaRitagliare({ file, target: 'edit' })}
-                  imgUploading={uploadingImage}
+                  editBadge={editBadge}
+                  onEditBadge={setEditBadge}
                   onToggleActive={() => toggleActive(service)}
                 />
               ))}
@@ -540,18 +517,6 @@ export default function CarWashCatalogTab() {
         )
       })}
 
-      <RitagliaImmagineModal
-        file={immagineDaRitagliare?.file || null}
-        ratio={RITAGLIO_CATALOGO_RATIO}
-        latoMax={CATALOGO_LATO_MAX}
-        descrizione="Questo e' il riquadro in cui il sito mostra i servizi Prime Wash."
-        onAnnulla={() => setImmagineDaRitagliare(null)}
-        onConferma={blob => {
-          const target = immagineDaRitagliare?.target
-          setImmagineDaRitagliare(null)
-          if (target) caricaImmagine(blob, target)
-        }}
-      />
     </div>
   )
 }
@@ -575,11 +540,8 @@ interface ServiceCardProps {
   onEditDuration: (v: string) => void
   onEditDescription: (v: string) => void
   onEditFeatures: (v: string) => void
-  editImageUrl: string
-  onEditImageUrl: (v: string) => void
-  /** Apre la finestra di ritaglio sul file scelto; l'upload lo fa il genitore. */
-  onScegliImmagine: (file: File) => void
-  imgUploading: boolean
+  editBadge: string
+  onEditBadge: (v: string) => void
   onToggleActive: () => void
 }
 
@@ -602,14 +564,10 @@ function ServiceCard({
   onEditDuration,
   onEditDescription,
   onEditFeatures,
-  editImageUrl,
-  onEditImageUrl,
-  onScegliImmagine,
-  imgUploading,
+  editBadge,
+  onEditBadge,
   onToggleActive,
 }: ServiceCardProps) {
-  const editImgRef = useRef<HTMLInputElement>(null)
-
   const inactive = !service.is_active
 
   if (isEditing) {
@@ -695,28 +653,17 @@ function ServiceCard({
           />
         </div>
 
-        {/* Image Upload */}
+        {/* Etichetta: la pastiglia che il sito disegna sopra al nome. */}
         <div className="mb-3">
-          <label className="block text-xs text-theme-text-muted mb-1">Immagine</label>
-          <div className="flex items-center gap-2">
-            <input ref={editImgRef} type="file" accept={IMMAGINE_ACCEPT} className="hidden"
-              onChange={e => {
-                const file = e.target.files?.[0]
-                // Vedi la nota sull'input del nuovo servizio.
-                e.target.value = ''
-                if (file) onScegliImmagine(file)
-              }} />
-            <button type="button" onClick={() => editImgRef.current?.click()} disabled={imgUploading}
-              className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
-              {imgUploading ? 'Invio…' : 'Carica PNG'}
-            </button>
-            {editImageUrl && (
-              <div className="flex items-center gap-2">
-                <img src={editImageUrl} alt="" className="w-10 h-10 object-cover rounded" />
-                <button type="button" onClick={() => onEditImageUrl('')} className="text-red-400 text-xs">X</button>
-              </div>
-            )}
-          </div>
+          <label className="block text-xs text-theme-text-muted mb-1">Etichetta (facoltativa)</label>
+          <input
+            type="text"
+            value={editBadge}
+            onChange={e => onEditBadge(e.target.value)}
+            placeholder="es. CLASSICO"
+            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+          />
+          <p className="text-[11px] text-theme-text-muted mt-1">Compare sulla card del sito, sopra al nome. Vuoto = nessuna etichetta.</p>
         </div>
 
         {/* Action buttons */}
@@ -775,32 +722,12 @@ function ServiceCard({
       </div>
 
       <div className="flex items-start gap-3 mb-2 pr-8">
-        {/* Miniatura del servizio — cambiandola da qui si aggiorna anche sul
-            sito (car_wash_services.image_url).
-
-            Rapporto 4:5 come le locandine del catalogo: prima era una fascia
-            16:9 ritagliata in `cover`, che di una locandina verticale mostrava
-            solo la striscia centrale — logo, titolo e prezzo restavano fuori.
-
-            Ed e' piccola di proposito: la fascia larga in cima costava quasi
-            200 px per card e con trenta servizi il catalogo era tutto da
-            scorrere. */}
-        <div className="w-14 aspect-[4/5] flex-shrink-0 overflow-hidden rounded-lg bg-theme-bg-tertiary grid place-items-center">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {(service as any).image_url ? (
-            <img
-              /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-              src={(service as any).image_url}
-              alt={service.name}
-              loading="lazy"
-              className="w-full h-full object-contain"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-            />
-          ) : (
-            <span className="text-[10px] leading-tight text-theme-text-muted text-center px-1">Nessuna foto</span>
-          )}
-        </div>
         <div className="min-w-0 flex-1">
+          {service.badge && (
+            <span className="inline-block mb-1 px-2 py-0.5 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-semibold uppercase tracking-wider">
+              {service.badge}
+            </span>
+          )}
           <h4 className="font-semibold text-theme-text-primary">{service.name}</h4>
           {service.name_en && service.name_en !== service.name && (
             <p className="text-xs text-theme-text-muted">{service.name_en}</p>
