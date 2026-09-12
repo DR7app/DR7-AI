@@ -1594,7 +1594,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             console.warn('[generate-contract] Insurance lookup failed:', cfgErr?.message)
         }
 
-        let insuranceLabel = nomeLegacy || opzionePro?.name || ''
+        // Il nome stampato sul contratto e' quello scritto in Centralina Pro
+        // per l'opzione che il cliente ha scelto ("Kasko Base"), non
+        // l'etichetta corta dell'id legacy ("Base"): se l'opzione si trova,
+        // vince sempre lei.
+        let insuranceLabel = opzionePro?.name || nomeLegacy || ''
         if (!insuranceLabel) insuranceLabel = insuranceOptionId
 
         // Tabella "FRANCHIGIE E ASSICURAZIONI": due numeri per riga, franchigia
