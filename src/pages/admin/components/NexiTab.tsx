@@ -14,6 +14,18 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import Paginazione from './Paginazione'
 
+/** Prenotazione mostrata nella ricerca "Collega prenotazione". */
+interface BookingLite {
+    id: string
+    customer_name: string | null
+    customer_email: string | null
+    vehicle_name: string | null
+    pickup_date: string | null
+    dropoff_date: string | null
+    service_type: string | null
+    status: string | null
+}
+
 interface PreauthCustomerLite {
     id: string
     full_name: string
@@ -572,6 +584,77 @@ export default function NexiTab() {
             toast.error('Errore: ' + msg)
         } finally {
             setPreauthSending(false)
+        }
+    }
+
+    // ── Collegamento a una prenotazione ──────────────────────────────
+    // 12/09/2026: le pre-autorizzazioni create da questo tab nascono senza
+    // booking_id (nexi-create-preauth non ne riceve uno), quindi restavano
+    // righe senza prenotazione ne' mezzo. Qui si cerca la prenotazione del
+    // cliente e si scrive il collegamento con nexi-link-booking.
+    const [showLinkBookingModal, setShowLinkBookingModal] = useState(false)
+    const [linkBookingTx, setLinkBookingTx] = useState<NexiTransaction | null>(null)
+    const [linkBookingSearch, setLinkBookingSearch] = useState('')
+    const [linkBookingRows, setLinkBookingRows] = useState<BookingLite[]>([])
+    const [linkBookingLoading, setLinkBookingLoading] = useState(false)
+
+    function openLinkBookingModal(tx: NexiTransaction) {
+        setLinkBookingTx(tx)
+        // Ricerca precompilata col nome che gia' conosciamo della riga.
+        const guess = (tx.booking?.customer_name || tx.customer_name || tx.customer_email || '').trim()
+        setLinkBookingSearch(guess)
+        setLinkBookingRows([])
+        setShowLinkBookingModal(true)
+        if (guess) void searchBookingsToLink(guess)
+    }
+
+    async function searchBookingsToLink(term: string) {
+        const q = term.trim()
+        if (q.length < 2) {
+            setLinkBookingRows([])
+            return
+        }
+        setLinkBookingLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_email, vehicle_name, pickup_date, dropoff_date, service_type, status')
+                .or(`customer_name.ilike.%${q}%,customer_email.ilike.%${q}%`)
+                .order('pickup_date', { ascending: false })
+                .limit(25)
+            if (error) throw error
+            setLinkBookingRows((data || []) as BookingLite[])
+        } catch (e) {
+            console.error('[NexiTab] searchBookingsToLink error:', e)
+            toast.error('Ricerca prenotazioni fallita')
+        } finally {
+            setLinkBookingLoading(false)
+        }
+    }
+
+    async function linkTransactionToBooking(bookingId: string | null) {
+        if (!linkBookingTx) return
+        const toastId = toast.loading(bookingId ? 'Collego la prenotazione...' : 'Scollego la prenotazione...')
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-link-booking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transactionId: linkBookingTx.id, bookingId }),
+            })
+            const data = await res.json()
+            toast.dismiss(toastId)
+            if (!res.ok || !data.success) {
+                toast.error(data.error || 'Collegamento fallito')
+                return
+            }
+            toast.success(data.message || 'Transazione collegata')
+            setShowLinkBookingModal(false)
+            setLinkBookingTx(null)
+            await fetchTransactions()
+        } catch (err) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
         }
     }
 
@@ -1646,6 +1729,18 @@ export default function NexiTab() {
                                                 {tx.booking?.customer_name || tx.customer_name || 'N/A'}
                                             </div>
                                             <div className="text-xs text-theme-text-muted">{tx.customer_email}</div>
+                                            {/* 12/09/2026: una pre-auth creata dal gestionale non ha
+                                                prenotazione. Da qui la si collega (o si cambia), cosi'
+                                                cauzione e mezzo stanno sulla stessa riga del cliente. */}
+                                            {(tx.source || 'nexi') === 'nexi' && (
+                                                <button
+                                                    onClick={() => openLinkBookingModal(tx)}
+                                                    className="mt-1 text-[11px] underline text-theme-text-muted hover:text-dr7-gold"
+                                                    title="Collega questa transazione a una prenotazione"
+                                                >
+                                                    {tx.booking?.id ? 'Cambia prenotazione' : 'Collega prenotazione'}
+                                                </button>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             {/* 2026-07-20: mostra Cattura/Annulla anche per 'pending_preauth'.
@@ -2465,6 +2560,81 @@ export default function NexiTab() {
                                 </div>
                             </>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {showLinkBookingModal && linkBookingTx && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowLinkBookingModal(false)}>
+                    <div className="w-full max-w-2xl rounded-2xl border border-theme-border bg-theme-bg-secondary p-6" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-theme-text-primary mb-1">Collega a una prenotazione</h3>
+                        <p className="text-xs text-theme-text-muted mb-4">
+                            {linkBookingTx.description} · {formatEUR(linkBookingTx.amount_cents || 0)} · ordine {linkBookingTx.order_id || '—'}
+                        </p>
+
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="text"
+                                value={linkBookingSearch}
+                                onChange={(e) => setLinkBookingSearch(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') void searchBookingsToLink(linkBookingSearch) }}
+                                placeholder="Nome o email del cliente"
+                                className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                            />
+                            <button
+                                onClick={() => void searchBookingsToLink(linkBookingSearch)}
+                                className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/40 hover:bg-dr7-gold/30"
+                            >
+                                Cerca
+                            </button>
+                        </div>
+
+                        <div className="max-h-80 overflow-y-auto divide-y divide-white/5 border border-theme-border rounded-lg">
+                            {linkBookingLoading && (
+                                <div className="p-4 text-sm text-theme-text-muted">Cerco...</div>
+                            )}
+                            {!linkBookingLoading && linkBookingRows.length === 0 && (
+                                <div className="p-4 text-sm text-theme-text-muted">Nessuna prenotazione trovata.</div>
+                            )}
+                            {!linkBookingLoading && linkBookingRows.map((b) => (
+                                <button
+                                    key={b.id}
+                                    onClick={() => void linkTransactionToBooking(b.id)}
+                                    className="w-full text-left px-4 py-3 hover:bg-theme-bg-hover"
+                                >
+                                    <div className="text-sm text-theme-text-primary font-semibold">
+                                        {b.customer_name || b.customer_email || 'Cliente'}
+                                        {b.id === linkBookingTx.booking?.id && (
+                                            <span className="ml-2 text-[10px] uppercase text-dr7-gold">collegata</span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-theme-text-muted">
+                                        {[
+                                            b.vehicle_name || serviceLabel(b.service_type || ''),
+                                            b.pickup_date ? formatRomeDate(new Date(b.pickup_date), { dateStyle: 'short' }) : null,
+                                            b.status,
+                                        ].filter(Boolean).join(' · ')}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex justify-between gap-2 mt-4">
+                            {linkBookingTx.booking?.id ? (
+                                <button
+                                    onClick={() => void linkTransactionToBooking(null)}
+                                    className="px-4 py-2 rounded-lg text-sm font-semibold bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border hover:bg-theme-bg-hover"
+                                >
+                                    Scollega
+                                </button>
+                            ) : <span />}
+                            <button
+                                onClick={() => setShowLinkBookingModal(false)}
+                                className="px-4 py-2 rounded-lg text-sm font-semibold bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border hover:bg-theme-bg-hover"
+                            >
+                                Annulla
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
