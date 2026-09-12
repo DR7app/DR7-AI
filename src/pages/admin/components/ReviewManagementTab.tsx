@@ -618,7 +618,7 @@ export default function ReviewManagementTab() {
   // Setta send_status='SENT' cosi\' esce da "Da Inviare" e finisce nella
   // colonna "Inviate" senza bisogno di triggerare l'invio automatico.
   async function handleMarcaGiaRecensito(candidateId: string) {
-    if (!confirm('Marcare questo cliente come gia\' recensito?\nNon riceverà più la richiesta automatica.')) return
+    // 2026-09-12: nessuna conferma — il bottone Blocca agisce subito.
     setSendingId(candidateId)
     try {
       // 2026-08-22: il blocco manuale scrive send_status='BLOCKED' (stato reale),
