@@ -35,6 +35,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import MoneyInput from '../../../components/MoneyInput'
+import { parseMoney } from '../../../utils/money'
 // Alberatura reale di dr7.app: una voce dell'onglet = una pagina del sito.
 // Catalogo dei testi del sito: GENERATO da scripts/genTestiCatalogo.mjs.
 // E' quello che rende modificabili anche le pagine senza editor dedicato.
@@ -6875,13 +6876,16 @@ function Dr7ClubPlanEditor({ copy, setCopy }: { copy: Dr7ClubPlanCopy; setCopy: 
                     <span className="block text-xs text-theme-text-muted mb-1">Nome (EN)</span>
                     <input value={copy.name_en} onChange={(e) => set({ name_en: e.target.value })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
                 </label>
+                {/* Importi in €: MoneyInput, non `type="number"`. Con locale
+                    italiano il campo numerico ingoia la virgola e il piano da
+                    9,90 non era digitabile. Vedi src/components/MoneyInput.tsx. */}
                 <label className="block">
                     <span className="block text-xs text-theme-text-muted mb-1">Prezzo mensile (€)</span>
-                    <input type="number" min="0" step="1" value={copy.monthly_eur} onChange={(e) => set({ monthly_eur: Number(e.target.value) || 0 })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
+                    <MoneyInput min="0" value={copy.monthly_eur} onChange={(v) => set({ monthly_eur: parseMoney(v) || 0 })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
                 </label>
                 <label className="block">
                     <span className="block text-xs text-theme-text-muted mb-1">Prezzo annuale (€)</span>
-                    <input type="number" min="0" step="1" value={copy.annually_eur} onChange={(e) => set({ annually_eur: Number(e.target.value) || 0 })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
+                    <MoneyInput min="0" value={copy.annually_eur} onChange={(v) => set({ annually_eur: parseMoney(v) || 0 })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
                 </label>
                 <label className="block md:col-span-2">
                     <span className="block text-xs text-theme-text-muted mb-1">Vantaggi (IT) — uno per riga</span>
