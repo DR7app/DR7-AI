@@ -2137,8 +2137,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           vehicle_id: vehicle.id,
           pickup_date: dateStr,
           pickup_time: smartTime,
-          return_date: dateStr, // Default same day return? Or +1? Let's say +1 day default
-          return_time: smartTime,
+          return_date: dateStr, // stesso giorno: noleggio a ore, prezzo di 1 giornata
+          return_time: suggestReturnTime(smartTime, dateStr, dateStr),
           // Recalculate based on logic if needed, but simple is better for now
           category: vehicle.category,
         }));
@@ -2344,6 +2344,28 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     const returnHours = String(tempDate.getHours()).padStart(2, '0')
     const returnMinutes = String(tempDate.getMinutes()).padStart(2, '0')
     return `${returnHours}:${returnMinutes}`
+  }
+
+  // 2026-09-12 (direzione): si puo' noleggiare anche per poche ore nello STESSO
+  // giorno — il prezzo resta comunque quello di una giornata intera. Quando la
+  // riconsegna cade nello stesso giorno del ritiro, l'orario suggerito
+  // "ritiro - 1h30" finirebbe PRIMA del ritiro e la prenotazione verrebbe
+  // rifiutata dalla validazione: in quel caso si propone la fine dell'ultima
+  // fascia di riconsegna del giorno (es. 17:00) e, se non basta, ritiro + 1h30.
+  const minutesToTime = (m: number): string => {
+    const c = Math.max(0, Math.min(23 * 60 + 45, m))
+    return `${String(Math.floor(c / 60)).padStart(2, '0')}:${String(c % 60).padStart(2, '0')}`
+  }
+  const suggestReturnTime = (pickupTime: string, pickupDate?: string, returnDate?: string): string => {
+    if (!pickupTime) return ''
+    const sameDay = !!pickupDate && !!returnDate && pickupDate === returnDate
+    if (!sameDay) return calculateReturnTime(pickupTime)
+    const [ph, pm] = pickupTime.split(':').map(Number)
+    const pickupMin = ph * 60 + pm
+    const ranges = rentalHoursFor(returnDate, 'return')
+    const lastEnd = ranges && ranges.length > 0 ? ranges[ranges.length - 1][1] : null
+    if (lastEnd != null && lastEnd > pickupMin) return minutesToTime(lastEnd)
+    return minutesToTime(pickupMin + 90)
   }
 
   // Get available vehicles based on selected dates and times
@@ -6108,7 +6130,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         setTimeout(() => {
           alert(
             'DATE NON VALIDE\n\n' +
-            'La data di riconsegna deve essere successiva alla data di ritiro.\n\n' +
+            'La data e ora di riconsegna devono essere successive al ritiro (la riconsegna in giornata e\' ammessa).\n\n' +
             `Ritiro: ${testPickupDate.toLocaleDateString('it-IT')} ${testPickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n` +
             `Riconsegna: ${testReturnDate.toLocaleDateString('it-IT')} ${testReturnDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n\n` +
             'Modifica le date e riprova.'
@@ -9542,19 +9564,24 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     onChange={(e) => {
                       const v = e.target.value
                       setFormData(prev => {
-                        // Default Data Riconsegna to pickup + 1 day when it is
-                        // empty or no longer ≥ pickup. Leave it alone if the
-                        // admin already chose a later date.
+                        // 2026-09-12 (direzione): la Data Riconsegna si allinea
+                        // allo STESSO giorno del ritiro (prima era +1 giorno),
+                        // perche' si noleggia anche solo per qualche ora nella
+                        // stessa giornata pagando comunque una giornata piena.
+                        // Una riconsegna gia' scelta piu' avanti resta com'e'.
                         let nextReturn = prev.return_date
-                        if (v) {
-                          const needsAuto = !prev.return_date || prev.return_date <= v
-                          if (needsAuto) {
-                            const d = new Date(`${v}T00:00:00`)
-                            d.setDate(d.getDate() + 1)
-                            nextReturn = d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-                          }
+                        if (v && (!prev.return_date || prev.return_date < v)) {
+                          nextReturn = v
                         }
-                        return { ...prev, pickup_date: v, return_date: nextReturn }
+                        // Nello stesso giorno l'ora di riconsegna deve stare
+                        // DOPO il ritiro, altrimenti il salvataggio viene
+                        // bloccato: la si risuggerisce solo se manca o non e'
+                        // piu' valida.
+                        let nextReturnTime = prev.return_time
+                        if (v && nextReturn === v && prev.pickup_time && (!nextReturnTime || nextReturnTime <= prev.pickup_time)) {
+                          nextReturnTime = suggestReturnTime(prev.pickup_time, v, nextReturn)
+                        }
+                        return { ...prev, pickup_date: v, return_date: nextReturn, return_time: nextReturnTime }
                       })
                     }}
                   />
@@ -9564,8 +9591,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     value={formData.pickup_time}
                     onChange={(e) => {
                       const pickupTime = e.target.value
-                      const returnTime = calculateReturnTime(pickupTime)
-                      setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
+                      setFormData(prev => ({
+                        ...prev,
+                        pickup_time: pickupTime,
+                        return_time: suggestReturnTime(pickupTime, prev.pickup_date, prev.return_date),
+                      }))
                     }}
                     options={buildRentalTimeOptions(formData.pickup_date, 'pickup')}
                   />
@@ -9669,7 +9699,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     required
                     min={formData.pickup_date}
                     value={formData.return_date}
-                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_date: v })) }}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setFormData(prev => {
+                        // Riconsegna nello stesso giorno del ritiro: se l'ora
+                        // rimasta e' precedente al ritiro la si risuggerisce.
+                        let nextReturnTime = prev.return_time
+                        if (v && v === prev.pickup_date && prev.pickup_time && (!nextReturnTime || nextReturnTime <= prev.pickup_time)) {
+                          nextReturnTime = suggestReturnTime(prev.pickup_time, prev.pickup_date, v)
+                        }
+                        return { ...prev, return_date: v, return_time: nextReturnTime }
+                      })
+                    }}
                   />
                   <Select
                     label="Ora Riconsegna"
@@ -9692,7 +9733,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       })()}
                     </p>
                   )}
-                  <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
+                  <p className="text-xs text-blue-400 mt-1">
+                    {formData.return_date && formData.return_date === formData.pickup_date
+                      ? 'Riconsegna in giornata: si paga comunque 1 giornata intera'
+                      : 'Suggerito: Ritiro - 1h30'}
+                  </p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile · 🔴 = fuori orario standard</p>
                 </div>
                 <Select
