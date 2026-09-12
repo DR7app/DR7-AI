@@ -1527,16 +1527,36 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // supercars (Centralina) e exotic (anagrafica veicoli) sono la
             // stessa categoria: senza l'alias la lista non si trova mai.
             const alias = cat === 'exotic' ? 'supercars' : cat === 'supercars' ? 'exotic' : ''
+            // 12/09/2026 — L'ordine di questa lista e' il bug delle franchigie
+            // a zero. Una categoria impostata "per fascia" in Centralina tiene
+            // spesso ancora una lista `all` vecchia, con le franchigie a 0:
+            // quando la prenotazione non porta la fascia del conducente, la
+            // lista `all` veniva letta per PRIMA e il contratto stampava 0 al
+            // posto dei 10.000 scritti in Fascia A (Hypercar / Kasko Base).
+            // Adesso si rispetta il `mode` della categoria, come fa
+            // convertProConfig: per_fascia legge le fasce (prima quella del
+            // conducente, poi A, poi le altre) e tiene `all` solo come
+            // ultimissima spiaggia per le prenotazioni vecchie.
             const pooldi = (c: Record<string, unknown>): ProOpzione[][] => {
                 const out: ProOpzione[][] = []
                 const byFascia = c?.byFascia as Record<string, ProOpzione[]> | undefined
-                if (fasciaPreferita && Array.isArray(byFascia?.[fasciaPreferita])) out.push(byFascia![fasciaPreferita])
-                if (Array.isArray(c?.all)) out.push(c.all as ProOpzione[])
-                if (byFascia && typeof byFascia === 'object') {
-                    for (const k of Object.keys(byFascia)) {
-                        if (k === fasciaPreferita) continue
-                        if (Array.isArray(byFascia[k])) out.push(byFascia[k])
-                    }
+                const all = Array.isArray(c?.all) ? (c.all as ProOpzione[]) : null
+                const perFascia = String(c?.mode ?? 'per_fascia') !== 'all_tiers'
+                const fasce: ProOpzione[][] = []
+                if (fasciaPreferita && Array.isArray(byFascia?.[fasciaPreferita])) fasce.push(byFascia![fasciaPreferita])
+                // Senza fascia sulla prenotazione si parte da A (conducente
+                // esperto): e' la fascia di default del gestionale.
+                for (const k of ['A', 'B', ...Object.keys(byFascia || {})]) {
+                    if (k === fasciaPreferita) continue
+                    const pool = byFascia?.[k]
+                    if (Array.isArray(pool) && !fasce.includes(pool)) fasce.push(pool)
+                }
+                if (perFascia) {
+                    out.push(...fasce)
+                    if (all) out.push(all)
+                } else {
+                    if (all) out.push(all)
+                    out.push(...fasce)
                 }
                 return out
             }
@@ -1569,6 +1589,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         let opzionePro: ProOpzione | null = null
         try {
             opzionePro = cercaOpzionePro()
+            console.log(`[generate-contract] Kasko: categoria "${vehicleCategory}", fascia "${fasciaPreferita || '—'}", opzione ${insuranceOptionId} -> ${opzionePro ? `${opzionePro.name} (${opzionePro.id})` : 'NON TROVATA'}`)
         } catch (cfgErr: any) {
             console.warn('[generate-contract] Insurance lookup failed:', cfgErr?.message)
         }
