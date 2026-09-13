@@ -563,6 +563,15 @@ export interface RegistrazioneClienteCopy {
   invalid_help_it: string; invalid_help_en: string;
   done_title_it: string; done_title_en: string;
   done_body_it: string; done_body_en: string;
+  // Pre-compilazione dai documenti (step form) + popup "compila piu' velocemente"
+  prefill_title_it: string; prefill_title_en: string;
+  prefill_body_it: string; prefill_body_en: string;
+  prefill_cta_it: string; prefill_cta_en: string;
+  prefill_error_it: string; prefill_error_en: string;
+  popup_title_it: string; popup_title_en: string;
+  popup_body_it: string; popup_body_en: string;
+  popup_cta_upload_it: string; popup_cta_upload_en: string;
+  popup_cta_manual_it: string; popup_cta_manual_en: string;
   // Documents step
   docs_intro_it: string; docs_intro_en: string;
   docs_label_identity_it: string; docs_label_identity_en: string;
@@ -902,6 +911,23 @@ export interface PaymentCopy {
 export interface SignUpCopy {
   // Page chrome
   subtitle_it: string; subtitle_en: string;
+  // Patente di guida (iscrizione sito)
+  section_patente_it: string; section_patente_en: string;
+  field_patente_tipo_it: string; field_patente_tipo_en: string;
+  field_patente_numero_it: string; field_patente_numero_en: string;
+  field_patente_ente_it: string; field_patente_ente_en: string;
+  field_patente_rilascio_it: string; field_patente_rilascio_en: string;
+  field_patente_scadenza_it: string; field_patente_scadenza_en: string;
+  patente_hint_it: string; patente_hint_en: string;
+  // Pre-compilazione dai documenti + popup "Compila piu' velocemente"
+  prefill_title_it: string; prefill_title_en: string;
+  prefill_body_it: string; prefill_body_en: string;
+  prefill_cta_it: string; prefill_cta_en: string;
+  prefill_error_it: string; prefill_error_en: string;
+  popup_title_it: string; popup_title_en: string;
+  popup_body_it: string; popup_body_en: string;
+  popup_cta_upload_it: string; popup_cta_upload_en: string;
+  popup_cta_manual_it: string; popup_cta_manual_en: string;
   // Client type selector
   client_type_label_it: string; client_type_label_en: string;
   client_type_default_it: string; client_type_default_en: string;
@@ -2046,6 +2072,22 @@ export const INITIAL_REGISTRAZIONE_CLIENTE: RegistrazioneClienteCopy = {
   done_title_it: 'Registrazione completata', done_title_en: 'Registration complete',
   done_body_it: 'Grazie. Il team DR7 verificherà i documenti caricati al più presto.',
   done_body_en: 'Thank you. The DR7 team will verify the uploaded documents as soon as possible.',
+  prefill_title_it: 'Carica i tuoi documenti',
+  prefill_title_en: 'Upload your documents',
+  prefill_body_it: "Carica patente e documento d'identità. I dati verranno rilevati automaticamente e inseriti nei campi richiesti, riducendo i tempi di registrazione.",
+  prefill_body_en: 'Upload your driving licence and ID document. The data is read automatically and written into the required fields, so registration takes less time.',
+  prefill_cta_it: 'Carica e compila automaticamente',
+  prefill_cta_en: 'Upload and fill automatically',
+  prefill_error_it: 'Non siamo riusciti a leggere i documenti. Puoi compilare i campi a mano.',
+  prefill_error_en: 'We could not read the documents. You can fill in the fields manually.',
+  popup_title_it: 'Compila più velocemente',
+  popup_title_en: 'Fill in faster',
+  popup_body_it: 'Carica i tuoi documenti e lascia che DR7 compili automaticamente i tuoi dati.',
+  popup_body_en: 'Upload your documents and let DR7 fill in your details automatically.',
+  popup_cta_upload_it: 'Carica i documenti',
+  popup_cta_upload_en: 'Upload documents',
+  popup_cta_manual_it: 'Continua manualmente',
+  popup_cta_manual_en: 'Continue manually',
   docs_intro_it: 'Carica i tuoi documenti. Saranno verificati dal team DR7 prima di confermare la registrazione. Formati: JPG, PNG, PDF (max 10 MB ciascuno).',
   docs_intro_en: 'Upload your documents. They will be verified by the DR7 team before confirming the registration. Formats: JPG, PNG, PDF (max 10 MB each).',
   docs_label_identity_it: "Carta d'identità o Passaporto",
@@ -2395,6 +2437,30 @@ export const INITIAL_PAYMENT: PaymentCopy = {
 // ─── Default SignUp seed (registrazione cliente) ──────────────────────────
 export const INITIAL_SIGNUP: SignUpCopy = {
   subtitle_it: 'Registrazione Cliente - DR7', subtitle_en: 'Client Registration - DR7',
+  section_patente_it: 'Patente di guida', section_patente_en: 'Driving licence',
+  field_patente_tipo_it: 'Categoria', field_patente_tipo_en: 'Category',
+  field_patente_numero_it: 'Numero patente', field_patente_numero_en: 'Licence number',
+  field_patente_ente_it: 'Rilasciata da', field_patente_ente_en: 'Issued by',
+  field_patente_rilascio_it: 'Data di conseguimento', field_patente_rilascio_en: 'Date obtained',
+  field_patente_scadenza_it: 'Scadenza', field_patente_scadenza_en: 'Expiry date',
+  patente_hint_it: 'Si compilano da sole caricando la patente qui sopra. Non sono obbligatorie.',
+  patente_hint_en: 'Filled automatically when you upload your licence above. Not required.',
+  prefill_title_it: 'Carica i tuoi documenti',
+  prefill_title_en: 'Upload your documents',
+  prefill_body_it: "Carica patente e documento d'identità. I dati verranno rilevati automaticamente e inseriti nei campi richiesti, riducendo i tempi di registrazione.",
+  prefill_body_en: 'Upload your driving licence and ID document. The data is read automatically and written into the required fields, so registration takes less time.',
+  prefill_cta_it: 'Carica e compila automaticamente',
+  prefill_cta_en: 'Upload and fill automatically',
+  prefill_error_it: 'Non siamo riusciti a leggere i documenti. Puoi compilare i campi a mano.',
+  prefill_error_en: 'We could not read the documents. You can fill in the fields manually.',
+  popup_title_it: 'Compila più velocemente',
+  popup_title_en: 'Fill in faster',
+  popup_body_it: 'Carica i tuoi documenti e lascia che DR7 compili automaticamente i tuoi dati.',
+  popup_body_en: 'Upload your documents and let DR7 fill in your details automatically.',
+  popup_cta_upload_it: 'Carica i documenti',
+  popup_cta_upload_en: 'Upload documents',
+  popup_cta_manual_it: 'Continua manualmente',
+  popup_cta_manual_en: 'Continue manually',
   client_type_label_it: 'Tipo Cliente', client_type_label_en: 'Client Type',
   client_type_default_it: 'Seleziona...', client_type_default_en: 'Select...',
   client_type_azienda_it: 'Azienda', client_type_azienda_en: 'Company',
@@ -3122,7 +3188,7 @@ export const INITIAL_FOOTER: FooterCopy = {
     { id: 'tt', label: 'Tiktok',    href: 'https://www.tiktok.com/@dr7luxuryempire',           icon: 'tiktok' },
   ],
   // 10/09/2026 — il titolo e' la SECONDA riga: la prima la scrive la vetrina
-  // col numero vero delle recensioni ("317 esperienze."). Percio' qui sta una
+  // col numero vero delle recensioni ("N esperienze."). Percio' qui sta una
   // frase corta che chiude, non un titolo intero.
   reviews_title: 'One standard only.',
   reviews_title_it: 'Un solo standard.',
@@ -3295,7 +3361,10 @@ export const INITIAL_HOME: HomeCopy = {
     { id: 'parco',      value: '\u20ac3M+',    label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
     { id: 'patrimonio', value: '\u20ac6M+',    label_it: 'Patrimonio netto',                 label_en: 'Net equity' },
     { id: 'capitale',   value: '\u20ac1M',     label_it: 'Capitale sociale',                 label_en: 'Share capital' },
-    { id: 'recensioni', value: '317+',    label_it: 'Recensioni a 5 stelle',            label_en: '5-star reviews' },
+    // 14/09/2026 — qui c'era "317+" scritto a mano: le recensioni salivano e
+    // il sito continuava a dirne 317. `{reviewCount}` lo riempie la pagina col
+    // numero vero di Google (hooks/useReviewCount.ts), come sulla Business.
+    { id: 'recensioni', value: '{reviewCount}+', label_it: 'Recensioni a 5 stelle',        label_en: '5-star reviews' },
     { id: 'brand',      value: '\u20ac5M',     label_it: 'Valutazione del brand',            label_en: 'Brand valuation' },
     { id: 'azienda',    value: '\u20ac15M',    label_it: 'Valutazione aziendale',            label_en: 'Company valuation' },
   ],
