@@ -68,14 +68,24 @@ const birthdayHandler: Handler = async (event) => {
       const tpl = (tplRows || []).find((r: { is_enabled?: boolean }) => r.is_enabled !== false) || (tplRows || [])[0];
       // floor (non round): un offset < 24h NON deve diventare "1 giorno prima".
       // Solo offset >= 24h contano come giorni interi di anticipo. 0 = il giorno stesso.
+      // 14/09/2026: offset NEGATIVO = auguri DOPO il compleanno (la colonna e'
+      // documentata cosi': positivo = prima dell'evento, negativo = dopo).
+      // Prima il ramo negativo veniva ignorato e restava 0, quindi "3 giorni
+      // dopo" partiva comunque il giorno stesso.
       const h = Number(tpl?.trigger_offset_hours);
-      if (Number.isFinite(h) && h >= 24) offsetDays = Math.floor(h / 24);
+      if (Number.isFinite(h)) {
+        offsetDays = h >= 0 ? Math.floor(h / 24) : -Math.floor(Math.abs(h) / 24);
+      }
     } catch (e) {
       console.warn('[Birthday Auto] lookup offset fallito, uso 0 (giorno stesso):', e);
     }
 
+    // offsetDays > 0: oggi si cercano i compleanni che cadranno fra N giorni
+    //                 (auguri in anticipo).
+    // offsetDays < 0: oggi si cercano i compleanni caduti N giorni fa
+    //                 (auguri in ritardo voluto).
     const targetDate = new Date(today);
-    if (offsetDays > 0) targetDate.setDate(targetDate.getDate() + offsetDays);
+    targetDate.setDate(targetDate.getDate() + offsetDays);
     const targetMonth = targetDate.getMonth() + 1; // JavaScript months are 0-indexed
     const targetDay = targetDate.getDate();
 

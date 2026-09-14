@@ -121,6 +121,16 @@
 [functions."weather-alert-cron"]
   schedule = "0 * * * *"
 
+# Compleanni — auguri automatici via WhatsApp, ogni giorno alle 08:00 UTC.
+# 14/09/2026: la funzione aveva solo lo schedule() dentro al file e nessuna
+# riga qui, come i rinnovi Club che non sono mai partiti. QUANTI giorni prima
+# (o dopo) parte il messaggio si decide nel tab Compleanni / Messaggi di
+# Sistema Pro: la funzione legge trigger_offset_hours del template compleanno.
+# Ogni cliente riceve gli auguri una sola volta all'anno (tabella
+# birthday_messages), quindi l'attivazione non manda arretrati in blocco.
+[functions."send-birthday-messages"]
+  schedule = "0 8 * * *"
+
 # Nexi preauth auto-refresh — riattivato 2026-05-13.
 # Cron giornaliero che rinnova le pre-autorizzazioni a lungo termine
 # (durata > 7 giorni) ogni 6 giorni. Strategia void-first:

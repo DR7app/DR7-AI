@@ -22,6 +22,18 @@ interface BirthdaySentRecord {
     sent_at: string
 }
 
+// Momenti di invio selezionabili: da 30 giorni prima del compleanno a 30
+// giorni dopo, il giorno stesso compreso. Positivo = prima, negativo = dopo,
+// come la colonna trigger_offset_hours che legge il cron.
+const OPZIONI_ANTICIPO = [30, 21, 14, 10, 7, 5, 4, 3, 2, 1, 0, -1, -2, -3, -5, -7, -10, -14, -21, -30]
+
+function etichettaAnticipo(giorni: number): string {
+    if (giorni === 0) return 'Il giorno stesso'
+    const n = Math.abs(giorni)
+    const parola = n === 1 ? '1 giorno' : `${n} giorni`
+    return giorni > 0 ? `${parola} prima` : `${parola} dopo`
+}
+
 // Il body del messaggio compleanno vive in Messaggi di Sistema Pro →
 // "Messaggio Compleanno" (key `pro_marketing_compleanno`). Niente più
 // fallback locale: se il template è mancante/disattivato il tab mostra
@@ -50,11 +62,45 @@ export default function BirthdaysTab() {
     const currentYear = new Date().getFullYear()
     const [messageTemplate, setMessageTemplate] = useState('')
     const [proTemplateMissing, setProTemplateMissing] = useState(false)
+    // 14/09/2026 — QUANDO partono gli auguri. Il valore vero sta in
+    // system_messages.trigger_offset_hours del template compleanno (positivo =
+    // giorni PRIMA, negativo = giorni DOPO, 0 = il giorno stesso): e' quello
+    // che legge il cron send-birthday-messages. Qui si legge e si scrive lo
+    // stesso campo, cosi' quello che si vede nel tab e' quello che parte
+    // davvero. Prima il tab scriveva "prossimi 10 giorni" fissi mentre
+    // l'invio era gia' impostato sul giorno stesso: due numeri diversi per
+    // la stessa cosa.
+    const [anticipoGiorni, setAnticipoGiorni] = useState(0)
+    const [idTemplateCompleanno, setIdTemplateCompleanno] = useState<string | null>(null)
+    const [salvandoAnticipo, setSalvandoAnticipo] = useState(false)
     // URL del sito impostato in admin → Marketing → Social Links (UI).
     // Storage: centralina_pro_config.config.marketing.website_url.
     // Sostituito nel template via il placeholder canonico {website_url} con
     // alias retro-compat {website} / {link} / {sito}.
     const [websiteUrl, setWebsiteUrl] = useState('https://dr7.app')
+
+    // Salva il momento di invio sul template Pro del compleanno: e' l'unico
+    // posto da cui il cron send-birthday-messages legge l'anticipo, quindi
+    // scriverlo qui cambia davvero quando parte il messaggio.
+    async function salvaAnticipo(giorni: number) {
+        if (!idTemplateCompleanno) return
+        const precedente = anticipoGiorni
+        setAnticipoGiorni(giorni)
+        setSalvandoAnticipo(true)
+        try {
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ trigger_offset_hours: giorni * 24 })
+                .eq('id', idTemplateCompleanno)
+            if (error) throw error
+        } catch (err) {
+            setAnticipoGiorni(precedente)
+            logger.error('Errore salvataggio anticipo compleanno:', err)
+            alert('Errore nel salvataggio: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setSalvandoAnticipo(false)
+        }
+    }
 
     // Generate unique discount code
     function generateDiscountCode(): string {
@@ -196,14 +242,26 @@ export default function BirthdaysTab() {
             // o creati con key custom (pro_custom_*).
             const { data: rows } = await supabase
                 .from('system_messages')
-                .select('message_key, message_body, is_enabled, label')
-            const candidates = (rows || []) as Array<{ message_key: string; message_body: string | null; is_enabled: boolean | null; label: string | null }>
+                .select('id, message_key, message_body, is_enabled, label, trigger_offset_hours')
+            const candidates = (rows || []) as Array<{ id: string; message_key: string; message_body: string | null; is_enabled: boolean | null; label: string | null; trigger_offset_hours: number | null }>
             const direct = candidates.find(r => r.message_key === 'pro_marketing_compleanno')
             const labelMatch = !direct ? candidates.find(r => {
                 const lbl = (r.label || '').toLowerCase()
                 return lbl.includes('compleanno') && (r.is_enabled !== false) && r.message_body
             }) : null
             const tpl = direct || labelMatch
+            // Anticipo/ritardo dell'invio automatico: stessa riga, stesso campo
+            // che legge il cron. Ore -> giorni interi (positivo = prima).
+            if (tpl) {
+                setIdTemplateCompleanno(tpl.id)
+                const ore = Number(tpl.trigger_offset_hours)
+                setAnticipoGiorni(Number.isFinite(ore)
+                    ? (ore >= 0 ? Math.floor(ore / 24) : -Math.floor(Math.abs(ore) / 24))
+                    : 0)
+            } else {
+                setIdTemplateCompleanno(null)
+                setAnticipoGiorni(0)
+            }
             if (tpl?.message_body && tpl.is_enabled !== false) {
                 setMessageTemplate(tpl.message_body)
                 setProTemplateMissing(false)
@@ -541,7 +599,9 @@ export default function BirthdaysTab() {
 
     // Real metrics derived from already-loaded customer + sent data.
     const compleanniOggi = customers.filter(c => c.days_until === 0).length
-    const daAuguriProssimi10 = customers.filter(c => c.days_until >= 0 && c.days_until <= 10).length
+    // Il conteggio segue la finestra scelta nel filtro, non piu' 10 giorni
+    // fissi: l'etichetta e il numero dicono la stessa cosa.
+    const daAuguriInFinestra = customers.filter(c => c.days_until >= 0 && c.days_until <= daysRange).length
     const messaggiInviati = customers.filter(c => c.already_sent_this_year).length
 
     return (
@@ -584,11 +644,38 @@ export default function BirthdaysTab() {
             {/* KPI strip */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                 <KpiCardBD label="Compleanni Oggi" value={String(compleanniOggi)} accent="rose" icon="cake" />
-                <KpiCardBD label="Da Auguri (prossimi 10gg)" value={String(daAuguriProssimi10)} accent="amber" icon="clock" />
+                <KpiCardBD label={`Da Auguri (prossimi ${daysRange}gg)`} value={String(daAuguriInFinestra)} accent="amber" icon="clock" />
                 <KpiCardBD label="Messaggi Inviati" value={String(messaggiInviati)} accent="green" icon="check" />
                 <KpiCardBD label="Tasso di Apertura" value="—" accent="blue" icon="eye" decorative />
                 <KpiCardBD label="Codici Convertiti" value="—" accent="purple" icon="ticket" decorative />
                 <KpiCardBD label="Fatturato Generato" value="—" accent="gold" icon="euro" decorative />
+            </div>
+
+            {/* Quando partono gli auguri automatici. Scrive lo stesso campo che
+                legge il cron (system_messages.trigger_offset_hours del template
+                compleanno): qui e in Messaggi di Sistema Pro si vede sempre lo
+                stesso valore. */}
+            <div className="bg-theme-bg-tertiary p-4 rounded-lg border border-theme-border">
+                <div className="flex flex-wrap items-center gap-3">
+                    <label className="text-theme-text-primary text-sm font-medium">Invio automatico auguri</label>
+                    <select
+                        value={anticipoGiorni}
+                        disabled={salvandoAnticipo || !idTemplateCompleanno}
+                        onChange={(e) => salvaAnticipo(parseInt(e.target.value))}
+                        className="bg-theme-bg-secondary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm disabled:opacity-50"
+                    >
+                        {OPZIONI_ANTICIPO.map(g => (
+                            <option key={g} value={g}>{etichettaAnticipo(g)}</option>
+                        ))}
+                    </select>
+                    <span className="text-theme-text-muted text-sm">
+                        {salvandoAnticipo
+                            ? 'Salvataggio…'
+                            : idTemplateCompleanno
+                                ? `Il messaggio parte ${etichettaAnticipo(anticipoGiorni).toLowerCase()}, una volta all'anno per cliente.`
+                                : 'Template compleanno non trovato in Messaggi di Sistema Pro.'}
+                    </span>
+                </div>
             </div>
 
             {/* Filters */}
@@ -603,11 +690,9 @@ export default function BirthdaysTab() {
                                 onChange={(e) => setDaysRange(parseInt(e.target.value))}
                                 className="bg-theme-bg-secondary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm"
                             >
-                                <option value={3}>3 giorni</option>
-                                <option value={7}>7 giorni</option>
-                                <option value={10}>10 giorni</option>
-                                <option value={14}>14 giorni</option>
-                                <option value={30}>30 giorni</option>
+                                {[1, 2, 3, 5, 7, 10, 14, 21, 30].map(g => (
+                                    <option key={g} value={g}>{g === 1 ? '1 giorno' : `${g} giorni`}</option>
+                                ))}
                             </select>
                         </div>
 
