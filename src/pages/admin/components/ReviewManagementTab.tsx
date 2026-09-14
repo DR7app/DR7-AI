@@ -1123,6 +1123,13 @@ export default function ReviewManagementTab() {
       && (c.send_status === 'BLOCKED' || c.send_status === 'SENT')
   }
 
+  // 14/09/2026: un candidato puo' ricevere la richiesta solo se non l'ha gia'
+  // ricevuta e non e' bloccato. FAILED e' un ritentativo dello stesso invio,
+  // quindi resta ammesso. Stessa regola del controllo server in review-send.
+  function puoEssereInviato(c: ReviewCandidate) {
+    return c.send_status === 'TO_SEND' || c.send_status === 'FAILED'
+  }
+
   // Combined status pill (dot + label) — derives a single visual state from
   // eligibility_status × send_status × review_risk. Mirrors the Rentora design.
   function renderStatusPill(c: ReviewCandidate) {
@@ -1552,7 +1559,14 @@ export default function ReviewManagementTab() {
               {isEligible && (
                 <>
                   {/* 2026-05-28: rimosso bottone Email per-riga — WhatsApp-only */}
-                  {candidate.customer_phone && (
+                  {/* 14/09/2026: il bottone Invia compare SOLO se il candidato
+                      e' davvero da inviare. Prima restava cliccabile anche dopo
+                      un invio riuscito (send_status='SENT') e sui bloccati a
+                      mano ('BLOCKED'): si poteva rilanciare la richiesta allo
+                      stesso cliente un secondo dopo. Per rimandarla si passa
+                      dal bottone Sblocca, che riporta il candidato a TO_SEND.
+                      FAILED resta inviabile: e' un ritentativo, non un doppione. */}
+                  {puoEssereInviato(candidate) && candidate.customer_phone && (
                     <button
                       onClick={() => handleSend(candidate.id, 'WHATSAPP')}
                       disabled={sendingId === candidate.id}

@@ -133,7 +133,27 @@ const handler: Handler = async (event) => {
       };
     }
 
-    // 3. Anti-duplication check: no existing SENT request for this candidate.
+    // 3a. Lo stato del candidato comanda: solo TO_SEND (mai inviato) e FAILED
+    // (ritentativo dello stesso invio) possono partire. SENT = richiesta gia'
+    // partita, BLOCKED/EXCLUDED = bloccato a mano o escluso dallo sweep.
+    // 14/09/2026: prima il controllo guardava SOLO review_requests, quindi un
+    // candidato gia' inviato la cui riga non risultava SENT (invio parziale,
+    // riga storica mancante) oppure bloccato a mano riceveva di nuovo il
+    // messaggio subito dopo il primo. Per rimandarla si passa da "Sblocca",
+    // che riporta il candidato a TO_SEND.
+    const statiInviabili = ['TO_SEND', 'FAILED'];
+    if (!previewOnly && !statiInviabili.includes(candidate.send_status)) {
+      const motivo = candidate.send_status === 'SENT'
+        ? 'Richiesta di recensione già inviata a questo cliente. Usa "Sblocca" per rimandarla.'
+        : `Candidato non inviabile. Stato invio: ${candidate.send_status}`;
+      return {
+        statusCode: 409,
+        headers: getHeaders(event.headers.origin),
+        body: JSON.stringify({ error: motivo }),
+      };
+    }
+
+    // 3b. Anti-duplication check: no existing SENT request for this candidate.
     // 2026-06-02: BYPASS quando candidate.send_status === 'TO_SEND'. La
     // direzione ha cliccato "Sblocca" sul candidato (che resetta
     // candidate.send_status a TO_SEND) \u2014 vuole RI-inviare la richiesta.
