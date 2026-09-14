@@ -1491,17 +1491,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
 
         console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
 
-        // Map insurance option ID to readable label.
-        // 1st: legacy hardcoded map (old bookings). 2nd: lookup in centralina_pro_config (new bookings).
-        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'KASKO_BASE'
-        const legacyInsuranceLabels: Record<string, string> = {
-            'RCA': 'RCA Compresa',
-            'KASKO': 'Base',
-            'KASKO_BASE': 'Base',
-            'KASKO_BLACK': 'Black',
-            'KASKO_SIGNATURE': 'Signature',
-            'DR7': 'DR7'
-        }
+        // Nome dell'assicurazione: UNICA fonte Centralina Pro. Qui non c'e'
+        // nessuna tabella di nomi: si prende l'id salvato sulla prenotazione e
+        // si cerca l'opzione in Centralina.
+        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || ''
 
         // 08/09/2026 — Franchigie sul contratto (Incendio, Furto, Eventi
         // naturali, Eventi sociopolitici, Atti vandalici) + testo Kasko.
@@ -1518,7 +1511,12 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         const fasciaPreferita = driverTier === 'TIER_1' ? 'B' : driverTier === 'TIER_2' ? 'A' : ''
         const normalizzaNome = (v: unknown) => String(v ?? '')
             .toLowerCase().replace(/kasko|compresa|\(.*?\)/g, '').replace(/[^a-z0-9]/g, '').trim()
-        const nomeLegacy = legacyInsuranceLabels[insuranceOptionId] || ''
+        // Le prenotazioni vecchie hanno salvato un id parlante ("KASKO_BASE")
+        // invece del codice Centralina. Per ritrovarle si cerca per NOME
+        // partendo dall'id stesso della prenotazione — nessun nome di
+        // prodotto scritto qui: normalizzaNome toglie "kasko"/"compresa",
+        // quindi "KASKO_BASE" e l'opzione Centralina "Kasko Base" combaciano.
+        const nomeLegacy = insuranceOptionId.replace(/_/g, ' ')
 
         function cercaOpzionePro(): ProOpzione | null {
             const categorie = (cpCfg?.config as { insurance?: unknown })?.insurance
@@ -1598,8 +1596,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // per l'opzione che il cliente ha scelto ("Kasko Base"), non
         // l'etichetta corta dell'id legacy ("Base"): se l'opzione si trova,
         // vince sempre lei.
-        let insuranceLabel = opzionePro?.name || nomeLegacy || ''
-        if (!insuranceLabel) insuranceLabel = insuranceOptionId
+        // Se la Centralina non conosce piu' quell'opzione il nome resta vuoto:
+        // meglio una casella vuota che un nome inventato dal codice.
+        const insuranceLabel = opzionePro?.name || ''
 
         // Tabella "FRANCHIGIE E ASSICURAZIONI": due numeri per riga, franchigia
         // in euro e scoperto in percentuale. Nel PDF il simbolo € e il % sono

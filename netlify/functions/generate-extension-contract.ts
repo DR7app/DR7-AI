@@ -175,17 +175,41 @@ export const handler: Handler = async (event) => {
         // 6. Fill Form Fields
         const form = pdfDoc.getForm()
 
-        // Insurance mapping
-        const insuranceOptionId = booking.booking_details?.insuranceOption || 'KASKO_BASE'
-        const insuranceLabels: Record<string, string> = {
-            'RCA': 'Kasko',
-            'KASKO': 'Kasko',
-            'KASKO_BASE': 'Kasko',
-            'KASKO_BLACK': 'Kasko Black',
-            'KASKO_SIGNATURE': 'Kasko Signature',
-            'DR7': 'Kasko DR7'
+        // Nome dell'assicurazione: unica fonte Centralina Pro, come sul
+        // contratto principale. Qui non c'e' nessuna tabella di nomi: si
+        // cerca l'opzione salvata sulla prenotazione fra quelle configurate.
+        // Se la Centralina non la conosce piu', la casella resta vuota.
+        const insuranceOptionId = String(booking.booking_details?.insuranceOption || '')
+        let insuranceLabel = ''
+        if (insuranceOptionId) {
+            try {
+                const { data: cpRow } = await supabase
+                    .from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+                const categorie = (cpRow as { config?: { insurance?: unknown } } | null)?.config?.insurance
+                // Le prenotazioni vecchie hanno salvato un id parlante
+                // ("KASKO_BASE") invece del codice Centralina: si cerca anche
+                // per nome normalizzato, partendo dall'id stesso.
+                const normalizza = (v: unknown) => String(v ?? '')
+                    .toLowerCase().replace(/kasko|compresa|\(.*?\)/g, '').replace(/[^a-z0-9]/g, '').trim()
+                const cercato = normalizza(insuranceOptionId.replace(/_/g, ' '))
+                if (Array.isArray(categorie)) {
+                    for (const cat of categorie as Record<string, unknown>[]) {
+                        const pools: { id?: string; name?: string }[][] = []
+                        const byFascia = cat?.byFascia as Record<string, { id?: string; name?: string }[]> | undefined
+                        for (const k of Object.keys(byFascia || {})) if (Array.isArray(byFascia![k])) pools.push(byFascia![k])
+                        if (Array.isArray(cat?.all)) pools.push(cat.all as { id?: string; name?: string }[])
+                        for (const pool of pools) {
+                            const hit = pool.find(o => o?.id === insuranceOptionId)
+                                || pool.find(o => cercato && normalizza(o?.name) === cercato)
+                            if (hit?.name) { insuranceLabel = hit.name; break }
+                        }
+                        if (insuranceLabel) break
+                    }
+                }
+            } catch (e: any) {
+                console.warn('[generate-extension-contract] Lettura assicurazione da Centralina fallita:', e?.message)
+            }
         }
-        const insuranceLabel = insuranceLabels[insuranceOptionId] || insuranceOptionId
 
         // Additional amount for extension
         const additionalAmount = latestExtension.additional_amount || 0

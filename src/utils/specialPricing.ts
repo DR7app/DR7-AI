@@ -9,7 +9,6 @@ export interface SpecialPricingRule {
     dailyRate: number
     discountTiers: { minDays: number; discount: number }[]
     includesUnlimitedKm: boolean
-    includesKasko: 'base' | 'gold' | 'platinum' | null
     excludeCarWash: boolean
     noDeposit: boolean
     noCents: boolean
@@ -26,7 +25,6 @@ const SPECIAL_PRICING_RULES: SpecialPricingRule[] = [
             { minDays: 3, discount: 0.10 },    // 3 days: -10%
         ],
         includesUnlimitedKm: true,
-        includesKasko: 'base',
         excludeCarWash: true,
         noDeposit: true,
         noCents: true,
@@ -41,7 +39,6 @@ const SPECIAL_PRICING_RULES: SpecialPricingRule[] = [
             { minDays: 3, discount: 0.10 },
         ],
         includesUnlimitedKm: true,
-        includesKasko: 'base',
         excludeCarWash: true,
         noDeposit: false,
         noCents: true,

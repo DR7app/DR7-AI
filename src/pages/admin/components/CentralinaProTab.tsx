@@ -3591,46 +3591,13 @@ type InsuranceCategoryConfig = {
   all: InsuranceOption[]
 }
 
-const INITIAL_INSURANCE: InsuranceCategoryConfig[] = [
-  {
-    id: 'supercars',
-    label: 'Supercars / Exotic',
-    mode: 'per_fascia',
-    byFascia: {
-      A: [
-        { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 10000, deductible_fixed: 0, deductible_percent: 0 },
-        { id: uid(), name: 'Kasko Base', daily_price: 89, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 30 },
-        { id: uid(), name: 'Kasko DR7', daily_price: 289, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-      ],
-      B: [
-        { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 15000, deductible_fixed: 0, deductible_percent: 0 },
-        { id: uid(), name: 'Kasko Base', daily_price: 119, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 30 },
-      ],
-    },
-    all: [],
-  },
-  {
-    id: 'urban',
-    label: 'Urban',
-    mode: 'all_tiers',
-    byFascia: {},
-    all: [
-      { id: uid(), name: 'Kasko Base', daily_price: 15, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-      { id: uid(), name: 'Kasko DR7', daily_price: 45, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-    ],
-  },
-  {
-    id: 'aziendali',
-    label: 'Aziendali',
-    mode: 'all_tiers',
-    byFascia: {},
-    all: [
-      { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-      { id: uid(), name: 'Kasko Base', daily_price: 45, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-      { id: uid(), name: 'Kasko DR7', daily_price: 90, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-    ],
-  },
-]
+const INITIAL_INSURANCE: InsuranceCategoryConfig[] = []
+
+// Nessuna assicurazione di fabbrica: le voci le crea la direzione qui in
+// Centralina Pro > Assicurazioni. Prima c'era un elenco scritto nel codice
+// (RCA / Kasko Base / Black / Signature / DR7 con i loro prezzi): su ogni
+// business nuovo ricompariva da solo, e nel form prenotazione arrivavano
+// listini che nessuno aveva mai configurato.
 
 function AssicurazioniSection({
   insurance,
@@ -3931,7 +3898,7 @@ function FranchigieContrattoBox({
             {/* L'ultima riga e' l'opzione stessa: si scrive qui come tutte le
                 altre. Il nome e' quello dell'opzione, come il contratto lo
                 stampa nella casella accanto alla parola "Kasko". */}
-            <span className="text-[13px] text-theme-text-primary">{nomeOpzione?.trim() || 'Kasko'}</span>
+            <span className="text-[13px] text-theme-text-primary">{nomeOpzione?.trim() || '—'}</span>
             <NumeroCella value={kaskoEur} onChange={(v) => onKasko('deductible_fixed', v)} />
             <NumeroCella value={kaskoPerc} onChange={(v) => onKasko('deductible_percent', v)} />
           </div>

@@ -66,11 +66,8 @@ export function calculateLicenseYears(issueDate: string): number {
 }
 
 /** Tier-based pricing constants — must match website constants.ts */
-export const TIER_KASKO_BASE_PRICE = {
-  TIER_1: 119, // €119/day for young/risk
-  TIER_2: 89,  // €89/day for standard
-} as const;
-
+// Il prezzo della Kasko Base non sta piu' qui: ogni assicurazione ha il suo
+// prezzo in Centralina Pro > Assicurazioni, per categoria e per fascia.
 export const TIER_UNLIMITED_KM_PRICE = {
   TIER_1: 289, // €289/day for young/risk
   TIER_2: 189, // €189/day for standard

@@ -131,11 +131,22 @@ export function getNoCauzioneSurcharge(config: RentalConfig): number {
   return config.no_cauzione_surcharge?.per_day ?? 0
 }
 
+/** L'opzione scelta e' una RCA (nessuna Kasko)?
+ *  Si legge dalla Centralina Pro: si cerca l'opzione per id e si guarda il
+ *  NOME che le ha dato la direzione. Gli id in Centralina sono codici
+ *  generati (es. "wxb63p2f"), quindi confrontare l'id con "RCA" non
+ *  funzionava piu' e questo controllo era muto. */
+export function isRcaInsurance(config: RentalConfig | null | undefined, insuranceId: string): boolean {
+  const opt = getInsuranceOptionById(config, insuranceId)
+  if (!opt) return false
+  return /^\s*rca\b/i.test(opt.name || '')
+}
+
 /** Check if no cauzione is available for a given tier + insurance */
 export function isNoCauzioneAvailable(config: RentalConfig, tier: DriverTier, insuranceId: string): boolean {
   const restriction = config.no_cauzione_surcharge?.tier_restriction
   if (restriction && tier !== restriction) return false
-  if (config.no_cauzione_surcharge?.requires_kasko && insuranceId === 'RCA') return false
+  if (config.no_cauzione_surcharge?.requires_kasko && isRcaInsurance(config, insuranceId)) return false
   return true
 }
 

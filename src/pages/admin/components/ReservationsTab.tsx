@@ -119,7 +119,7 @@ import {
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
-import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getInsuranceOptionById, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
+import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getInsuranceOptionById, isRcaInsurance, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 // 2026-08: il gate auto-fattura per metodo di pagamento vive SOLO nel server
@@ -869,14 +869,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // TUTTE le categorie/fasce, quindi risolve anche se l'id selezionato
     // appartiene a una fascia diversa da quella di default.
     const rawIns = formData.insurance_option || ''
-    const insLegacyMap: Record<string, string> = {
-      RCA: 'RCA', KASKO_BASE: 'Kasko Base', KASKO_BLACK: 'Kasko Black',
-      KASKO_SIGNATURE: 'Kasko Signature', KASKO_DR7: 'Kasko DR7', DR7: 'Kasko DR7',
-    }
-    const insDisplay =
-      (rentalConfig ? getInsuranceNameById(rentalConfig, rawIns) : null)
-      || insLegacyMap[rawIns]
-      || (rawIns ? rawIns.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase()) : '')
+    const insDisplay = (rentalConfig ? getInsuranceNameById(rentalConfig, rawIns) : null) || ''
     set(operation, 'Assicurazione', insDisplay)
 
     // Meta — operatore + timestamp
@@ -1088,7 +1081,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     garante_3_telefono: '',
     garante_3_email: '',
     // Kasko & Deposit
-    insurance_option: 'KASKO_BASE' as KaskoTier,
+    // Vuota: l'assicurazione la porta la Centralina Pro quando si sceglie il
+    // veicolo. Nessun valore di partenza inventato qui.
+    insurance_option: '' as KaskoTier,
     // Prezzo e franchigie concordati per QUESTA prenotazione: non toccano il
     // listino di Centralina Pro. Vedi utils/kaskoUnaVolta.ts.
     kasko_una_volta: null as KaskoUnaVolta | null,
@@ -2594,7 +2589,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         ...prev,
         total_amount: specialTotal.toFixed(2),
         // Force options to match website config
-        insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' : prev.insurance_option,
         unlimited_km: specialRule.includesUnlimitedKm,
         km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
         deposit: specialRule.noDeposit ? '0' : prev.deposit,
@@ -2642,7 +2636,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setFormData(prev => ({
       ...prev,
       total_amount: specialTotal.toFixed(2),
-      insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' as KaskoTier : prev.insurance_option,
       unlimited_km: specialRule.includesUnlimitedKm,
       km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
       deposit: specialRule.noDeposit ? '0' : prev.deposit,
@@ -2669,8 +2662,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       if (!isCurrentOptionValid && availableOptions.length > 0) {
         // Prefer a RCA option (match by id OR by name, since Centralina ids are
         // random hashes), else the first valid option for the category.
-        const rca = availableOptions.find(opt => opt.id === 'RCA' || /^rca\b/i.test(opt.label || ''))
-        const fallbackId = (rca?.id || availableOptions[0]?.id || 'KASKO_BASE') as KaskoTier
+        const rca = availableOptions.find(opt => /^\s*rca\b/i.test(opt.label || ''))
+        const fallbackId = (rca?.id || availableOptions[0].id) as KaskoTier
         setFormData(prev => ({ ...prev, insurance_option: fallbackId }))
       }
     }
@@ -3366,7 +3359,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
           return ['__limitation_override_requested__']
         }
-        if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+        if (formData.deposit_status === 'no_cauzione' && isRcaInsurance(rentalConfig, formData.insurance_option) && !hasOverride('no_cauzione_rca_only')) {
           setOverrideDetails(buildOverrideDetailsBase([
             { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
           ]))
@@ -4590,7 +4583,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // bookings showed the wrong tier in admin (Massimo Runchina case).
       insurance_option: (booking as { insurance_option?: string }).insurance_option
         || booking.booking_details?.insuranceOption
-        || 'KASKO_BASE',
+        || '',
       kasko_una_volta: leggiKaskoUnaVolta((booking.booking_details as { kasko_una_volta?: unknown } | undefined)?.kasko_una_volta),
       // Cauzione amount + status — read in TWO shapes:
       //  • admin-shape (created via this form): booking_details.deposit + booking_details.deposit_status
@@ -5434,7 +5427,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // (d) No Cauzione + RCA only (richiede Kasko attiva)
       if (
         formData.deposit_status === 'no_cauzione'
-        && formData.insurance_option === 'RCA'
+        && isRcaInsurance(rentalConfig, formData.insurance_option)
         && !hasOverride('no_cauzione_rca_only')
       ) {
         trips.push({
@@ -5699,7 +5692,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               return
             }
           }
-          if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+          if (formData.deposit_status === 'no_cauzione' && isRcaInsurance(rentalConfig, formData.insurance_option) && !hasOverride('no_cauzione_rca_only')) {
             setOverrideDetails(buildOverrideDetailsBase([
               { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
             ]))
@@ -5914,7 +5907,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 }
               }
             }
-            if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+            if (formData.deposit_status === 'no_cauzione' && isRcaInsurance(rentalConfig, formData.insurance_option) && !hasOverride('no_cauzione_rca_only')) {
               setOverrideDetails(buildOverrideDetailsBase([
                 { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
               ]))
@@ -7580,8 +7573,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               pickup_date: pickupDateTime,
               dropoff_date: returnDateTime,
               pickup_location: pickupLocationLabel,
-              insurance_option: 'KASKO_BASE',
-              kasko_una_volta: null,
+              insurance_option: formData.insurance_option || '',
+              kasko_una_volta: formData.kasko_una_volta,
               price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
               payment_status: paymentStatus,
               payment_method: formData.payment_method || '',
@@ -7589,7 +7582,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
               booking_details: {
                 amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || eurToCents(formData.total_amount)) : 0,
-                insuranceOption: 'KASKO_BASE',
+                insuranceOption: formData.insurance_option || '',
                 deposit: parseFloat(formData.deposit) || 0,
                 deposit_status: formData.deposit_status,
                 include_cauzione_veicoli: !!formData.include_cauzione_veicoli,
@@ -7634,31 +7627,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // Build template vars
           const pickupD = new Date(pickupDateTime)
           const dropoffD = new Date(returnDateTime)
-          // Resolve insurance display name. Two ID formats live in this codebase:
-          //   - Centralina Pro UIDs (random 8-char hash, e.g. "xtfcs9w3")
-          //   - Legacy enums ("KASKO_BASE", "KASKO_BLACK", "KASKO_SIGNATURE",
-          //     "KASKO_DR7", "DR7", "RCA")
-          // Try Pro first; if that misses, map known legacy IDs; if even that
-          // misses, humanize the raw value (KASKO_BASE → "Kasko Base").
+          // Nome dell'assicurazione: si legge SOLO dalla Centralina Pro.
+          // Prima si cerca fra le opzioni della categoria del veicolo, poi in
+          // tutta la Centralina (l'id scelto puo' stare in un'altra fascia).
+          // Se la Centralina non conosce l'id, il nome resta vuoto: nessun
+          // nome di ripiego scritto nel codice.
           const insuranceKaskoOpts = vehicle ? getInsuranceOptions(vehicle, customerTier?.tier, configOverlay, rentalConfig) : []
           const insuranceMatch = insuranceKaskoOpts.find(k => k.id === formData.insurance_option)
-          const legacyInsuranceMap: Record<string, string> = {
-            RCA: 'RCA',
-            KASKO_BASE: 'Kasko Base',
-            KASKO_BLACK: 'Kasko Black',
-            KASKO_SIGNATURE: 'Kasko Signature',
-            KASKO_DR7: 'Kasko DR7',
-            DR7: 'Kasko DR7',
-          }
-          const rawInsuranceId = formData.insurance_option || ''
           const insuranceDisplayName =
             insuranceMatch?.label
-            || legacyInsuranceMap[rawInsuranceId]
-            || rawInsuranceId
-                .replace(/_/g, ' ')
-                .toLowerCase()
-                .replace(/\b\w/g, (c: string) => c.toUpperCase())
-            || 'Kasko Base'
+            || getInsuranceNameById(rentalConfig, formData.insurance_option || '')
+            || ''
           const templateVars = {
             '{customer_name}': customerInfo?.full_name || 'Cliente',
             '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
@@ -8531,8 +8510,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       second_driver_license_issued_by: '',
       second_driver_license_issue_date: '',
       second_driver_license_expiry: '',
-      // Kasko & Deposit
-      insurance_option: 'KASKO_BASE',
+      // Kasko & Deposit — l'assicurazione la porta la Centralina Pro
+      insurance_option: '',
       kasko_una_volta: null,
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
@@ -9390,8 +9369,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               // Check if current insurance option is valid for this tier
                               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
                               const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier, configOverlay, rentalConfig)
+                              // Cambio fascia: se l'opzione scelta non e' fra
+                              // quelle che la Centralina Pro da' a questa
+                              // fascia, si prende la prima valida — RCA se la
+                              // categoria ce l'ha. Mai un id fisso.
                               if (!tierOptions.some(o => o.id === prev.insurance_option)) {
-                                updates.insurance_option = 'KASKO_BASE'
+                                const rca = tierOptions.find(o => /^\s*rca\b/i.test(o.label || ''))
+                                updates.insurance_option = (rca?.id || tierOptions[0]?.id || '') as KaskoTier
                               }
                               return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
                             })
@@ -9491,8 +9475,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               driverAge: customerTier?.driverAge || 0,
                               licenseYears: customerTier?.licenseYears || 0,
                             })
-                            // Reset insurance option (come PreventiviTab line 2034)
-                            setFormData(prev => ({ ...prev, insurance_option: 'KASKO_BASE' as KaskoTier }))
+                            // Cambio fascia a mano: si azzera l'assicurazione.
+                            // La prima valida per la nuova fascia arriva dalla
+                            // Centralina Pro (effetto di reset qui sopra).
+                            setFormData(prev => ({ ...prev, insurance_option: '' as KaskoTier }))
                           }
                         }}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
@@ -10508,7 +10494,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         ...prev,
                         insurance_option: newOption,
                         // Auto-reset no_cauzione when switching to RCA (requires Kasko)
-                        ...(newOption === 'RCA' && prev.deposit_status === 'no_cauzione' ? { deposit_status: 'da_incassare' as const } : {}),
+                        ...(isRcaInsurance(rentalConfig, newOption) && prev.deposit_status === 'no_cauzione' ? { deposit_status: 'da_incassare' as const } : {}),
                       }));
                     }}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
@@ -10582,11 +10568,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       )}
                     </div>
                   )}
-                  {formData.insurance_option === 'RCA' && (
-                    <p className="text-xs text-yellow-400 mt-1">
-                      ⚠️ Senza Kasko: cauzione obbligatoria €{customerTier?.tier === 'TIER_2' ? '10.000' : '15.000'}
-                    </p>
-                  )}
+                  {isRcaInsurance(rentalConfig, formData.insurance_option) && (() => {
+                    // L'importo e' la "Cauzione obbligatoria" dell'opzione in
+                    // Centralina Pro (mandatory_deposit). Se li' non c'e',
+                    // l'avviso non mostra nessuna cifra: mai 10.000/15.000
+                    // scritti nel codice.
+                    const obbligatoria = getInsuranceOptionById(rentalConfig, formData.insurance_option)?.mandatory_deposit || 0
+                    return (
+                      <p className="text-xs text-yellow-400 mt-1">
+                        ⚠️ Senza Kasko{obbligatoria > 0 ? `: cauzione obbligatoria €${obbligatoria.toLocaleString('it-IT')}` : ''}
+                      </p>
+                    )
+                  })()}
                 </div>
                 {!formData.cauzione_auto && (
                   <>
@@ -10678,7 +10671,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       >
                         <option value="da_incassare">Da incassare</option>
                         <option value="incassata">Incassata</option>
-                        {(!customerTier || customerTier.tier === 'TIER_2') && formData.insurance_option !== 'RCA' && (
+                        {(!customerTier || customerTier.tier === 'TIER_2') && !isRcaInsurance(rentalConfig, formData.insurance_option) && (
                           <option value="no_cauzione">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/giorno)</option>
                         )}
                       </select>
@@ -10688,7 +10681,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       {customerTier?.tier === 'TIER_1' && (
                         <p className="text-xs text-amber-400 mt-1">No Cauzione non disponibile per Fascia B</p>
                       )}
-                      {customerTier?.tier === 'TIER_2' && formData.insurance_option === 'RCA' && (
+                      {customerTier?.tier === 'TIER_2' && isRcaInsurance(rentalConfig, formData.insurance_option) && (
                         <p className="text-xs text-amber-400 mt-1">No Cauzione richiede una Kasko attiva</p>
                       )}
                     </div>
@@ -12278,19 +12271,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         {selectedBooking.service_type !== USCITA_SERVICE_TYPE && (
                           <>
                         <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{(() => {
+                          // Solo Centralina Pro: se l'id salvato non c'e' piu'
+                          // in Centralina non si inventa un nome.
                           const rawId = selectedBooking.booking_details?.insuranceOption || ''
-                          const proName = getInsuranceNameById(rentalConfig, rawId)
-                          if (proName) return proName
-                          const legacyMap: Record<string, string> = {
-                            RCA: 'RCA Compresa (no Kasko)',
-                            KASKO: 'Kasko Base',
-                            KASKO_BASE: 'Kasko Base',
-                            KASKO_BLACK: 'Kasko Black',
-                            KASKO_SIGNATURE: 'Kasko Signature',
-                            KASKO_DR7: 'Kasko DR7',
-                            DR7: 'Kasko DR7',
-                          }
-                          return legacyMap[rawId] || rawId || 'Kasko Base'
+                          return getInsuranceNameById(rentalConfig, rawId) || '—'
                         })()}</span></div>
                         <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{
                           // 2026-05-29: rimosso label hardcoded "+30%" — il

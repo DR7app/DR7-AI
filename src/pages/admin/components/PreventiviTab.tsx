@@ -2885,9 +2885,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           zeroToHundred ? `0-100 ${String(zeroToHundred).replace('.', ',')}s` : '',
         ].filter(Boolean).join(' ')
 
+        // Nome dell'assicurazione: solo Centralina Pro. Se la Centralina non
+        // conosce l'id salvato, la riga resta vuota — niente "Kasko" generico.
         const resolveInsLabel = () =>
           pInsOpts.find(i => i.id === p.insurance_option)?.label
-          || (p.insurance_option ? String(p.insurance_option) : 'Kasko')
+          || (rentalConfig ? getInsuranceOptionById(rentalConfig, p.insurance_option || '')?.name : null)
+          || ''
 
         // Build each pricing line independently so the template can reference
         // them one at a time (e.g. {rental_line}, {km_line}, ...) and skip
@@ -3936,7 +3939,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         '{dropoff_time}': fmtTime(p.dropoff_date),
         '{pickup_location}': pickupLocationLabel,
         '{dropoff_location}': dropoffLocationLabel,
-        '{insurance}': p.insurance_option || '',
+        '{insurance}': (rentalConfig ? getInsuranceOptionById(rentalConfig, p.insurance_option || '')?.name : null) || '',
         '{km_info}': preventivoUnlimited ? 'Illimitati' : (preventivoKmLimit && preventivoKmLimit !== 'Illimitati' ? `${preventivoKmLimit} km` : 'Illimitati'),
         '{total}': (p.total_final ?? totalCents / 100).toFixed(2),
         '{payment_method}': payment_method,
