@@ -97,3 +97,50 @@ export function centsToEur(c: number): string {
 export function eur(cents: number | null | undefined): string {
   return ((Number(cents) || 0) / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
 }
+
+/* --- Stili e testi condivisi anche dalle viste Preventivi (Mare/Aria/
+ * Soggiorni e Lavaggio). Stanno in questo file .ts, non accanto ai componenti:
+ * un modulo che esporta sia costanti sia componenti rompe il fast refresh. --- */
+
+export const BTN_PRIMARY = 'px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50'
+export const BTN_GHOST = 'px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover'
+
+export const STATUS_BADGE: Record<string, string> = {
+  confirmed: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  confermata: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  pending: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  active: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+  completed: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+  completata: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+  cancelled: 'bg-red-500/15 text-red-400 border-red-500/30',
+  annullata: 'bg-red-500/15 text-red-400 border-red-500/30',
+  bozza: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
+  inviato: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  accettato: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  rifiutato: 'bg-red-500/15 text-red-400 border-red-500/30',
+  convertito: 'bg-dr7-gold/15 text-dr7-gold border-dr7-gold/30',
+}
+
+/**
+ * 2026-08-24: prima bastava che il messaggio CONTENESSE "noleggio_catalog"
+ * per dire "tabelle non ancora create". Cosi' un vincolo violato o un
+ * permesso RLS — errori veri, con una causa precisa — venivano raccontati
+ * come una migration mancante: si andava a cercare una tabella che c'era
+ * gia'. Ora si distingue per codice, e il messaggio del database resta
+ * sempre visibile in coda.
+ */
+export function missingTableHint(msg: string, code?: string): string {
+  const dettaglio = msg ? ` (dettaglio: ${msg})` : ''
+  if (code === '42P01' || code === 'PGRST205' || /relation .* does not exist|could not find the table|schema cache/i.test(msg)) {
+    return `Tabella non ancora creata: esegui la migration Stage 2 (noleggio_catalog / noleggio_preventivi) nel SQL editor Supabase.${dettaglio}`
+  }
+  if (code === '23514' || /violates check constraint/i.test(msg)) {
+    return `Il database non accetta questo valore: un vincolo (CHECK) lo esclude. Se hai appena aggiunto un nuovo tipo di servizio, va allargato il vincolo.${dettaglio}`
+  }
+  if (code === '42501' || /row-level security|permission denied/i.test(msg)) {
+    return `Permessi insufficienti su questa tabella (RLS): l'utente admin non e' autorizzato a scrivere.${dettaglio}`
+  }
+  if (code === '23505') return `Esiste gia' un elemento con questi dati.${dettaglio}`
+  if (code === '42703') return `Colonna mancante: la tabella e' piu' vecchia del gestionale, manca una migration.${dettaglio}`
+  return msg
+}

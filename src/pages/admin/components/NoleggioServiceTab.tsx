@@ -5,7 +5,7 @@
 //
 // Prenotazioni + Calendario: tabella `bookings`.
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ScheletroBarra, ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -13,11 +13,13 @@ import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { LeadPicker } from './LeadPicker'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import { INPUT_CLS, eur, eurToCents, centsToEur } from './noleggioFormBits'
+import { INPUT_CLS, eur, eurToCents, centsToEur, missingTableHint, BTN_PRIMARY, BTN_GHOST } from './noleggioFormBits'
 import CalendarTab from './CalendarTab'
 import ReservationsTab from './ReservationsTab'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import { risorsa } from '../../../utils/basePath'
+import { Header, Badge, ErrorBox, EmptyBox } from './noleggioUiBits'
+import PreventiviLavaggioView from './PreventiviLavaggioView'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -114,23 +116,6 @@ interface PreventivoRow {
   created_at: string | null
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  confirmed: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  confermata: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  pending: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  active: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-  completed: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
-  completata: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
-  cancelled: 'bg-red-500/15 text-red-400 border-red-500/30',
-  annullata: 'bg-red-500/15 text-red-400 border-red-500/30',
-  bozza: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30',
-  inviato: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  accettato: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  rifiutato: 'bg-red-500/15 text-red-400 border-red-500/30',
-}
-
-const BTN_PRIMARY = 'px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50'
-const BTN_GHOST = 'px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover'
 
 export default function NoleggioServiceTab({ serviceType, view, labels }: NoleggioServiceTabProps) {
   // 2026-08-14 (roadmap #11) — Le prenotazioni del Noleggio MARE usano ora la
@@ -151,6 +136,11 @@ export default function NoleggioServiceTab({ serviceType, view, labels }: Nolegg
   if (view === 'calendar') return <CalendarView serviceType={serviceType} labels={labels} />
   if (view === 'catalog') return <CatalogView serviceType={serviceType} labels={labels} />
   if (view === 'tours') return <ToursView serviceType={serviceType} labels={labels} />
+  // 14/09/2026 (direzione): il Lavaggio ha la SUA scheda preventivi. Quella
+  // condivisa sceglie il mezzo da `noleggio_catalog`, dove il lavaggio non c'e':
+  // il suo listino e' `car_wash_services` (Catalogo Prime Wash), e il modulo
+  // gli chiedeva periodo/tour/passeggeri invece di data, ora, veicolo e targa.
+  if (serviceType === 'car_wash') return <PreventiviLavaggioView />
   return <PreventiviView serviceType={serviceType} labels={labels} />
 }
 
@@ -1680,44 +1670,3 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
 /* ------------------------------- SHARED UI ------------------------------ */
 
 // LeadPicker estratto in ./LeadPicker (riusato da Lavaggi/Meccanica).
-
-function Header({ title, action }: { title: string; action?: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 flex-wrap">
-      <h2 className="text-lg font-semibold text-theme-text-primary">{title}</h2>
-      {action}
-    </div>
-  )
-}
-function Badge({ value }: { value: string | null }) {
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${STATUS_BADGE[(value || '').toLowerCase()] || 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}>{value || '—'}</span>
-}
-function ErrorBox({ msg }: { msg: string }) {
-  return <div className="bg-red-500/15 border border-red-500/40 text-red-300 px-4 py-3 rounded-lg text-sm">{msg}</div>
-}
-function EmptyBox({ msg }: { msg: string }) {
-  return <div className="text-theme-text-muted text-sm py-10 text-center border border-theme-border rounded-lg">{msg}</div>
-}
-/**
- * 2026-08-24: prima bastava che il messaggio CONTENESSE "noleggio_catalog"
- * per dire "tabelle non ancora create". Cosi' un vincolo violato o un
- * permesso RLS — errori veri, con una causa precisa — venivano raccontati
- * come una migration mancante: si andava a cercare una tabella che c'era
- * gia'. Ora si distingue per codice, e il messaggio del database resta
- * sempre visibile in coda.
- */
-function missingTableHint(msg: string, code?: string): string {
-  const dettaglio = msg ? ` (dettaglio: ${msg})` : ''
-  if (code === '42P01' || code === 'PGRST205' || /relation .* does not exist|could not find the table|schema cache/i.test(msg)) {
-    return `Tabella non ancora creata: esegui la migration Stage 2 (noleggio_catalog / noleggio_preventivi) nel SQL editor Supabase.${dettaglio}`
-  }
-  if (code === '23514' || /violates check constraint/i.test(msg)) {
-    return `Il database non accetta questo valore: un vincolo (CHECK) lo esclude. Se hai appena aggiunto un nuovo tipo di servizio, va allargato il vincolo.${dettaglio}`
-  }
-  if (code === '42501' || /row-level security|permission denied/i.test(msg)) {
-    return `Permessi insufficienti su questa tabella (RLS): l'utente admin non e' autorizzato a scrivere.${dettaglio}`
-  }
-  if (code === '23505') return `Esiste gia' un elemento con questi dati.${dettaglio}`
-  if (code === '42703') return `Colonna mancante: la tabella e' piu' vecchia del gestionale, manca una migration.${dettaglio}`
-  return msg
-}
