@@ -3196,12 +3196,16 @@ export default function CustomersTab() {
         )}
       </div>
 
+      {/* 14/09/2026: righe piu' strette (py-1.5 invece di py-3, bottoni status
+          e badge tipo cliente piu' bassi). Stesse colonne e stessi contenuti:
+          cambia solo l'altezza, cosi' in un colpo d'occhio si leggono quasi il
+          doppio dei clienti senza scorrere. */}
       <div className="hidden lg:block rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="">
               <tr>
-                <th className="px-4 py-3 text-left">
+                <th className="px-4 py-1.5 text-left">
                   <input
                     type="checkbox"
                     checked={selectedCustomerIds.size === customers.length && customers.length > 0}
@@ -3219,13 +3223,13 @@ export default function CustomersTab() {
                   { field: 'name' as SortField, label: 'Nome' },
                 ].map(col => (
                   <th key={col.field}
-                    className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary cursor-pointer select-none hover:text-dr7-gold transition-colors"
+                    className="px-4 py-1.5 text-left text-sm font-semibold text-theme-text-primary cursor-pointer select-none hover:text-dr7-gold transition-colors"
                     onClick={() => { if (sortField === col.field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') } else { setSortField(col.field); setSortDir('asc') }; setCurrentPage(1) }}
                   >
                     {col.label} {sortField === col.field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                <th className="px-4 py-1.5 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
                 {[
                   { field: 'tipo' as SortField, label: 'Tipo Cliente' },
                   { field: 'email' as SortField, label: 'Email' },
@@ -3233,14 +3237,14 @@ export default function CustomersTab() {
                   { field: 'wallet' as SortField, label: 'Wallet' },
                 ].map(col => (
                   <th key={col.field}
-                    className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary cursor-pointer select-none hover:text-dr7-gold transition-colors"
+                    className="px-4 py-1.5 text-left text-sm font-semibold text-theme-text-primary cursor-pointer select-none hover:text-dr7-gold transition-colors"
                     onClick={() => { if (sortField === col.field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') } else { setSortField(col.field); setSortDir('asc') }; setCurrentPage(1) }}
                   >
                     {col.label} {sortField === col.field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Status</th>
+                <th className="px-4 py-1.5 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+                <th className="px-4 py-1.5 text-right text-sm font-semibold text-theme-text-primary">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -3250,7 +3254,7 @@ export default function CustomersTab() {
                   className={`border-t border-theme-border hover:bg-theme-text-primary/5 transition-all duration-200 ${rowHighlight(customer.status)
                     }`}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-1.5">
                     <input
                       type="checkbox"
                       checked={selectedCustomerIds.has(customer.id)}
@@ -3266,17 +3270,17 @@ export default function CustomersTab() {
                       className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-dr7-gold"
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm text-theme-text-primary">
+                  <td className="px-4 py-1.5 text-sm text-theme-text-primary">
                     <span className="inline-flex items-center gap-1.5">
                       {customer.full_name}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm whitespace-nowrap">
+                  <td className="px-4 py-1.5 text-sm whitespace-nowrap">
                     <ClientStatusBadge tier={customer.status ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-1.5 text-sm">
                     {customer.tipo_cliente ? (
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
                         ? 'bg-blue-500/20 text-blue-400'
                         : customer.tipo_cliente === 'azienda'
                           ? 'bg-purple-500/20 text-purple-400'
@@ -3290,10 +3294,10 @@ export default function CustomersTab() {
                       <span className="text-theme-text-muted">-</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.email || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-theme-text-primary"><NumeroTelefono valore={customer.phone} /></td>
-                  <td className="px-4 py-3 text-sm font-medium text-dr7-gold">{walletBalances.has(customer.id) ? `€${walletBalances.get(customer.id)!.toFixed(2)}` : '-'}</td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-1.5 text-sm text-theme-text-primary">{customer.email || '-'}</td>
+                  <td className="px-4 py-1.5 text-sm text-theme-text-primary"><NumeroTelefono valore={customer.phone} /></td>
+                  <td className="px-4 py-1.5 text-sm font-medium text-dr7-gold">{walletBalances.has(customer.id) ? `€${walletBalances.get(customer.id)!.toFixed(2)}` : '-'}</td>
+                  <td className="px-4 py-1.5 text-sm">
                     {/* 28/08/2026: quattro bottoni in fila per riga rendevano
                         la tabella illeggibile. Ora un solo "Gestisci" che
                         raccoglie le azioni sul cliente, link di pagamento
@@ -3340,7 +3344,7 @@ export default function CustomersTab() {
                     />
 
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-1.5 text-sm">
                     <div className="flex gap-2 items-center justify-end">
                       {/* Pulsanti generati dalla configurazione: i quattro di
                           sistema piu' quelli creati in Centralina Pro > Status
@@ -3353,7 +3357,7 @@ export default function CustomersTab() {
                             <button
                               key={st.key}
                               onClick={() => handleUpdateCustomerStatus(customer.id, st.key)}
-                              className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${col.badge} ${attivo ? 'ring-2 ring-offset-1 ring-offset-transparent ring-current' : 'opacity-70 hover:opacity-100'}`}
+                              className={`px-2 py-1 rounded-full text-xs font-bold border transition-all ${col.badge} ${attivo ? 'ring-2 ring-offset-1 ring-offset-transparent ring-current' : 'opacity-70 hover:opacity-100'}`}
                               title={st.label}
                             >
                               {statusAbbrFrom(st.label)}
@@ -3363,7 +3367,7 @@ export default function CustomersTab() {
                         {customer.status && (
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, null)}
-                            className="px-2 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-theme-border/50 backdrop-blur-sm transition-all"
+                            className="px-2 py-1 rounded-full text-xs font-medium bg-theme-bg-tertiary/30 text-theme-text-primary/60 hover:bg-theme-bg-hover/50 hover:text-theme-text-primary border border-theme-border/50 backdrop-blur-sm transition-all"
                             title="Rimuovi Status"
                           >
                             ✕
@@ -3372,11 +3376,11 @@ export default function CustomersTab() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-right">
+                  <td className="px-4 py-1.5 text-sm text-right">
                     <Button
                       onClick={() => handleDelete(customer.id)}
                       variant="secondary"
-                      className="text-xs py-1 px-3 bg-red-900 hover:bg-red-800"
+                      className="text-xs py-0.5 px-2.5 bg-red-900 hover:bg-red-800"
                     >
                       ×
                     </Button>
