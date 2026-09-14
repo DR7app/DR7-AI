@@ -942,16 +942,23 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                   </div>
                 )}
                 {/* Tutti i livelli configurati in Centralina Pro. Possono
-                    essere trenta: la griglia va a capo e non li taglia. */}
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 mt-4">
-                  {clubTiers.map((t) => (
-                    <div key={t.tier} className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === t.tier ? 'border-dr7-gold/60 bg-dr7-gold/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
-                      <div className="text-[11px] font-semibold text-theme-text-primary truncate" title={t.label}>{t.label}</div>
-                      <div className="text-[10px] text-theme-text-muted tabular-nums">{t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)} – ${fmtEur(t.max)}`}</div>
-                      <div className="text-[10px] text-theme-text-muted">{t.rewardPercent}% reward</div>
-                    </div>
-                  ))}
-                </div>
+                    essere trenta: nel gestionale la lista sta chiusa, aperta
+                    si mangiava mezza scheda cliente. */}
+                <details className="mt-3 group">
+                  <summary className="cursor-pointer select-none list-none text-[10px] uppercase tracking-wider font-semibold text-theme-text-muted hover:text-theme-text-primary">
+                    <span className="group-open:hidden">Mostra</span><span className="hidden group-open:inline">Nascondi</span> tutti i livelli ({clubTiers.length})
+                  </summary>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 mt-2">
+                    {clubTiers.map((t) => (
+                      <div key={t.tier} className={`rounded-md border px-1.5 py-1 text-center ${clubTier.tier === t.tier ? 'border-dr7-gold/60 bg-dr7-gold/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}
+                        title={`${t.label} · ${t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)} – ${fmtEur(t.max)}`} · ${t.rewardPercent}% reward`}>
+                        <div className="text-[10px] font-semibold text-theme-text-primary truncate">{t.label}</div>
+                        <div className="text-[9px] text-theme-text-muted tabular-nums truncate">{t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)}–${fmtEur(t.max)}`}</div>
+                        <div className="text-[9px] text-theme-text-muted">{t.rewardPercent}%</div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </div>
             </div>
           )

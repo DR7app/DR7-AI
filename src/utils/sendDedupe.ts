@@ -118,10 +118,25 @@ function bodyKey(init?: RequestInit): string {
   const b = init?.body
   if (b == null) return ''
   if (typeof b === 'string') return b
+  // FormData: JSON.stringify NON lancia, restituisce "{}". Due upload diversi
+  // sullo stesso endpoint avevano quindi la stessa firma e il secondo file
+  // veniva scartato come doppione (risposta finta 200, file mai caricato).
+  // La firma si costruisce dal contenuto: nome campo + nome file + dimensione.
+  if (typeof FormData !== 'undefined' && b instanceof FormData) {
+    const parti: string[] = []
+    b.forEach((value, key) => {
+      parti.push(
+        typeof value === 'string'
+          ? `${key}=${value}`
+          : `${key}=file:${value.name}:${value.size}:${value.type}`,
+      )
+    })
+    return `__formdata__${parti.join('|')}`
+  }
   try {
     return JSON.stringify(b)
   } catch {
-    // Non-serialisable body (FormData/Blob/stream): fall back to a marker so
+    // Non-serialisable body (Blob/stream): fall back to a marker so
     // we don't accidentally treat two different uploads as identical.
     return `__nonserializable__${Date.now()}`
   }

@@ -86,11 +86,15 @@ export const handler: Handler = async (event) => {
     }
 
     // Body multipart.
-    const contentType = (event.headers['content-type'] || event.headers['Content-Type'] || '').toLowerCase()
+    // Il boundary si legge dall'header ORIGINALE: minuscolizzarlo rompeva ogni
+    // upload dal browser (Chrome manda "----WebKitFormBoundary...", con le
+    // maiuscole) e il parser non trovava piu' nessuna parte nel body.
+    const contentTypeRaw = event.headers['content-type'] || event.headers['Content-Type'] || ''
+    const contentType = contentTypeRaw.toLowerCase()
     if (!contentType.startsWith('multipart/form-data')) {
         return jsonResponse(400, { error: 'Content-Type deve essere multipart/form-data' }, origin)
     }
-    const boundaryMatch = contentType.match(/boundary=([^;]+)/i)
+    const boundaryMatch = contentTypeRaw.match(/boundary=([^;]+)/i)
     if (!boundaryMatch) return jsonResponse(400, { error: 'Boundary multipart mancante' }, origin)
     const boundary = boundaryMatch[1].trim().replace(/^"|"$/g, '')
 
