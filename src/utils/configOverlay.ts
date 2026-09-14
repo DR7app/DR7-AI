@@ -136,32 +136,18 @@ export function getVehicleSforoOverride(config: RentalConfig | null, vehicleId: 
 
 function getHardcodedDefaults(): ConfigOverlay {
   return {
-    insuranceTier1: [
-      { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-      { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 119 },
-    ],
-    insuranceTier2: [
-      { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-      { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 89 },
-      { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 149 },
-      { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 189 },
-      { id: 'DR7', label: 'Kasko DR7', pricePerDay: 289 },
-    ],
-    urbanInsurance: [
-      { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
-      { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
-    ],
-    utilitaireInsurance: [
-      { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-      { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-      { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
-      { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
-      { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
-    ],
-    furgoneInsurance: [
-      { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-      { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-    ],
+    // 14/09/2026: le assicurazioni NON hanno piu' un elenco di riserva.
+    // Prima, quando la Centralina Pro non era ancora caricata o la
+    // categoria del veicolo non aveva una voce, il form prenotazione
+    // ripiegava qui e offriva Kasko Black / Signature: listini che non
+    // esistono piu' e che nessuno poteva togliere dalla Centralina.
+    // L'unica fonte delle assicurazioni e' Centralina Pro > Assicurazioni:
+    // se li' non c'e' nulla, qui non c'e' nulla.
+    insuranceTier1: [],
+    insuranceTier2: [],
+    urbanInsurance: [],
+    utilitaireInsurance: [],
+    furgoneInsurance: [],
     sforoDefaults: [
       { match: (n: string) => n.includes('rs3') || n.includes('macan') || n.includes('test'), sforo: '0.89', label: 'RS3/Macan/Test' },
       { match: (n: string) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'), sforo: '0.49', label: 'Furgone/NCC' },

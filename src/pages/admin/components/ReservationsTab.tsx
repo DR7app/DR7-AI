@@ -128,27 +128,15 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 
 // --- Kasko Constants & Types ---
-type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
+// L'id di un'assicurazione e' quello che le da' Centralina Pro (un codice
+// generato, es. "xtfcs9w3"). I vecchi nomi fissi RCA / KASKO_BASE /
+// KASKO_BLACK / KASKO_SIGNATURE / DR7 restano solo dentro le prenotazioni
+// gia' salvate, dove servono a rileggere il nome: non sono piu' un elenco
+// di scelte possibili.
+type KaskoTier = string;
 
-// All insurance options, deposits, pricing now read from Centralina Pro config
-// No hardcoded fallback arrays
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const INSURANCE_ELIGIBILITY = {
-  RCA: { minAge: 18, minLicenseYears: 2 },
-  KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
-  KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
-  KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
-  DR7: { minAge: 25, minLicenseYears: 3 },
-};
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const URBAN_INSURANCE_ELIGIBILITY = {
-  KASKO_BASE: { minAge: 18, minLicenseYears: 3 },
-  KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
-  KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
-  DR7: { minAge: 21, minLicenseYears: 2 },
-};
+// Assicurazioni, cauzioni e prezzi: unica fonte Centralina Pro.
+// Nessun elenco di riserva scritto nel codice.
 
 // Generate time options for 15-minute intervals
 // eslint-disable-next-line react-refresh/only-export-components
