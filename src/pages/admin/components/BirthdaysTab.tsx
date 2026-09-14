@@ -22,10 +22,10 @@ interface BirthdaySentRecord {
     sent_at: string
 }
 
-// Momenti di invio selezionabili: da 30 giorni prima del compleanno a 30
-// giorni dopo, il giorno stesso compreso. Positivo = prima, negativo = dopo,
-// come la colonna trigger_offset_hours che legge il cron.
-const OPZIONI_ANTICIPO = [30, 21, 14, 10, 7, 5, 4, 3, 2, 1, 0, -1, -2, -3, -5, -7, -10, -14, -21, -30]
+// Momenti di invio selezionabili: OGNI giorno da 30 giorni prima del
+// compleanno a 30 giorni dopo, il giorno stesso compreso. Positivo = prima,
+// negativo = dopo, come la colonna trigger_offset_hours che legge il cron.
+const OPZIONI_ANTICIPO = Array.from({ length: 61 }, (_, i) => 30 - i)
 
 function etichettaAnticipo(giorni: number): string {
     if (giorni === 0) return 'Il giorno stesso'
