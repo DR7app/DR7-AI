@@ -4,6 +4,8 @@ import Button from './Button'
 import MoneyInput from '../../../components/MoneyInput'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
+import { useRentalConfig } from '../../../hooks/useRentalConfig'
+import { getInsuranceOptions } from '../../../utils/configLookup'
 
 /**
  * PREVENDITE DR7 — 14/09/2026
@@ -201,6 +203,36 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   // Flotta (per scegliere i veicoli della prevendita)
   const [flotta, setFlotta] = useState<VeicoloFlotta[]>([])
   const [ricercaVeicolo, setRicercaVeicolo] = useState('')
+
+  // Assicurazioni: si leggono SOLO dalla Centralina Pro (Assicurazioni), per le
+  // categorie dei veicoli scelti, fascia A e fascia B insieme. Scritte a mano
+  // non servivano a niente: al momento della prenotazione il sito deve
+  // riconoscere QUALE opzione e' compresa, e la riconosce dal nome della
+  // Centralina. Se la Centralina non ha nulla, qui non c'e' nulla: il buco si
+  // vede invece di essere coperto da un elenco inventato nel codice.
+  const { config: configNoleggio } = useRentalConfig('car_rental')
+  const assicurazioniDisponibili = useMemo(() => {
+    const categorie = new Set<string>()
+    for (const v of bozza.veicoli) {
+      const cat = flotta.find(f => f.id === v.id)?.category
+      if (cat) categorie.add(cat)
+    }
+    // Nessun veicolo scelto (o senza categoria): si mostrano tutte quelle che
+    // la Centralina conosce, cosi' la tendina non resta vuota per sbaglio.
+    const chiavi = categorie.size > 0
+      ? [...categorie]
+      : Object.keys(configNoleggio?.insurance || {}).filter(k => !['eligibility', 'deductibles', 'category_labels'].includes(k))
+    const nomi: string[] = []
+    for (const cat of chiavi) {
+      for (const tier of ['TIER_1', 'TIER_2'] as const) {
+        for (const opt of getInsuranceOptions(configNoleggio, cat, tier)) {
+          const nome = String(opt?.name || '').trim()
+          if (nome && !nomi.includes(nome)) nomi.push(nome)
+        }
+      }
+    }
+    return nomi
+  }, [configNoleggio, bozza.veicoli, flotta])
 
   // Venduti
   const [venduti, setVenduti] = useState<PrevenditaCliente[]>([])
@@ -1045,14 +1077,26 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                 </div>
                 <div>
                   <label className="text-sm text-theme-text-secondary mb-1 block">Assicurazione inclusa</label>
-                  <input
-                    type="text"
+                  <select
                     value={bozza.assicurazione_inclusa}
                     onChange={e => setBozza(b => ({ ...b, assicurazione_inclusa: e.target.value }))}
-                    placeholder="es. Kasko Base"
                     className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary outline-none focus:border-dr7-gold"
-                  />
-                  <p className="text-xs text-theme-text-muted mt-1">Lasciare vuoto se non e' compresa.</p>
+                  >
+                    <option value="">Non inclusa</option>
+                    {assicurazioniDisponibili.map(nome => (
+                      <option key={nome} value={nome}>{nome}</option>
+                    ))}
+                    {/* Un'assicurazione salvata prima e poi rinominata in
+                        Centralina resta visibile: non sparisce in silenzio. */}
+                    {bozza.assicurazione_inclusa && !assicurazioniDisponibili.includes(bozza.assicurazione_inclusa) && (
+                      <option value={bozza.assicurazione_inclusa}>{bozza.assicurazione_inclusa} (non piu' in Centralina)</option>
+                    )}
+                  </select>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    {assicurazioniDisponibili.length === 0
+                      ? 'Nessuna assicurazione in Centralina Pro per queste categorie: aggiungila da Centralina Pro > Assicurazioni.'
+                      : 'Dalle Assicurazioni della Centralina Pro. Il sito la riconosce e la mette a zero al momento della prenotazione.'}
+                  </p>
                 </div>
               </div>
 
