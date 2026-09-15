@@ -595,6 +595,14 @@ export const handler: Handler = async (event) => {
         // bookingDetails is already declared above
         const bookingCustomer = bookingDetails.customer || {}
 
+        // 2026-09-12: al checkout del sito un privato puo' premere "Fattura a
+        // un'azienda". In quel caso la fattura e' intestata alla societa'
+        // scelta li', non al cliente che ha pagato, e l'indirizzo e' la SEDE
+        // LEGALE: vale la stessa regola dei clienti azienda del gestionale.
+        const fatturaRichiesta = (bookingDetails.fattura || {}) as Record<string, any>
+        const fatturaAzienda = fatturaRichiesta.tipo_cliente === 'azienda'
+            && String(fatturaRichiesta.ragione_sociale || '').trim() !== ''
+
         // 1. Try customerData from database
         if (customerData) {
             const addressParts = []
@@ -664,9 +672,27 @@ export const handler: Handler = async (event) => {
             fullAddress = parts.join(', ')
         }
 
+        // Fattura all'azienda: sede legale al posto dell'indirizzo del cliente.
+        if (fatturaAzienda) {
+            const indirizzoAzienda = componiIndirizzo({
+                via: fatturaRichiesta.sede_legale || fatturaRichiesta.indirizzo || '',
+                civico: '',
+                cap: fatturaRichiesta.cap || '',
+                citta: fatturaRichiesta.citta || '',
+                provincia: fatturaRichiesta.provincia || '',
+            })
+            if (indirizzoAzienda) fullAddress = indirizzoAzienda
+        }
+
         // Ensure tax fields are robustly fetched
-        const taxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || '').toUpperCase().trim()
-        const vatNumber = (customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || '').toUpperCase().trim()
+        const taxCode = (fatturaAzienda
+            ? (fatturaRichiesta.codice_fiscale || '')
+            : (customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || '')
+        ).toUpperCase().trim()
+        const vatNumber = (fatturaAzienda
+            ? (fatturaRichiesta.partita_iva || '')
+            : (customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || '')
+        ).toUpperCase().trim()
 
         // Debug: log what was found for diagnostics
         const debugInfo = {
@@ -1148,7 +1174,9 @@ export const handler: Handler = async (event) => {
             // all'AZIENDA quando una srl prenotava con un dipendente come
             // driver.
             customer_name: (
-                (customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione')
+                fatturaAzienda
+                    ? fatturaRichiesta.ragione_sociale
+                    : (customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione')
                     ? (customerData?.ragione_sociale || customerData?.denominazione || booking.customer_name || 'Cliente')
                     : (booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || (customerData?.nome ? `${customerData.nome} ${customerData.cognome || ''}`.trim() : null) || customerData?.ragione_sociale || customerData?.denominazione || 'Cliente')
             ),
@@ -1157,6 +1185,10 @@ export const handler: Handler = async (event) => {
             customer_email: customerData?.email || bookingCustomer.email || resolvedEmail || '',
             customer_tax_code: taxCode,
             customer_vat: vatNumber,
+            // SDI/PEC scritti dal cliente al checkout: senza questi la fattura
+            // all'azienda partirebbe al codice generico 0000000.
+            ...(fatturaAzienda && fatturaRichiesta.sdi ? { customer_sdi_code: String(fatturaRichiesta.sdi).toUpperCase().trim() } : {}),
+            ...(fatturaAzienda && fatturaRichiesta.pec ? { customer_pec: String(fatturaRichiesta.pec).trim() } : {}),
             booking_id: bookingId,
             items,
             subtotal,
