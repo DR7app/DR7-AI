@@ -21,6 +21,7 @@
     "wb:sync": "node scripts/syncWebsiteBuilder.mjs",
     "wb:check": "node scripts/syncWebsiteBuilder.mjs --check",
     "wb:verifica": "node scripts/verificaWebsiteBuilder.mjs",
+    "prevendite:verifica": "node scripts/verificaPrevendite.mjs",
     "testi:gen": "node scripts/genTestiCatalogo.mjs",
     "wallet:verifica": "node scripts/verificaWalletPrenotazione.mjs"
   },

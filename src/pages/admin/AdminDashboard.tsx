@@ -69,6 +69,7 @@ const ReportGoogleBusinessTab = lazyWithRetry(() => import('./components/ReportG
 const ReportPenaliDanniTab = lazyWithRetry(() => import('./components/ReportPenaliDanniTab'))
 const ReferralProgramTab = lazyWithRetry(() => import('./components/ReferralProgramTab'))
 const CodiciScontoTab = lazyWithRetry(() => import('./components/CodiciScontoTab'))
+const PrevenditeTab = lazyWithRetry(() => import('./components/PrevenditeTab'))
 const GestioneDanniTab = lazyWithRetry(() => import('./components/GestioneDanniTab'))
 const CargosTab = lazyWithRetry(() => import('./components/CargosTab'))
 const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
@@ -100,7 +101,7 @@ const GpsKeylessTab = lazyWithRetry(() => import('./components/GpsKeylessTab'))
 // una rotella. Con il precarico al passaggio del mouse quasi non si vede.
 const TabLoader = () => <ScheletroPagina card={4} righe={8} />
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control' | 'website-builder'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'prevendite' | 'prevendite-vendute' | 'prevendite-popup' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control' | 'website-builder'
 
 /**
  * Chunk di ogni tab, per poterlo scaricare PRIMA del clic.
@@ -189,6 +190,9 @@ const CHUNK_TAB: Partial<Record<TabType, { preload: () => void }>> = {
   'emtn': EMTNTab,
   'gps-keyless': GpsKeylessTab,
   'codice-sconto': CodiciScontoTab,
+  'prevendite': PrevenditeTab,
+  'prevendite-vendute': PrevenditeTab,
+  'prevendite-popup': PrevenditeTab,
   'report-lavaggio': ReportLavaggioTab,
   'report-clienti': ReportClientiTab,
   'report-autisti': ReportAutistiTab,
@@ -568,6 +572,20 @@ export default function AdminDashboard() {
   type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; soloTecnici?: boolean; subView?: 'bookings' | 'preventivi' | 'uscite'; permKey?: string }
   const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi' | 'uscite'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
+    // 14/09/2026 (direzione): "Prevendita e Promozioni" e' una sezione sua, in
+    // cima, sopra Noleggio Terra. Sono le due leve commerciali che vendono un
+    // vantaggio prima del noleggio: la prevendita (pacchetto di utilizzi
+    // pagati in anticipo, che poi si spende sul calendario come una
+    // prenotazione normale) e il codice sconto.
+    // Codice Sconto NON si tocca: resta dov'e' sempre stato, in Marketing.
+    // Questa sezione gli sta ACCANTO nel menu, non se lo porta via — e non lo
+    // duplica nemmeno, perche' la stessa tab in due sezioni fa rimbalzare la
+    // barra laterale.
+    { name: 'Prevendita e Promozioni', tabs: [
+      { tab: 'prevendite', label: 'Catalogo Prevendite' },
+      { tab: 'prevendite-vendute', label: 'Prevendite Vendute' },
+      { tab: 'prevendite-popup', label: 'Popup Sito' },
+    ] },
     { name: 'Noleggio Terra', tabs: [
       { tab: 'reservations', label: 'Prenotazioni', subView: 'bookings' },
       { tab: 'reservations', label: 'Preventivi', subView: 'preventivi', permKey: 'reservations-preventivi' },
@@ -745,6 +763,9 @@ export default function AdminDashboard() {
   // GESTIONE, SISTEMI) + an icon. Missing entries default to 'sistemi' and
   // render with a generic dot icon.
   const SECTION_META: Record<string, { group: 'core' | 'gestione' | 'sistemi'; icon: React.ReactNode }> = {
+    // 14/09/2026: senza questa riga la sezione finiva nel gruppo di riserva
+    // ('sistemi'), cioe' in fondo alla barra, invece che in cima sopra Terra.
+    'Prevendita e Promozioni': { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4L4.2 8.7l5.4-.8L12 3z"/> },
     'Noleggio Terra':  { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/> },
     'Noleggio Mare':   { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 17l1-4h14l1 4M5 13l7-9 7 9M12 4v9"/> },
     'Noleggio Aria':   { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 5h18M12 5v3M7 11h8a3 3 0 013 3v2H6a2 2 0 01-2-2v-1a2 2 0 012-2zm9 7l3 3"/> },
@@ -862,6 +883,9 @@ export default function AdminDashboard() {
     'social-links': 'Social Links',
     'referral': 'Referral',
     'codice-sconto': 'Codice Sconto',
+    'prevendite': 'Catalogo Prevendite',
+    'prevendite-vendute': 'Prevendite Vendute',
+    'prevendite-popup': 'Popup Prevendite',
     'nexi': 'Nexi',
     'report-noleggio': 'Report Noleggio Terra',
     'report-mare': 'Report Noleggio Mare',
@@ -1578,6 +1602,9 @@ export default function AdminDashboard() {
           {activeTab === 'emtn' && <EMTNTab />}
           {activeTab === 'gps-keyless' && <GpsKeylessTab />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
+          {activeTab === 'prevendite' && <PrevenditeTab vista="catalogo" />}
+          {activeTab === 'prevendite-vendute' && <PrevenditeTab vista="venduti" />}
+          {activeTab === 'prevendite-popup' && <PrevenditeTab vista="popup" />}
           {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}
           {activeTab === 'report-clienti' && (isTabRestricted('report-clienti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportClientiTab />)}
           {activeTab === 'report-autisti' && (isTabRestricted('report-autisti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportAutistiTab />)}

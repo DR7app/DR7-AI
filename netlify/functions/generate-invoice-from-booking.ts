@@ -286,6 +286,14 @@ export const handler: Handler = async (event) => {
         return handleMembershipPurchaseFattura(purchaseId, purchaseData, !!includeIVA)
     }
 
+    // ── FATTURA PREVENDITA (14/09/2026) ──────────────────────────────────
+    // Stessa capability delle altre due: l'id della riga pagata al posto del
+    // token. La chiama il sito (prevendite-finalizza) quando l'acquisto di un
+    // pacchetto di utilizzi va a buon fine.
+    if (purchaseType === 'prevendita_purchase' && purchaseId) {
+        return handlePrevenditaFattura(purchaseId, purchaseData, !!includeIVA)
+    }
+
     // Booking flow — require admin auth UNLESS this is a server-to-server
     // callback from the website's nexi-callback.js. The website doesn't have
     // ADMIN_API_TOKEN set in its Netlify env, so every booking fattura call
@@ -1856,6 +1864,198 @@ async function handleMembershipPurchaseFattura(
     } catch (error: any) {
         console.error('[Club Fattura] Errore inatteso:', error)
         return { statusCode: 500, body: JSON.stringify({ error: error.message || 'Unexpected error', stack: error.stack }) }
+    }
+}
+
+/**
+ * Fattura dell'acquisto di una PREVENDITA (pacchetto di utilizzi pagato in
+ * anticipo). Gemella delle due sopra: stessa capability, stessa numerazione
+ * atomica, stesso PDF via WhatsApp, stesso invio allo SDI.
+ *
+ * Cambia la tabella (prevendite_clienti) e una cosa in piu': i dati fiscali si
+ * leggono anche DALLA RIGA dell'acquisto. Il sito li salva li' al momento del
+ * pagamento, e capita spesso che la scheda cliente sia ancora vuota (i dati
+ * dell'iscrizione restano nei metadati auth finche' una UPDATE non li copia).
+ * Senza questa riserva usciva una fattura senza indirizzo ne' codice fiscale,
+ * quindi non mandabile allo SDI.
+ */
+async function handlePrevenditaFattura(
+    purchaseId: string,
+    purchaseData: Record<string, any> | null | undefined,
+    includeIVA: boolean,
+): Promise<{ statusCode: number; body: string }> {
+    try {
+        const dynamicVatRate = await loadVatRate()
+
+        const { data: acquisto, error: errAcquisto } = await supabase
+            .from('prevendite_clienti')
+            .select('*')
+            .eq('id', purchaseId)
+            .single()
+
+        if (errAcquisto || !acquisto) {
+            return { statusCode: 404, body: JSON.stringify({ error: 'Prevendita non trovata', purchaseId }) }
+        }
+        const PAID_STATUSES = ['succeeded', 'completed', 'paid']
+        if (!PAID_STATUSES.includes(String(acquisto.payment_status || '').toLowerCase())) {
+            return { statusCode: 400, body: JSON.stringify({ error: `Prevendita non pagata (stato: ${acquisto.payment_status})` }) }
+        }
+
+        const userId = acquisto.user_id
+        let customerData: any = null
+        if (userId) {
+            const { data: byId } = await supabase.from('customers_extended').select('*').eq('id', userId).maybeSingle()
+            customerData = byId
+            if (!customerData) {
+                const { data: byUserId } = await supabase.from('customers_extended').select('*').eq('user_id', userId).maybeSingle()
+                customerData = byUserId
+            }
+        }
+
+        const notesMarker = `prevendita_purchase:${purchaseId}`
+        const { data: existingFattura } = await supabase
+            .from('fatture')
+            .select('*')
+            .eq('note', notesMarker)
+            .maybeSingle()
+        if (existingFattura) {
+            console.log(`[Prevendita Fattura] Gia' generata per ${purchaseId}: ${existingFattura.numero_fattura}`)
+            if (!existingFattura.pdf_url) {
+                const backfilledUrl = await sendWalletFatturaPdfAndWhatsApp(existingFattura, customerData)
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: 'Fattura already existed — PDF and WhatsApp backfilled',
+                        invoice: { ...existingFattura, pdf_url: backfilledUrl },
+                        backfilled: true,
+                    })
+                }
+            }
+            return { statusCode: 200, body: JSON.stringify({ message: 'Fattura already exists', invoice: existingFattura, skipped: true }) }
+        }
+
+        // L'importo pagato con la carta e' LORDO (IVA inclusa).
+        const paidAmount = Number(acquisto.prezzo_pagato ?? purchaseData?.amount ?? 0)
+        if (!(paidAmount > 0)) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Importo della prevendita non valido' }) }
+        }
+        const vatRate = includeIVA ? dynamicVatRate : 0
+        const vatDivisor = includeIVA ? 1 + dynamicVatRate / 100 : 1
+        const netUnit = Number((paidAmount / vatDivisor).toFixed(2))
+
+        const utilizzi = Number(acquisto.utilizzi_iniziali || 0)
+        const descr = utilizzi > 0
+            ? `Prevendita DR7 - ${acquisto.nome} (${utilizzi} utilizzi)`
+            : `Prevendita DR7 - ${acquisto.nome}`
+
+        const items = [{
+            description: descr,
+            unit_price: netUnit,
+            quantity: 1,
+            vat_rate: vatRate,
+            total: netUnit,
+        }]
+        const subtotal = netUnit
+        const total = paidAmount
+        // L'IVA e' la differenza, non il netto per l'aliquota: il totale deve
+        // restare al centesimo quello che il cliente ha pagato.
+        const vatAmount = Number((total - subtotal).toFixed(2))
+
+        const currentYear = new Date().getFullYear()
+        let invoiceNumber = ''
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+            if (seqError || seqResult == null) {
+                console.error('[Prevendita Fattura] Sequence error:', seqError)
+                return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate invoice number' }) }
+            }
+            const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+            const { data: exist } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+            if (!exist) { invoiceNumber = candidate; break }
+        }
+        if (!invoiceNumber) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate unique invoice number' }) }
+        }
+
+        const fullAddress = componiIndirizzo({
+            via: customerData?.indirizzo || acquisto.customer_indirizzo || '',
+            civico: customerData?.numero_civico || acquisto.customer_numero_civico || '',
+            cap: customerData?.codice_postale || customerData?.cap || acquisto.customer_cap || '',
+            citta: customerData?.citta || customerData?.citta_residenza || acquisto.customer_citta || '',
+            provincia: customerData?.provincia || customerData?.provincia_residenza || acquisto.customer_provincia || '',
+        })
+        const isAziendaCustomer = customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione'
+        const customerName = isAziendaCustomer
+            ? (customerData?.ragione_sociale || customerData?.denominazione || acquisto.customer_nome || 'Cliente')
+            : (customerData?.nome
+                ? `${customerData.nome} ${customerData.cognome || ''}`.trim()
+                : (customerData?.ragione_sociale || customerData?.denominazione || acquisto.customer_nome || 'Cliente'))
+
+        const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        const invoiceData: Record<string, any> = {
+            numero_fattura: invoiceNumber,
+            data_emissione: italyDate,
+            importo_totale: total,
+            stato: 'paid',
+            customer_name: customerName,
+            customer_address: fullAddress,
+            customer_phone: customerData?.telefono || customerData?.phone || acquisto.customer_telefono || '',
+            customer_email: customerData?.email || acquisto.customer_email || '',
+            customer_tax_code: customerData?.codice_fiscale || acquisto.customer_codice_fiscale || '',
+            customer_vat: customerData?.partita_iva || '',
+            booking_id: null,
+            items,
+            subtotal,
+            vat_amount: vatAmount,
+            exempt_amount: 0,
+            sdi_status: 'draft',
+            note: notesMarker,
+            updated_at: new Date().toISOString(),
+        }
+
+        const { data: invoice, error: insertError } = await supabase
+            .from('fatture')
+            .insert([invoiceData])
+            .select()
+            .single()
+
+        if (insertError || !invoice) {
+            console.error('[Prevendita Fattura] Insert failed:', insertError)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to insert fattura', details: insertError?.message }) }
+        }
+
+        const pdfUrl = await sendWalletFatturaPdfAndWhatsApp(invoice as any, customerData)
+
+        if (invoice.customer_tax_code || invoice.customer_vat) {
+            try {
+                const xmlContent = generateFatturaXML(invoice as any)
+                const filename = generateInvoiceFilename(invoice as any)
+                const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+                await supabase.from('fatture').update({
+                    sdi_status: 'sending',
+                    aruba_invoice_id: arubaResult.id,
+                    xml_filename: filename,
+                    aruba_upload_filename: arubaResult.filename,
+                    sdi_sent_at: new Date().toISOString(),
+                }).eq('id', invoice.id)
+                console.log('[Prevendita Fattura] Inviata allo SDI:', arubaResult.id)
+            } catch (sdiErr: any) {
+                console.error('[Prevendita Fattura] Invio SDI fallito (fattura salvata come bozza):', sdiErr?.message)
+                await supabase.from('fatture').update({
+                    sdi_response: { auto_send_error: String(sdiErr?.message || sdiErr), at: new Date().toISOString() }
+                }).eq('id', invoice.id)
+            }
+        } else {
+            console.log('[Prevendita Fattura] Nessun codice fiscale: SDI saltato')
+        }
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ success: true, invoice, pdfUrl, message: 'Prevendita fattura generated' })
+        }
+    } catch (error: any) {
+        console.error('[Prevendita Fattura] Errore inatteso:', error)
+        return { statusCode: 500, body: JSON.stringify({ error: error.message || 'Unexpected error' }) }
     }
 }
 

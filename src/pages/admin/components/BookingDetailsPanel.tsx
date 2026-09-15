@@ -306,6 +306,35 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             </div>
           </div>
 
+          {/* 14/09/2026 — Prenotazione fatta con una PREVENDITA. Va detto qui,
+              prima del blocco Pagamento: chi guarda la scheda vede un totale
+              bassissimo (o zero) e deve capire subito perche'. Il noleggio
+              l'ha pagato mesi fa; quello che si legge sotto sono solo gli
+              extra aggiunti adesso. */}
+          {booking.booking_details?.prevendita_cliente_id && (
+            <div className="border border-emerald-600/40 bg-emerald-600/10 rounded-lg p-4 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Prenotata con una prevendita</span>
+                <span className="text-xs text-emerald-400">1 utilizzo scalato</span>
+              </div>
+              <p className="text-sm font-medium text-theme-text-primary">
+                {booking.booking_details.prevendita_nome || 'Prevendita'}
+              </p>
+              <p className="text-xs text-theme-text-muted">
+                Gia' pagato col pacchetto: noleggio
+                {booking.booking_details.prevendita_km_inclusi ? ` · ${booking.booking_details.prevendita_km_inclusi} km` : ''}
+                {booking.booking_details.prevendita_assicurazione ? ` · ${booking.booking_details.prevendita_assicurazione}` : ''}
+                {booking.booking_details.prevendita_copertura_eur
+                  ? ` (valore ${formatEUR(Number(booking.booking_details.prevendita_copertura_eur))})`
+                  : ''}
+              </p>
+              <p className="text-xs text-theme-text-muted">
+                Residui e registro degli utilizzi in Prevendita e Promozioni &gt; Prevendite Vendute.
+                Annullando la prenotazione l'utilizzo NON torna da solo: lo rimette la direzione da li'.
+              </p>
+            </div>
+          )}
+
           {/* Payment Status */}
           <div className="space-y-3">
             <div className="flex justify-between items-center">
