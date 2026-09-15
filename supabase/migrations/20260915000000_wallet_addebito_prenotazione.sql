@@ -30,7 +30,10 @@
 --      oggi quel movimento e' collegato al cliente E alla sua prenotazione.
 --   3. Qualsiasi errore qui dentro non fa fallire la prenotazione: l'eccezione
 --      viene catturata e trasformata in un WARNING. Un trigger sulla tabella
---      delle prenotazioni non puo' impedire di prenotare.
+--      delle prenotazioni non puo' impedire di prenotare. UNICA eccezione, per
+--      decisione della direzione (15/09/2026): il CREDITO INSUFFICIENTE. Li' il
+--      salvataggio viene rifiutato con un messaggio esplicito — un credito che
+--      non esiste non si spende, da nessuna schermata.
 --
 -- Gift card ESCLUSA di proposito: in DR7 e' un codice sconto
 -- (DiscountCodeGeneratorModal, code_type 'gift_card'), non credito del wallet.
@@ -283,11 +286,19 @@ BEGIN
 
   v_nuovo_saldo := round(v_saldo - v_delta, 2);
 
-  -- Saldo insufficiente: si addebita lo stesso e il wallet va in rosso.
-  -- Non esistono blocchi duri nel gestionale: il controllo (con OTP) sta nella
-  -- schermata, qui si registra il debito invece di perderlo.
-  IF v_nuovo_saldo < 0 THEN
-    RAISE WARNING '[wallet] prenotazione %: saldo insufficiente, wallet del cliente % va a %', NEW.id, v_user_id, v_nuovo_saldo;
+  -- Saldo insufficiente: SI RIFIUTA. Regola della direzione (15/09/2026):
+  -- una prenotazione non puo' essere pagata con un credito che non c'e'. Il
+  -- gestionale mostra il popup prima di arrivare qui, ma il salvataggio passa
+  -- da molte schermate (Da Saldare > segna pagato, check-out, estensioni,
+  -- import, SQL a mano): questa e' l'ultima porta, ed e' chiusa per tutte.
+  --
+  -- E' l'UNICO caso in cui questo trigger fa fallire una scrittura su bookings.
+  -- Il codice DR7WL lo distingue da qualunque altro errore: sotto, nel blocco
+  -- EXCEPTION, viene rilanciato invece di essere trasformato in un warning.
+  IF v_nuovo_saldo < 0 AND v_delta > 0 THEN
+    RAISE EXCEPTION 'Credito Wallet insufficiente: il cliente ha % EUR e ne servono %. Scegli un altro metodo di pagamento oppure ricarica il wallet.',
+      to_char(v_saldo, 'FM999999990.00'), to_char(v_delta, 'FM999999990.00')
+      USING ERRCODE = 'DR7WL';
   END IF;
 
   UPDATE public.user_credit_balance
@@ -320,11 +331,16 @@ BEGIN
 
   RETURN NEW;
 
-EXCEPTION WHEN OTHERS THEN
-  -- Regola non negoziabile: un problema sul wallet non puo' impedire di
-  -- salvare una prenotazione. Si scrive nel log e si va avanti.
-  RAISE WARNING '[wallet] sincronizzazione fallita per la prenotazione %: % (%)', NEW.id, SQLERRM, SQLSTATE;
-  RETURN NEW;
+EXCEPTION
+  WHEN SQLSTATE 'DR7WL' THEN
+    -- Credito insufficiente: e' una risposta, non un guasto. Deve arrivare
+    -- all'operatore cosi' com'e' ed impedire il salvataggio.
+    RAISE;
+  WHEN OTHERS THEN
+    -- Tutto il resto: un problema sul wallet non puo' impedire di salvare una
+    -- prenotazione. Si scrive nel log e si va avanti.
+    RAISE WARNING '[wallet] sincronizzazione fallita per la prenotazione %: % (%)', NEW.id, SQLERRM, SQLSTATE;
+    RETURN NEW;
 END;
 $$;
 

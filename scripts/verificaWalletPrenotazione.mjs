@@ -168,11 +168,38 @@ await db.query(`UPDATE bookings SET payment_method='Contanti' WHERE id=$1`, [b4.
 ok(await saldo(c4) === 200, `saldo intatto a ${eur(await saldo(c4))}: non si restituisce cio che non e stato preso`)
 ok((await movimenti(b4.id)).length === 0, 'nessun movimento inventato')
 
-console.log('\n── 9. Credito insufficiente: si registra il debito, non si perde ')
+console.log('\n── 9. Credito insufficiente: la prenotazione viene RIFIUTATA ──')
 const c5 = await nuovoCliente(50)
-const b5 = await prenota({ userId: c5, totale: 30000 })
-ok(await saldo(c5) === -250, `saldo a ${eur(await saldo(c5))}: il debito resta scritto`)
-ok((await movimenti(b5.id)).length === 1, 'il movimento c e')
+let rifiutata = null
+try {
+  await prenota({ userId: c5, totale: 30000 })
+} catch (e) {
+  rifiutata = e
+}
+ok(!!rifiutata, 'il salvataggio fallisce invece di svuotare un wallet che non copre')
+ok(/Credito Wallet insufficiente/.test(String(rifiutata?.message)), `messaggio per l operatore: "${String(rifiutata?.message).split('\n')[0]}"`)
+ok(/50\.00/.test(String(rifiutata?.message)) && /300\.00/.test(String(rifiutata?.message)), 'il messaggio dice quanto c e e quanto serve')
+ok(await saldo(c5) === 50, `saldo intatto a ${eur(await saldo(c5))}`)
+ok((await q(`SELECT id FROM bookings WHERE user_id=$1`, [c5])).length === 0, 'nessuna prenotazione creata')
+
+// Con un altro metodo di pagamento la stessa prenotazione passa: e' la via
+// d'uscita che il messaggio indica all'operatore.
+const b5 = await prenota({ userId: c5, totale: 30000, metodo: 'Contanti' })
+ok(!!b5.id && await saldo(c5) === 50, 'la stessa prenotazione in contanti si salva, wallet invariato')
+
+// Anche una MODIFICA che porterebbe il wallet sotto zero viene rifiutata.
+const c5b = await nuovoCliente(200)
+const b5b = await prenota({ userId: c5b, totale: 10000 })
+ok(await saldo(c5b) === 100, 'prima: noleggio da 100 su 200 di credito')
+let rifiutataModifica = null
+try {
+  await db.query(`UPDATE bookings SET price_total=90000 WHERE id=$1`, [b5b.id])
+} catch (e) {
+  rifiutataModifica = e
+}
+ok(!!rifiutataModifica && /Credito Wallet insufficiente/.test(String(rifiutataModifica?.message)),
+   'alzare il totale oltre il credito disponibile: rifiutato')
+ok(await saldo(c5b) === 100, `saldo invariato a ${eur(await saldo(c5b))}`)
 
 console.log('\n── 10. Casi che non devono toccare il wallet ───────────────────')
 const c6 = await nuovoCliente(300)

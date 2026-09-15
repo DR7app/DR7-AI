@@ -1195,6 +1195,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // solo quando serve: cliente scelto + metodo wallet.
   const [saldoWallet, setSaldoWallet] = useState<SaldoWallet | null>(null)
   const [saldoWalletInCaricamento, setSaldoWalletInCaricamento] = useState(false)
+  // Popup di blocco: credito wallet insufficiente. Vedi il gate in handleSubmit.
+  const [walletInsufficiente, setWalletInsufficiente] = useState<{ saldo: number; dovuto: number } | null>(null)
   const metodoEWallet = isCreditWallet(formData.payment_method)
 
   useEffect(() => {
@@ -6131,18 +6133,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
           setSaldoWallet(saldoAggiornato)
           const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
-          if (saldoAggiornato.userId && residuoWallet < 0 && !hasOverride('wallet.saldo_negativo')) {
-            setOverrideDetails(buildOverrideDetailsBase([
-              { label: 'Motivo richiesta', value: 'Credit Wallet con credito insufficiente' },
-              { label: 'Saldo attuale', value: formattaEuro(saldoAggiornato.saldo ?? 0) },
-              { label: 'Importo da addebitare', value: formattaEuro(dovutoWallet) },
-              { label: 'Saldo risultante', value: formattaEuro(residuoWallet) },
-            ]))
-            if (!requestOverride('wallet.saldo_negativo',
-                `Il Credit Wallet del cliente ha ${formattaEuro(saldoAggiornato.saldo ?? 0)} e l'addebito è di ${formattaEuro(dovutoWallet)}: il saldo andrebbe a ${formattaEuro(residuoWallet)}.`)) {
-              abortForOtp()
-              return
-            }
+          if (saldoAggiornato.userId && residuoWallet < 0) {
+            // 15/09/2026 (direzione): con credito insufficiente la prenotazione
+            // NON si salva. Qui non c'e' OTP di proposito — un OTP con il toggle
+            // spento in Gestione OTP si auto-approva in silenzio, ed e' esattamente
+            // come e' passata la prima prenotazione senza copertura. Si sceglie un
+            // altro metodo di pagamento, oppure si ricarica il wallet del cliente.
+            setWalletInsufficiente({ saldo: saldoAggiornato.saldo ?? 0, dovuto: dovutoWallet })
+            setIsSubmitting(false)
+            submitLockRef.current = false
+            // Niente pendingSubmitRef: non c'e' niente da riprendere, la
+            // prenotazione va salvata con un altro metodo di pagamento.
+            pendingSubmitRef.current = null
+            return
           }
         }
       }
@@ -7254,6 +7257,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // quando la causa non e' ovvia dal solo .message (es. RLS,
           // trigger, FK violation). User ha riportato errori opachi
           // tipo "booked in the request window" senza contesto.
+          // Credito Wallet insufficiente: il database ha rifiutato. Non e' un
+          // guasto, e' la regola — all'operatore va la frase, non il dump.
+          if (/Credito Wallet insufficiente/i.test(bookingError.message || '')) {
+            throw new Error(bookingError.message)
+          }
           const full = `${bookingError.message || ''}\n\nCodice: ${bookingError.code || 'N/D'}\nDettaglio: ${bookingError.details || 'N/D'}\nHint: ${bookingError.hint || 'N/D'}`
           throw new Error(`Errore aggiornamento prenotazione:\n${full}`)
         }
@@ -7339,6 +7347,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           console.error('Failed to create booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
           // 2026-05-30: dump completo dell'errore (vedi commento gemello sopra)
+          // Credito Wallet insufficiente: il database ha rifiutato. Non e' un
+          // guasto, e' la regola — all'operatore va la frase, non il dump.
+          if (/Credito Wallet insufficiente/i.test(bookingError.message || '')) {
+            throw new Error(bookingError.message)
+          }
           const full = `${bookingError.message || ''}\n\nCodice: ${bookingError.code || 'N/D'}\nDettaglio: ${bookingError.details || 'N/D'}\nHint: ${bookingError.hint || 'N/D'}`
           throw new Error(`Errore creazione prenotazione:\n${full}`)
         }
@@ -12326,6 +12339,48 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
           </>
         )}
+
+      {/* ── Credito Wallet insufficiente: blocco esplicito ──────────────────
+          15/09/2026 (direzione): una prenotazione col Credit Wallet non si
+          salva se il cliente non ha copertura. Non e' un OTP: un OTP con il
+          toggle spento si auto-approva in silenzio, ed e' cosi' che era
+          passata una prenotazione senza credito. Qui si esce e basta: o si
+          cambia metodo di pagamento, o si ricarica il wallet del cliente. */}
+      {walletInsufficiente && (
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-theme-bg-secondary sm:rounded-lg border border-red-500/40 overflow-hidden">
+            <div className="p-4 border-b border-theme-border">
+              <h3 className="text-lg font-bold text-red-500 dark:text-red-400">Credito Wallet insufficiente</h3>
+            </div>
+            <div className="p-4 space-y-3 text-sm">
+              <p className="text-theme-text-primary">
+                Il Credit Wallet di questo cliente non copre l&apos;importo della prenotazione.
+                Scegli un altro metodo di pagamento, oppure ricarica il wallet dalla scheda del cliente.
+              </p>
+              <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary">Saldo del cliente</span>
+                  <span className="font-semibold text-theme-text-primary">{formattaEuro(walletInsufficiente.saldo)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary">Importo richiesto</span>
+                  <span className="font-semibold text-theme-text-primary">{formattaEuro(walletInsufficiente.dovuto)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary">Mancano</span>
+                  <span className="font-semibold text-red-500 dark:text-red-400">
+                    {formattaEuro(Math.round((walletInsufficiente.dovuto - walletInsufficiente.saldo) * 100) / 100)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-theme-text-muted">La prenotazione non e&apos; stata salvata.</p>
+            </div>
+            <div className="p-4 border-t border-theme-border flex justify-end">
+              <Button type="button" onClick={() => setWalletInsufficiente(null)}>Ho capito</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (

@@ -262,6 +262,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // soldi e quanto resta. Si interroga il database solo quando serve.
   const [saldoWallet, setSaldoWallet] = useState<SaldoWallet | null>(null)
   const [saldoWalletInCaricamento, setSaldoWalletInCaricamento] = useState(false)
+  // Popup di blocco: credito wallet insufficiente. Vedi il gate in createBooking.
+  const [walletInsufficiente, setWalletInsufficiente] = useState<{ saldo: number; dovuto: number } | null>(null)
   // Foreign plate flow (Targa Estera) — requires OTP per category
   const [showForeignPlateModal, setShowForeignPlateModal] = useState(false)
   const [pendingForeignCategory, setPendingForeignCategory] = useState<'urban' | 'maxi' | null>(null)
@@ -2144,18 +2146,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         totaleEur: getFinalPrice(),
         acconoEur: parseFloat(formData.amount_paid || '0') || 0,
       })
-      if (dovutoWallet > 0 && !override.hasOverride('wallet.saldo_negativo')) {
+      if (dovutoWallet > 0) {
         // Il saldo mostrato nel form puo' essere vecchio: si rilegge adesso.
         const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
         setSaldoWallet(saldoAggiornato)
         const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
         if (saldoAggiornato.userId && residuoWallet < 0) {
-          pendingCreateBookingRef.current = { force: forceBooking }
+          // 15/09/2026 (direzione): senza copertura la prenotazione NON si
+          // salva. Niente OTP di proposito: col toggle spento in Gestione OTP
+          // si auto-approva in silenzio, ed e' cosi' che era passata una
+          // prenotazione senza credito.
+          pendingCreateBookingRef.current = null
           createBookingLockRef.current = false
-          override.requestOverride(
-            'wallet.saldo_negativo',
-            `Il Credit Wallet del cliente ha ${formattaEuro(saldoAggiornato.saldo ?? 0)} e l'addebito e' di ${formattaEuro(dovutoWallet)}: il saldo andrebbe a ${formattaEuro(residuoWallet)}.`
-          )
+          setSubmitting(false)
+          setWalletInsufficiente({ saldo: saldoAggiornato.saldo ?? 0, dovuto: dovutoWallet })
           return
         }
       }
@@ -3584,6 +3588,51 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           await refreshCustomers()
         }}
       />
+
+      {/* ── Credito Wallet insufficiente: blocco esplicito ──────────────────
+          15/09/2026 (direzione): senza copertura la prenotazione non si salva.
+          Non e' un OTP: col toggle spento si auto-approverebbe in silenzio. */}
+      {walletInsufficiente && (
+        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-theme-bg-secondary sm:rounded-lg border border-red-500/40 overflow-hidden">
+            <div className="p-4 border-b border-theme-border">
+              <h3 className="text-lg font-bold text-red-500 dark:text-red-400">Credito Wallet insufficiente</h3>
+            </div>
+            <div className="p-4 space-y-3 text-sm">
+              <p className="text-theme-text-primary">
+                Il Credit Wallet di questo cliente non copre l&apos;importo della prenotazione.
+                Scegli un altro metodo di pagamento, oppure ricarica il wallet dalla scheda del cliente.
+              </p>
+              <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary">Saldo del cliente</span>
+                  <span className="font-semibold text-theme-text-primary">{formattaEuro(walletInsufficiente.saldo)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary">Importo richiesto</span>
+                  <span className="font-semibold text-theme-text-primary">{formattaEuro(walletInsufficiente.dovuto)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary">Mancano</span>
+                  <span className="font-semibold text-red-500 dark:text-red-400">
+                    {formattaEuro(Math.round((walletInsufficiente.dovuto - walletInsufficiente.saldo) * 100) / 100)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-theme-text-muted">La prenotazione non e&apos; stata salvata.</p>
+            </div>
+            <div className="p-4 border-t border-theme-border flex justify-end">
+              <button
+                type="button"
+                onClick={() => setWalletInsufficiente(null)}
+                className="px-4 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover"
+              >
+                Ho capito
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="bg-theme-bg-secondary rounded-2xl p-6 sm:p-8 border border-theme-border shadow-2xl mb-6">
