@@ -180,10 +180,10 @@ const PREVENDITA_VUOTA = {
 }
 
 /**
- * `vista` arriva dalla barra laterale: "Prevendita e Promozioni" espone
- * Catalogo, Prevendite Vendute e Popup Sito come tre voci distinte, ognuna con
- * il suo permesso. Resta anche la navigazione interna, cosi' si passa da una
- * all'altra senza tornare al menu.
+ * La voce nel menu e' una sola: Marketing > Prevendita e Promozioni, accanto
+ * al Codice Sconto. Catalogo, Prevendite Vendute e Popup Sito si scambiano
+ * qui dentro. `vista` resta un parametro perche' i vecchi link diretti alle
+ * tre rotte continuino ad aprire la pagina giusta.
  */
 export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { vista?: Vista } = {}) {
   const [vista, setVista] = useState<Vista>(vistaIniziale)

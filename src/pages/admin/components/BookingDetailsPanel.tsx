@@ -329,7 +329,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                   : ''}
               </p>
               <p className="text-xs text-theme-text-muted">
-                Residui e registro degli utilizzi in Prevendita e Promozioni &gt; Prevendite Vendute.
+                Residui e registro degli utilizzi in Marketing &gt; Prevendita e Promozioni &gt; Prevendite Vendute.
                 Annullando la prenotazione l'utilizzo NON torna da solo: lo rimette la direzione da li'.
               </p>
             </div>
