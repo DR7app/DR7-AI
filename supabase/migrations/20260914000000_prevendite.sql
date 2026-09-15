@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.prevendite (
   -- [{ id, nome, targa }] — id = vehicles.id del gestionale.
   veicoli               JSONB NOT NULL DEFAULT '[]'::jsonb,
   km_inclusi            INTEGER NOT NULL DEFAULT 0,   -- per OGNI utilizzo
-  assicurazione_inclusa TEXT,                          -- etichetta/id opzione
+  assicurazione_inclusa TEXT,                          -- NOME dell'opzione Centralina, mai l'id
   validita_mesi         INTEGER NOT NULL DEFAULT 12,
   max_utilizzi_mese     INTEGER,                       -- NULL = nessun limite
   max_giorni_consecutivi INTEGER,                      -- NULL = nessun limite
