@@ -49,6 +49,29 @@ export function isWalletOrGift(paymentMethod: string | null | undefined): boolea
   return n === 'credit' || n.includes('wallet') || n.includes('gift')
 }
 
+/**
+ * Pagamento fatto col CREDIT WALLET del cliente, cioe' col saldo di
+ * `user_credit_balance`. E' la condizione che fa scattare l'addebito
+ * automatico sul wallet (trigger `trg_dr7_wallet_sync_prenotazione`,
+ * migrazione 20260915000000): la stessa regola e' scritta in SQL nella
+ * funzione `dr7_metodo_e_credit_wallet` — se cambia una, cambia anche l'altra.
+ *
+ * Differenza voluta rispetto a isWalletOrGift: la GIFT CARD resta fuori. In
+ * DR7 e' un codice sconto (DiscountCodeGeneratorModal, code_type 'gift_card'),
+ * non credito del wallet: addebitarla al saldo prenderebbe soldi veri.
+ *
+ * L'ordine dei controlli conta: "Carta di Credito" contiene "credito" ma e'
+ * una carta, e deve uscire prima che si guardi quella parola.
+ */
+export function isCreditWallet(paymentMethod: string | null | undefined): boolean {
+  const n = normalize(paymentMethod)
+  if (!n) return false
+  if (n.includes('gift')) return false
+  if (n.includes('wallet')) return true
+  if (n.includes('carta') || n.includes('card')) return false
+  return n.includes('credit') || n.includes('credito') || n.includes('crediti')
+}
+
 export function isCartaPunti(paymentMethod: string | null | undefined): boolean {
   const n = normalize(paymentMethod)
   if (!n) return false

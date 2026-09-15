@@ -25,7 +25,8 @@ import { authFetch } from '../../../utils/authFetch'
 import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
-import { isCartaPunti, isNexiPayByLink, isWalletOrGift } from '../../../utils/paymentMethodMatchers'
+import { isCartaPunti, isNexiPayByLink, isWalletOrGift, isCreditWallet } from '../../../utils/paymentMethodMatchers'
+import { leggiSaldoWallet, leggiMovimentoWallet, importoDovutoWallet, formattaEuro, type SaldoWallet } from '../../../utils/walletCliente'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import CarWashBookingDetailModal from './CarWashBookingDetailModal'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
@@ -253,6 +254,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [targaNotFound, setTargaNotFound] = useState(false)
   // OTP override for manual category selection
   const override = useLimitationOverride()
+
+  // ── Credit Wallet del cliente ────────────────────────────────────────
+  // 15/09/2026: col metodo "Credit Wallet" l'importo esce davvero dal wallet
+  // del cliente al salvataggio (trigger trg_dr7_wallet_sync_prenotazione).
+  // Qui si legge il saldo PRIMA, perche' l'operatore veda da dove escono i
+  // soldi e quanto resta. Si interroga il database solo quando serve.
+  const [saldoWallet, setSaldoWallet] = useState<SaldoWallet | null>(null)
+  const [saldoWalletInCaricamento, setSaldoWalletInCaricamento] = useState(false)
   // Foreign plate flow (Targa Estera) — requires OTP per category
   const [showForeignPlateModal, setShowForeignPlateModal] = useState(false)
   const [pendingForeignCategory, setPendingForeignCategory] = useState<'urban' | 'maxi' | null>(null)
@@ -409,6 +418,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     amount_paid: '0',
     notes: ''
   })
+
+  // Lettura del Credit Wallet: solo quando il metodo scelto e' il wallet e
+  // c'e' un cliente selezionato. Lo stato vive accanto all'hook override.
+  const metodoEWallet = isCreditWallet(formData.payment_method)
+  useEffect(() => {
+    let annullato = false
+    if (!metodoEWallet || !formData.customer_id) {
+      setSaldoWallet(null)
+      setSaldoWalletInCaricamento(false)
+      return
+    }
+    setSaldoWalletInCaricamento(true)
+    leggiSaldoWallet(formData.customer_id).then(r => {
+      if (annullato) return
+      setSaldoWallet(r)
+      setSaldoWalletInCaricamento(false)
+    })
+    return () => { annullato = true }
+  }, [metodoEWallet, formData.customer_id])
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A — filtra per appointment_date.
@@ -2104,6 +2132,35 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
+    // ===== OTP GATE: Credit Wallet con credito insufficiente =====
+    // 15/09/2026: col metodo "Credit Wallet" l'importo esce davvero dal wallet
+    // del cliente quando la prenotazione viene salvata. Se il saldo non basta
+    // il wallet va in negativo: si puo' fare, ma lo autorizza la direzione.
+    // Nessun blocco secco — OTP e si procede.
+    if (!currentVehicleIsTest && isCreditWallet(formData.payment_method)) {
+      const dovutoWallet = importoDovutoWallet({
+        metodo: formData.payment_method,
+        statoPagamento: formData.payment_status,
+        totaleEur: getFinalPrice(),
+        acconoEur: parseFloat(formData.amount_paid || '0') || 0,
+      })
+      if (dovutoWallet > 0 && !override.hasOverride('wallet.saldo_negativo')) {
+        // Il saldo mostrato nel form puo' essere vecchio: si rilegge adesso.
+        const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
+        setSaldoWallet(saldoAggiornato)
+        const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
+        if (saldoAggiornato.userId && residuoWallet < 0) {
+          pendingCreateBookingRef.current = { force: forceBooking }
+          createBookingLockRef.current = false
+          override.requestOverride(
+            'wallet.saldo_negativo',
+            `Il Credit Wallet del cliente ha ${formattaEuro(saldoAggiornato.saldo ?? 0)} e l'addebito e' di ${formattaEuro(dovutoWallet)}: il saldo andrebbe a ${formattaEuro(residuoWallet)}.`
+          )
+          return
+        }
+      }
+    }
+
     // 2026-05-19: validazione cliente per tipo (persona_fisica / azienda /
     // pubblica_amministrazione). Indirizzo struttura DIVERSA per ogni tipo:
     //  - persona_fisica → indirizzo + citta_residenza + codice_postale
@@ -2324,6 +2381,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     formSubmittedRef.current = true
 
     logger.log('✅ Booking created successfully:', data)
+
+    // ── Credit Wallet: conferma di cosa e' uscito davvero ──────────────
+    // L'addebito lo ha gia' fatto il database insieme all'INSERT (trigger
+    // trg_dr7_wallet_sync_prenotazione). Qui si rilegge il registro dei
+    // movimenti per riferire l'importo reale. Non blocca nulla.
+    if (isCreditWallet(formData.payment_method) && data?.id) {
+      try {
+        const movimento = await leggiMovimentoWallet(data.id)
+        if (movimento.addebitato > 0) {
+          toast.success(
+            `Credit Wallet: addebitati ${formattaEuro(movimento.addebitato)}. Saldo del cliente: ${formattaEuro(movimento.saldo ?? 0)}.`,
+            { duration: 6000 },
+          )
+        } else if (['paid', 'succeeded', 'completed', 'partial'].includes((formData.payment_status || '').toLowerCase())) {
+          toast('Credit Wallet: nessun addebito registrato. Verifica che il cliente abbia un account sul sito.', { duration: 8000, icon: '!' })
+        }
+      } catch { /* la lettura del wallet non puo' far fallire il salvataggio */ }
+    }
     logAdminAction('create_carwash', 'carwash_booking', data.id, {
       ...buildCarWashContext(data),
       customer: data?.customer_name || customerName,
@@ -5279,6 +5354,70 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   />
                 </div>
               </div>
+
+              {/* ── Credit Wallet: saldo del cliente e importo che verra' prelevato ──
+                  L'addebito lo esegue il database al salvataggio. Qui l'operatore
+                  vede da quale wallet escono i soldi e quanto resta. Nessun blocco:
+                  se il credito non basta si salva lo stesso, con OTP. */}
+              {metodoEWallet && (() => {
+                const dovuto = importoDovutoWallet({
+                  metodo: formData.payment_method,
+                  statoPagamento: formData.payment_status,
+                  totaleEur: getFinalPrice(),
+                  acconoEur: parseFloat(formData.amount_paid || '0') || 0,
+                })
+                if (!formData.customer_id) {
+                  return (
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
+                      Seleziona prima il cliente: l&apos;addebito sul Credit Wallet ha bisogno di sapere a chi appartiene il credito.
+                    </div>
+                  )
+                }
+                if (saldoWalletInCaricamento) {
+                  return (
+                    <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 text-sm text-theme-text-muted">
+                      Lettura del Credit Wallet del cliente...
+                    </div>
+                  )
+                }
+                if (!saldoWallet?.userId) {
+                  return (
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
+                      Questo cliente non ha un account sul sito, quindi non ha un Credit Wallet: nessun importo verr&agrave; prelevato.
+                    </div>
+                  )
+                }
+                const saldo = saldoWallet.saldo ?? 0
+                const residuo = Math.round((saldo - dovuto) * 100) / 100
+                const insufficiente = dovuto > 0 && residuo < 0
+                return (
+                  <div className={`rounded-lg border p-3 space-y-1 text-sm ${
+                    insufficiente ? 'border-amber-500/40 bg-amber-500/5' : 'border-theme-border bg-theme-bg-tertiary'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary">Credit Wallet del cliente</span>
+                      <span className="font-semibold text-theme-text-primary">{formattaEuro(saldo)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary">
+                        {dovuto > 0 ? 'Verrà prelevato ora' : 'Nessun prelievo con questo stato pagamento'}
+                      </span>
+                      <span className="font-semibold text-theme-text-primary">{formattaEuro(dovuto)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
+                      <span className={`font-semibold ${insufficiente ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-primary'}`}>
+                        {formattaEuro(residuo)}
+                      </span>
+                    </div>
+                    {insufficiente && (
+                      <p className="pt-1 text-amber-600 dark:text-amber-400">
+                        Il credito non basta: il wallet andrebbe in negativo. Salvando verr&agrave; chiesta l&apos;autorizzazione della direzione.
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Conferma Prenotazione — quando lo stato e' "Da Saldare",
                   ticca per inviare comunque il template di conferma al cliente
