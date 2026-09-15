@@ -204,35 +204,74 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   const [flotta, setFlotta] = useState<VeicoloFlotta[]>([])
   const [ricercaVeicolo, setRicercaVeicolo] = useState('')
 
-  // Assicurazioni: si leggono SOLO dalla Centralina Pro (Assicurazioni), per le
-  // categorie dei veicoli scelti, fascia A e fascia B insieme. Scritte a mano
-  // non servivano a niente: al momento della prenotazione il sito deve
-  // riconoscere QUALE opzione e' compresa, e la riconosce dal nome della
-  // Centralina. Se la Centralina non ha nulla, qui non c'e' nulla: il buco si
-  // vede invece di essere coperto da un elenco inventato nel codice.
+  // ─── Assicurazioni: SOLO dalla Centralina Pro ──────────────────────────────
+  //
+  // Nella Centralina un'assicurazione non e' un nome: e' una voce per CATEGORIA
+  // e per FASCIA, con un prezzo suo. "Kasko Base" costa 100 EUR/giorno su
+  // Exotic Cars e 45 su Supercar; "Kasko DR7" in fascia B spesso non esiste
+  // proprio. Un pacchetto vale su piu' auto, quindi la prevendita non puo'
+  // tenere un id solo: tiene il NOME scelto qui e il sito ritrova l'opzione
+  // giusta per l'auto e per la fascia del cliente al momento della
+  // prenotazione. Qui sotto si vede subito quanto vale su ogni categoria del
+  // pacchetto e dove invece non esiste.
+  //
+  // Fascia A/B della Centralina = TIER_2/TIER_1 nel formato interno
+  // (convertProConfig, mappa storica).
   const { config: configNoleggio } = useRentalConfig('car_rental')
-  const assicurazioniDisponibili = useMemo(() => {
-    const categorie = new Set<string>()
+  const FASCE_CENTRALINA = [
+    { etichetta: 'Fascia A', tier: 'TIER_2' as const },
+    { etichetta: 'Fascia B', tier: 'TIER_1' as const },
+  ]
+  const nomeAssicurazioneNormalizzato = (n: string | null | undefined) =>
+    String(n ?? '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/kasko|compresa|inclusa/g, ' ').replace(/[^a-z0-9]/g, '')
+  const stessaAssicurazione = (a: string | null | undefined, b: string | null | undefined) => {
+    const x = nomeAssicurazioneNormalizzato(a)
+    return x !== '' && x === nomeAssicurazioneNormalizzato(b)
+  }
+
+  // Le categorie coperte dal pacchetto: quelle dei veicoli scelti.
+  const categoriePacchetto = useMemo(() => {
+    const viste: string[] = []
     for (const v of bozza.veicoli) {
       const cat = flotta.find(f => f.id === v.id)?.category
-      if (cat) categorie.add(cat)
+      if (cat && !viste.includes(cat)) viste.push(cat)
     }
-    // Nessun veicolo scelto (o senza categoria): si mostrano tutte quelle che
-    // la Centralina conosce, cosi' la tendina non resta vuota per sbaglio.
-    const chiavi = categorie.size > 0
-      ? [...categorie]
+    return viste
+  }, [bozza.veicoli, flotta])
+
+  const assicurazioniDisponibili = useMemo(() => {
+    // Nessun veicolo scelto: si elencano tutte quelle che la Centralina conosce,
+    // cosi' la tendina non resta vuota per sbaglio. Nessun elenco nel codice.
+    const chiavi = categoriePacchetto.length > 0
+      ? categoriePacchetto
       : Object.keys(configNoleggio?.insurance || {}).filter(k => !['eligibility', 'deductibles', 'category_labels'].includes(k))
     const nomi: string[] = []
     for (const cat of chiavi) {
-      for (const tier of ['TIER_1', 'TIER_2'] as const) {
-        for (const opt of getInsuranceOptions(configNoleggio, cat, tier)) {
+      for (const f of FASCE_CENTRALINA) {
+        for (const opt of getInsuranceOptions(configNoleggio, cat, f.tier)) {
           const nome = String(opt?.name || '').trim()
-          if (nome && !nomi.includes(nome)) nomi.push(nome)
+          if (nome && !nomi.some(n => stessaAssicurazione(n, nome))) nomi.push(nome)
         }
       }
     }
     return nomi
-  }, [configNoleggio, bozza.veicoli, flotta])
+  }, [configNoleggio, categoriePacchetto])
+
+  // Cosa succede davvero, categoria per categoria e fascia per fascia, con
+  // l'assicurazione scelta: il prezzo al giorno che il pacchetto copre, oppure
+  // il buco (quell'assicurazione li' non esiste).
+  const coperturaAssicurazione = useMemo(() => {
+    if (!bozza.assicurazione_inclusa) return []
+    return categoriePacchetto.map(cat => ({
+      categoria: cat,
+      etichetta: configNoleggio?.vehicle_categories?.[cat]?.label || cat,
+      fasce: FASCE_CENTRALINA.map(f => {
+        const trovata = getInsuranceOptions(configNoleggio, cat, f.tier)
+          .find(o => stessaAssicurazione(o.name, bozza.assicurazione_inclusa))
+        return { etichetta: f.etichetta, prezzo: trovata ? Number(trovata.daily_price) || 0 : null }
+      }),
+    }))
+  }, [configNoleggio, categoriePacchetto, bozza.assicurazione_inclusa])
 
   // Venduti
   const [venduti, setVenduti] = useState<PrevenditaCliente[]>([])
@@ -1095,8 +1134,31 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                   <p className="text-xs text-theme-text-muted mt-1">
                     {assicurazioniDisponibili.length === 0
                       ? 'Nessuna assicurazione in Centralina Pro per queste categorie: aggiungila da Centralina Pro > Assicurazioni.'
-                      : 'Dalle Assicurazioni della Centralina Pro. Il sito la riconosce e la mette a zero al momento della prenotazione.'}
+                      : 'Dalle Assicurazioni della Centralina Pro. Il prezzo cambia per categoria e per fascia: qui sotto quello che il pacchetto copre davvero.'}
                   </p>
+                  {coperturaAssicurazione.length > 0 && (
+                    <div className="mt-2 border border-theme-border rounded-lg overflow-hidden">
+                      {coperturaAssicurazione.map(riga => (
+                        <div key={riga.categoria} className="flex items-center justify-between gap-3 px-3 py-2 border-b border-theme-border last:border-b-0 text-xs">
+                          <span className="text-theme-text-secondary">{riga.etichetta}</span>
+                          <span className="flex gap-3">
+                            {riga.fasce.map(f => (
+                              <span key={f.etichetta} className={f.prezzo === null ? 'text-red-400' : 'text-theme-text-primary'}>
+                                {f.etichetta}: {f.prezzo === null ? 'non esiste' : `${f.prezzo.toLocaleString('it-IT')} EUR/giorno`}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                      ))}
+                      {coperturaAssicurazione.some(r => r.fasce.some(f => f.prezzo === null)) && (
+                        <p className="px-3 py-2 text-xs text-red-400 bg-theme-bg-tertiary">
+                          Dove c'e' "non esiste" il cliente di quella fascia non trova questa assicurazione:
+                          il pacchetto non gli copre niente. Aggiungila in Centralina Pro &gt; Assicurazioni,
+                          oppure scegline un'altra.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
