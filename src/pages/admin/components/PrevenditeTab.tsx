@@ -260,18 +260,27 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   // Cosa succede davvero, categoria per categoria e fascia per fascia, con
   // l'assicurazione scelta: il prezzo al giorno che il pacchetto copre, oppure
   // il buco (quell'assicurazione li' non esiste).
+  // Auto per auto, perche' e' cosi' che si ragiona scegliendo il pacchetto:
+  // questa macchina, questa assicurazione, questo prezzo. La categoria decide
+  // l'elenco, la fascia del cliente decide il prezzo — e a volte l'opzione in
+  // fascia B non c'e' affatto.
   const coperturaAssicurazione = useMemo(() => {
     if (!bozza.assicurazione_inclusa) return []
-    return categoriePacchetto.map(cat => ({
-      categoria: cat,
-      etichetta: configNoleggio?.vehicle_categories?.[cat]?.label || cat,
-      fasce: FASCE_CENTRALINA.map(f => {
-        const trovata = getInsuranceOptions(configNoleggio, cat, f.tier)
-          .find(o => stessaAssicurazione(o.name, bozza.assicurazione_inclusa))
-        return { etichetta: f.etichetta, prezzo: trovata ? Number(trovata.daily_price) || 0 : null }
-      }),
-    }))
-  }, [configNoleggio, categoriePacchetto, bozza.assicurazione_inclusa])
+    return bozza.veicoli.map(v => {
+      const cat = flotta.find(f => f.id === v.id)?.category || ''
+      return {
+        id: v.id,
+        nome: v.nome,
+        categoria: cat ? (configNoleggio?.vehicle_categories?.[cat]?.label || cat) : 'senza categoria',
+        fasce: FASCE_CENTRALINA.map(f => {
+          const trovata = cat
+            ? getInsuranceOptions(configNoleggio, cat, f.tier).find(o => stessaAssicurazione(o.name, bozza.assicurazione_inclusa))
+            : undefined
+          return { etichetta: f.etichetta, prezzo: trovata ? Number(trovata.daily_price) || 0 : null }
+        }),
+      }
+    })
+  }, [configNoleggio, bozza.veicoli, flotta, bozza.assicurazione_inclusa])
 
   // Venduti
   const [venduti, setVenduti] = useState<PrevenditaCliente[]>([])
@@ -1125,10 +1134,11 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                     {assicurazioniDisponibili.map(nome => (
                       <option key={nome} value={nome}>{nome}</option>
                     ))}
-                    {/* Un'assicurazione salvata prima e poi rinominata in
-                        Centralina resta visibile: non sparisce in silenzio. */}
-                    {bozza.assicurazione_inclusa && !assicurazioniDisponibili.includes(bozza.assicurazione_inclusa) && (
-                      <option value={bozza.assicurazione_inclusa}>{bozza.assicurazione_inclusa} (non piu' in Centralina)</option>
+                    {/* Un'assicurazione salvata prima, e poi rinominata in Centralina o
+                        non piu' valida per i veicoli scelti adesso, resta visibile: non
+                        sparisce in silenzio mentre si modifica il pacchetto. */}
+                    {bozza.assicurazione_inclusa && !assicurazioniDisponibili.some(n => stessaAssicurazione(n, bozza.assicurazione_inclusa)) && (
+                      <option value={bozza.assicurazione_inclusa}>{bozza.assicurazione_inclusa} (non disponibile per questi veicoli)</option>
                     )}
                   </select>
                   <p className="text-xs text-theme-text-muted mt-1">
@@ -1139,8 +1149,8 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                   {coperturaAssicurazione.length > 0 && (
                     <div className="mt-2 border border-theme-border rounded-lg overflow-hidden">
                       {coperturaAssicurazione.map(riga => (
-                        <div key={riga.categoria} className="flex items-center justify-between gap-3 px-3 py-2 border-b border-theme-border last:border-b-0 text-xs">
-                          <span className="text-theme-text-secondary">{riga.etichetta}</span>
+                        <div key={riga.id} className="flex items-center justify-between gap-3 px-3 py-2 border-b border-theme-border last:border-b-0 text-xs">
+                          <span className="text-theme-text-secondary">{riga.nome} <span className="text-theme-text-muted">· {riga.categoria}</span></span>
                           <span className="flex gap-3">
                             {riga.fasce.map(f => (
                               <span key={f.etichetta} className={f.prezzo === null ? 'text-red-400' : 'text-theme-text-primary'}>
@@ -1152,8 +1162,9 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                       ))}
                       {coperturaAssicurazione.some(r => r.fasce.some(f => f.prezzo === null)) && (
                         <p className="px-3 py-2 text-xs text-red-400 bg-theme-bg-tertiary">
-                          Dove c'e' "non esiste" il cliente di quella fascia non trova questa assicurazione:
-                          il pacchetto non gli copre niente. Aggiungila in Centralina Pro &gt; Assicurazioni,
+                          Dove c'e' "non esiste" il cliente di quella fascia, su quell'auto, non trova
+                          questa assicurazione: il pacchetto non gli copre niente e il contratto non la
+                          riporta. Aggiungila in Centralina Pro &gt; Assicurazioni per quella categoria,
                           oppure scegline un'altra.
                         </p>
                       )}
