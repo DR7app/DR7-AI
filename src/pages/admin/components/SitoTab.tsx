@@ -500,7 +500,13 @@ function conDefault<T extends object>(remoto: T | null | undefined, iniziale: T)
     return { ...iniziale, ...(remoto || {}) }
 }
 
-export default function SitoTab() {
+/**
+ * `incorporato` — l'onglet vive dentro Centralina Pro (sezione "Sito"), non
+ * piu' come tab a se'. In quel caso la Centralina ha gia' il suo titolo e il
+ * suo riquadro: qui si toglie l'intestazione e il fondo a tutta pagina,
+ * altrimenti si vedono due header uno sopra l'altro.
+ */
+export default function SitoTab({ incorporato = false }: { incorporato?: boolean }) {
     const { loading: roleLoading, hasRole } = useAdminRole()
     const isDirezione = hasRole('sito-direzione')
     const override = useLimitationOverride()
@@ -963,7 +969,7 @@ export default function SitoTab() {
     }
 
     return (
-        <div className="bg-theme-bg-secondary min-h-screen pb-32">
+        <div className={incorporato ? '' : 'bg-theme-bg-secondary min-h-screen pb-32'}>
             <LimitationOverrideModal
                 isOpen={override.limitationState.isOpen}
                 limitationCode={override.limitationState.limitationCode}
@@ -975,27 +981,29 @@ export default function SitoTab() {
                 onOverrideApproved={override.handleOverrideApproved}
             />
 
-            {/* Header */}
-            <div className="px-6 pt-6 pb-4 bg-theme-bg-primary border-b border-theme-border">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-[28px] font-semibold tracking-tight text-theme-text-primary">Sito</h1>
-                        <p className="text-[14px] text-theme-text-secondary mt-1">
-                            Le pagine di dr7.app, nell'ordine in cui le trova un visitatore.{' '}
-                            {MANAGED_COUNT === TOTAL_COUNT
-                                ? <>Tutte e {TOTAL_COUNT} si modificano da qui: nessun testo del sito richiede uno sviluppatore.</>
-                                : <>{MANAGED_COUNT} su {TOTAL_COUNT} si modificano da qui.</>}
-                        </p>
+            {/* Header — solo fuori dalla Centralina, che ha gia' il suo. */}
+            {!incorporato && (
+                <div className="px-6 pt-6 pb-4 bg-theme-bg-primary border-b border-theme-border">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-[28px] font-semibold tracking-tight text-theme-text-primary">Sito</h1>
+                            <p className="text-[14px] text-theme-text-secondary mt-1">
+                                Le pagine di dr7.app, nell'ordine in cui le trova un visitatore.{' '}
+                                {MANAGED_COUNT === TOTAL_COUNT
+                                    ? <>Tutte e {TOTAL_COUNT} si modificano da qui: nessun testo del sito richiede uno sviluppatore.</>
+                                    : <>{MANAGED_COUNT} su {TOTAL_COUNT} si modificano da qui.</>}
+                            </p>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Attivo
+                        </span>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        Attivo
-                    </span>
                 </div>
-            </div>
+            )}
 
             {/* Body: side nav + content */}
-            <div className="px-6 pt-6">
+            <div className={incorporato ? '' : 'px-6 pt-6'}>
                 <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
                     {/* Nav: l'alberatura di dr7.app, ricercabile */}
                     <aside>
@@ -2344,16 +2352,6 @@ function HomeEditor({
             </div>
 
             {/* SEO */}
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">SEO</h3>
-                <p className="text-[12px] text-theme-text-secondary">
-                    Titolo H1 nascosto nella pagina, indicizzato dai motori di ricerca. Non visibile nella UI.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="H1 SEO (IT)" value={copy.seo_h1_it} onChange={v => updateField('seo_h1_it', v)} />
-                    <FieldText label="H1 SEO (EN)" value={copy.seo_h1_en} onChange={v => updateField('seo_h1_en', v)} />
-                </div>
-            </section>
 
             {/* Atto 01 — Arrivo */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
@@ -2979,12 +2977,6 @@ function FooterEditor({
             {/* Network band */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Network (banda social)</h3>
-                <FieldText label="Titolo (IT)" value={copy.network_title_it ?? ''} onChange={v => updateField('network_title_it', v)} />
-                <FieldText label="Title (EN)" value={copy.network_title_en ?? ''} onChange={v => updateField('network_title_en', v)} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldTextArea label="Testo (IT)" value={copy.network_text_it} onChange={v => updateField('network_text_it', v)} />
-                    <FieldTextArea label="Testo (EN)" value={copy.network_text_en} onChange={v => updateField('network_text_en', v)} />
-                </div>
                 <div className="space-y-2">
                     <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Social ({copy.social_links.length})</h4>
                     {copy.social_links.map((s, i) => (
@@ -3034,11 +3026,6 @@ function FooterEditor({
             {/* Contact band */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Contatti & Legale</h3>
-                <FieldText label="Titolo (es. Contact)" value={copy.contact_title} onChange={v => updateField('contact_title', v)} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Numero WhatsApp visualizzato" value={copy.contact_whatsapp_number} onChange={v => updateField('contact_whatsapp_number', v)} />
-                    <FieldText label="URL WhatsApp (wa.me)" value={copy.contact_whatsapp_url} onChange={v => updateField('contact_whatsapp_url', v)} />
-                </div>
                 <FieldText label="Ragione sociale" value={copy.contact_company_name} onChange={v => updateField('contact_company_name', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sede legale (IT)" value={copy.contact_legal_address_it} onChange={v => updateField('contact_legal_address_it', v)} />
@@ -3543,7 +3530,6 @@ function CareersEditor({ copy, setCopy }: { copy: CareersCopy; setCopy: (next: C
                     <FieldTextArea label="Testo (IT) — supporta inline markdown" value={copy.apply_text_it} onChange={v => update('apply_text_it', v)} />
                     <FieldTextArea label="Text (EN)" value={copy.apply_text_en} onChange={v => update('apply_text_en', v)} />
                 </div>
-                <FieldText label="Email candidature" value={copy.apply_email} onChange={v => update('apply_email', v)} />
             </section>
         </div>
     )
@@ -4635,22 +4621,14 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                     <FieldText label="Notes label (EN)" value={copy.field_notes_label_en} onChange={v => update('field_notes_label_en', v)} />
                     <FieldText label="Note placeholder (IT)" value={copy.field_notes_placeholder_it} onChange={v => update('field_notes_placeholder_it', v)} />
                     <FieldText label="Notes placeholder (EN)" value={copy.field_notes_placeholder_en} onChange={v => update('field_notes_placeholder_en', v)} />
-                    <FieldText label="Orario partenza label (IT)" value={copy.field_departure_time_label_it} onChange={v => update('field_departure_time_label_it', v)} />
-                    <FieldText label="Departure time label (EN)" value={copy.field_departure_time_label_en} onChange={v => update('field_departure_time_label_en', v)} />
                     <FieldText label="Volo di ritorno? label (IT)" value={copy.field_return_flight_label_it} onChange={v => update('field_return_flight_label_it', v)} />
                     <FieldText label="Return flight? label (EN)" value={copy.field_return_flight_label_en} onChange={v => update('field_return_flight_label_en', v)} />
-                    <FieldText label="Orario ritorno label (IT)" value={copy.field_return_time_label_it} onChange={v => update('field_return_time_label_it', v)} />
-                    <FieldText label="Return time label (EN)" value={copy.field_return_time_label_en} onChange={v => update('field_return_time_label_en', v)} />
                     <FieldText label="Tappe/scali? label (IT)" value={copy.field_stops_label_it} onChange={v => update('field_stops_label_it', v)} />
                     <FieldText label="Stops? label (EN)" value={copy.field_stops_label_en} onChange={v => update('field_stops_label_en', v)} />
                     <FieldText label="Quali tappe label (IT)" value={copy.field_stops_detail_label_it} onChange={v => update('field_stops_detail_label_it', v)} />
                     <FieldText label="Which stops label (EN)" value={copy.field_stops_detail_label_en} onChange={v => update('field_stops_detail_label_en', v)} />
                     <FieldText label="Quali tappe placeholder (IT)" value={copy.field_stops_detail_placeholder_it} onChange={v => update('field_stops_detail_placeholder_it', v)} />
                     <FieldText label="Which stops placeholder (EN)" value={copy.field_stops_detail_placeholder_en} onChange={v => update('field_stops_detail_placeholder_en', v)} />
-                    <FieldText label="Bagagli label (IT)" value={copy.field_luggage_label_it} onChange={v => update('field_luggage_label_it', v)} />
-                    <FieldText label="Luggage label (EN)" value={copy.field_luggage_label_en} onChange={v => update('field_luggage_label_en', v)} />
-                    <FieldText label="Bagagli riga sotto (IT)" value={copy.field_luggage_placeholder_it} onChange={v => update('field_luggage_placeholder_it', v)} />
-                    <FieldText label="Luggage hint line (EN)" value={copy.field_luggage_placeholder_en} onChange={v => update('field_luggage_placeholder_en', v)} />
                     <FieldText label="Numero bagagli label (IT)" value={copy.field_luggage_count_label_it} onChange={v => update('field_luggage_count_label_it', v)} />
                     <FieldText label="Luggage count label (EN)" value={copy.field_luggage_count_label_en} onChange={v => update('field_luggage_count_label_en', v)} />
                     <FieldText label="Numero bagagli — ultima voce (IT)" value={copy.field_luggage_count_max_option_it} onChange={v => update('field_luggage_count_max_option_it', v)} />
@@ -4697,8 +4675,6 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                     <FieldTextArea label="Disclaimer (EN)" value={copy.disclaimer_en} onChange={v => update('disclaimer_en', v)} />
                     <FieldText label="Alert successo (IT)" value={copy.alert_success_it} onChange={v => update('alert_success_it', v)} />
                     <FieldText label="Success alert (EN)" value={copy.alert_success_en} onChange={v => update('alert_success_en', v)} />
-                    <FieldText label="Alert errore (IT)" value={copy.alert_error_it} onChange={v => update('alert_error_it', v)} />
-                    <FieldText label="Error alert (EN)" value={copy.alert_error_en} onChange={v => update('alert_error_en', v)} />
                 </div>
             </section>
 
@@ -4909,30 +4885,6 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                     <FieldText label='Button "EXPLORE" (EN)' value={copy.explore_label_en} onChange={v => update('explore_label_en', v)} />
                     <FieldText label='Voce "ACCOUNT" (IT)' value={copy.account_label_it ?? ''} onChange={v => update('account_label_it', v)} />
                     <FieldText label='Item "ACCOUNT" (EN)' value={copy.account_label_en ?? ''} onChange={v => update('account_label_en', v)} />
-                    <FieldText label='Pill "Credit Wallet" (IT)' value={copy.credit_wallet_label_it} onChange={v => update('credit_wallet_label_it', v)} />
-                    <FieldText label='Pill "Credit Wallet" (EN)' value={copy.credit_wallet_label_en} onChange={v => update('credit_wallet_label_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Drawer (menu laterale)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label='CTA "Prenota Ora" (IT)' value={copy.drawer_book_cta_it} onChange={v => update('drawer_book_cta_it', v)} />
-                    <FieldText label='CTA "Book Now" (EN)' value={copy.drawer_book_cta_en} onChange={v => update('drawer_book_cta_en', v)} />
-                    <FieldText label='Etichetta "La Nostra Flotta" (IT)' value={copy.flotta_label_it} onChange={v => update('flotta_label_it', v)} />
-                    <FieldText label='Label "Our Fleet" (EN)' value={copy.flotta_label_en} onChange={v => update('flotta_label_en', v)} />
-                    <FieldText label='Titolo sezione "Servizi" (IT)' value={copy.servizi_heading_it} onChange={v => update('servizi_heading_it', v)} />
-                    <FieldText label='Section heading "Services" (EN)' value={copy.servizi_heading_en} onChange={v => update('servizi_heading_en', v)} />
-                    <FieldText label='Titolo sezione "Esperienze" (IT)' value={copy.esperienze_heading_it} onChange={v => update('esperienze_heading_it', v)} />
-                    <FieldText label='Section heading "Experiences" (EN)' value={copy.esperienze_heading_en} onChange={v => update('esperienze_heading_en', v)} />
-                    <FieldText label='Titolo sezione "Prime Wash" (IT)' value={copy.prime_wash_heading_it} onChange={v => update('prime_wash_heading_it', v)} />
-                    <FieldText label='Section heading "Prime Wash" (EN)' value={copy.prime_wash_heading_en} onChange={v => update('prime_wash_heading_en', v)} />
-                    <FieldText label='Titolo sezione "Business" (IT)' value={copy.business_heading_it} onChange={v => update('business_heading_it', v)} />
-                    <FieldText label='Section heading "Business" (EN)' value={copy.business_heading_en} onChange={v => update('business_heading_en', v)} />
-                    <FieldText label='Titolo sezione "Digital" (IT)' value={copy.digital_heading_it} onChange={v => update('digital_heading_it', v)} />
-                    <FieldText label='Section heading "Digital" (EN)' value={copy.digital_heading_en} onChange={v => update('digital_heading_en', v)} />
-                    <FieldText label='CTA "Contattaci" (IT)' value={copy.contact_cta_it} onChange={v => update('contact_cta_it', v)} />
-                    <FieldText label='CTA "Contact us" (EN)' value={copy.contact_cta_en} onChange={v => update('contact_cta_en', v)} />
                 </div>
             </section>
 
@@ -4957,16 +4909,6 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                             </div>
                         </div>
                     ))}
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Popup prenotazione (apre dal drawer)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo popup (IT)" value={copy.popup_title_it} onChange={v => update('popup_title_it', v)} />
-                    <FieldText label="Popup title (EN)" value={copy.popup_title_en} onChange={v => update('popup_title_en', v)} />
-                    <FieldText label="Sottotitolo popup (IT)" value={copy.popup_subtitle_it} onChange={v => update('popup_subtitle_it', v)} />
-                    <FieldText label="Popup subtitle (EN)" value={copy.popup_subtitle_en} onChange={v => update('popup_subtitle_en', v)} />
                 </div>
             </section>
         </div>
@@ -5184,10 +5126,6 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di validazione</h3>
                 <p className="text-[12px] text-theme-text-secondary -mt-2">Mostrati inline accanto al campo invalido al momento del submit.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label='Voce vuota tendina tipo cliente (IT)' value={copy.client_type_default_it} onChange={v => update('client_type_default_it', v)} />
-                    <FieldText label='Client type placeholder (EN)' value={copy.client_type_default_en} onChange={v => update('client_type_default_en', v)} />
-                    <FieldText label='Voce vuota tendina tipo documento (IT)' value={copy.field_doc_type_default_it} onChange={v => update('field_doc_type_default_it', v)} />
-                    <FieldText label='Document type placeholder (EN)' value={copy.field_doc_type_default_en} onChange={v => update('field_doc_type_default_en', v)} />
                     <FieldText label="Tipo cliente obbligatorio (IT)" value={copy.err_select_client_type_it} onChange={v => update('err_select_client_type_it', v)} />
                     <FieldText label="Client type required (EN)" value={copy.err_select_client_type_en} onChange={v => update('err_select_client_type_en', v)} />
                     <FieldText label="Nazione obbligatorio (IT)" value={copy.err_country_required_it} onChange={v => update('err_country_required_it', v)} />
@@ -5252,6 +5190,70 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                     <FieldText label="City required (EN)" value={copy.err_city_required_en} onChange={v => update('err_city_required_en', v)} />
                     <FieldText label="Indirizzo obbligatorio PA (IT)" value={copy.err_pa_address_required_it} onChange={v => update('err_pa_address_required_it', v)} />
                     <FieldText label="PA address required (EN)" value={copy.err_pa_address_required_en} onChange={v => update('err_pa_address_required_en', v)} />
+                </div>
+            </section>
+
+            {/* 15/09/2026: i tre blocchi qui sotto erano gli ultimi testi della
+                registrazione visibili sul sito ma senza casella nel gestionale.
+                SignUpPage li legge gia' (`s('section_patente_it', …)`): mancava
+                solo il posto dove scriverli. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Patente di guida</h3>
+                <p className="text-[11px] text-theme-text-secondary">
+                    Il riquadro che compare dopo il caricamento della patente. I campi si compilano da
+                    soli leggendo il documento: qui si cambia solo come si chiamano.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.section_patente_it} onChange={v => update('section_patente_it', v)} />
+                    <FieldText label="Section title (EN)" value={copy.section_patente_en} onChange={v => update('section_patente_en', v)} />
+                    <FieldTextArea label="Nota sotto il titolo (IT)" value={copy.patente_hint_it} onChange={v => update('patente_hint_it', v)} />
+                    <FieldTextArea label="Hint under the title (EN)" value={copy.patente_hint_en} onChange={v => update('patente_hint_en', v)} />
+                    <FieldText label='Campo "Categoria" (IT)' value={copy.field_patente_tipo_it} onChange={v => update('field_patente_tipo_it', v)} />
+                    <FieldText label='Field "Category" (EN)' value={copy.field_patente_tipo_en} onChange={v => update('field_patente_tipo_en', v)} />
+                    <FieldText label='Campo "Numero patente" (IT)' value={copy.field_patente_numero_it} onChange={v => update('field_patente_numero_it', v)} />
+                    <FieldText label='Field "Licence number" (EN)' value={copy.field_patente_numero_en} onChange={v => update('field_patente_numero_en', v)} />
+                    <FieldText label='Campo "Rilasciata da" (IT)' value={copy.field_patente_ente_it} onChange={v => update('field_patente_ente_it', v)} />
+                    <FieldText label='Field "Issued by" (EN)' value={copy.field_patente_ente_en} onChange={v => update('field_patente_ente_en', v)} />
+                    <FieldText label='Campo "Data di conseguimento" (IT)' value={copy.field_patente_rilascio_it} onChange={v => update('field_patente_rilascio_it', v)} />
+                    <FieldText label='Field "Date obtained" (EN)' value={copy.field_patente_rilascio_en} onChange={v => update('field_patente_rilascio_en', v)} />
+                    <FieldText label='Campo "Scadenza" (IT)' value={copy.field_patente_scadenza_it} onChange={v => update('field_patente_scadenza_it', v)} />
+                    <FieldText label='Field "Expiry date" (EN)' value={copy.field_patente_scadenza_en} onChange={v => update('field_patente_scadenza_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Compilazione automatica dai documenti</h3>
+                <p className="text-[11px] text-theme-text-secondary">
+                    Il riquadro in cima al modulo che propone di caricare patente e documento per
+                    compilare i campi da soli.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.prefill_title_it} onChange={v => update('prefill_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.prefill_title_en} onChange={v => update('prefill_title_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.prefill_body_it} onChange={v => update('prefill_body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.prefill_body_en} onChange={v => update('prefill_body_en', v)} />
+                    <FieldText label="Pulsante (IT)" value={copy.prefill_cta_it} onChange={v => update('prefill_cta_it', v)} />
+                    <FieldText label="Button (EN)" value={copy.prefill_cta_en} onChange={v => update('prefill_cta_en', v)} />
+                    <FieldTextArea label="Errore di lettura (IT)" value={copy.prefill_error_it} onChange={v => update('prefill_error_it', v)} />
+                    <FieldTextArea label="Read error (EN)" value={copy.prefill_error_en} onChange={v => update('prefill_error_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Popup "Compila piu' velocemente"</h3>
+                <p className="text-[11px] text-theme-text-secondary">
+                    La finestrella che si apre da sola sulla registrazione e offre le due strade:
+                    caricare i documenti o proseguire a mano.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.popup_title_it} onChange={v => update('popup_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.popup_title_en} onChange={v => update('popup_title_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.popup_body_it} onChange={v => update('popup_body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.popup_body_en} onChange={v => update('popup_body_en', v)} />
+                    <FieldText label="Pulsante carica (IT)" value={copy.popup_cta_upload_it} onChange={v => update('popup_cta_upload_it', v)} />
+                    <FieldText label="Upload button (EN)" value={copy.popup_cta_upload_en} onChange={v => update('popup_cta_upload_en', v)} />
+                    <FieldText label="Pulsante continua a mano (IT)" value={copy.popup_cta_manual_it} onChange={v => update('popup_cta_manual_it', v)} />
+                    <FieldText label="Continue manually button (EN)" value={copy.popup_cta_manual_en} onChange={v => update('popup_cta_manual_en', v)} />
                 </div>
             </section>
         </div>
@@ -5868,8 +5870,6 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Errori modale</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Nome obbligatorio (IT)" value={copy.err_name_required_it} onChange={v => update('err_name_required_it', v)} />
-                    <FieldText label="Name required (EN)" value={copy.err_name_required_en} onChange={v => update('err_name_required_en', v)} />
                     <FieldText label="Email obbligatoria (IT)" value={copy.err_email_required_it} onChange={v => update('err_email_required_it', v)} />
                     <FieldText label="Email required (EN)" value={copy.err_email_required_en} onChange={v => update('err_email_required_en', v)} />
                     <FieldText label="Telefono non valido (IT)" value={copy.err_phone_invalid_it} onChange={v => update('err_phone_invalid_it', v)} />
@@ -6316,6 +6316,45 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                     <FieldText label="Email (IT)" value={copy.field_email_it} onChange={v => update('field_email_it', v)} />
                     <FieldText label="Email (EN)" value={copy.field_email_en} onChange={v => update('field_email_en', v)} />
                     <FieldText label="Placeholder Email" value={copy.field_email_placeholder} onChange={v => update('field_email_placeholder', v)} />
+                </div>
+            </section>
+
+            {/* 15/09/2026: la pagina mostrava questi testi e il gestionale non
+                aveva dove scriverli. Stessi due blocchi della registrazione
+                dal sito: si toccano qui perche' la pagina e' un'altra. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Compilazione automatica dai documenti</h3>
+                <p className="text-[11px] text-theme-text-secondary">
+                    Il riquadro in cima al modulo che propone di caricare patente e documento per
+                    compilare i campi da soli.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.prefill_title_it} onChange={v => update('prefill_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.prefill_title_en} onChange={v => update('prefill_title_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.prefill_body_it} onChange={v => update('prefill_body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.prefill_body_en} onChange={v => update('prefill_body_en', v)} />
+                    <FieldText label="Pulsante (IT)" value={copy.prefill_cta_it} onChange={v => update('prefill_cta_it', v)} />
+                    <FieldText label="Button (EN)" value={copy.prefill_cta_en} onChange={v => update('prefill_cta_en', v)} />
+                    <FieldTextArea label="Errore di lettura (IT)" value={copy.prefill_error_it} onChange={v => update('prefill_error_it', v)} />
+                    <FieldTextArea label="Read error (EN)" value={copy.prefill_error_en} onChange={v => update('prefill_error_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Popup "Compila piu' velocemente"</h3>
+                <p className="text-[11px] text-theme-text-secondary">
+                    La finestrella che si apre da sola e offre le due strade: caricare i documenti o
+                    proseguire a mano.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.popup_title_it} onChange={v => update('popup_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.popup_title_en} onChange={v => update('popup_title_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.popup_body_it} onChange={v => update('popup_body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.popup_body_en} onChange={v => update('popup_body_en', v)} />
+                    <FieldText label="Pulsante carica (IT)" value={copy.popup_cta_upload_it} onChange={v => update('popup_cta_upload_it', v)} />
+                    <FieldText label="Upload button (EN)" value={copy.popup_cta_upload_en} onChange={v => update('popup_cta_upload_en', v)} />
+                    <FieldText label="Pulsante continua a mano (IT)" value={copy.popup_cta_manual_it} onChange={v => update('popup_cta_manual_it', v)} />
+                    <FieldText label="Continue manually button (EN)" value={copy.popup_cta_manual_en} onChange={v => update('popup_cta_manual_en', v)} />
                 </div>
             </section>
         </div>

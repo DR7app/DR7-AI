@@ -735,10 +735,10 @@ export default function AdminDashboard() {
       { tab: 'system-control', label: 'DR7 A.I System Control', soloTecnici: true },
     ] },
     { name: 'Sito', tabs: [
-      { tab: 'sito', label: 'Sito' },
-      // 04/09/2026: il Website Builder sta accanto ai testi, non al posto
-      // loro. "Sito" resta la via rapida per correggere una frase; qui si
-      // cambia com'e' fatta la pagina.
+      // 15/09/2026 (direzione): i testi del sito sono una CONFIGURAZIONE, non
+      // una tab operativa. La voce "Sito" e' passata dentro Centralina Pro
+      // (sezione "Sito"): si apre da li'. La rotta 'sito' resta valida per i
+      // link salvati, ma non compare piu' due volte nel menu.
       { tab: 'website-builder', label: 'Website Builder' },
     ] },
     { name: 'DR7 Trust', tabs: [

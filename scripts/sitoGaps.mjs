@@ -21,7 +21,17 @@ import os from 'os'
 
 const ADMIN = process.cwd()
 const SITO = process.env.SITO_REPO || path.join(os.homedir(), 'Sito')
-const tab = fs.readFileSync(path.join(ADMIN, 'src/pages/admin/components/SitoTab.tsx'), 'utf8')
+const tabGrezzo = fs.readFileSync(path.join(ADMIN, 'src/pages/admin/components/SitoTab.tsx'), 'utf8')
+// I commenti non sono caselle. Una nota che cita `s('section_patente_it', …)`
+// bastava a far contare quel campo come modificabile: il rapporto diceva 0
+// anche dopo aver tolto l'input. Si guarda solo il codice.
+const tab = tabGrezzo
+    // I blocchi /* */ e {/* */} vanno via interi: bastava che una riga in
+    // mezzo citasse una chiave perche' il campo risultasse coperto.
+    .replace(/\{?\/\*[\s\S]*?\*\/\}?/g, ' ')
+    .split('\n')
+    .filter(l => !l.trim().startsWith('//'))
+    .join('\n')
 const gen = fs.readFileSync(path.join(ADMIN, 'src/pages/admin/components/sito/siteCopyDefaults.ts'), 'utf8')
 
 // ─── Come l'onglet raggiunge un campo ────────────────────────────────────
@@ -44,6 +54,19 @@ if (/\[`\$\{key\}_\$\{lang\}`\]|`\$\{key\}_\$\{lang\}`/.test(tab)) {
             reachable.add(`${k[1]}_it`)
             reachable.add(`${k[1]}_en`)
         }
+    }
+}
+
+// Un editor puo' comporre la chiave invece di scriverla: l'Aspetto elenca i
+// filmati delle pagine e monta `video_${f.chiave}_url`. Cercare
+// `copy.video_terra_url` non lo trova, e 24 caselle perfettamente funzionanti
+// risultavano "senza casella". Si espande ogni gabarit con le stringhe
+// letterali presenti nel file.
+{
+    const letterali = [...new Set([...tab.matchAll(/'([a-z0-9_]+)'/g)].map(m => m[1]))]
+    for (const m of tab.matchAll(/`([a-z0-9_]+)\$\{[^`]*?\}([a-z0-9_]*)`/g)) {
+        const [, pre, post] = m
+        for (const l of letterali) reachable.add(`${pre}${l}${post}`)
     }
 }
 
@@ -144,15 +167,33 @@ const testoSito = siteFiles
 const chiaviDefault = new Set(
     [...gen.matchAll(/^\s{2}([a-z][a-zA-Z0-9_]*)\??:\s*(?:string|number|boolean|string\[\])/gm)].map(m => m[1]),
 )
+// Anche il sito compone le chiavi: `useFilmato` legge `video_${chiave}_url`.
+// Senza questa regola i 24 filmati risultavano caselle morte pur essendo
+// l'unica fonte del video che si vede sulla pagina.
+const gabaritiSito = [...testoSito.matchAll(/`([a-z0-9_]+)\$\{[^`]*?\}([a-z0-9_]*)`/g)]
+    .map(m => new RegExp(`^${m[1]}.+${m[2]}$`))
+
 const morte = [...chiaviDefault]
     .filter(k => {
         if (!reachable.has(k)) return false            // nessuna casella: e' il punto 2
         const base = k.replace(/_(it|en)$/, '')
-        return !testoSito.includes(k) && !testoSito.includes(base)
+        if (testoSito.includes(k) || testoSito.includes(base)) return false
+        return !gabaritiSito.some(re => re.test(k))
     })
     .sort()
 
 console.log(`\nCASELLE CHE NON CAMBIANO NIENTE (il sito non legge la chiave): ${morte.length}`)
 for (const k of morte) console.log('  -', k)
 
-if (wrongLang.length) process.exitCode = 1
+// 15/09/2026 — la direzione ha chiuso i tre buchi (0 / 0 / 0) e ha chiesto che
+// resti cosi': ogni testo di dr7.app ha la sua casella, e ogni casella cambia
+// qualcosa sul sito. Da qui in poi il rapporto e' anche un divieto, altrimenti
+// la prossima pagina rifatta rimette in fila caselle mute senza che si veda.
+//   - campo senza casella  -> aggiungi l'input nell'editor della sua schermata
+//   - casella senza effetto -> togli la chiave da ~/Sito/utils/siteCopy.ts e
+//                              rigenera (npm run sito:gen && npm run testi:gen),
+//                              oppure falla leggere dalla pagina
+if (wrongLang.length || missingTotal || morte.length) {
+    console.log('\n[gaps] FALLITO — vedi sopra. Il patto e\' 0 campi senza casella e 0 caselle senza effetto.')
+    process.exitCode = 1
+}

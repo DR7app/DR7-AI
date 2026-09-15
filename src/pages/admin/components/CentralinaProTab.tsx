@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { CONTRATTO_VOCI as VOCI, CONTRATTO_DEFAULT as VOCI_DEFAULT, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import toast from 'react-hot-toast'
@@ -29,6 +29,12 @@ import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import MulteConfigSection from './MulteConfigSection'
 import GestioneMailPecSection from './GestioneMailPecSection'
 import MeteoConfigSection from './MeteoConfigSection'
+// 15/09/2026 (direzione): l'onglet "Sito" non e' piu' una tab a se', vive
+// dentro la Centralina come ogni altra configurazione. Caricato pigro: e' il
+// componente piu' grande del gestionale e aprire la Centralina non deve
+// scaricarlo finche' non si apre la sezione.
+import lazyWithRetry from '../../../utils/lazyWithRetry'
+const SitoSection = lazyWithRetry(() => import('./SitoTab'))
 
 type FleetVehicle = {
   id: string
@@ -60,7 +66,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -116,6 +122,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'catalogo', title: 'Catalogo' },
   { id: 'status-clienti', title: 'Status Clienti' },
   { id: 'autisti', title: 'Autisti' },
+  { id: 'sito', title: 'Sito' },
   // 'Marketing' rimossa: ora vive in admin > Marketing > Social Links.
   // Il campo `marketing` resta nel snapshot per preservarlo durante save.
 ]
@@ -2293,7 +2300,10 @@ export default function CentralinaProTab() {
 
   return (
     <div className="min-h-screen bg-theme-bg-primary pb-32">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
+      {/* La sezione Sito ha una sua barra di navigazione (le 66 pagine di
+          dr7.app): dentro i 1152px della Centralina le due barre affiancate
+          lasciavano meno di 250px per colonna ai campi. Solo li' si allarga. */}
+      <div className={`${section === 'sito' ? 'max-w-[1600px]' : 'max-w-6xl'} mx-auto px-4 md:px-8 py-8`}>
         <div className="flex items-start justify-between flex-wrap gap-4 mb-8">
           <div>
             <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-theme-text-primary">
@@ -2563,6 +2573,14 @@ export default function CentralinaProTab() {
                 <AutistiConfigSection />
               </>
             )}
+            {section === 'sito' && (
+              <>
+                <GlobaleBadge cosa="I testi di dr7.app" />
+                <Suspense fallback={<ScheletroTabella righe={8} colonne={2} />}>
+                  <SitoSection incorporato />
+                </Suspense>
+              </>
+            )}
             </>)}
           </main>
         </div>
@@ -2574,6 +2592,7 @@ export default function CentralinaProTab() {
           Salva: mostrarne due confondeva, e quello grande li' non salvava
           niente di quella sezione. */}
       {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti'
+        && section !== 'sito'
         && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && (
         <SaveBar
           changes={changes}

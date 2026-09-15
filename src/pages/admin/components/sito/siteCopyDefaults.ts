@@ -302,8 +302,6 @@ export interface HomeMetric {
 }
 
 export interface HomeCopy {
-  seo_h1_it: string;
-  seo_h1_en: string;
   hero_autoplay_seconds: number;     // default 8
   hero_slides: HomeSlide[];
   categories: HomeCategoryOverride[];
@@ -786,7 +784,6 @@ export interface CreditWalletCopy {
   modal_pay_template_it: string; modal_pay_template_en: string;   // "Paga €{amount}"
   modal_processing_it: string; modal_processing_en: string;
   // Validation / errors
-  err_name_required_it: string; err_name_required_en: string;
   err_email_required_it: string; err_email_required_en: string;
   err_phone_invalid_it: string; err_phone_invalid_en: string;
   err_cf_invalid_it: string; err_cf_invalid_en: string;
@@ -930,7 +927,6 @@ export interface SignUpCopy {
   popup_cta_manual_it: string; popup_cta_manual_en: string;
   // Client type selector
   client_type_label_it: string; client_type_label_en: string;
-  client_type_default_it: string; client_type_default_en: string;
   client_type_azienda_it: string; client_type_azienda_en: string;
   client_type_persona_it: string; client_type_persona_en: string;
   client_type_pa_it: string; client_type_pa_en: string;
@@ -964,7 +960,6 @@ export interface SignUpCopy {
   field_ruolo_it: string; field_ruolo_en: string;
   field_ruolo_placeholder_it: string; field_ruolo_placeholder_en: string;
   field_doc_type_it: string; field_doc_type_en: string;
-  field_doc_type_default_it: string; field_doc_type_default_en: string;
   field_doc_type_carta_it: string; field_doc_type_carta_en: string;
   field_doc_type_passaporto_it: string; field_doc_type_passaporto_en: string;
   field_doc_type_patente_it: string; field_doc_type_patente_en: string;
@@ -1054,16 +1049,7 @@ export interface HeaderCopy {
   // Voce a destra della lente: porta all'area cliente (o all'accesso se
   // il visitatore non ha ancora fatto login). Fa coppia con MENU a sinistra.
   account_label_it?: string; account_label_en?: string;   // "ACCOUNT"
-  credit_wallet_label_it: string; credit_wallet_label_en: string;
   // Drawer
-  drawer_book_cta_it: string; drawer_book_cta_en: string;       // "Prenota Ora"
-  flotta_label_it: string; flotta_label_en: string;             // "La Nostra Flotta"
-  servizi_heading_it: string; servizi_heading_en: string;
-  esperienze_heading_it: string; esperienze_heading_en: string;
-  prime_wash_heading_it: string; prime_wash_heading_en: string;
-  business_heading_it: string; business_heading_en: string;
-  digital_heading_it: string; digital_heading_en: string;
-  contact_cta_it: string; contact_cta_en: string;               // "Contattaci"
   // Menu principale (redesign): 9 voci, titolo + sottotitolo IT/EN.
   // Opzionali: se mancanti nel DB il sito usa i default hardcoded.
   menu_mobilita_title_it?: string; menu_mobilita_title_en?: string;
@@ -1109,8 +1095,6 @@ export interface HeaderCopy {
   menu_digital_img?: string;
   menu_contatti_img?: string;
   // Booking popup chrome (form itself = BookingSearchBox)
-  popup_title_it: string; popup_title_en: string;               // "Prenota Ora"
-  popup_subtitle_it: string; popup_subtitle_en: string;         // "Seleziona date e orari"
 }
 
 // ─── Aspetto & Funzionalita' del sito ──────────────────────────────────────
@@ -1313,10 +1297,8 @@ export interface AviationQuoteCopy {
   field_arrival_label_it: string; field_arrival_label_en: string;
   field_arrival_placeholder_it: string; field_arrival_placeholder_en: string;
   field_departure_date_label_it: string; field_departure_date_label_en: string;
-  field_departure_time_label_it: string; field_departure_time_label_en: string;
   field_return_flight_label_it: string; field_return_flight_label_en: string;
   field_return_date_label_it: string; field_return_date_label_en: string;
-  field_return_time_label_it: string; field_return_time_label_en: string;
   // Flessibilita': nel charter privato sposta il preventivo piu' di ogni
   // altra risposta, quindi si chiede al cliente invece di darla per fissa.
   field_flexibility_label_it: string; field_flexibility_label_en: string;
@@ -1325,8 +1307,6 @@ export interface AviationQuoteCopy {
   field_stops_label_it: string; field_stops_label_en: string;
   field_stops_detail_label_it: string; field_stops_detail_label_en: string;
   field_stops_detail_placeholder_it: string; field_stops_detail_placeholder_en: string;
-  field_luggage_label_it: string; field_luggage_label_en: string;
-  field_luggage_placeholder_it: string; field_luggage_placeholder_en: string;
   // Bagagli: due tendine invece di un campo libero. Le voci del peso sono
   // una riga sola separata da virgole, cosi' l'operatore le cambia da qui.
   field_luggage_count_label_it: string; field_luggage_count_label_en: string;
@@ -1350,7 +1330,6 @@ export interface AviationQuoteCopy {
   submit_submitting_it: string; submit_submitting_en: string;
   disclaimer_it: string; disclaimer_en: string;
   alert_success_it: string; alert_success_en: string;
-  alert_error_it: string; alert_error_en: string;
   // WhatsApp recipient phone (template body now in system_messages).
   whatsapp_phone: string;
 }
@@ -1543,7 +1522,6 @@ export interface CareersCopy {
   jobs: CareersJob[];
   apply_heading_it: string; apply_heading_en: string;
   apply_text_it: string; apply_text_en: string;     // supports inline markdown ([label](url))
-  apply_email: string;
 }
 
 // ─── Press ──────────────────────────────────────────────────────────────────
@@ -1662,12 +1640,6 @@ export interface FooterLink {
 }
 
 export interface FooterCopy {
-  // Network band
-  network_title: string;
-  network_title_it?: string;
-  network_title_en?: string;
-  network_text_it: string;
-  network_text_en: string;
   social_links: FooterSocialLink[];
   // Reviews band header
   reviews_title: string;
@@ -1679,10 +1651,6 @@ export interface FooterCopy {
    *  (es. /recensioni-scena.jpg) o indirizzo completo. Sta a destra e si
    *  spegne verso sinistra, dove corre il testo. Vuota = solo il fondo. */
   reviews_image?: string;
-  // Contact band
-  contact_title: string;
-  contact_whatsapp_number: string;     // displayed text, e.g. "+39 345 790 5205"
-  contact_whatsapp_url: string;        // wa.me URL
   contact_company_name: string;
   contact_legal_address_it: string;
   contact_legal_address_en: string;
@@ -1789,17 +1757,6 @@ export const INITIAL_HEADER: HeaderCopy = {
   close_menu_aria_it: 'Chiudi menu', close_menu_aria_en: 'Close menu',
   explore_label_it: 'MENU', explore_label_en: 'MENU',
   account_label_it: 'ACCOUNT', account_label_en: 'ACCOUNT',
-  credit_wallet_label_it: 'Credit Wallet', credit_wallet_label_en: 'Credit Wallet',
-  drawer_book_cta_it: 'Prenota Ora', drawer_book_cta_en: 'Book Now',
-  flotta_label_it: 'La Nostra Flotta', flotta_label_en: 'Our Fleet',
-  servizi_heading_it: 'Servizi & Mobilità di Lusso', servizi_heading_en: 'Services & Luxury Mobility',
-  esperienze_heading_it: 'Esperienze & Accesso Esclusivo', esperienze_heading_en: 'Experiences & Exclusive Access',
-  prime_wash_heading_it: 'Lavaggio & Meccanica', prime_wash_heading_en: 'Car Wash & Mechanics',
-  business_heading_it: 'Business & Corporate', business_heading_en: 'Business & Corporate',
-  digital_heading_it: 'Innovazione Digitale', digital_heading_en: 'Digital Innovation',
-  contact_cta_it: 'Contattaci', contact_cta_en: 'Contact us',
-  popup_title_it: 'Prenota Ora', popup_title_en: 'Book Now',
-  popup_subtitle_it: 'Seleziona date e orari', popup_subtitle_en: 'Select dates and times',
 };
 
 /**
@@ -2292,7 +2249,6 @@ export const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
   modal_cancel_it: 'Annulla', modal_cancel_en: 'Cancel',
   modal_pay_template_it: 'Paga €{amount}', modal_pay_template_en: 'Pay €{amount}',
   modal_processing_it: 'Elaborazione...', modal_processing_en: 'Processing...',
-  err_name_required_it: 'Il nome è obbligatorio', err_name_required_en: 'Name is required',
   err_email_required_it: 'L\'email è obbligatoria', err_email_required_en: 'Email is required',
   err_phone_invalid_it: 'Formato telefono non valido', err_phone_invalid_en: 'Invalid phone format',
   err_cf_invalid_it: 'Codice Fiscale non valido (16 caratteri)',
@@ -2462,7 +2418,6 @@ export const INITIAL_SIGNUP: SignUpCopy = {
   popup_cta_manual_it: 'Continua manualmente',
   popup_cta_manual_en: 'Continue manually',
   client_type_label_it: 'Tipo Cliente', client_type_label_en: 'Client Type',
-  client_type_default_it: 'Seleziona...', client_type_default_en: 'Select...',
   client_type_azienda_it: 'Azienda', client_type_azienda_en: 'Company',
   client_type_persona_it: 'Persona Fisica', client_type_persona_en: 'Individual',
   client_type_pa_it: 'Pubblica Amministrazione', client_type_pa_en: 'Public Administration',
@@ -2492,7 +2447,6 @@ export const INITIAL_SIGNUP: SignUpCopy = {
   field_ruolo_it: 'Ruolo', field_ruolo_en: 'Role',
   field_ruolo_placeholder_it: 'Es. Amministratore', field_ruolo_placeholder_en: 'E.g. Administrator',
   field_doc_type_it: 'Tipo', field_doc_type_en: 'Type',
-  field_doc_type_default_it: 'Seleziona...', field_doc_type_default_en: 'Select...',
   field_doc_type_carta_it: "Carta d'Identità", field_doc_type_carta_en: 'ID Card',
   field_doc_type_passaporto_it: 'Passaporto', field_doc_type_passaporto_en: 'Passport',
   field_doc_type_patente_it: 'Patente', field_doc_type_patente_en: 'Driving Licence',
@@ -2650,10 +2604,8 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   field_arrival_label_it: 'Qual è la destinazione?', field_arrival_label_en: 'What is your destination?',
   field_arrival_placeholder_it: 'Parigi, Londra, Ibiza...', field_arrival_placeholder_en: 'Paris, London, Ibiza...',
   field_departure_date_label_it: 'Data di partenza', field_departure_date_label_en: 'Departure date',
-  field_departure_time_label_it: 'Orario indicativo di partenza', field_departure_time_label_en: 'Approximate departure time',
   field_return_flight_label_it: 'Hai bisogno anche del volo di ritorno?', field_return_flight_label_en: 'Do you also need a return flight?',
   field_return_date_label_it: 'Data di ritorno (opzionale)', field_return_date_label_en: 'Return date (optional)',
-  field_return_time_label_it: 'Orario indicativo di ritorno (opzionale)', field_return_time_label_en: 'Approximate return time (optional)',
   field_flexibility_label_it: 'Le date e gli orari sono flessibili?', field_flexibility_label_en: 'Are your dates and times flexible?',
   field_flexibility_hint_it: '', field_flexibility_hint_en: '',
   field_passengers_label_it: 'Numero di passeggeri', field_passengers_label_en: 'Number of passengers',
@@ -2661,9 +2613,6 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   field_stops_detail_label_it: 'Indica le tappe o gli scali desiderati', field_stops_detail_label_en: 'Which stops would you like?',
   field_stops_detail_placeholder_it: "Esempio: scalo a Nizza all'andata",
   field_stops_detail_placeholder_en: 'Example: stop in Nice on the way out',
-  field_luggage_label_it: 'Bagagli', field_luggage_label_en: 'Luggage',
-  field_luggage_placeholder_it: 'Quanti e specifica peso',
-  field_luggage_placeholder_en: 'How many, and their approximate weight',
   field_luggage_count_label_it: 'Numero di bagagli', field_luggage_count_label_en: 'Number of bags',
   field_luggage_count_max_option_it: 'Più di 10', field_luggage_count_max_option_en: 'More than 10',
   field_luggage_weight_label_it: 'Peso per bagaglio', field_luggage_weight_label_en: 'Weight per bag',
@@ -2689,8 +2638,6 @@ export const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
   disclaimer_en: 'You\'ll be redirected to WhatsApp. We\'ll contact you within 24 hours with a personalized quote.',
   alert_success_it: 'Richiesta inviata! Ti contatteremo presto.',
   alert_success_en: 'Request sent! We\'ll be in touch soon.',
-  alert_error_it: 'Errore durante l\'invio della richiesta. Riprova.',
-  alert_error_en: 'Error submitting your request. Please try again.',
   whatsapp_phone: '393457905205',
 };
 
@@ -2996,7 +2943,6 @@ export const INITIAL_CAREERS: CareersCopy = {
   apply_heading_en: 'How to Apply',
   apply_text_it: 'Se pensi di avere ciò che serve per far parte di DR7, invia il tuo curriculum vitae e una lettera di presentazione a [candidatura@dr7.app](mailto:candidatura@dr7.app).',
   apply_text_en: 'If you think you have what it takes to join DR7, send your CV and cover letter to [candidatura@dr7.app](mailto:candidatura@dr7.app).',
-  apply_email: 'candidatura@dr7.app',
 };
 
 // ─── Default Press seed ────────────────────────────────────────────────────
@@ -3178,11 +3124,6 @@ export const INITIAL_CONTACT: ContactCopy = {
 
 // ─── Default Footer seed ────────────────────────────────────────────────────
 export const INITIAL_FOOTER: FooterCopy = {
-  network_title: 'Join the DR7 Network',
-  network_title_it: 'Entra nel Network DR7',
-  network_title_en: 'Join the DR7 Network',
-  network_text_it: 'Entra nel nostro ecosistema globale e segui i nostri canali social per contenuti esclusivi e aggiornamenti dal mondo DR7 Cagliari.',
-  network_text_en: 'Join our global ecosystem and follow our social channels for exclusive content and updates from the DR7 Cagliari world.',
   social_links: [
     { id: 'ig', label: 'Instagram', href: 'https://www.instagram.com/dubai_rent_7.0_s_p_a_', icon: 'instagram' },
     { id: 'tt', label: 'Tiktok',    href: 'https://www.tiktok.com/@dr7luxuryempire',           icon: 'tiktok' },
@@ -3196,9 +3137,6 @@ export const INITIAL_FOOTER: FooterCopy = {
   reviews_text_it: 'Clienti da tutto il mondo. Storie reali, esperienze che parlano per noi.',
   reviews_text_en: 'Guests from all over the world. Real stories, experiences that speak for us.',
   reviews_image: '/recensioni-scena.jpg',
-  contact_title: 'Contact',
-  contact_whatsapp_number: '+39 345 790 5205',
-  contact_whatsapp_url: 'https://wa.me/393457905205',
   contact_company_name: 'DR7 S.p.A.',
   contact_legal_address_it: 'Sede Legale: Via del Fangario 25, 09122 Cagliari (CA) – Italia',
   contact_legal_address_en: 'Registered Office: Via del Fangario 25, 09122 Cagliari (CA) – Italy',
@@ -3286,8 +3224,6 @@ export const INITIAL_ABOUT: AboutCopy = {
 // Mirrors the legacy hardcoded HomePage values (HERO_SLIDES + DISPLAY_TITLE
 // + CATEGORY_IMAGE) so swapping to admin-managed copy is a no-op until edited.
 export const INITIAL_HOME: HomeCopy = {
-  seo_h1_it: 'DR7 — Noleggio Auto di Lusso, Supercar e Servizi Premium in Sardegna',
-  seo_h1_en: 'DR7 — Luxury Car Rental, Supercars & Premium Services in Sardinia',
   hero_autoplay_seconds: 8,
   // UNA sola scena d'apertura: `/main.mp4`, quella con cui il sito si e'
   // sempre aperto ed era la prima delle sei in configurazione.
