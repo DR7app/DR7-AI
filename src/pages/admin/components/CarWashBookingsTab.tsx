@@ -2135,10 +2135,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // ===== OTP GATE: Credit Wallet con credito insufficiente =====
-    // 15/09/2026: col metodo "Credit Wallet" l'importo esce davvero dal wallet
-    // del cliente quando la prenotazione viene salvata. Se il saldo non basta
-    // il wallet va in negativo: si puo' fare, ma lo autorizza la direzione.
-    // Nessun blocco secco — OTP e si procede.
+    // 15/09/2026 (direzione): col metodo "Credit Wallet" l'importo esce davvero
+    // dal wallet del cliente quando la prenotazione viene salvata. Il Credit
+    // Wallet NON puo' andare in negativo: senza copertura la prenotazione non
+    // si salva. Niente OTP di proposito — col toggle spento in Gestione OTP si
+    // auto-approva in silenzio, ed e' cosi' che era passata una prenotazione
+    // senza credito.
     if (!currentVehicleIsTest && isCreditWallet(formData.payment_method)) {
       const dovutoWallet = importoDovutoWallet({
         metodo: formData.payment_method,
@@ -5455,13 +5457,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
-                      <span className={`font-semibold ${insufficiente ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-primary'}`}>
+                      <span className={`font-semibold ${insufficiente ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'}`}>
                         {formattaEuro(residuo)}
                       </span>
                     </div>
                     {insufficiente && (
-                      <p className="pt-1 text-amber-600 dark:text-amber-400">
-                        Il credito non basta: il wallet andrebbe in negativo. Salvando verr&agrave; chiesta l&apos;autorizzazione della direzione.
+                      <p className="pt-1 text-red-600 dark:text-red-400">
+                        Il credito non basta e il Credit Wallet non puo&apos; andare in negativo: con questo
+                        metodo la prenotazione non si salva. Scegli un altro metodo di pagamento oppure
+                        ricarica il wallet del cliente.
                       </p>
                     )}
                   </div>
