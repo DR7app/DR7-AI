@@ -74,6 +74,27 @@ const leggi = (f) => fs.readFileSync(new URL(`../supabase/migrations/${f}`, impo
 await db.exec(leggi('20260915000000_wallet_addebito_prenotazione.sql'))
 await db.exec(leggi('20260916000000_wallet_crediti_vincolati.sql'))
 
+// Il sito prenota da `book_with_credits`: qui si ricrea quel che gli serve.
+await db.exec(`
+ALTER TABLE public.bookings
+  ADD COLUMN IF NOT EXISTS vehicle_image_url text,
+  ADD COLUMN IF NOT EXISTS pickup_date timestamptz,
+  ADD COLUMN IF NOT EXISTS dropoff_date timestamptz,
+  ADD COLUMN IF NOT EXISTS pickup_location text,
+  ADD COLUMN IF NOT EXISTS dropoff_location text,
+  ADD COLUMN IF NOT EXISTS currency text,
+  ADD COLUMN IF NOT EXISTS booking_source text,
+  ADD COLUMN IF NOT EXISTS booked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS customer_phone text,
+  ADD COLUMN IF NOT EXISTS deposit_amount numeric,
+  ADD COLUMN IF NOT EXISTS vehicle_id uuid,
+  ADD COLUMN IF NOT EXISTS insurance_option text,
+  ADD COLUMN IF NOT EXISTS booking_usage_zone text,
+  ADD COLUMN IF NOT EXISTS vehicle_type text;
+CREATE TABLE IF NOT EXISTS public.vehicles (id uuid PRIMARY KEY, plate text);
+`)
+await db.exec(leggi('20260916010000_book_with_credits_vincolato.sql'))
+
 const ok = (c, m) => { console.log(`${c ? 'OK  ' : 'KO  '} ${m}`); if (!c) process.exit(1) }
 const q = async (s, p) => (await db.query(s, p)).rows
 const uno = async (s, p) => (await q(s, p))[0]
@@ -161,5 +182,36 @@ tit('10. La migrazione si puo rilanciare')
 await db.exec(leggi('20260916000000_wallet_crediti_vincolati.sql'))
 ok(await residuo(soloLavaggio) === 40, 'rilanciarla non cambia i residui')
 ok(await disponibile('car_wash') === 90, 'ne le disponibilita (40 del lotto lavaggio + 50 di quello valido su due servizi)')
+
+tit('11. Il sito: book_with_credits usa il vincolato')
+await db.query('UPDATE public.user_credit_balance SET balance = 10 WHERE user_id=$1', [CLIENTE])
+const lottoTerra = await lotto('Promo Terra', 70, null, ['rental'])
+const esito = await uno(
+  `SELECT public.book_with_credits($1, $2, $3, $4::jsonb) AS r`,
+  [CLIENTE, 13000, 'Audi RS3', JSON.stringify({
+    user_id: CLIENTE, vehicle_name: 'Audi RS3', vehicle_type: 'car',
+    pickup_date: '2026-10-01T10:00:00Z', dropoff_date: '2026-10-03T10:00:00Z',
+    price_total: 13000, currency: 'EUR', service_type: 'car_rental',  // in centesimi, come il sito
+  })])
+ok(esito.r.success === true, 'la prenotazione dal sito e passata')
+ok(Number(esito.r.da_credito_vincolato) === 120, 'ha usato tutto il vincolato valido su Terra: 50 + 70')
+ok(await residuo(lottoTerra) === 0, 'il lotto Terra e vuoto')
+ok(await residuo(soloLavaggio) === 40, 'il lotto solo-lavaggio non e stato toccato')
+ok(await saldo() === 0, 'e dal saldo libero sono usciti solo i 10 mancanti')
+const movimento = await uno(
+  `SELECT booking_id FROM public.wallet_crediti_vincolati_movimenti WHERE lotto_id=$1 ORDER BY created_at DESC LIMIT 1`,
+  [lottoTerra])
+ok(!!movimento.booking_id, 'il movimento del lotto sa a quale prenotazione appartiene')
+
+tit('12. Dal sito, senza credito valido su quel servizio, si rifiuta')
+await db.query('UPDATE public.user_credit_balance SET balance = 0 WHERE user_id=$1', [CLIENTE])
+let rifiutataSito = false
+try {
+  await uno(`SELECT public.book_with_credits($1, $2, $3, $4::jsonb) AS r`,
+    [CLIENTE, 3000, 'Barca', JSON.stringify({ user_id: CLIENTE, vehicle_name: 'Barca', service_type: 'boat_rental', price_total: 3000 })])
+} catch (e) {
+  rifiutataSito = /insufficiente/i.test(e.message)
+}
+ok(rifiutataSito, 'sul Mare non passa: il credito lavaggio non vale li')
 
 console.log('\nSCENARIO COMPLETO: tutto verificato.')
