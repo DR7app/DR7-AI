@@ -109,7 +109,19 @@ export const handler: Handler = async (event) => {
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       console.error('[lookup-targa] OpenAPI error', res.status, body)
-      return { statusCode: 502, headers, body: JSON.stringify({ error: `Errore API (${res.status})` }) }
+      // 16/09/2026 — "Errore API (401)" mandava l'operatore a cercare un
+      // problema di permessi suoi. Il 401 di OpenAPI vuol dire che l'account
+      // del servizio targhe non e' attivo (credito finito, abbonamento
+      // scaduto, token revocato): non lo risolve nessuno da qui dentro, e chi
+      // guarda lo schermo deve sapere dove andare.
+      const inattivo = res.status === 401 || res.status === 403
+      const senzaCredito = res.status === 402 || res.status === 429
+      const messaggio = inattivo
+        ? 'Servizio targhe non attivo (account OpenAPI): controlla abbonamento e credito su openapi.com'
+        : senzaCredito
+          ? 'Servizio targhe senza credito o oltre il limite di chiamate (OpenAPI)'
+          : `Errore API (${res.status})`
+      return { statusCode: 502, headers, body: JSON.stringify({ error: messaggio }) }
     }
 
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown> }
