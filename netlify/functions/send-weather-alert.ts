@@ -134,7 +134,44 @@ function normalizePhone(raw: string): string | null {
   return phone || null
 }
 
-interface Recipient { name: string; vehicle: string; phone: string }
+interface Recipient { name: string; vehicle: string; phone: string; plate: string; dropoff: string }
+
+/**
+ * I segnaposto del template, sostituiti PER OGNI destinatario.
+ *
+ * 16/09/2026 — bug in produzione: questa funzione spediva il testo di
+ * `system_messages` cosi' com'era. La direzione ha scritto "Gentile {nome},"
+ * e i clienti hanno ricevuto le parentesi graffe. La sostituzione c'era in
+ * tutti gli altri invii (check-in, recensioni, voucher, cauzioni) ma non qui.
+ *
+ * L'ultima riga e' la rete di sicurezza: qualunque segnaposto rimasto, anche
+ * uno inventato in un template, viene tolto invece di partire a schermo. Un
+ * cliente non deve mai vedere una graffa.
+ */
+function componiMessaggio(testo: string, r: Recipient): string {
+  const nome = String(r.name || '').trim()
+  const primoNome = nome.split(/\s+/)[0] || 'Cliente'
+  const valori: Record<string, string> = {
+    '{nome}': primoNome,
+    '{name}': primoNome,
+    '{customer_name}': nome || 'Cliente',
+    '{nome_completo}': nome || 'Cliente',
+    '{vehicle_name}': r.vehicle || '',
+    '{veicolo}': r.vehicle || '',
+    '{plate}': r.plate || '',
+    '{targa}': r.plate || '',
+    '{dropoff_date}': r.dropoff ? new Date(r.dropoff).toLocaleDateString('it-IT') : '',
+    '{data_riconsegna}': r.dropoff ? new Date(r.dropoff).toLocaleDateString('it-IT') : '',
+  }
+  let out = String(testo || '')
+  for (const [chiave, valore] of Object.entries(valori)) out = out.split(chiave).join(valore)
+  const rimasti = out.match(/\{[a-z0-9_]+\}/gi)
+  if (rimasti) {
+    console.warn('[send-weather-alert] segnaposto sconosciuti tolti dal messaggio:', [...new Set(rimasti)].join(', '))
+    out = out.replace(/\{[a-z0-9_]+\}/gi, '')
+  }
+  return out.replace(/[ \t]+\n/g, '\n').trim()
+}
 
 /**
  * Assicura che ESISTANO in system_messages le righe dei template meteo, cosi'
@@ -234,7 +271,13 @@ export async function runWeatherAlert(
 
     const name = (r as { customer_name?: string }).customer_name || (custObj.fullName as string) || 'Cliente'
     const vehicle = (r as { vehicle_name?: string }).vehicle_name || (r as { vehicle_plate?: string }).vehicle_plate || ''
-    recipients.push({ name, vehicle, phone })
+    recipients.push({
+      name,
+      vehicle,
+      phone,
+      plate,
+      dropoff: String((r as { dropoff_date?: string }).dropoff_date || ''),
+    })
   }
 
   if (preview) return { recipients, sent: 0, failed: 0, count: recipients.length, templateKey, business }
@@ -284,7 +327,7 @@ export async function runWeatherAlert(
       const resp = await fetch(greenApiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: `${rcpt.phone}@c.us`, message: messageBody }),
+        body: JSON.stringify({ chatId: `${rcpt.phone}@c.us`, message: componiMessaggio(messageBody, rcpt) }),
       })
       const result = await resp.json()
       if (!resp.ok || result.error) { console.error('[send-weather-alert] Green API error for', rcpt.phone, result); failed++; continue }
@@ -294,7 +337,7 @@ export async function runWeatherAlert(
           supabase.from('sent_messages_log').insert({
             customer_name: rcpt.name,
             customer_phone: rcpt.phone,
-            message_text: messageBody,
+            message_text: componiMessaggio(messageBody, rcpt),
             template_label: cfg.label,
             status: 'sent',
           })
