@@ -7434,10 +7434,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             )
             leggiSaldoWallet(formData.customer_id, serviceType).then(setSaldoWallet)
           } else if (['paid', 'succeeded', 'completed', 'partial'].includes((formData.payment_status || '').toLowerCase())) {
-            // Metodo wallet + incasso registrato, ma nel registro non risulta
-            // nessun movimento: quasi sempre significa cliente senza account
-            // sul sito, quindi senza wallet da cui prelevare.
-            toast('Credit Wallet: nessun addebito registrato. Verifica che il cliente abbia un account sul sito.', { duration: 8000, icon: '!' })
+            // Nessun movimento a registro. Due cause diverse, e dirne una per
+            // l'altra manda l'operatore a cercare un problema che non c'e':
+            // sui VEICOLI DI PROVA il denaro non si muove mai, per scelta.
+            const targaProva = (vehicle?.plate || '').toUpperCase().startsWith('TEST')
+              || (vehicle?.display_name || '').trim().toLowerCase() === 'test'
+            if (targaProva) {
+              toast('Veicolo di prova: nessun movimento sul Credit Wallet. E voluto — le prenotazioni di test non toccano denaro vero.', { duration: 8000, icon: '!' })
+            } else {
+              toast('Credit Wallet: nessun addebito registrato. Verifica che il cliente abbia un account sul sito.', { duration: 8000, icon: '!' })
+            }
           }
         } catch { /* la lettura del wallet non puo' far fallire il salvataggio */ }
       }
