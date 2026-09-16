@@ -67,11 +67,15 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role; END IF;
 END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
+-- Gli account del sito: il trigger ci passa per capire se bookings.user_id
+-- e' un account oppure l'id di una scheda cliente.
+CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY, email text);
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
 `)
 
 const leggi = (f) => fs.readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')
 await db.exec(leggi('20260915000000_wallet_addebito_prenotazione.sql'))
+await db.exec(leggi('20260916030000_wallet_account_da_scheda.sql'))
 await db.exec(leggi('20260916000000_wallet_crediti_vincolati.sql'))
 
 // Il sito prenota da `book_with_credits`: qui si ricrea quel che gli serve.
@@ -101,7 +105,13 @@ const uno = async (s, p) => (await q(s, p))[0]
 const tit = (t) => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 62 - t.length))}`)
 
 const CLIENTE = '11111111-1111-1111-1111-111111111111'
+await db.query('INSERT INTO auth.users (id, email) VALUES ($1, $2)', [CLIENTE, 'prova@dr7.app'])
 await db.query('INSERT INTO public.user_credit_balance (user_id, balance) VALUES ($1, 0)', [CLIENTE])
+// La scheda cliente del gestionale: un'altra riga, un altro id. Le prenotazioni
+// scritte dall'ufficio portano QUESTO id in bookings.user_id.
+const SCHEDA = '22222222-2222-2222-2222-222222222222'
+await db.query('INSERT INTO public.customers_extended (id, user_id, email, nome, cognome) VALUES ($1,$2,$3,$4,$5)',
+  [SCHEDA, CLIENTE, 'prova@dr7.app', 'Prova', 'Cliente'])
 
 const saldo = async () => Number((await uno('SELECT balance FROM public.user_credit_balance WHERE user_id=$1', [CLIENTE])).balance)
 const disponibile = async (servizio) =>
@@ -213,5 +223,15 @@ try {
   rifiutataSito = /insufficiente/i.test(e.message)
 }
 ok(rifiutataSito, 'sul Mare non passa: il credito lavaggio non vale li')
+
+tit('13. Prenotazione scritta dall ufficio: user_id e la SCHEDA')
+await db.query('UPDATE public.user_credit_balance SET balance = 0 WHERE user_id=$1', [CLIENTE])
+const lottoUfficio = await lotto('Promo ufficio', 80, null, ['rental'])
+const bUfficio = (await uno(
+  `INSERT INTO public.bookings (user_id, service_type, vehicle_name, price_total, amount_paid, payment_method, payment_status, status)
+   VALUES ($1,'car_rental','Auto',8000,0,'Credit Wallet','paid','confirmed') RETURNING id`, [SCHEDA])).id
+ok(await residuo(lottoUfficio) === 0, 'il credito e stato scalato lo stesso (account trovato dalla scheda)')
+const movUfficio = await uno('SELECT amount FROM public.credit_transactions WHERE reference_id=$1', [bUfficio])
+ok(movUfficio && Number(movUfficio.amount) === 80, 'e il movimento e a registro')
 
 console.log('\nSCENARIO COMPLETO: tutto verificato.')

@@ -315,14 +315,11 @@ BEGIN
   -- (c) Il cliente e il suo wallet. Senza account sito non esiste un wallet da
   --     addebitare: si avvisa e si lascia passare la prenotazione (la scheda
   --     del gestionale lo segnala all'operatore prima del salvataggio).
-  v_user_id := NEW.user_id;
-  IF v_user_id IS NULL AND coalesce(NEW.customer_email, '') <> '' THEN
-    SELECT ce.user_id INTO v_user_id
-      FROM public.customers_extended ce
-     WHERE lower(ce.email) = lower(NEW.customer_email)
-       AND ce.user_id IS NOT NULL
-     LIMIT 1;
-  END IF;
+  -- 16/09/2026: `bookings.user_id` e' l'account del sito quando la
+  -- prenotazione arriva dal sito, ma e' l'id della SCHEDA CLIENTE quando la
+  -- scrive il gestionale. Chiedere sempre e comunque un account qui dentro
+  -- voleva dire non addebitare mai le prenotazioni fatte dall'ufficio.
+  v_user_id := public.dr7_wallet_account_del_cliente(NEW.user_id, NEW.customer_email);
 
   IF v_user_id IS NULL THEN
     RAISE WARNING '[wallet] prenotazione % con metodo wallet ma nessun account cliente: addebito non eseguito', NEW.id;
