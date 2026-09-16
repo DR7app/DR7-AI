@@ -6887,9 +6887,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         // continuavano a mostrare il vecchio "Parziale €X" mentre il form ne
         // mostrava un altro. Su NUOVA prenotazione resta il comportamento
         // precedente (solo 'partial' valorizza, altrimenti default DB).
-        amount_paid: editingId
-          ? eurToCents(formData.amount_paid || '0')
-          : (formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : undefined),
+        // Credit Wallet + "Pagato" = il wallet paga l'intero totale, ed e'
+        // quello che il database preleva. Senza scriverlo qui la prenotazione
+        // risultava pagata con "Importo Pagato €0,00": due schermate che si
+        // contraddicono, e i report che sommano l'incassato non lo vedevano.
+        amount_paid: (isCreditWallet(formData.payment_method) && formData.payment_status === 'paid')
+          ? Math.round(eurToCents(formData.total_amount))
+          : editingId
+            ? eurToCents(formData.amount_paid || '0')
+            : (formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : undefined),
         // Pay by Link bookings start as pending_payment/unpaid;
         // other payment methods start as confirmed/paid.
         // 2026-05-28: se l'admin ha spuntato "Conferma Prenotazione" il
@@ -11148,6 +11154,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         && formData.payment_status !== 'paid'
                         && formData.payment_status !== 'partial') {
                       updates.payment_status = 'paid'
+                      updates.amount_paid = formData.total_amount || updates.amount_paid
                       if (formData.status === 'pending' || formData.status === 'pending_payment') {
                         updates.status = 'confirmed'
                       }
