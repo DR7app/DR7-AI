@@ -11138,6 +11138,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       updates.status = 'pending'
                       updates.amount_paid = '0'
                     }
+                    // 16/09/2026: pagare col Credit Wallet vuol dire che i
+                    // soldi escono ADESSO, al salvataggio. Lasciando "non
+                    // pagato" il database non addebita niente — e' la regola
+                    // del trigger — e il credito del cliente restava intatto
+                    // dopo una prenotazione pagata col wallet. Si porta a
+                    // "Pagato", resta modificabile se l'operatore vuole altro.
+                    if (isCreditWallet(method)
+                        && formData.payment_status !== 'paid'
+                        && formData.payment_status !== 'partial') {
+                      updates.payment_status = 'paid'
+                      if (formData.status === 'pending' || formData.status === 'pending_payment') {
+                        updates.status = 'confirmed'
+                      }
+                    }
                     setFormData(prev => ({ ...prev, ...updates }))
                   }}
                   options={(() => {
