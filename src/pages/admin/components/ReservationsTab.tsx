@@ -679,6 +679,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [autistiRitiro, setAutistiRitiro] = useState<AutistaRef[]>([])
   const [autistiRiconsegna, setAutistiRiconsegna] = useState<AutistaRef[]>([])
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
+  // Mezzi archiviati (status 'retired'). Stanno fuori dall'elenco normale —
+  // non si vendono piu' — ma servono per registrare a posteriori un noleggio
+  // vecchio: una multa arrivata mesi dopo, un contratto fatto su carta. Si
+  // vedono SOLO con "Mostra tutte le disponibilita'" acceso, marcati.
+  const [veicoliArchiviati, setVeicoliArchiviati] = useState<Vehicle[]>([])
 
   // Limitation Override (OTP-based director approval)
   const {
@@ -2523,8 +2528,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const vehiclesForDropdown = useMemo((): Vehicle[] => {
     // Admin override: show ALL vehicles if checkbox is checked
     if (showAllVehicles) {
-      logger.log('[Vehicle Dropdown] ADMIN OVERRIDE: Showing all vehicles:', vehicles.length)
-      return vehicles
+      // Con l'override si vede tutto, mezzi archiviati compresi: e' l'unico
+      // modo di registrare un noleggio vecchio di un'auto tolta dal listino.
+      const idNoti = new Set(vehicles.map(v => v.id))
+      const tutti = [...vehicles, ...veicoliArchiviati.filter(v => !idNoti.has(v.id))]
+      logger.log('[Vehicle Dropdown] ADMIN OVERRIDE: Showing all vehicles:', tutti.length)
+      return tutti
     }
 
     // Start with the base vehicles (already filtered by availability engine)
@@ -2559,7 +2568,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     logger.log('[Vehicle Dropdown] Final list:', result.length, 'vehicles:', result.map(v => v.display_name))
 
     return result
-  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles])
+  }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles, veicoliArchiviati])
 
   // Pickup/dropoff locations: built-ins (office, domicilio) + configurable
   // entries from Centralina Pro (Servizi → Luoghi di Ritiro). Fee is
@@ -3175,6 +3184,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           id: v.id
         })))
         setVehicles(vehiclesData || [])
+        // Gli archiviati a parte: cosi' non entrano ne' nel calendario ne'
+        // nel motore delle disponibilita', ma restano raggiungibili.
+        supabase
+          .from('vehicles')
+          .select('*')
+          .eq('status', 'retired')
+          .order('display_name')
+          .then(({ data }) => setVeicoliArchiviati((data || []) as Vehicle[]))
       }
 
       // Reservations API: la richiesta e' partita a inizio loadData.
@@ -10015,6 +10032,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         { value: '', label: `Seleziona ${assetLabels.asset.toLowerCase()}...` },
                         ...vehiclesForDropdown.map((v: Vehicle) => {
                           let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
+                          if (v.status === 'retired') label += ' [Archiviato]'
                           const earliestTime = vehicleEarliestTimes.get(v.id)
                           if (earliestTime && !showAllVehicles) {
                             const hours = earliestTime.getHours().toString().padStart(2, '0')
