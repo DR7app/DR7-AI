@@ -410,6 +410,48 @@ const handler: Handler = async (event) => {
           ? servizi.map((s: unknown) => String(s || '').trim()).filter(Boolean)
           : [];
 
+        // Senza scadenza e senza servizi non c'e' nessun vincolo: e' una
+        // ricarica normale a piu' persone. Va nel SALDO, non in un lotto —
+        // altrimenti il cliente avrebbe un credito che non vede nel saldo e
+        // che non conta per gli interessi del Club.
+        if (!scadenza && serviziPuliti.length === 0) {
+          const tipoRiga = String(nature || '').toLowerCase() === 'bonus' ? 'admin_bonus' : 'admin_topup';
+          let scritti = 0;
+          for (const uid of perAccount.keys()) {
+            const { data: saldoRiga } = await serviceSupabase
+              .from('user_credit_balance').select('balance').eq('user_id', uid).maybeSingle();
+            const saldoAttuale = saldoRiga?.balance ? parseFloat(String(saldoRiga.balance)) : 0;
+            const nuovoSaldo = Math.round((saldoAttuale + importo) * 100) / 100;
+            if (saldoRiga) {
+              await serviceSupabase.from('user_credit_balance')
+                .update({ balance: nuovoSaldo, last_updated: new Date().toISOString() })
+                .eq('user_id', uid);
+            } else {
+              await serviceSupabase.from('user_credit_balance')
+                .insert({ user_id: uid, balance: nuovoSaldo, last_updated: new Date().toISOString() });
+            }
+            await serviceSupabase.from('credit_transactions').insert({
+              user_id: uid,
+              transaction_type: 'credit',
+              amount: importo,
+              balance_after: nuovoSaldo,
+              description: description || 'Credito manuale admin',
+              reference_type: tipoRiga,
+            });
+            scritti++;
+          }
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              destinatari: scritti,
+              totale: Math.round(importo * scritti * 100) / 100,
+              nel_saldo: true,
+            }),
+          };
+        }
+
         const righe = [...perAccount.entries()].map(([uid]) => ({
           user_id: uid,
           importo,

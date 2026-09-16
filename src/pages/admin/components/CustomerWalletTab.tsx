@@ -374,10 +374,13 @@ export default function CustomerWalletTab() {
     const scadenzaTesto = vincolatoScadenza
       ? new Date(vincolatoScadenza).toLocaleDateString('it-IT')
       : 'nessuna scadenza'
+    const senzaVincoli = !vincolatoScadenza && vincolatoServizi.size === 0
     const conferma = window.confirm(
       `Assegnare EUR ${importo.toFixed(2)} a ${quanti} cliente/i?\n\n`
-      + `Vale su: ${servizioTesto}\nScadenza: ${scadenzaTesto}\n`
-      + `Totale regalato: EUR ${(importo * quanti).toFixed(2)}`
+      + (senzaVincoli
+          ? 'Nessun vincolo: finisce nel saldo normale, spendibile su tutto e senza scadenza.\n'
+          : `Vale su: ${servizioTesto}\nScadenza: ${scadenzaTesto}\n`)
+      + `Totale: EUR ${(importo * quanti).toFixed(2)}`
     )
     if (!conferma) return
 
@@ -786,10 +789,12 @@ export default function CustomerWalletTab() {
           className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left"
         >
           <span>
-            <span className="text-sm font-bold text-theme-text-primary">Credito vincolato</span>
+            <span className="text-sm font-bold text-theme-text-primary">Ricarica multipla e credito vincolato</span>
             <span className="block text-[11px] text-theme-text-muted">
-              Credito che vale solo su certi servizi e solo fino a una data. Si consuma prima
-              del saldo normale, a partire da quello che scade per primo.
+              Carica credito a piu' clienti in una volta — scelti a mano o tutti. Senza scadenza e
+              senza servizi e' una ricarica normale e va nel saldo; mettendo una scadenza o dei
+              servizi diventa credito vincolato, che si consuma prima del saldo a partire da
+              quello che scade per primo.
             </span>
           </span>
           <span className="text-theme-text-muted text-xs">{vincolatoAperto ? 'Chiudi' : 'Apri'}</span>
@@ -938,7 +943,11 @@ export default function CustomerWalletTab() {
               disabled={vincolatoInvio}
               className="px-4 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-sm hover:bg-emerald-500/25 disabled:opacity-50"
             >
-              {vincolatoInvio ? 'Assegno...' : 'Assegna credito vincolato'}
+              {vincolatoInvio
+                ? 'Assegno...'
+                : (!vincolatoScadenza && vincolatoServizi.size === 0)
+                  ? 'Ricarica i clienti scelti'
+                  : 'Assegna credito vincolato'}
             </button>
           </div>
         )}
