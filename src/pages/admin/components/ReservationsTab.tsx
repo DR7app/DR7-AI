@@ -6135,12 +6135,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
           setSaldoWallet(saldoAggiornato)
           const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
-          if (saldoAggiornato.userId && residuoWallet < 0) {
+          // 16/09/2026 (direzione): anche senza account (= nessun wallet,
+          // credito zero) si blocca: prima passava come pagata senza prelievo.
+          if (!saldoAggiornato.userId || residuoWallet < 0) {
             // 15/09/2026 (direzione): con credito insufficiente la prenotazione
             // NON si salva. Qui non c'e' OTP di proposito — un OTP con il toggle
             // spento in Gestione OTP si auto-approva in silenzio, ed e' esattamente
             // come e' passata la prima prenotazione senza copertura. Si sceglie un
-            // altro metodo di pagamento, oppure si ricarica il wallet del cliente.
+            // altro metodo di pagamento.
             setWalletInsufficiente({ saldo: saldoAggiornato.saldo ?? 0, dovuto: dovutoWallet })
             setIsSubmitting(false)
             submitLockRef.current = false
@@ -11120,8 +11122,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               {/* ── Credit Wallet: saldo del cliente e importo che verra' prelevato ──
                   L'addebito lo esegue il database al salvataggio. Questo riquadro
                   serve all'operatore per vedere, prima di salvare, da quale wallet
-                  escono i soldi e quanto resta dopo. Nessun blocco: se il credito
-                  non basta si salva lo stesso, con autorizzazione OTP. */}
+                  escono i soldi e quanto resta dopo. Se il credito non basta la
+                  prenotazione non si salva: si cambia metodo di pagamento. */}
               {metodoEWallet && (() => {
                 const dovuto = importoDovutoWallet({
                   metodo: formData.payment_method,
@@ -11145,9 +11147,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 }
                 if (!saldoWallet?.userId) {
                   return (
-                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
-                      Questo cliente non ha un account sul sito, quindi non ha un Credit Wallet: nessun importo verra' prelevato.
-                      Registra il cliente sul sito oppure scegli un altro metodo di pagamento.
+                    <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm font-semibold text-red-600 dark:text-red-400">
+                      Il cliente non ha un Credit Wallet: cambia metodo di pagamento.
                     </div>
                   )
                 }
@@ -11157,7 +11158,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 return (
                   <div className={`rounded-lg border p-3 space-y-1 text-sm ${
                     insufficiente
-                      ? 'border-amber-500/40 bg-amber-500/5'
+                      ? 'border-red-500/40 bg-red-500/5'
                       : 'border-theme-border bg-theme-bg-tertiary'
                   }`}>
                     <div className="flex items-center justify-between">
@@ -11170,18 +11171,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       </span>
                       <span className="font-semibold text-theme-text-primary">{formattaEuro(dovuto)}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
-                      <span className={`font-semibold ${insufficiente ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'}`}>
-                        {formattaEuro(residuo)}
-                      </span>
-                    </div>
-                    {insufficiente && (
-                      <p className="pt-1 text-red-600 dark:text-red-400">
-                        Il credito non basta e il Credit Wallet non puo&apos; andare in negativo: con questo
-                        metodo la prenotazione non si salva. Scegli un altro metodo di pagamento oppure
-                        ricarica il wallet del cliente.
+                    {/* 16/09/2026 (direzione): mai mostrare un saldo negativo, il
+                        wallet non ci puo' andare. Con credito insufficiente
+                        compare solo l'avviso di cambiare metodo di pagamento. */}
+                    {insufficiente ? (
+                      <p className="pt-1 font-semibold text-red-600 dark:text-red-400">
+                        Credito insufficiente: cambia metodo di pagamento.
                       </p>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
+                        <span className="font-semibold text-theme-text-primary">{formattaEuro(residuo)}</span>
+                      </div>
                     )}
                   </div>
                 )
@@ -12348,8 +12349,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           15/09/2026 (direzione): una prenotazione col Credit Wallet non si
           salva se il cliente non ha copertura. Non e' un OTP: un OTP con il
           toggle spento si auto-approva in silenzio, ed e' cosi' che era
-          passata una prenotazione senza credito. Qui si esce e basta: o si
-          cambia metodo di pagamento, o si ricarica il wallet del cliente. */}
+          passata una prenotazione senza credito. Qui si esce e basta: si
+          cambia metodo di pagamento. */}
       {walletInsufficiente && (
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
           <div className="w-full sm:max-w-md bg-theme-bg-secondary sm:rounded-lg border border-red-500/40 overflow-hidden">
@@ -12358,12 +12359,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             </div>
             <div className="p-4 space-y-3 text-sm">
               <p className="text-theme-text-primary">
-                Il Credit Wallet di questo cliente non copre l&apos;importo della prenotazione.
-                Scegli un altro metodo di pagamento, oppure ricarica il wallet dalla scheda del cliente.
+                Il Credit Wallet non puo&apos; andare in negativo: cambia metodo di pagamento.
               </p>
               <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-theme-text-secondary">Saldo del cliente</span>
+                  <span className="text-theme-text-secondary">Credito disponibile</span>
                   <span className="font-semibold text-theme-text-primary">{formattaEuro(walletInsufficiente.saldo)}</span>
                 </div>
                 <div className="flex items-center justify-between">

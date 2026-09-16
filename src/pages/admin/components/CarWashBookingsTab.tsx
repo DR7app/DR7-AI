@@ -2153,7 +2153,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
         setSaldoWallet(saldoAggiornato)
         const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
-        if (saldoAggiornato.userId && residuoWallet < 0) {
+        // 16/09/2026 (direzione): anche senza account (= nessun wallet,
+        // credito zero) si blocca: prima passava come pagata senza prelievo.
+        if (!saldoAggiornato.userId || residuoWallet < 0) {
           // 15/09/2026 (direzione): senza copertura la prenotazione NON si
           // salva. Niente OTP di proposito: col toggle spento in Gestione OTP
           // si auto-approva in silenzio, ed e' cosi' che era passata una
@@ -3602,12 +3604,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             </div>
             <div className="p-4 space-y-3 text-sm">
               <p className="text-theme-text-primary">
-                Il Credit Wallet di questo cliente non copre l&apos;importo della prenotazione.
-                Scegli un altro metodo di pagamento, oppure ricarica il wallet dalla scheda del cliente.
+                Il Credit Wallet non puo&apos; andare in negativo: cambia metodo di pagamento.
               </p>
               <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-theme-text-secondary">Saldo del cliente</span>
+                  <span className="text-theme-text-secondary">Credito disponibile</span>
                   <span className="font-semibold text-theme-text-primary">{formattaEuro(walletInsufficiente.saldo)}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -5408,8 +5409,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
               {/* ── Credit Wallet: saldo del cliente e importo che verra' prelevato ──
                   L'addebito lo esegue il database al salvataggio. Qui l'operatore
-                  vede da quale wallet escono i soldi e quanto resta. Nessun blocco:
-                  se il credito non basta si salva lo stesso, con OTP. */}
+                  vede da quale wallet escono i soldi e quanto resta. Se il credito
+                  non basta la prenotazione non si salva: si cambia metodo. */}
               {metodoEWallet && (() => {
                 const dovuto = importoDovutoWallet({
                   metodo: formData.payment_method,
@@ -5433,8 +5434,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 }
                 if (!saldoWallet?.userId) {
                   return (
-                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600 dark:text-amber-400">
-                      Questo cliente non ha un account sul sito, quindi non ha un Credit Wallet: nessun importo verr&agrave; prelevato.
+                    <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm font-semibold text-red-600 dark:text-red-400">
+                      Il cliente non ha un Credit Wallet: cambia metodo di pagamento.
                     </div>
                   )
                 }
@@ -5443,7 +5444,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 const insufficiente = dovuto > 0 && residuo < 0
                 return (
                   <div className={`rounded-lg border p-3 space-y-1 text-sm ${
-                    insufficiente ? 'border-amber-500/40 bg-amber-500/5' : 'border-theme-border bg-theme-bg-tertiary'
+                    insufficiente ? 'border-red-500/40 bg-red-500/5' : 'border-theme-border bg-theme-bg-tertiary'
                   }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-theme-text-secondary">Credit Wallet del cliente</span>
@@ -5455,18 +5456,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </span>
                       <span className="font-semibold text-theme-text-primary">{formattaEuro(dovuto)}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
-                      <span className={`font-semibold ${insufficiente ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'}`}>
-                        {formattaEuro(residuo)}
-                      </span>
-                    </div>
-                    {insufficiente && (
-                      <p className="pt-1 text-red-600 dark:text-red-400">
-                        Il credito non basta e il Credit Wallet non puo&apos; andare in negativo: con questo
-                        metodo la prenotazione non si salva. Scegli un altro metodo di pagamento oppure
-                        ricarica il wallet del cliente.
+                    {/* 16/09/2026 (direzione): mai mostrare un saldo negativo, il
+                        wallet non ci puo' andare. Con credito insufficiente
+                        compare solo l'avviso di cambiare metodo di pagamento. */}
+                    {insufficiente ? (
+                      <p className="pt-1 font-semibold text-red-600 dark:text-red-400">
+                        Credito insufficiente: cambia metodo di pagamento.
                       </p>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
+                        <span className="font-semibold text-theme-text-primary">{formattaEuro(residuo)}</span>
+                      </div>
                     )}
                   </div>
                 )
