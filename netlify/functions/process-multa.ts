@@ -327,7 +327,7 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         .from('bookings')
         .select(`
             id, pickup_date, dropoff_date, customer_name, customer_email,
-            customer_phone, vehicle_name, vehicle_plate, booking_details, user_id, contract_url
+            customer_phone, vehicle_id, vehicle_name, vehicle_plate, booking_details, user_id, contract_url
         `)
         .lte('pickup_date', dayEndIso)
         .gte('dropoff_date', dayStartIso)
@@ -335,13 +335,49 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
 
     if (error || !bookings || bookings.length === 0) return null
 
-    // Match by plate
-    const normalize = (s: string) => s?.replace(/\s/g, '').toUpperCase() || ''
+    // Abbinamento alla targa, come Report Noleggio: targa, poi vehicle_id,
+    // poi nome del mezzo. Molte prenotazioni vecchie non hanno la targa
+    // copiata (solo vehicle_id e nome): con la sola targa una multa su
+    // un'auto tolta dal listino non trovava mai il noleggio. Le auto tolte
+    // restano in `vehicles` con status 'retired', quindi si leggono tutte.
+    const normalize = (s: string) => s?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || ''
+    const normName = (s: string | null | undefined) => (s || '')
+        .toLowerCase().replace(/[‘’‛ʼ′`´]/g, "'").replace(/\s+/g, ' ').trim()
     const targetPlate = normalize(targa)
+    const plateOf = (b: { vehicle_plate?: string | null; booking_details?: { vehicle_plate?: string; plate?: string } | null }) =>
+        normalize(b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.plate || '')
+    const samePlate = (p: string) => !!p && !!targetPlate && (p === targetPlate || p.includes(targetPlate))
+
+    const { data: vehicles } = await supabase.from('vehicles').select('id, display_name, plate')
+    const validVehicleIds = new Set((vehicles || []).map(v => v.id))
+    const plateVehicles = (vehicles || []).filter(v => samePlate(normalize(v.plate || '')))
+    const plateVehicleIds = new Set(plateVehicles.map(v => v.id))
+    const plateNames = new Set(plateVehicles.map(v => normName(v.display_name)).filter(Boolean))
+
+    // Se il mezzo non e' piu' in `vehicles`, il nome si ricava dalle altre
+    // prenotazioni che la targa l'hanno registrata.
+    if (plateNames.size === 0 && targetPlate.length >= 4) {
+        const { data: sameCar } = await supabase
+            .from('bookings')
+            .select('vehicle_name, vehicle_plate, booking_details')
+            .ilike('vehicle_plate', `%${targetPlate}%`)
+            .limit(50)
+        for (const b of sameCar || []) {
+            if (samePlate(plateOf(b)) && normName(b.vehicle_name)) plateNames.add(normName(b.vehicle_name))
+        }
+    }
 
     const plateMatches = bookings.filter(b => {
-        const bPlate = normalize(b.vehicle_plate || b.booking_details?.vehicle_plate || '')
-        return !!bPlate && (bPlate === targetPlate || bPlate.includes(targetPlate))
+        const bPlate = plateOf(b)
+        if (samePlate(bPlate)) return true
+        const detailsVehicleId = b.booking_details?.vehicle_id
+        if (b.vehicle_id && plateVehicleIds.has(b.vehicle_id)) return true
+        if (detailsVehicleId && plateVehicleIds.has(detailsVehicleId)) return true
+        // Nome solo se la prenotazione non ha ne' targa ne' un id valido:
+        // due auto dello stesso modello non devono scambiarsi le multe.
+        const idMissingOrOrphan = (!b.vehicle_id || !validVehicleIds.has(b.vehicle_id))
+            && (!detailsVehicleId || !validVehicleIds.has(detailsVehicleId))
+        return !bPlate && idMissingOrOrphan && plateNames.has(normName(b.vehicle_name))
     })
 
     if (plateMatches.length === 0) return null
