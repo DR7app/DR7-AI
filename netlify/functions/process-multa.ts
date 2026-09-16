@@ -404,6 +404,28 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
 
     if (!match) return null
 
+    return arricchisciConducente(match, targa)
+}
+
+/**
+ * Da una prenotazione al conducente: anagrafica, documenti, contratto.
+ *
+ * Sta fuori da findDriver perche' la stessa cosa serve quando la prenotazione
+ * la sceglie la direzione a mano — targa scritta male sul verbale, auto tolta
+ * dal listino, prenotazione vecchia senza targa copiata. Ricerca automatica e
+ * scelta manuale devono dare lo STESSO risultato.
+ */
+async function arricchisciConducente(
+    match: {
+        id: string; user_id?: string; customer_name?: string; customer_email?: string
+        customer_phone?: string; vehicle_name?: string; vehicle_plate?: string | null
+        pickup_date: string; dropoff_date: string; contract_url?: string | null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        booking_details?: any
+    },
+    targa: string,
+): Promise<DriverData | null> {
+
     // Enrich with customer_extended data
     let cognome = ''
     let nome = ''
@@ -565,6 +587,72 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     }
 }
 
+
+/**
+ * I noleggi fra cui scegliere a mano.
+ *
+ * L'abbinamento automatico e' un aiuto, non un giudice: una targa letta male
+ * dal verbale, un'auto tolta dal listino, una prenotazione vecchia senza targa
+ * copiata, e non trova niente. La direzione deve poter aprire l'elenco dei
+ * noleggi di quei giorni e dire "e' questo". Si mostra TUTTO, annullate
+ * comprese e mezzi archiviati compresi: e' la direzione che decide.
+ */
+export interface NoleggioCandidato {
+    id: string
+    vehicle_name: string | null
+    vehicle_plate: string | null
+    customer_name: string | null
+    customer_email: string | null
+    pickup_date: string
+    dropoff_date: string
+    status: string | null
+    service_type: string | null
+    ha_contratto: boolean
+}
+
+async function cercaNoleggiPerMulta(dataInfrazione: string, testo: string): Promise<NoleggioCandidato[]> {
+    const cerca = (testo || '').trim().toLowerCase()
+    let query = supabase
+        .from('bookings')
+        .select('id, vehicle_name, vehicle_plate, customer_name, customer_email, pickup_date, dropoff_date, status, service_type, contract_url, booking_details')
+        .order('pickup_date', { ascending: false })
+        .limit(200)
+
+    // Finestra larga: il giorno della multa piu' due giorni prima e dopo. Gli
+    // orari di ritiro e riconsegna registrati non sono sempre quelli veri, e
+    // una multa presa il giorno del cambio auto deve restare raggiungibile.
+    const [dd, mm, yyyy] = (dataInfrazione || '').split('/')
+    if (dd && mm && yyyy) {
+        const giorno = Date.parse(`${yyyy}-${mm}-${dd}T12:00:00Z`)
+        if (!isNaN(giorno)) {
+            const da = new Date(giorno - 2 * 86400000).toISOString()
+            const a = new Date(giorno + 2 * 86400000).toISOString()
+            query = query.lte('pickup_date', a).gte('dropoff_date', da)
+        }
+    }
+
+    const { data, error } = await query
+    if (error || !data) return []
+
+    const righe = data as Array<NoleggioCandidato & { contract_url?: string | null; booking_details?: { contract_url?: string } | null }>
+    const filtrate = cerca
+        ? righe.filter(b => [b.vehicle_name, b.vehicle_plate, b.customer_name, b.customer_email]
+            .some(v => String(v || '').toLowerCase().includes(cerca)))
+        : righe
+
+    return filtrate.map(b => ({
+        id: b.id,
+        vehicle_name: b.vehicle_name || null,
+        vehicle_plate: b.vehicle_plate || null,
+        customer_name: b.customer_name || null,
+        customer_email: b.customer_email || null,
+        pickup_date: b.pickup_date,
+        dropoff_date: b.dropoff_date,
+        status: b.status || null,
+        service_type: b.service_type || null,
+        ha_contratto: !!(b.contract_url || b.booking_details?.contract_url),
+    }))
+}
 
 /**
  * Intestazione della lettera "Comunicazione dati conducente" (24/08/2026).
@@ -857,7 +945,7 @@ async function sendPEC(
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 interface ProcessMultaRequest {
-    action: 'extract' | 'findDriver' | 'sendPec' | 'fullProcess'
+    action: 'extract' | 'findDriver' | 'cercaNoleggi' | 'noleggioScelto' | 'sendPec' | 'fullProcess'
     // For extract
     pdfBase64?: string
     pdfFileName?: string
@@ -865,6 +953,9 @@ interface ProcessMultaRequest {
     targa?: string
     data_infrazione?: string
     ora_infrazione?: string
+    // Scelta manuale del noleggio (quando l'automatico non trova)
+    cerca?: string
+    booking_id?: string
     // For sendPec
     multaData?: MultaData
     driverData?: DriverData
@@ -931,6 +1022,44 @@ const handler: Handler = async (event) => {
                     headers: corsHeaders,
                     body: JSON.stringify({ driver }),
                 }
+            }
+
+            // ── Scelta manuale: elenco dei noleggi di quei giorni ────────
+            // Serve quando l'automatico non trova: targa letta male, auto
+            // archiviata, prenotazione vecchia senza targa copiata.
+            case 'cercaNoleggi': {
+                const noleggi = await cercaNoleggiPerMulta(req.data_infrazione || '', req.cerca || '')
+                return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ noleggi }) }
+            }
+
+            // ── Scelta manuale: da quel noleggio, il conducente ──────────
+            case 'noleggioScelto': {
+                if (!req.booking_id) {
+                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Prenotazione richiesta' }) }
+                }
+                const { data: prenotazione } = await supabase
+                    .from('bookings')
+                    .select('id, pickup_date, dropoff_date, customer_name, customer_email, customer_phone, vehicle_id, vehicle_name, vehicle_plate, booking_details, user_id, contract_url')
+                    .eq('id', req.booking_id)
+                    .maybeSingle()
+                if (!prenotazione) {
+                    return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Prenotazione non trovata' }) }
+                }
+                const driver = await arricchisciConducente(prenotazione, req.targa || '')
+                if (!driver) {
+                    return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Conducente non ricavabile da questa prenotazione' }) }
+                }
+                // La lettera si prepara qui come nella strada automatica: la
+                // schermata di controllo dev'essere la stessa, scelta a mano o no.
+                const letteraManuale = req.multaData
+                    ? generateLetterText(
+                        req.multaData,
+                        driver,
+                        await loadMulteConfig(await rigaBusinessDellaMulta(driver.booking_id)),
+                        req.aziendaOverride || {},
+                    )
+                    : ''
+                return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ driver, letterText: letteraManuale }) }
             }
 
             // ── Step 3: Send PEC ─────────────────────────────────────────

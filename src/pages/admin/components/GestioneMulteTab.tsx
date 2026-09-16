@@ -38,6 +38,32 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
     const [pecResult, setPecResult] = useState<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // ── Scelta manuale del noleggio ──────────────────────────────────────────
+    // L'abbinamento automatico e' un aiuto, non un giudice: targa letta male,
+    // auto archiviata, prenotazione vecchia senza targa copiata. Qui la
+    // direzione apre l'elenco dei noleggi di quei giorni e dice qual e'.
+    interface NoleggioCandidato {
+        id: string
+        vehicle_name: string | null
+        vehicle_plate: string | null
+        customer_name: string | null
+        customer_email: string | null
+        pickup_date: string
+        dropoff_date: string
+        status: string | null
+        service_type: string | null
+        ha_contratto: boolean
+    }
+    const [sceltaManuale, setSceltaManuale] = useState(false)
+    const [noleggiCandidati, setNoleggiCandidati] = useState<NoleggioCandidato[]>([])
+    const [cercaNoleggio, setCercaNoleggio] = useState('')
+    const [caricamentoNoleggi, setCaricamentoNoleggi] = useState(false)
+    // Contratto messo a mano: quello vecchio puo' essere su carta, scansionato
+    // fuori dal gestionale, o mai generato. Senza questo la PEC partiva senza
+    // contratto e l'ente lo richiedeva di nuovo.
+    const [caricamentoContratto, setCaricamentoContratto] = useState(false)
+    const contrattoInputRef = useRef<HTMLInputElement>(null)
+
     // ── Destinatario PEC dinamico (organo accertatore) ───────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [pecRecipient, setPecRecipient] = useState<any>(null)  // proposta backend
@@ -227,6 +253,77 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
             toast.error('Errore: ' + _errMsg)
         } finally {
             setMultaProcessing(false)
+        }
+    }
+
+    async function caricaNoleggiCandidati(testo: string) {
+        setCaricamentoNoleggi(true)
+        try {
+            const res = await fetch('/.netlify/functions/process-multa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'cercaNoleggi',
+                    data_infrazione: multaData?.data_infrazione || '',
+                    cerca: testo,
+                }),
+            })
+            const data = await res.json()
+            setNoleggiCandidati(data.noleggi || [])
+            if ((data.noleggi || []).length === 0) toast('Nessun noleggio in quei giorni con questa ricerca')
+        } catch (err: unknown) {
+            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setCaricamentoNoleggi(false)
+        }
+    }
+
+    async function scegliNoleggio(bookingId: string) {
+        setMultaProcessing(true)
+        try {
+            const res = await fetch('/.netlify/functions/process-multa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'noleggioScelto',
+                    booking_id: bookingId,
+                    targa: multaData?.targa || '',
+                    multaData,
+                }),
+            })
+            const data = await res.json()
+            if (data.error) { toast.error(data.error); return }
+            setDriverData(data.driver)
+            if (data.letterText) setLetterText(data.letterText)
+            setSceltaManuale(false)
+            setMultaStep('review')
+            toast.success('Noleggio abbinato a mano. Controlla i dati prima di inviare.')
+        } catch (err: unknown) {
+            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setMultaProcessing(false)
+        }
+    }
+
+    async function caricaContrattoAMano(file: File) {
+        if (!driverData?.booking_id) { toast.error('Prima scegli il noleggio'); return }
+        setCaricamentoContratto(true)
+        try {
+            const estensione = (file.name.split('.').pop() || 'pdf').toLowerCase()
+            const percorso = `multe-manuale/${driverData.booking_id}-${Date.now()}.${estensione}`
+            const { error: erroreUpload } = await supabase.storage
+                .from('contracts')
+                .upload(percorso, file, { upsert: true, contentType: file.type || 'application/pdf' })
+            if (erroreUpload) throw erroreUpload
+            const { data: firmato } = await supabase.storage.from('contracts').createSignedUrl(percorso, 604800)
+            if (!firmato?.signedUrl) throw new Error('Link al contratto non ottenuto')
+            setDriverData((d: Record<string, unknown> | null) => (d ? { ...d, contract_url: firmato.signedUrl } : d))
+            toast.success('Contratto allegato a mano')
+        } catch (err: unknown) {
+            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setCaricamentoContratto(false)
+            if (contrattoInputRef.current) contrattoInputRef.current.value = ''
         }
     }
 
@@ -584,6 +681,67 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                             {multaData.ora_infrazione && <div><span className="text-theme-text-muted">Ora:</span> <span className="text-theme-text-primary">{multaData.ora_infrazione}</span></div>}
                                             {multaData.numero_verbale && <div><span className="text-theme-text-muted">Verbale:</span> <span className="text-theme-text-primary">{multaData.numero_verbale}</span></div>}
                                         </div>
+                                        <p className="text-xs text-theme-text-muted">
+                                            La targa puo' essere letta male dal verbale, l'auto puo' essere stata archiviata
+                                            o la prenotazione puo' essere vecchia e senza targa copiata. Il noleggio si
+                                            sceglie a mano: le prenotazioni restano tutte, anche delle auto che non ci sono piu'.
+                                        </p>
+                                        <Button
+                                            onClick={() => { setSceltaManuale(true); caricaNoleggiCandidati('') }}
+                                            className="bg-theme-bg-tertiary"
+                                        >
+                                            Scegli il noleggio a mano
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {sceltaManuale && (
+                                    <div className="p-4 bg-theme-bg-secondary border border-theme-border rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="text-sm font-bold text-theme-text-primary">
+                                                Noleggi intorno al {multaData?.data_infrazione || 'giorno della multa'}
+                                            </div>
+                                            <button onClick={() => setSceltaManuale(false)} className="text-xs text-theme-text-muted hover:text-theme-text-primary">Chiudi</button>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={cercaNoleggio}
+                                                onChange={e => setCercaNoleggio(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') caricaNoleggiCandidati(cercaNoleggio) }}
+                                                placeholder="Targa, auto, cliente..."
+                                                className="flex-1 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                            />
+                                            <Button onClick={() => caricaNoleggiCandidati(cercaNoleggio)} disabled={caricamentoNoleggi}>
+                                                {caricamentoNoleggi ? 'Cerco...' : 'Cerca'}
+                                            </Button>
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto border border-theme-border rounded-lg divide-y divide-theme-border">
+                                            {noleggiCandidati.map(n => (
+                                                <button
+                                                    key={n.id}
+                                                    onClick={() => scegliNoleggio(n.id)}
+                                                    disabled={multaProcessing}
+                                                    className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover disabled:opacity-50"
+                                                >
+                                                    <div className="flex items-center justify-between gap-2 text-sm">
+                                                        <span className="text-theme-text-primary">{n.customer_name || 'Senza nome'}</span>
+                                                        <span className="font-mono text-xs text-theme-text-muted">{n.vehicle_plate || 'senza targa'}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-2 text-xs text-theme-text-muted">
+                                                        <span>{n.vehicle_name || 'mezzo non indicato'}</span>
+                                                        <span>
+                                                            {new Date(n.pickup_date).toLocaleDateString('it-IT')} — {new Date(n.dropoff_date).toLocaleDateString('it-IT')}
+                                                            {n.status ? ` · ${n.status}` : ''}
+                                                            {n.ha_contratto ? ' · contratto' : ''}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {noleggiCandidati.length === 0 && !caricamentoNoleggi && (
+                                                <div className="px-3 py-4 text-sm text-theme-text-muted">Nessun noleggio da mostrare.</div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -710,6 +868,23 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                                 Contratto non trovato — generato all'invio
                                             </span>
                                         )}
+                                        {/* Il contratto si puo' sempre mettere a mano: vecchie
+                                            prenotazioni, contratti su carta, scansioni fuori dal
+                                            gestionale. Quello caricato qui parte con la PEC. */}
+                                        <input
+                                            ref={contrattoInputRef}
+                                            type="file"
+                                            accept="application/pdf,image/*"
+                                            className="hidden"
+                                            onChange={e => { const f = e.target.files?.[0]; if (f) caricaContrattoAMano(f) }}
+                                        />
+                                        <button
+                                            onClick={() => contrattoInputRef.current?.click()}
+                                            disabled={caricamentoContratto}
+                                            className="inline-flex items-center gap-1 px-2 py-1 bg-theme-bg-tertiary rounded text-xs text-theme-text-primary border border-theme-border hover:bg-theme-bg-hover disabled:opacity-50"
+                                        >
+                                            {caricamentoContratto ? 'Carico...' : driverData.contract_url ? 'Sostituisci contratto' : 'Allega contratto a mano'}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
