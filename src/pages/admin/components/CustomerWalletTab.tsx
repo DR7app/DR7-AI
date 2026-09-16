@@ -588,7 +588,11 @@ export default function CustomerWalletTab() {
   })
 
   const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === 'balance') return (b.balance_cents || 0) - (a.balance_cents || 0)
+    if (sortBy === 'balance') {
+      const totale = (c: CustomerResult) =>
+        (c.balance_cents || 0) / 100 + (vincolatoPerUtente.get(String(c.user_id || c.id)) || 0)
+      return totale(b) - totale(a)
+    }
     return (a.full_name || '').localeCompare(b.full_name || '')
   })
 
@@ -847,28 +851,26 @@ export default function CustomerWalletTab() {
                         {customer.email || '—'}
                       </div>
 
-                      {/* Wallet */}
+                      {/* Wallet — il TOTALE che il cliente ha da spendere.
+                          Il credito vincolato e' suo a tutti gli effetti: se
+                          la colonna mostrasse solo il saldo libero, caricare
+                          200 EUR vincolati lascerebbe scritto "0,00" e
+                          sembrerebbe che la ricarica non sia mai avvenuta.
+                          Il vincolo si legge nella riga sotto. */}
                       <div className={`text-sm font-bold tabular-nums ${
-                        balance >= 50000 ? 'text-emerald-400'
-                        : balance > 0 ? 'text-theme-text-primary'
+                        balance + vincolatoCliente * 100 >= 50000 ? 'text-emerald-400'
+                        : balance + vincolatoCliente > 0 ? 'text-theme-text-primary'
                         : 'text-theme-text-muted'
                       }`}>
-                        €{(balance / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        {/* Il credito vincolato non sta nel saldo: se non si
-                            scrivesse qui accanto, un credito appena regalato
-                            sembrerebbe non essere mai arrivato. */}
-                        {(() => {
-                          const vincolato = vincolatoPerUtente.get(String(customer.user_id || customer.id)) || 0
-                          if (vincolato <= 0) return null
-                          return (
-                            <span
-                              className="block text-[11px] font-normal text-emerald-400"
-                              title="Credito vincolato a servizi o scadenza — si spende prima del saldo"
-                            >
-                              + €{vincolato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vincolato
-                            </span>
-                          )
-                        })()}
+                        €{((balance / 100) + vincolatoCliente).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {vincolatoCliente > 0 && (
+                          <span
+                            className="block text-[11px] font-normal text-teal-400"
+                            title="Credito vincolato a servizi o a una scadenza — si spende prima del saldo libero"
+                          >
+                            di cui €{vincolatoCliente.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vincolato
+                          </span>
+                        )}
                       </div>
                     </>
                   )

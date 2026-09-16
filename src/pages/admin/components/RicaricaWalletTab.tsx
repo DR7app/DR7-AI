@@ -353,10 +353,10 @@ export default function RicaricaWalletTab() {
                     </div>
                     <span className="text-sm text-theme-text-secondary truncate hidden lg:block">{c.email || '—'}</span>
                     <span className="text-sm text-theme-text-primary tabular-nums hidden lg:block">
-                      €{c.saldo.toFixed(2)}
+                      €{(c.saldo + (vincolatoPerUtente.get(c.user_id) || 0)).toFixed(2)}
                       {(vincolatoPerUtente.get(c.user_id) || 0) > 0 && (
                         <span className="block text-[11px] font-normal text-teal-400">
-                          + €{(vincolatoPerUtente.get(c.user_id) || 0).toFixed(2)} vincolato
+                          di cui €{(vincolatoPerUtente.get(c.user_id) || 0).toFixed(2)} vincolato
                         </span>
                       )}
                     </span>
