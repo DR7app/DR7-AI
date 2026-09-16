@@ -1497,17 +1497,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
       })
 
-      const { data: legacyCustomers } = await supabase
-        .from('customers')
-        .select('id, full_name, email, phone')
-
-      if (legacyCustomers) {
-        legacyCustomers.forEach((c: any) => {
-          if (!customerMap.has(c.id)) {
-            customerMap.set(c.id, c)
-          }
-        })
-      }
+      // 16/09/2026: niente piu' tabella `customers` legacy. Le sue righe
+      // rimettevano nella ricerca clienti gia' eliminati dalla Lead.
 
       setCustomers(Array.from(customerMap.values()))
     } catch (error) {

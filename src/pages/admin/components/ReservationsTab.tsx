@@ -316,6 +316,8 @@ interface Customer {
   created_at: string
   updated_at: string
   scadenza_patente?: string | null
+  /** true = la riga esiste in Lead (customers_extended). */
+  inLead?: boolean
 }
 
 interface Vehicle {
@@ -1214,6 +1216,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     })
     return () => { annullato = true }
   }, [metodoEWallet, formData.customer_id])
+
+  // 16/09/2026: la ricerca cliente propone SOLO i clienti presenti in Lead.
+  // `customers` contiene anche quelli ricavati dalle prenotazioni passate
+  // (servono a riempire nomi e telefoni in tabella): senza questo filtro un
+  // cliente eliminato dalla Lead ricompariva in "Cerca Cliente".
+  // Restano i clienti gia' scelti nella prenotazione aperta, cosi' in modifica
+  // il nome resta visibile. Se l'anagrafica non e' arrivata si usa tutto.
+  const customersPerRicerca = useMemo(() => {
+    if (!customers.some(c => c.inLead)) return customers
+    const selezionati = new Set([formData.customer_id, formData.second_driver_id, formData.garante_customer_id].filter(Boolean))
+    return customers.filter(c => c.inLead || selezionati.has(c.id))
+  }, [customers, formData.customer_id, formData.second_driver_id, formData.garante_customer_id])
 
   // --- Centralina Config Overlay ---
   // Loads pricing from Supabase config. Falls back to hardcoded defaults.
@@ -3044,6 +3058,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             // cade sul default Fascia A invece della fascia reale del cliente.
             data_nascita: c.data_nascita || null,
             data_rilascio_patente: c.data_rilascio_patente || c.metadata?.patente?.rilascio || c.patente_data_rilascio || null,
+            inLead: true,
           } as Customer
 
           // ✅ FIX: ALWAYS use customer ID as the Map key
@@ -3055,9 +3070,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       logger.log('[ReservationsTab] Total unique customers after customers_extended:', customerMap.size)
 
       // Tabella `customers` legacy (retrocompatibilita'): partita a inizio loadData.
+      // 16/09/2026: serve solo se l'anagrafica non e' arrivata. Con Lead
+      // caricata, le sue righe rimettevano nella ricerca clienti gia' eliminati.
       const { data: customersTableData, error: customersTableError } = await legacyCustomersPromise
 
-      if (!customersTableError && customersTableData) {
+      if (!customersTableError && customersTableData && !customersExtendedData) {
         customersTableData.forEach(c => {
           // Only add if not already in map (customers_extended takes precedence)
           if (!customerMap.has(c.id)) {
@@ -9385,7 +9402,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente</label>
                     <CustomerAutocomplete
-                      customers={customers}
+                      customers={customersPerRicerca}
                       selectedCustomerId={formData.customer_id}
                       onSelectCustomer={async (customerId) => {
                         setFormData(prev => ({ ...prev, customer_id: customerId }))
@@ -10372,7 +10389,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Secondo Guidatore</label>
                       <CustomerAutocomplete
-                        customers={customers}
+                        customers={customersPerRicerca}
                         selectedCustomerId={formData.second_driver_id}
                         onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, second_driver_id: customerId }))}
                         placeholder="Inizia a scrivere nome, email o telefono..."
@@ -10476,7 +10493,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           Seleziona da clienti <span className="text-theme-text-muted text-xs font-normal">(opzionale — popola i campi)</span>
                         </label>
                         <CustomerAutocomplete
-                          customers={customers}
+                          customers={customersPerRicerca}
                           selectedCustomerId=""
                           onSelectCustomer={async (customerId) => {
                             if (!customerId) return
@@ -11004,7 +11021,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           <div>
                             <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Garante</label>
                             <CustomerAutocomplete
-                              customers={customers}
+                              customers={customersPerRicerca}
                               selectedCustomerId={formData.garante_customer_id}
                               onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, garante_customer_id: customerId }))}
                               placeholder="Inizia a scrivere nome, email o telefono..."
