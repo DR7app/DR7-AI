@@ -23,7 +23,8 @@
     "wb:verifica": "node scripts/verificaWebsiteBuilder.mjs",
     "prevendite:verifica": "node scripts/verificaPrevendite.mjs",
     "testi:gen": "node scripts/genTestiCatalogo.mjs",
-    "wallet:verifica": "node scripts/verificaWalletPrenotazione.mjs"
+    "wallet:verifica": "node scripts/verificaWalletPrenotazione.mjs",
+    "wallet:vincolato": "node scripts/verificaWalletVincolato.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

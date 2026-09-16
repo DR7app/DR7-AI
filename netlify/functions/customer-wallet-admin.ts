@@ -35,7 +35,8 @@ const handler: Handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Token non valido' }) };
     }
 
-    const { action, customer_id, user_id, amount, description, query, nature, overrideId } = JSON.parse(event.body || '{}');
+    const { action, customer_id, user_id, amount, description, query, nature, overrideId,
+            destinatari, scadenza, servizi } = JSON.parse(event.body || '{}');
 
     switch (action) {
       case 'list_all_balances': {
@@ -331,6 +332,141 @@ const handler: Handler = async (event) => {
           headers,
           body: JSON.stringify({ success: true, new_balance_cents: Math.round(newBalance * 100) }),
         };
+      }
+
+      // ── CREDITO VINCOLATO (16/09/2026) ──────────────────────────────
+      // Un credito che vale SOLO su certi servizi e SOLO fino a una data.
+      // Non entra in `user_credit_balance`: vive nei suoi lotti, e la spesa
+      // lo consuma per primo (trigger `dr7_wallet_sync_prenotazione`).
+      //
+      // Si puo' dare a un cliente, a una selezione o a tutti. "Tutti" vuol
+      // dire tutti quelli che hanno un account sito: senza account non c'e'
+      // wallet da riempire. La risposta dice quante righe sono state scritte
+      // e quanto vale il regalo in totale — chi preme il bottone deve poterlo
+      // confrontare con quello che si aspettava.
+      case 'credito_vincolato': {
+        const importo = Number(amount);
+        if (!Number.isFinite(importo) || importo <= 0) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Importo obbligatorio' }) };
+        }
+
+        const serviceSupabase = createClient(
+          process.env.VITE_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const tipo = String(destinatari?.tipo || 'cliente');
+        const idsRichiesti: string[] = Array.isArray(destinatari?.customer_ids)
+          ? destinatari.customer_ids.filter(Boolean)
+          : [];
+
+        let selezione = serviceSupabase
+          .from('customers_extended')
+          .select('id, user_id, nome, cognome')
+          .not('user_id', 'is', null);
+
+        if (tipo === 'cliente') {
+          if (!customer_id) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cliente obbligatorio' }) };
+          }
+          selezione = selezione.eq('id', customer_id);
+        } else if (tipo === 'selezione') {
+          if (idsRichiesti.length === 0) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessun cliente selezionato' }) };
+          }
+          selezione = selezione.in('id', idsRichiesti);
+        } else if (tipo !== 'tutti') {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Destinatari non validi' }) };
+        }
+
+        const { data: clienti, error: erroreClienti } = await selezione;
+        if (erroreClienti) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: erroreClienti.message }) };
+        }
+
+        // Un cliente puo' avere piu' schede con lo stesso account: il credito
+        // si darebbe due volte. Si scrive una riga per ACCOUNT.
+        const perAccount = new Map<string, { id: string; nome: string }>();
+        for (const c of clienti || []) {
+          const uid = String((c as { user_id?: string }).user_id || '');
+          if (!uid || perAccount.has(uid)) continue;
+          perAccount.set(uid, {
+            id: String((c as { id: string }).id),
+            nome: [(c as { nome?: string }).nome, (c as { cognome?: string }).cognome].filter(Boolean).join(' '),
+          });
+        }
+
+        if (perAccount.size === 0) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Nessun destinatario con account sito: senza account non esiste un wallet da riempire.' }),
+          };
+        }
+
+        // Servizi: lista vuota = vale su tutto. Vale la pena scriverlo NULL,
+        // cosi' la regola in SQL e' una sola.
+        const serviziPuliti = Array.isArray(servizi)
+          ? servizi.map((s: unknown) => String(s || '').trim()).filter(Boolean)
+          : [];
+
+        const righe = [...perAccount.entries()].map(([uid]) => ({
+          user_id: uid,
+          importo,
+          residuo: importo,
+          scadenza: scadenza || null,
+          servizi: serviziPuliti.length > 0 ? serviziPuliti : null,
+          descrizione: description || null,
+          origine: 'admin',
+          creato_da: user.id,
+        }));
+
+        const { error: erroreInsert } = await serviceSupabase
+          .from('wallet_crediti_vincolati')
+          .insert(righe);
+
+        if (erroreInsert) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: erroreInsert.message }) };
+        }
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            destinatari: righe.length,
+            totale: Math.round(importo * righe.length * 100) / 100,
+          }),
+        };
+      }
+
+      // Lotti vincolati di un cliente, con quanto resta e se sono ancora buoni.
+      case 'crediti_vincolati': {
+        if (!user_id && !customer_id) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cliente obbligatorio' }) };
+        }
+        const serviceSupabase = createClient(
+          process.env.VITE_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+        let uid = user_id;
+        if (!uid && customer_id) {
+          const { data: c } = await serviceSupabase
+            .from('customers_extended').select('user_id').eq('id', customer_id).maybeSingle();
+          uid = (c as { user_id?: string } | null)?.user_id;
+        }
+        if (!uid) {
+          return { statusCode: 200, headers, body: JSON.stringify({ lotti: [] }) };
+        }
+        const { data: lotti, error: erroreLotti } = await serviceSupabase
+          .from('wallet_crediti_vincolati')
+          .select('*')
+          .eq('user_id', uid)
+          .order('created_at', { ascending: false });
+        if (erroreLotti) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: erroreLotti.message }) };
+        }
+        return { statusCode: 200, headers, body: JSON.stringify({ lotti: lotti || [] }) };
       }
 
       case 'transactions': {
