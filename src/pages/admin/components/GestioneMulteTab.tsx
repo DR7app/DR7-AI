@@ -64,6 +64,18 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
     const [caricamentoContratto, setCaricamentoContratto] = useState(false)
     const contrattoInputRef = useRef<HTMLInputElement>(null)
 
+    // Dati scritti a mano: la multa puo' riguardare un noleggio che a sistema
+    // non esiste (contratto su carta, periodo prima del gestionale). Senza
+    // questo la multa restava ferma e la PEC non partiva mai.
+    const DATI_A_MANO_VUOTI = {
+        cognome: '', nome: '', codice_fiscale: '', data_nascita: '', luogo_nascita: '',
+        indirizzo: '', cap: '', citta: '', provincia: '', patente_numero: '',
+        customer_phone: '', customer_email: '', vehicle_name: '', vehicle_plate: '',
+        pickup_date: '', dropoff_date: '',
+    }
+    const [datiAMano, setDatiAMano] = useState({ ...DATI_A_MANO_VUOTI })
+    const [moduloAMano, setModuloAMano] = useState(false)
+
     // ── Destinatario PEC dinamico (organo accertatore) ───────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [pecRecipient, setPecRecipient] = useState<any>(null)  // proposta backend
@@ -306,7 +318,7 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
     }
 
     async function caricaContrattoAMano(file: File) {
-        if (!driverData?.booking_id) { toast.error('Prima scegli il noleggio'); return }
+        if (!driverData) { toast.error('Prima scegli il noleggio o scrivi i dati a mano'); return }
         // Il corpo di una funzione Netlify sta sotto i 6 MB e il base64 gonfia
         // di un terzo: meglio dirlo prima che vedere un errore oscuro.
         if (file.size > 4 * 1024 * 1024) { toast.error('File troppo grande (massimo 4 MB)'); return }
@@ -323,7 +335,7 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'allegaContratto',
-                    booking_id: driverData.booking_id,
+                    booking_id: driverData.booking_id || null,
                     contrattoBase64: base64,
                     contrattoNome: file.name,
                     contrattoTipo: file.type || 'application/pdf',
@@ -338,6 +350,55 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
         } finally {
             setCaricamentoContratto(false)
             if (contrattoInputRef.current) contrattoInputRef.current.value = ''
+        }
+    }
+
+    async function confermaDatiAMano() {
+        if (!datiAMano.cognome.trim() || !datiAMano.nome.trim()) {
+            toast.error('Nome e cognome del conducente sono obbligatori')
+            return
+        }
+        const driver = {
+            booking_id: '',
+            customer_name: `${datiAMano.nome} ${datiAMano.cognome}`.trim(),
+            customer_email: datiAMano.customer_email,
+            customer_phone: datiAMano.customer_phone,
+            cognome: datiAMano.cognome,
+            nome: datiAMano.nome,
+            codice_fiscale: datiAMano.codice_fiscale,
+            data_nascita: datiAMano.data_nascita,
+            luogo_nascita: datiAMano.luogo_nascita,
+            indirizzo: datiAMano.indirizzo,
+            citta: datiAMano.citta,
+            provincia: datiAMano.provincia,
+            cap: datiAMano.cap,
+            patente_numero: datiAMano.patente_numero,
+            vehicle_name: datiAMano.vehicle_name,
+            vehicle_plate: datiAMano.vehicle_plate || multaData?.targa || '',
+            pickup_date: datiAMano.pickup_date,
+            dropoff_date: datiAMano.dropoff_date,
+            contract_url: '',
+            license_urls: [] as string[],
+            id_urls: [] as string[],
+            codice_fiscale_urls: [] as string[],
+        }
+        setMultaProcessing(true)
+        try {
+            const res = await fetch('/.netlify/functions/process-multa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'lettera', multaData, driverData: driver }),
+            })
+            const data = await res.json()
+            if (data.letterText) setLetterText(data.letterText)
+            setDriverData(driver)
+            setModuloAMano(false)
+            setMultaStep('review')
+            toast.success('Dati inseriti a mano. Controlla la lettera prima di inviare.')
+        } catch (err: unknown) {
+            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setMultaProcessing(false)
         }
     }
 
@@ -700,12 +761,23 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                             o la prenotazione puo' essere vecchia e senza targa copiata. Il noleggio si
                                             sceglie a mano: le prenotazioni restano tutte, anche delle auto che non ci sono piu'.
                                         </p>
-                                        <Button
-                                            onClick={() => { setSceltaManuale(true); caricaNoleggiCandidati('') }}
-                                            className="bg-theme-bg-tertiary"
-                                        >
-                                            Scegli il noleggio a mano
-                                        </Button>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                onClick={() => { setSceltaManuale(true); caricaNoleggiCandidati('') }}
+                                                className="bg-theme-bg-tertiary"
+                                            >
+                                                Scegli il noleggio a mano
+                                            </Button>
+                                            <Button
+                                                onClick={() => {
+                                                    setDatiAMano(d => ({ ...d, vehicle_plate: multaData?.targa || d.vehicle_plate }))
+                                                    setModuloAMano(true)
+                                                }}
+                                                className="bg-theme-bg-tertiary"
+                                            >
+                                                Scrivi i dati a mano
+                                            </Button>
+                                        </div>
                                     </div>
                                 )}
 
@@ -753,9 +825,60 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                                 </button>
                                             ))}
                                             {noleggiCandidati.length === 0 && !caricamentoNoleggi && (
-                                                <div className="px-3 py-4 text-sm text-theme-text-muted">Nessun noleggio da mostrare.</div>
+                                                <div className="px-3 py-4 text-sm text-theme-text-muted">
+                                                    Nessun noleggio in questi giorni. Se il noleggio non e' mai stato a
+                                                    sistema (contratto su carta, periodo prima del gestionale) usa
+                                                    "Scrivi i dati a mano".
+                                                </div>
                                             )}
                                         </div>
+                                    </div>
+                                )}
+
+                                {moduloAMano && (
+                                    <div className="p-4 bg-theme-bg-secondary border border-theme-border rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="text-sm font-bold text-theme-text-primary">Dati del conducente scritti a mano</div>
+                                            <button onClick={() => setModuloAMano(false)} className="text-xs text-theme-text-muted hover:text-theme-text-primary">Chiudi</button>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted">
+                                            Per le multe di noleggi che a sistema non ci sono. Quello che scrivi qui finisce
+                                            nella lettera esattamente come i dati letti dall'archivio; il contratto lo alleghi
+                                            dopo, nella schermata di controllo.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            {([
+                                                ['cognome', 'Cognome *', 'text'],
+                                                ['nome', 'Nome *', 'text'],
+                                                ['codice_fiscale', 'Codice fiscale', 'text'],
+                                                ['data_nascita', 'Data di nascita', 'date'],
+                                                ['luogo_nascita', 'Luogo di nascita', 'text'],
+                                                ['patente_numero', 'Patente n.', 'text'],
+                                                ['indirizzo', 'Indirizzo', 'text'],
+                                                ['cap', 'CAP', 'text'],
+                                                ['citta', 'Citta', 'text'],
+                                                ['provincia', 'Provincia', 'text'],
+                                                ['customer_phone', 'Telefono', 'text'],
+                                                ['customer_email', 'Email', 'text'],
+                                                ['vehicle_name', 'Veicolo', 'text'],
+                                                ['vehicle_plate', 'Targa', 'text'],
+                                                ['pickup_date', 'Inizio noleggio', 'date'],
+                                                ['dropoff_date', 'Fine noleggio', 'date'],
+                                            ] as const).map(([campo, etichetta, tipo]) => (
+                                                <div key={campo}>
+                                                    <label className="text-xs text-theme-text-secondary mb-1 block">{etichetta}</label>
+                                                    <input
+                                                        type={tipo}
+                                                        value={datiAMano[campo]}
+                                                        onChange={e => setDatiAMano(d => ({ ...d, [campo]: e.target.value }))}
+                                                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <Button onClick={confermaDatiAMano} disabled={multaProcessing}>
+                                            {multaProcessing ? 'Preparo...' : 'Usa questi dati'}
+                                        </Button>
                                     </div>
                                 )}
                             </div>

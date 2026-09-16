@@ -945,7 +945,7 @@ async function sendPEC(
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 interface ProcessMultaRequest {
-    action: 'extract' | 'findDriver' | 'cercaNoleggi' | 'noleggioScelto' | 'allegaContratto' | 'sendPec' | 'fullProcess'
+    action: 'extract' | 'findDriver' | 'cercaNoleggi' | 'noleggioScelto' | 'allegaContratto' | 'lettera' | 'sendPec' | 'fullProcess'
     // For extract
     pdfBase64?: string
     pdfFileName?: string
@@ -1071,11 +1071,11 @@ const handler: Handler = async (event) => {
             // chiave di servizio, cosi' non dipende dai permessi della
             // sessione di chi sta davanti allo schermo.
             case 'allegaContratto': {
-                if (!req.booking_id || !req.contrattoBase64) {
-                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Prenotazione e file richiesti' }) }
+                if (!req.contrattoBase64) {
+                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'File richiesto' }) }
                 }
                 const estensione = (req.contrattoNome?.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '')
-                const percorso = `multe-manuale/${req.booking_id}-${Date.now()}.${estensione || 'pdf'}`
+                const percorso = `multe-manuale/${req.booking_id || 'senza-prenotazione'}-${Date.now()}.${estensione || 'pdf'}`
                 const contenuto = Buffer.from(req.contrattoBase64, 'base64')
                 const { error: erroreUpload } = await supabase.storage
                     .from('contracts')
@@ -1089,6 +1089,20 @@ const handler: Handler = async (event) => {
                     return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Link al contratto non ottenuto' }) }
                 }
                 return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ contract_url: firmato.signedUrl, path: percorso }) }
+            }
+
+            // ── Lettera per i dati scritti a mano ────────────────────────
+            // Una multa puo' riguardare un noleggio che a sistema non c'e'
+            // proprio (contratto su carta, periodo prima del gestionale). In
+            // quel caso i dati del conducente li scrive la direzione e la
+            // lettera si prepara lo stesso, identica alle altre.
+            case 'lettera': {
+                if (!req.multaData || !req.driverData) {
+                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Dati multa e conducente richiesti' }) }
+                }
+                const cfg = await loadMulteConfig(await rigaBusinessDellaMulta(req.driverData.booking_id))
+                const letterText = generateLetterText(req.multaData, req.driverData, cfg, req.aziendaOverride || {})
+                return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ letterText }) }
             }
 
             // ── Step 3: Send PEC ─────────────────────────────────────────
