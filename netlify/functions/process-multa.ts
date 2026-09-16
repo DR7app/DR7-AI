@@ -945,7 +945,7 @@ async function sendPEC(
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 interface ProcessMultaRequest {
-    action: 'extract' | 'findDriver' | 'cercaNoleggi' | 'noleggioScelto' | 'sendPec' | 'fullProcess'
+    action: 'extract' | 'findDriver' | 'cercaNoleggi' | 'noleggioScelto' | 'allegaContratto' | 'sendPec' | 'fullProcess'
     // For extract
     pdfBase64?: string
     pdfFileName?: string
@@ -956,6 +956,10 @@ interface ProcessMultaRequest {
     // Scelta manuale del noleggio (quando l'automatico non trova)
     cerca?: string
     booking_id?: string
+    // Contratto caricato a mano
+    contrattoBase64?: string
+    contrattoNome?: string
+    contrattoTipo?: string
     // For sendPec
     multaData?: MultaData
     driverData?: DriverData
@@ -1060,6 +1064,31 @@ const handler: Handler = async (event) => {
                     )
                     : ''
                 return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ driver, letterText: letteraManuale }) }
+            }
+
+            // ── Contratto messo a mano ───────────────────────────────────
+            // Passa da qui e non dal browser: sul bucket `contracts` scrive la
+            // chiave di servizio, cosi' non dipende dai permessi della
+            // sessione di chi sta davanti allo schermo.
+            case 'allegaContratto': {
+                if (!req.booking_id || !req.contrattoBase64) {
+                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Prenotazione e file richiesti' }) }
+                }
+                const estensione = (req.contrattoNome?.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '')
+                const percorso = `multe-manuale/${req.booking_id}-${Date.now()}.${estensione || 'pdf'}`
+                const contenuto = Buffer.from(req.contrattoBase64, 'base64')
+                const { error: erroreUpload } = await supabase.storage
+                    .from('contracts')
+                    .upload(percorso, contenuto, { upsert: true, contentType: req.contrattoTipo || 'application/pdf' })
+                if (erroreUpload) {
+                    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: `Caricamento fallito: ${erroreUpload.message}` }) }
+                }
+                // Una settimana: il tempo di controllare e mandare la PEC.
+                const { data: firmato } = await supabase.storage.from('contracts').createSignedUrl(percorso, 604800)
+                if (!firmato?.signedUrl) {
+                    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Link al contratto non ottenuto' }) }
+                }
+                return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ contract_url: firmato.signedUrl, path: percorso }) }
             }
 
             // ── Step 3: Send PEC ─────────────────────────────────────────

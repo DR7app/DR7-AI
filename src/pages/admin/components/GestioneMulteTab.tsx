@@ -307,17 +307,31 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
 
     async function caricaContrattoAMano(file: File) {
         if (!driverData?.booking_id) { toast.error('Prima scegli il noleggio'); return }
+        // Il corpo di una funzione Netlify sta sotto i 6 MB e il base64 gonfia
+        // di un terzo: meglio dirlo prima che vedere un errore oscuro.
+        if (file.size > 4 * 1024 * 1024) { toast.error('File troppo grande (massimo 4 MB)'); return }
         setCaricamentoContratto(true)
         try {
-            const estensione = (file.name.split('.').pop() || 'pdf').toLowerCase()
-            const percorso = `multe-manuale/${driverData.booking_id}-${Date.now()}.${estensione}`
-            const { error: erroreUpload } = await supabase.storage
-                .from('contracts')
-                .upload(percorso, file, { upsert: true, contentType: file.type || 'application/pdf' })
-            if (erroreUpload) throw erroreUpload
-            const { data: firmato } = await supabase.storage.from('contracts').createSignedUrl(percorso, 604800)
-            if (!firmato?.signedUrl) throw new Error('Link al contratto non ottenuto')
-            setDriverData((d: Record<string, unknown> | null) => (d ? { ...d, contract_url: firmato.signedUrl } : d))
+            const base64 = await new Promise<string>((risolvi, rifiuta) => {
+                const lettore = new FileReader()
+                lettore.onload = () => risolvi(String(lettore.result).split(',')[1] || '')
+                lettore.onerror = () => rifiuta(new Error('File non leggibile'))
+                lettore.readAsDataURL(file)
+            })
+            const res = await fetch('/.netlify/functions/process-multa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'allegaContratto',
+                    booking_id: driverData.booking_id,
+                    contrattoBase64: base64,
+                    contrattoNome: file.name,
+                    contrattoTipo: file.type || 'application/pdf',
+                }),
+            })
+            const data = await res.json()
+            if (data.error) { toast.error(data.error); return }
+            setDriverData((d: Record<string, unknown> | null) => (d ? { ...d, contract_url: data.contract_url } : d))
             toast.success('Contratto allegato a mano')
         } catch (err: unknown) {
             toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
