@@ -356,44 +356,64 @@ const handler: Handler = async (event) => {
         );
 
         const tipo = String(destinatari?.tipo || 'cliente');
-        const idsRichiesti: string[] = Array.isArray(destinatari?.customer_ids)
-          ? destinatari.customer_ids.filter(Boolean)
+        // Il wallet sta sull'ACCOUNT, non sulla scheda: un cliente con due
+        // schede non deve ricevere il credito due volte, e un iscritto al sito
+        // senza scheda deve poterlo ricevere lo stesso. Per questo la lista
+        // del tab Marketing manda gli user_id; le schede restano accettate
+        // (customer_ids) per chi chiama dalla scheda cliente.
+        const userIdsRichiesti: string[] = Array.isArray(destinatari?.user_ids)
+          ? destinatari.user_ids.filter(Boolean).map(String)
+          : [];
+        const customerIdsRichiesti: string[] = Array.isArray(destinatari?.customer_ids)
+          ? destinatari.customer_ids.filter(Boolean).map(String)
           : [];
 
-        let selezione = serviceSupabase
-          .from('customers_extended')
-          .select('id, user_id, nome, cognome')
-          .not('user_id', 'is', null);
-
-        if (tipo === 'cliente') {
-          if (!customer_id) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cliente obbligatorio' }) };
-          }
-          selezione = selezione.eq('id', customer_id);
-        } else if (tipo === 'selezione') {
-          if (idsRichiesti.length === 0) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessun cliente selezionato' }) };
-          }
-          selezione = selezione.in('id', idsRichiesti);
-        } else if (tipo !== 'tutti') {
-          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Destinatari non validi' }) };
-        }
-
-        const { data: clienti, error: erroreClienti } = await selezione;
-        if (erroreClienti) {
-          return { statusCode: 500, headers, body: JSON.stringify({ error: erroreClienti.message }) };
-        }
-
-        // Un cliente puo' avere piu' schede con lo stesso account: il credito
-        // si darebbe due volte. Si scrive una riga per ACCOUNT.
         const perAccount = new Map<string, { id: string; nome: string }>();
-        for (const c of clienti || []) {
-          const uid = String((c as { user_id?: string }).user_id || '');
-          if (!uid || perAccount.has(uid)) continue;
-          perAccount.set(uid, {
-            id: String((c as { id: string }).id),
-            nome: [(c as { nome?: string }).nome, (c as { cognome?: string }).cognome].filter(Boolean).join(' '),
-          });
+
+        const aggiungiSchede = async (filtro: (q: any) => any) => {
+          const { data, error: err } = await filtro(
+            serviceSupabase.from('customers_extended').select('id, user_id, nome, cognome').not('user_id', 'is', null)
+          );
+          if (err) throw new Error(err.message);
+          for (const c of data || []) {
+            const uid = String((c as { user_id?: string }).user_id || '');
+            if (!uid || perAccount.has(uid)) continue;
+            perAccount.set(uid, {
+              id: String((c as { id: string }).id),
+              nome: [(c as { nome?: string }).nome, (c as { cognome?: string }).cognome].filter(Boolean).join(' '),
+            });
+          }
+        };
+
+        try {
+          if (tipo === 'cliente') {
+            if (!customer_id) {
+              return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cliente obbligatorio' }) };
+            }
+            await aggiungiSchede(q => q.eq('id', customer_id));
+          } else if (tipo === 'selezione') {
+            if (userIdsRichiesti.length === 0 && customerIdsRichiesti.length === 0) {
+              return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessun cliente selezionato' }) };
+            }
+            if (customerIdsRichiesti.length > 0) await aggiungiSchede(q => q.in('id', customerIdsRichiesti));
+            for (const uid of userIdsRichiesti) {
+              if (!perAccount.has(uid)) perAccount.set(uid, { id: uid, nome: '' });
+            }
+          } else if (tipo === 'tutti') {
+            await aggiungiSchede(q => q);
+            // Chi ha gia' un wallet ma non ha una scheda compilata: e' un
+            // cliente a tutti gli effetti, "tutti" vuol dire anche lui.
+            const { data: saldi } = await serviceSupabase
+              .from('user_credit_balance').select('user_id');
+            for (const b of saldi || []) {
+              const uid = String((b as { user_id?: string }).user_id || '');
+              if (uid && !perAccount.has(uid)) perAccount.set(uid, { id: uid, nome: '' });
+            }
+          } else {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Destinatari non validi' }) };
+          }
+        } catch (e) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) };
         }
 
         if (perAccount.size === 0) {
