@@ -904,16 +904,33 @@ export default function CustomersTab() {
         customersArray.map(c => c.user_id).filter(Boolean) as string[]
       )
       if (userIds.size > 0) {
-        void fetchAllRows<{ user_id: string; balance: string | number }>((from, to) =>
-          supabase.from('user_credit_balance').select('user_id, balance').range(from, to)
-        ).then(({ data }) => {
-          if (!data.length) return
+        // 16/09/2026: il wallet di un cliente e' saldo libero PIU' credito
+        // vincolato (valido per certi servizi e fino a una data). Leggendo
+        // solo il saldo, un cliente appena caricato di 200 EUR vincolati
+        // restava a "€0.00" anche qui, e sembrava che la ricarica non fosse
+        // mai avvenuta. La colonna dice quanto ha, non meta'.
+        void Promise.all([
+          fetchAllRows<{ user_id: string; balance: string | number }>((from, to) =>
+            supabase.from('user_credit_balance').select('user_id, balance').range(from, to)
+          ),
+          supabase
+            .from('wallet_crediti_vincolati')
+            .select('user_id, residuo, scadenza')
+            .gt('residuo', 0),
+        ]).then(([saldi, vincolati]) => {
           const saldoPerAccount = new Map<string, number>()
-          for (const row of data) {
+          for (const row of saldi.data) {
             if (row.user_id && userIds.has(row.user_id)) {
               saldoPerAccount.set(row.user_id, parseFloat(String(row.balance)) || 0)
             }
           }
+          const oggi = new Date().toISOString().slice(0, 10)
+          for (const l of (vincolati.data || []) as Array<{ user_id: string; residuo: number | string; scadenza: string | null }>) {
+            if (l.scadenza && l.scadenza < oggi) continue      // scaduto: non si spende piu'
+            if (!l.user_id || !userIds.has(l.user_id)) continue
+            saldoPerAccount.set(l.user_id, (saldoPerAccount.get(l.user_id) || 0) + (Number(l.residuo) || 0))
+          }
+          if (saldoPerAccount.size === 0) return
           const map = new Map<string, number>()
           for (const c of customersArray) {
             const uid = c.user_id

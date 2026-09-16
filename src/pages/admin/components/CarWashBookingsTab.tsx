@@ -432,7 +432,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
     setSaldoWalletInCaricamento(true)
-    leggiSaldoWallet(formData.customer_id).then(r => {
+    // Lavaggio e meccanica sono lo stesso business: il credito vincolato
+    // al lavaggio vale anche qui.
+    leggiSaldoWallet(formData.customer_id, 'car_wash').then(r => {
       if (annullato) return
       setSaldoWallet(r)
       setSaldoWalletInCaricamento(false)
@@ -2141,7 +2143,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
       if (dovutoWallet > 0) {
         // Il saldo mostrato nel form puo' essere vecchio: si rilegge adesso.
-        const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
+        const saldoAggiornato = await leggiSaldoWallet(formData.customer_id, 'car_wash')
         setSaldoWallet(saldoAggiornato)
         const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
         // 16/09/2026 (direzione): anche senza account (= nessun wallet,

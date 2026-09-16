@@ -1214,13 +1214,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       return
     }
     setSaldoWalletInCaricamento(true)
-    leggiSaldoWallet(formData.customer_id).then(r => {
+    // Il servizio conta: un credito vincolato al Lavaggio non paga un
+    // noleggio Terra, e viceversa.
+    leggiSaldoWallet(formData.customer_id, serviceType).then(r => {
       if (annullato) return
       setSaldoWallet(r)
       setSaldoWalletInCaricamento(false)
     })
     return () => { annullato = true }
-  }, [metodoEWallet, formData.customer_id])
+  }, [metodoEWallet, formData.customer_id, serviceType])
 
   // 16/09/2026: la ricerca cliente propone SOLO i clienti presenti in Lead.
   // `customers` contiene anche quelli ricavati dalle prenotazioni passate
@@ -6166,7 +6168,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         if (dovutoWallet > 0) {
           // Il saldo mostrato nel form puo' essere vecchio di qualche minuto:
           // prima di decidere lo si rilegge.
-          const saldoAggiornato = await leggiSaldoWallet(formData.customer_id)
+          const saldoAggiornato = await leggiSaldoWallet(formData.customer_id, serviceType)
           setSaldoWallet(saldoAggiornato)
           const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
           // 16/09/2026 (direzione): anche senza account (= nessun wallet,
@@ -7418,13 +7420,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               `Credit Wallet: addebitati ${formattaEuro(movimento.addebitato)}. Saldo del cliente: ${formattaEuro(movimento.saldo ?? 0)}.`,
               { duration: 6000 },
             )
-            setSaldoWallet({ userId: movimento.userId, saldo: movimento.saldo })
+            leggiSaldoWallet(formData.customer_id, serviceType).then(setSaldoWallet)
           } else if (movimento.addebitato < 0) {
             toast.success(
               `Credit Wallet: restituiti ${formattaEuro(Math.abs(movimento.addebitato))}. Saldo del cliente: ${formattaEuro(movimento.saldo ?? 0)}.`,
               { duration: 6000 },
             )
-            setSaldoWallet({ userId: movimento.userId, saldo: movimento.saldo })
+            leggiSaldoWallet(formData.customer_id, serviceType).then(setSaldoWallet)
           } else if (['paid', 'succeeded', 'completed', 'partial'].includes((formData.payment_status || '').toLowerCase())) {
             // Metodo wallet + incasso registrato, ma nel registro non risulta
             // nessun movimento: quasi sempre significa cliente senza account

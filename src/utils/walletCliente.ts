@@ -20,18 +20,35 @@ import { isCreditWallet } from './paymentMethodMatchers'
 export interface SaldoWallet {
   /** Account sito del cliente. NULL = nessun wallet collegato. */
   userId: string | null
-  /** Saldo in euro. NULL quando non c'e' un account a cui guardare. */
+  /** Quanto puo' spendere QUI: saldo libero piu' il vincolato valido per
+   *  questo servizio. NULL quando non c'e' un account a cui guardare. */
   saldo: number | null
+  /** Solo il saldo libero, senza vincoli. */
+  saldoLibero: number
+  /** La parte vincolata spendibile su questo servizio (scadenze escluse). */
+  vincolato: number
 }
 
-const VUOTO: SaldoWallet = { userId: null, saldo: null }
+const VUOTO: SaldoWallet = { userId: null, saldo: null, saldoLibero: 0, vincolato: 0 }
+
+/** Business di un service_type, come in businessScope.ts e in dr7_wallet_business. */
+function businessDi(servizio: string | null | undefined): string {
+  const v = String(servizio || '').trim().toLowerCase()
+  if (!v || v === 'rental' || v === 'car_rental') return 'rental'
+  if (v === 'mechanical' || v === 'mechanical_service' || v === 'car_wash') return 'car_wash'
+  if (v === 'boat_rental' || v === 'heli_rental' || v === 'stay_rental') return v
+  return 'rental'
+}
 
 /**
  * Saldo del wallet a partire dalla scheda cliente del gestionale.
  * Non solleva mai: una lettura fallita vale "non lo so", e la schermata
  * continua a funzionare (nessun blocco, mai — direzione).
  */
-export async function leggiSaldoWallet(customerId: string | null | undefined): Promise<SaldoWallet> {
+export async function leggiSaldoWallet(
+  customerId: string | null | undefined,
+  servizio?: string | null,
+): Promise<SaldoWallet> {
   if (!customerId) return VUOTO
   try {
     const { data: cliente } = await supabase
@@ -49,8 +66,28 @@ export async function leggiSaldoWallet(customerId: string | null | undefined): P
       .eq('user_id', userId)
       .maybeSingle()
 
-    const saldo = riga ? Number((riga as { balance: number | string }).balance) || 0 : 0
-    return { userId, saldo }
+    const saldoLibero = riga ? Number((riga as { balance: number | string }).balance) || 0 : 0
+
+    // 16/09/2026 — Credito VINCOLATO: vale solo su certi servizi e fino a una
+    // data, e sta in una tabella sua (non nel saldo). Senza questa lettura la
+    // schermata diceva "credito insufficiente" a un cliente che il credito ce
+    // l'aveva: bloccava proprio il noleggio per cui glielo avevamo dato.
+    const oggi = new Date().toISOString().slice(0, 10)
+    const { data: lotti } = await supabase
+      .from('wallet_crediti_vincolati')
+      .select('residuo, scadenza, servizi')
+      .eq('user_id', userId)
+      .gt('residuo', 0)
+
+    const business = businessDi(servizio)
+    let vincolato = 0
+    for (const l of (lotti || []) as Array<{ residuo: number | string; scadenza: string | null; servizi: string[] | null }>) {
+      if (l.scadenza && l.scadenza < oggi) continue
+      const vale = !l.servizi || l.servizi.length === 0 || l.servizi.some(x => businessDi(x) === business)
+      if (vale) vincolato += Number(l.residuo) || 0
+    }
+
+    return { userId, saldo: Math.round((saldoLibero + vincolato) * 100) / 100, saldoLibero, vincolato }
   } catch {
     return VUOTO
   }
