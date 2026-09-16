@@ -474,6 +474,34 @@ async function arricchisciConducente(
         if (c) applyCustomerData(c)
     }
 
+    // Fallback: la scheda cliente scritta dentro la prenotazione. Un noleggio
+    // fatto a un ospite non ha user_id e spesso nemmeno l'email: senza questo
+    // la lettera usciva con codice fiscale, nascita e residenza a "N/D", cioe'
+    // inutile — e' proprio quello che l'ente chiede.
+    const idSchedaCliente = match.booking_details?.customer?.customerId || match.booking_details?.customer?.id
+    if (!customerExtendedId && idSchedaCliente) {
+        const { data: c } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .eq('id', idSchedaCliente)
+            .maybeSingle()
+        if (c) applyCustomerData(c)
+    }
+
+    // Fallback: il telefono, confrontato sulle ultime 9 cifre (il prefisso e'
+    // scritto in mille modi). Solo se porta a UNA scheda sola.
+    const soloCifre = (v: string | null | undefined) => String(v || '').replace(/\D/g, '')
+    const telefonoNoleggio = soloCifre(match.customer_phone || match.booking_details?.customer?.phone)
+    if (!customerExtendedId && telefonoNoleggio.length >= 9) {
+        const coda = telefonoNoleggio.slice(-9)
+        const { data: righe } = await supabase
+            .from('customers_extended')
+            .select('*')
+            .ilike('telefono', `%${coda}%`)
+        const candidati = (righe || []).filter(c => soloCifre((c as { telefono?: string }).telefono).endsWith(coda))
+        if (candidati.length === 1) applyCustomerData(candidati[0])
+    }
+
     // Fallback name splitting
     if (!cognome && match.customer_name) {
         const parts = match.customer_name.trim().split(/\s+/)
