@@ -549,7 +549,8 @@ export default function CustomerWalletTab() {
   const totalBalance = allWalletCustomers.reduce((s, c) => s + (c.balance_cents || 0), 0)
 
   // ── KPIs e widget sidebar (dati gia' caricati, niente nuove query) ────────
-  const activeCustomers = allWalletCustomers.filter(c => (c.balance_cents || 0) > 0)
+  const activeCustomers = allWalletCustomers.filter(c =>
+    (c.balance_cents || 0) > 0 || (vincolatoPerUtente.get(String(c.user_id || c.id)) || 0) > 0)
   const activeCount = activeCustomers.length
   const totalCount = allWalletCustomers.length
   const inactiveCount = totalCount - activeCount
@@ -792,7 +793,10 @@ export default function CustomerWalletTab() {
                 {/* Cliente */}
                 {(() => {
                   const balance = customer.balance_cents || 0
-                  const isActive = balance > 0
+                  // Un cliente con solo credito vincolato non e' inattivo: ha
+                  // denaro da spendere, solo non nel saldo.
+                  const vincolatoCliente = vincolatoPerUtente.get(String(customer.user_id || customer.id)) || 0
+                  const isActive = balance > 0 || vincolatoCliente > 0
                   const palettes = [
                     'bg-rose-500/20 text-rose-300 border-rose-500/40',
                     'bg-amber-500/20 text-amber-300 border-amber-500/40',

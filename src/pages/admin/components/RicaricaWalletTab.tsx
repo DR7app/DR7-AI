@@ -122,6 +122,19 @@ export default function RicaricaWalletTab() {
     }
   }
 
+  // Quanto credito vincolato ha ogni cliente: va scritto sulla riga, non solo
+  // in fondo alla pagina. Il saldo resta a zero e senza questo sembra che il
+  // credito non sia mai arrivato.
+  const vincolatoPerUtente = useMemo(() => {
+    const m = new Map<string, number>()
+    const oggi = new Date().toISOString().slice(0, 10)
+    for (const l of lotti) {
+      if (l.scadenza && l.scadenza < oggi) continue
+      m.set(l.user_id, (m.get(l.user_id) || 0) + l.residuo)
+    }
+    return m
+  }, [lotti])
+
   const visibili = useMemo(() => {
     const q = ricerca.trim().toLowerCase()
     if (!q) return clienti.slice(0, 300)
@@ -339,7 +352,14 @@ export default function RicaricaWalletTab() {
                       <p className="text-sm font-semibold text-theme-text-primary truncate">{c.nome}</p>
                     </div>
                     <span className="text-sm text-theme-text-secondary truncate hidden lg:block">{c.email || '—'}</span>
-                    <span className="text-sm text-theme-text-primary tabular-nums hidden lg:block">€{c.saldo.toFixed(2)}</span>
+                    <span className="text-sm text-theme-text-primary tabular-nums hidden lg:block">
+                      €{c.saldo.toFixed(2)}
+                      {(vincolatoPerUtente.get(c.user_id) || 0) > 0 && (
+                        <span className="block text-[11px] font-normal text-teal-400">
+                          + €{(vincolatoPerUtente.get(c.user_id) || 0).toFixed(2)} vincolato
+                        </span>
+                      )}
+                    </span>
                   </label>
                 )
               })}
