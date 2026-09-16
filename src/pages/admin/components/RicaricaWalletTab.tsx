@@ -23,6 +23,17 @@ import toast from 'react-hot-toast'
  * solo chi riceve cosa.
  */
 
+interface LottoVincolato {
+  id: string
+  user_id: string
+  importo: number
+  residuo: number
+  scadenza: string | null
+  servizi: string[] | null
+  descrizione: string | null
+  created_at: string
+}
+
 interface ClienteWallet {
   user_id: string
   nome: string
@@ -41,6 +52,10 @@ const SERVIZI_WALLET: { id: string; label: string }[] = [
 export default function RicaricaWalletTab() {
   const [clienti, setClienti] = useState<ClienteWallet[]>([])
   const [caricamento, setCaricamento] = useState(true)
+  // Quello che e' gia' stato dato: senza questo elenco un credito vincolato
+  // non si vedeva da nessuna parte nel gestionale — non entra nel saldo — e
+  // sembrava che la ricarica non avesse funzionato.
+  const [lotti, setLotti] = useState<LottoVincolato[]>([])
 
   const [destinatari, setDestinatari] = useState<'selezione' | 'tutti'>('selezione')
   const [selezione, setSelezione] = useState<Set<string>>(new Set())
@@ -89,6 +104,17 @@ export default function RicaricaWalletTab() {
       }
 
       setClienti([...perUtente.values()].sort((a, b) => b.saldo - a.saldo || a.nome.localeCompare(b.nome)))
+
+      const { data: righeLotti } = await supabase
+        .from('wallet_crediti_vincolati')
+        .select('id, user_id, importo, residuo, scadenza, servizi, descrizione, created_at')
+        .gt('residuo', 0)
+        .order('created_at', { ascending: false })
+      setLotti((righeLotti || []).map(l => ({
+        ...(l as LottoVincolato),
+        importo: Number((l as { importo: number }).importo) || 0,
+        residuo: Number((l as { residuo: number }).residuo) || 0,
+      })))
     } catch (err) {
       toast.error('Errore caricamento clienti: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -156,6 +182,20 @@ export default function RicaricaWalletTab() {
     } finally {
       setInvio(false)
     }
+  }
+
+  async function eliminaLotto(l: LottoVincolato) {
+    // Solo se non e' stato ancora speso niente: un credito gia' usato non si
+    // puo' togliere senza riscrivere una prenotazione.
+    if (l.residuo !== l.importo) {
+      toast.error('Gia\' in parte speso: non si puo\' togliere')
+      return
+    }
+    if (!window.confirm(`Togliere EUR ${l.importo.toFixed(2)} a questo cliente?`)) return
+    const { error } = await supabase.from('wallet_crediti_vincolati').delete().eq('id', l.id)
+    if (error) { toast.error('Errore: ' + error.message); return }
+    toast.success('Credito tolto')
+    caricaClienti()
   }
 
   if (caricamento) return <ScheletroTabella righe={8} colonne={4} />
@@ -416,6 +456,63 @@ export default function RicaricaWalletTab() {
               : `Assegna credito vincolato a ${quanti} clienti`}
         </button>
       </div>
+
+      {/* Quello che e' gia' stato dato. Un credito vincolato non entra nel
+          saldo del cliente: se non comparisse qui, nel gestionale non si
+          vedrebbe da nessuna parte. */}
+      {lotti.length > 0 && (
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-theme-border flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-theme-text-primary">Crediti vincolati attivi</h3>
+            <span className="text-xs text-theme-text-muted tabular-nums">
+              {lotti.length} · €{lotti.reduce((s2, l) => s2 + l.residuo, 0).toFixed(2)} da spendere
+            </span>
+          </div>
+          <div className="hidden lg:grid grid-cols-[2fr_1fr_1.5fr_1.5fr_auto] gap-4 px-5 py-2 border-b border-theme-border text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+            <span>Cliente</span>
+            <span>Residuo</span>
+            <span>Vale su</span>
+            <span>Scadenza</span>
+            <span></span>
+          </div>
+          <div className="divide-y divide-theme-border/50 max-h-96 overflow-y-auto">
+            {lotti.map(l => {
+              const cliente = clienti.find(c => c.user_id === l.user_id)
+              const dove = !l.servizi || l.servizi.length === 0
+                ? 'Tutti i servizi'
+                : l.servizi.map(x => SERVIZI_WALLET.find(s2 => s2.id === x)?.label || x).join(', ')
+              const scaduto = l.scadenza ? new Date(l.scadenza) < new Date(new Date().toDateString()) : false
+              return (
+                <div key={l.id} className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1.5fr_1.5fr_auto] gap-2 lg:gap-4 px-5 py-3 items-center text-sm">
+                  <div className="min-w-0">
+                    <p className="text-theme-text-primary truncate">{cliente?.nome || 'Cliente'}</p>
+                    {l.descrizione && <p className="text-[11px] text-theme-text-muted truncate">{l.descrizione}</p>}
+                  </div>
+                  <span className="text-theme-text-primary tabular-nums">
+                    €{l.residuo.toFixed(2)}
+                    {l.residuo !== l.importo && (
+                      <span className="text-[11px] text-theme-text-muted"> di €{l.importo.toFixed(2)}</span>
+                    )}
+                  </span>
+                  <span className="text-theme-text-secondary text-xs">{dove}</span>
+                  <span className={`text-xs ${scaduto ? 'text-red-400' : 'text-theme-text-secondary'}`}>
+                    {l.scadenza ? new Date(l.scadenza).toLocaleDateString('it-IT') : 'Nessuna'}
+                    {scaduto ? ' · scaduto' : ''}
+                  </span>
+                  <button
+                    onClick={() => eliminaLotto(l)}
+                    disabled={l.residuo !== l.importo}
+                    title={l.residuo !== l.importo ? 'Gia\' in parte speso' : 'Togli questo credito'}
+                    className="px-2 py-1 rounded-lg text-[11px] border border-theme-border bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-40"
+                  >
+                    Togli
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

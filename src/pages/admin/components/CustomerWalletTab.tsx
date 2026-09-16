@@ -107,6 +107,11 @@ export default function CustomerWalletTab() {
   // Sort
   const [sortBy, setSortBy] = useState<'balance' | 'name'>('balance')
 
+  // Credito vincolato per cliente (16/09/2026): non entra nel saldo — vive in
+  // lotti suoi — quindi senza questa riga qui dentro un credito appena
+  // regalato non si vedeva da nessuna parte e sembrava non funzionare.
+  const [vincolatoPerUtente, setVincolatoPerUtente] = useState<Map<string, number>>(new Map())
+
   useEffect(() => { loadAllWalletCustomers() }, [])
 
   async function loadAllWalletCustomers() {
@@ -209,6 +214,21 @@ export default function CustomerWalletTab() {
       })
 
       setAllWalletCustomers(mapped)
+
+      // Somma dei lotti ancora spendibili, per account.
+      const oggi = new Date().toISOString().slice(0, 10)
+      const { data: lottiVincolati } = await supabase
+        .from('wallet_crediti_vincolati')
+        .select('user_id, residuo, scadenza')
+        .gt('residuo', 0)
+      const perUtenteVincolato = new Map<string, number>()
+      for (const l of lottiVincolati || []) {
+        const scad = (l as { scadenza?: string | null }).scadenza
+        if (scad && scad < oggi) continue
+        const uid = String((l as { user_id: string }).user_id)
+        perUtenteVincolato.set(uid, (perUtenteVincolato.get(uid) || 0) + (Number((l as { residuo: number }).residuo) || 0))
+      }
+      setVincolatoPerUtente(perUtenteVincolato)
 
       // Load recurring settings from customers_extended metadata
       const { data: custExtended } = await supabase
@@ -791,6 +811,21 @@ export default function CustomerWalletTab() {
                         : 'text-theme-text-muted'
                       }`}>
                         €{(balance / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {/* Il credito vincolato non sta nel saldo: se non si
+                            scrivesse qui accanto, un credito appena regalato
+                            sembrerebbe non essere mai arrivato. */}
+                        {(() => {
+                          const vincolato = vincolatoPerUtente.get(String(customer.user_id || customer.id)) || 0
+                          if (vincolato <= 0) return null
+                          return (
+                            <span
+                              className="block text-[11px] font-normal text-emerald-400"
+                              title="Credito vincolato a servizi o scadenza — si spende prima del saldo"
+                            >
+                              + €{vincolato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vincolato
+                            </span>
+                          )
+                        })()}
                       </div>
                     </>
                   )
