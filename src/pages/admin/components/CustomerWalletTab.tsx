@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
@@ -110,7 +110,13 @@ export default function CustomerWalletTab() {
   // Credito vincolato per cliente (16/09/2026): non entra nel saldo — vive in
   // lotti suoi — quindi senza questa riga qui dentro un credito appena
   // regalato non si vedeva da nessuna parte e sembrava non funzionare.
-  const [vincolatoPerUtente, setVincolatoPerUtente] = useState<Map<string, number>>(new Map())
+  interface LottoCliente { id: string; residuo: number; scadenza: string | null; servizi: string[] | null; descrizione: string | null }
+  const [lottiPerUtente, setLottiPerUtente] = useState<Map<string, LottoCliente[]>>(new Map())
+  const vincolatoPerUtente = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const [uid, righe] of lottiPerUtente) m.set(uid, righe.reduce((a, l) => a + l.residuo, 0))
+    return m
+  }, [lottiPerUtente])
 
   useEffect(() => { loadAllWalletCustomers() }, [])
 
@@ -219,16 +225,25 @@ export default function CustomerWalletTab() {
       const oggi = new Date().toISOString().slice(0, 10)
       const { data: lottiVincolati } = await supabase
         .from('wallet_crediti_vincolati')
-        .select('user_id, residuo, scadenza')
+        .select('id, user_id, residuo, scadenza, servizi, descrizione')
         .gt('residuo', 0)
-      const perUtenteVincolato = new Map<string, number>()
+        .order('scadenza', { ascending: true, nullsFirst: false })
+      const perUtenteLotti = new Map<string, LottoCliente[]>()
       for (const l of lottiVincolati || []) {
         const scad = (l as { scadenza?: string | null }).scadenza
-        if (scad && scad < oggi) continue
+        if (scad && scad < oggi) continue   // scaduto: non e' piu' spendibile
         const uid = String((l as { user_id: string }).user_id)
-        perUtenteVincolato.set(uid, (perUtenteVincolato.get(uid) || 0) + (Number((l as { residuo: number }).residuo) || 0))
+        const elenco = perUtenteLotti.get(uid) || []
+        elenco.push({
+          id: String((l as { id: string }).id),
+          residuo: Number((l as { residuo: number }).residuo) || 0,
+          scadenza: scad || null,
+          servizi: (l as { servizi?: string[] | null }).servizi || null,
+          descrizione: (l as { descrizione?: string | null }).descrizione || null,
+        })
+        perUtenteLotti.set(uid, elenco)
       }
-      setVincolatoPerUtente(perUtenteVincolato)
+      setLottiPerUtente(perUtenteLotti)
 
       // Load recurring settings from customers_extended metadata
       const { data: custExtended } = await supabase
@@ -608,7 +623,7 @@ export default function CustomerWalletTab() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
         {/* Totale Wallet Sistema */}
         <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent p-4">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"/>
@@ -625,6 +640,30 @@ export default function CustomerWalletTab() {
               €{(totalBalance / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">saldo cumulato in piattaforma</div>
+          </div>
+        </div>
+
+        {/* Credito vincolato — non sta nel saldo, quindi va detto qui o non
+            si vede: e' denaro promesso ai clienti a certe condizioni. */}
+        <div className="relative overflow-hidden rounded-2xl border border-teal-500/20 bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-teal-500/10 rounded-full blur-2xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-teal-300/80 uppercase tracking-wider font-semibold">Credito vincolato</div>
+              <div className="w-7 h-7 rounded-lg bg-teal-500/15 border border-teal-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-2xl lg:text-3xl font-bold text-teal-400 mt-2.5 tabular-nums">
+              €{[...vincolatoPerUtente.values()].reduce((a, b) => a + b, 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-theme-text-muted mt-1">
+              {vincolatoPerUtente.size > 0
+                ? `${vincolatoPerUtente.size} clienti · si assegna da Marketing > Wallet`
+                : 'nessuno · si assegna da Marketing > Wallet'}
+            </div>
           </div>
         </div>
 
@@ -856,6 +895,43 @@ export default function CustomerWalletTab() {
                     Carica
                   </button>
                 </div>
+
+                {/* Credito vincolato del cliente: a tutta riga come la ricarica
+                    automatica. Non sta nel saldo, quindi se non si scrive qui
+                    non esiste per chi guarda. */}
+                {(() => {
+                  const suoi = lottiPerUtente.get(String(customer.user_id || customer.id)) || []
+                  if (suoi.length === 0) return null
+                  const ETICHETTE: Record<string, string> = {
+                    rental: 'Noleggio Terra', boat_rental: 'Noleggio Mare', heli_rental: 'Noleggio Aria',
+                    stay_rental: 'Soggiorni', car_wash: 'Lavaggio & Meccanica',
+                  }
+                  return (
+                    <div className="col-span-full mt-2 bg-teal-500/5 border border-teal-500/30 rounded-xl p-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <p className="text-sm font-bold text-teal-400">Credito vincolato</p>
+                        <span className="text-xs text-teal-400 tabular-nums">
+                          €{suoi.reduce((a, l) => a + l.residuo, 0).toFixed(2)} da spendere
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {suoi.map(l => (
+                          <p key={l.id} className="text-xs text-theme-text-secondary">
+                            €{l.residuo.toFixed(2)} ·{' '}
+                            {!l.servizi || l.servizi.length === 0
+                              ? 'tutti i servizi'
+                              : l.servizi.map(x => ETICHETTE[x] || x).join(', ')}
+                            {l.scadenza ? ` · fino al ${new Date(l.scadenza).toLocaleDateString('it-IT')}` : ' · senza scadenza'}
+                            {l.descrizione ? ` · ${l.descrizione}` : ''}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-theme-text-muted mt-2">
+                        Si spende prima del saldo, e solo sui servizi indicati. Si assegna da Marketing &gt; Wallet.
+                      </p>
+                    </div>
+                  )
+                })()}
 
                 {/* Recurring badge — matching Rentora design */}
                 {recurringSettings.has(customer.id) && (() => {
