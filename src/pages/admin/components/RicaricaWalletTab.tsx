@@ -158,188 +158,264 @@ export default function RicaricaWalletTab() {
     }
   }
 
-  if (caricamento) return <ScheletroTabella righe={8} colonne={3} />
+  if (caricamento) return <ScheletroTabella righe={8} colonne={4} />
+
+  const totaleRegalo = (parseFloat(String(importo).replace(',', '.')) || 0) * quanti
+  const tuttiMostratiScelti = visibili.length > 0 && visibili.every(c => selezione.has(c.user_id))
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Intestazione */}
       <div>
         <h2 className="text-lg font-bold text-theme-text-primary">Ricarica Wallet</h2>
         <p className="text-sm text-theme-text-muted mt-1">
           Credito a piu' clienti in una volta. Senza scadenza e senza servizi va nel saldo ed e'
-          spendibile su tutto; mettendo una scadenza o dei servizi diventa credito vincolato, che
-          si consuma prima del saldo e solo dove vale. Per un cliente solo: Clienti &gt; Credit Wallet.
+          spendibile su tutto; con una scadenza o dei servizi diventa credito vincolato, che si
+          consuma prima del saldo e solo dove vale. Per un cliente solo: Clienti &gt; Credit Wallet.
         </p>
+      </div>
+
+      {/* Riepilogo: quanti scelti, quanto costa */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4">
+          <div className="text-[10px] text-emerald-300/80 uppercase tracking-wider font-semibold">Destinatari</div>
+          <div className="text-2xl lg:text-3xl font-bold text-emerald-400 mt-2.5 tabular-nums">{quanti}</div>
+          <div className="text-[11px] text-theme-text-muted mt-1">
+            {destinatari === 'tutti' ? 'tutti i clienti con account' : 'clienti scelti a mano'}
+          </div>
+        </div>
+        <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-4">
+          <div className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Totale</div>
+          <div className="text-2xl lg:text-3xl font-bold text-amber-400 mt-2.5 tabular-nums">
+            €{totaleRegalo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-[11px] text-theme-text-muted mt-1">importo per cliente × destinatari</div>
+        </div>
+        <div className="relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent p-4">
+          <div className="text-[10px] text-purple-300/80 uppercase tracking-wider font-semibold">Tipo</div>
+          <div className="text-lg font-bold text-purple-400 mt-3">{senzaVincoli ? 'Nel saldo' : 'Vincolato'}</div>
+          <div className="text-[11px] text-theme-text-muted mt-1">
+            {senzaVincoli ? 'spendibile su tutto, non scade' : 'solo dove vale, e fino alla scadenza'}
+          </div>
+        </div>
       </div>
 
       {/* A chi */}
-      <div>
-        <div className="text-xs text-theme-text-secondary mb-2">A chi</div>
-        <div className="flex flex-wrap gap-2">
-          {([
-            ['selezione', `Clienti scelti${selezione.size > 0 ? ` (${selezione.size})` : ''}`],
-            ['tutti', `Tutti i clienti (${clienti.length})`],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setDestinatari(id)}
-              className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                destinatari === id
-                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-2">
+        {([
+          ['selezione', `Selezione multipla${selezione.size > 0 ? ` (${selezione.size})` : ''}`],
+          ['tutti', `Tutti i clienti (${clienti.length})`],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setDestinatari(id)}
+            className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
+              destinatari === id
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                : 'bg-theme-bg-secondary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
+      {/* Ricerca — stesso formato della tab Credit Wallet */}
       {destinatari === 'selezione' && (
-        <div>
-          <div className="flex items-center justify-between gap-3 mb-2">
+        <>
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             <input
               type="text"
               value={ricerca}
-              onChange={e => setRicerca(e.target.value)}
-              placeholder="Cerca per nome o email..."
-              className="flex-1 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
+              onChange={(e) => setRicerca(e.target.value)}
+              placeholder="Cerca cliente per nome o email..."
+              className="w-full pl-10 pr-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-xl text-theme-text-primary outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
             />
             <button
-              onClick={() => setSelezione(prev => {
-                const tutti = new Set(prev)
-                const tuttiVisibili = visibili.every(c => tutti.has(c.user_id))
-                for (const c of visibili) { if (tuttiVisibili) tutti.delete(c.user_id); else tutti.add(c.user_id) }
-                return tutti
-              })}
-              className="px-3 py-2 rounded-lg text-xs border border-theme-border bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover whitespace-nowrap"
+              onClick={() => setSelezione(new Set())}
+              className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border text-[11px] text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
             >
-              Tutti quelli mostrati
+              Deseleziona tutti
             </button>
           </div>
-          <div className="max-h-72 overflow-y-auto border border-theme-border rounded-lg divide-y divide-theme-border/60">
-            {visibili.map(c => (
-              <label key={c.user_id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-theme-bg-hover">
-                <input
-                  type="checkbox"
-                  checked={selezione.has(c.user_id)}
-                  onChange={e => setSelezione(prev => {
-                    const next = new Set(prev)
-                    if (e.target.checked) next.add(c.user_id); else next.delete(c.user_id)
-                    return next
-                  })}
-                  className="w-4 h-4 rounded border-theme-border bg-theme-bg-tertiary"
-                />
-                <span className="text-sm text-theme-text-primary flex-1 truncate">{c.nome}</span>
-                <span className="text-[11px] text-theme-text-muted truncate max-w-[200px]">{c.email}</span>
-                <span className="text-xs text-theme-text-secondary tabular-nums">€{c.saldo.toFixed(2)}</span>
-              </label>
-            ))}
-            {visibili.length === 0 && (
-              <div className="px-3 py-4 text-sm text-theme-text-muted">Nessun cliente trovato.</div>
-            )}
+
+          {/* Tabella clienti con le caselle */}
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl overflow-hidden">
+            <div className="hidden lg:grid grid-cols-[auto_2fr_2fr_1fr] gap-4 px-5 py-3 border-b border-theme-border text-xs font-semibold text-theme-text-muted uppercase tracking-wider items-center">
+              <input
+                type="checkbox"
+                checked={tuttiMostratiScelti}
+                onChange={() => setSelezione(prev => {
+                  const next = new Set(prev)
+                  for (const c of visibili) { if (tuttiMostratiScelti) next.delete(c.user_id); else next.add(c.user_id) }
+                  return next
+                })}
+                className="w-4 h-4 rounded border-theme-border bg-theme-bg-tertiary"
+              />
+              <span>Cliente</span>
+              <span>Email</span>
+              <span>Wallet</span>
+            </div>
+
+            <div className="divide-y divide-theme-border/50 max-h-[520px] overflow-y-auto">
+              {visibili.map(c => {
+                const scelto = selezione.has(c.user_id)
+                const palettes = [
+                  'bg-rose-500/20 text-rose-300 border-rose-500/40',
+                  'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                  'bg-blue-500/20 text-blue-300 border-blue-500/40',
+                  'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                  'bg-purple-500/20 text-purple-300 border-purple-500/40',
+                  'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+                ]
+                let hash = 0
+                for (let i = 0; i < c.user_id.length; i++) hash = (hash * 31 + c.user_id.charCodeAt(i)) | 0
+                const colore = palettes[Math.abs(hash) % palettes.length]
+                const iniziali = c.nome.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]?.toUpperCase() || '').join('') || '?'
+                return (
+                  <label
+                    key={c.user_id}
+                    className={`grid grid-cols-[auto_1fr] lg:grid-cols-[auto_2fr_2fr_1fr] gap-2 lg:gap-4 px-5 py-3 items-center cursor-pointer transition-colors ${
+                      scelto ? 'bg-emerald-500/[0.06]' : 'hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={scelto}
+                      onChange={e => setSelezione(prev => {
+                        const next = new Set(prev)
+                        if (e.target.checked) next.add(c.user_id); else next.delete(c.user_id)
+                        return next
+                      })}
+                      className="w-4 h-4 rounded border-theme-border bg-theme-bg-tertiary"
+                    />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-full grid place-items-center text-sm font-bold border flex-shrink-0 ${colore}`}>
+                        {iniziali}
+                      </div>
+                      <p className="text-sm font-semibold text-theme-text-primary truncate">{c.nome}</p>
+                    </div>
+                    <span className="text-sm text-theme-text-secondary truncate hidden lg:block">{c.email || '—'}</span>
+                    <span className="text-sm text-theme-text-primary tabular-nums hidden lg:block">€{c.saldo.toFixed(2)}</span>
+                  </label>
+                )
+              })}
+              {visibili.length === 0 && (
+                <div className="text-center py-16 text-theme-text-muted">Nessun cliente trovato</div>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Quanto e a quali condizioni */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs text-theme-text-secondary mb-1 block">Importo per cliente (EUR)</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={importo}
-            onChange={e => setImporto(e.target.value)}
-            placeholder="50,00"
-            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
-          />
+      {/* Quanto, fino a quando, su cosa */}
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-5 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-theme-text-secondary mb-1 block">Importo per cliente (EUR)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={importo}
+              onChange={e => setImporto(e.target.value)}
+              placeholder="50,00"
+              className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-theme-text-secondary mb-1 block">Scadenza (ultimo giorno valido)</label>
+            <input
+              type="date"
+              value={scadenza}
+              onChange={e => setScadenza(e.target.value)}
+              className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
+            />
+            <p className="text-[11px] text-theme-text-muted mt-1">Vuoto = non scade mai.</p>
+          </div>
         </div>
-        <div>
-          <label className="text-xs text-theme-text-secondary mb-1 block">Scadenza (ultimo giorno valido)</label>
-          <input
-            type="date"
-            value={scadenza}
-            onChange={e => setScadenza(e.target.value)}
-            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
-          />
-          <p className="text-[11px] text-theme-text-muted mt-1">Vuoto = non scade mai.</p>
-        </div>
-      </div>
 
-      <div>
-        <div className="text-xs text-theme-text-secondary mb-2">Vale su</div>
-        <div className="flex flex-wrap gap-2">
-          {SERVIZI_WALLET.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setServizi(prev => {
-                const next = new Set(prev)
-                if (next.has(s.id)) next.delete(s.id); else next.add(s.id)
-                return next
-              })}
-              className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                servizi.has(s.id)
-                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[11px] text-theme-text-muted mt-2">
-          {servizi.size === 0
-            ? 'Nessun servizio scelto = vale su tutto.'
-            : 'Su qualsiasi altro servizio questo credito non e spendibile.'}
-        </p>
-      </div>
-
-      {senzaVincoli && (
         <div>
-          <div className="text-xs text-theme-text-secondary mb-2">Natura del credito</div>
+          <div className="text-xs text-theme-text-secondary mb-2">Vale su</div>
           <div className="flex flex-wrap gap-2">
-            {([
-              ['bonus', 'Omaggio (bonus)'],
-              ['real', 'Denaro incassato'],
-            ] as const).map(([id, label]) => (
+            {SERVIZI_WALLET.map(s => (
               <button
-                key={id}
-                onClick={() => setNatura(id)}
+                key={s.id}
+                onClick={() => setServizi(prev => {
+                  const next = new Set(prev)
+                  if (next.has(s.id)) next.delete(s.id); else next.add(s.id)
+                  return next
+                })}
                 className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                  natura === id
+                  servizi.has(s.id)
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                     : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
                 }`}
               >
-                {label}
+                {s.label}
               </button>
             ))}
           </div>
           <p className="text-[11px] text-theme-text-muted mt-2">
-            Una promozione e un omaggio: non e' capitale del cliente e non matura gli interessi
-            del DR7 Club. "Denaro incassato" solo se quei soldi sono entrati davvero.
+            {servizi.size === 0
+              ? 'Nessun servizio scelto = vale su tutto.'
+              : 'Su qualsiasi altro servizio questo credito non e spendibile.'}
           </p>
         </div>
-      )}
 
-      <div>
-        <label className="text-xs text-theme-text-secondary mb-1 block">Causale (la vede il cliente)</label>
-        <input
-          type="text"
-          value={descrizione}
-          onChange={e => setDescrizione(e.target.value)}
-          placeholder="es. Promo lavaggio settembre"
-          className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
-        />
+        {senzaVincoli && (
+          <div>
+            <div className="text-xs text-theme-text-secondary mb-2">Natura del credito</div>
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['bonus', 'Omaggio (bonus)'],
+                ['real', 'Denaro incassato'],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setNatura(id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                    natura === id
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                      : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-theme-text-muted mt-2">
+              Una promozione e un omaggio: non e' capitale del cliente e non matura gli interessi
+              del DR7 Club. "Denaro incassato" solo se quei soldi sono entrati davvero.
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs text-theme-text-secondary mb-1 block">Causale (la vede il cliente)</label>
+          <input
+            type="text"
+            value={descrizione}
+            onChange={e => setDescrizione(e.target.value)}
+            placeholder="es. Promo lavaggio settembre"
+            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
+          />
+        </div>
+
+        <button
+          onClick={assegna}
+          disabled={invio || quanti === 0}
+          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/25 disabled:opacity-50"
+        >
+          {invio
+            ? 'Carico...'
+            : senzaVincoli
+              ? `Ricarica ${quanti} clienti`
+              : `Assegna credito vincolato a ${quanti} clienti`}
+        </button>
       </div>
-
-      <button
-        onClick={assegna}
-        disabled={invio}
-        className="px-4 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-sm hover:bg-emerald-500/25 disabled:opacity-50"
-      >
-        {invio ? 'Carico...' : senzaVincoli ? `Ricarica ${quanti || ''} clienti` : `Assegna credito vincolato a ${quanti || ''} clienti`}
-      </button>
     </div>
   )
 }
