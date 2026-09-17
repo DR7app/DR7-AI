@@ -659,6 +659,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   const [loading, setLoading] = useState(() => !statoPronto(`prenotazioni:${serviceType}:${viewMode}:righe`))
   const [showForm, setShowForm] = useState(false)
+  const [serviziExperienceAperti, setServiziExperienceAperti] = useState(false)
   const [showUscita, setShowUscita] = useState(false)
   // group_id dell'uscita in modifica (null = nuova uscita).
   const [editUscitaGroupId, setEditUscitaGroupId] = useState<string | null>(null)
@@ -9285,6 +9286,42 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}
             <div className="mb-4 sm:mb-6 p-3 sm:p-4  rounded-lg border border-theme-border">
+              {/* 17/09/2026 (direzione): 1° guidatore obbligatorio, Fascia accanto. */}
+              <div className="flex flex-col md:flex-row md:items-end gap-3 mb-4">
+                <h4 className="flex-1 text-theme-text-primary font-semibold">
+                  1° Guidatore <span className="text-red-500">*</span>
+                  <span className="ml-2 text-xs font-normal text-theme-text-muted">obbligatorio</span>
+                </h4>
+                <div className="md:w-80">
+                  {/* Manual Fascia Selector — come PreventiviTab. Forza la fascia
+                      usata per pricing (km illimitati, secondo guidatore, DR7 Flex,
+                      insurance). Override su customerTier auto-classificato. */}
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Fascia Cliente</label>
+                  <select
+                    value={customerTier?.tier === 'TIER_1' || customerTier?.tier === 'TIER_2' ? customerTier.tier : ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === 'TIER_1' || v === 'TIER_2') {
+                        setCustomerTier({
+                          tier: v,
+                          reason: 'Fascia impostata manualmente',
+                          driverAge: customerTier?.driverAge || 0,
+                          licenseYears: customerTier?.licenseYears || 0,
+                        })
+                        // Cambio fascia a mano: si azzera l'assicurazione.
+                        // La prima valida per la nuova fascia arriva dalla
+                        // Centralina Pro (effetto di reset qui sopra).
+                        setFormData(prev => ({ ...prev, insurance_option: '' as KaskoTier }))
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                  >
+                    <option value="">-- Seleziona Fascia --</option>
+                    <option value="TIER_2">Fascia A (26-69, patente 5+ anni)</option>
+                    <option value="TIER_1">Fascia B (21-25 o patente 3-4 anni)</option>
+                  </select>
+                </div>
+              </div>
               <div className="border-b border-theme-border pb-4">
                 <div className="flex flex-wrap items-center gap-3 mb-4">
                   <button
@@ -9615,61 +9652,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       </div>
                     )}
 
-                    {/* Manual Fascia Selector — come PreventiviTab. Forza la fascia
-                        usata per pricing (km illimitati, secondo guidatore, DR7 Flex,
-                        insurance). Override su customerTier auto-classificato. */}
-                    <div className="mt-3">
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Fascia Cliente</label>
-                      <select
-                        value={customerTier?.tier === 'TIER_1' || customerTier?.tier === 'TIER_2' ? customerTier.tier : ''}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          if (v === 'TIER_1' || v === 'TIER_2') {
-                            setCustomerTier({
-                              tier: v,
-                              reason: 'Fascia impostata manualmente',
-                              driverAge: customerTier?.driverAge || 0,
-                              licenseYears: customerTier?.licenseYears || 0,
-                            })
-                            // Cambio fascia a mano: si azzera l'assicurazione.
-                            // La prima valida per la nuova fascia arriva dalla
-                            // Centralina Pro (effetto di reset qui sopra).
-                            setFormData(prev => ({ ...prev, insurance_option: '' as KaskoTier }))
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                      >
-                        <option value="">-- Seleziona Fascia --</option>
-                        <option value="TIER_2">Fascia A (26-69, patente 5+ anni)</option>
-                        <option value="TIER_1">Fascia B (21-25 o patente 3-4 anni)</option>
-                      </select>
-                    </div>
-
-                    {/* Residenza Cliente — come in Preventivi (Residente / Non
-                        Residente). Incide su TUTTO (prezzo, assicurazione,
-                        cauzioni), per questo sta in alto e non dentro la
-                        cauzione. Il bottone attivo riflette la residenza
-                        auto-rilevata dalla provincia finché l'admin non sceglie. */}
-                    <div className="mt-3">
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Residenza Cliente</label>
-                      <div className="flex gap-2">
-                        {([true, false] as const).map(val => (
-                          <button
-                            key={String(val)}
-                            type="button"
-                            onClick={() => setResidencyOverride(val ? 'residente' : 'non_residente')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                              isResidenteSardegna === val
-                                ? 'bg-dr7-gold text-white'
-                                : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
-                            }`}
-                          >
-                            {val ? 'Residente Sardegna' : 'Non Residente'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
                     {customers.length === 0 && (
                       <p className="text-sm text-yellow-400 mt-2">
                         Nessun cliente trovato. Verifica che l'API sia attiva o crea un nuovo cliente.
@@ -9680,10 +9662,448 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               </div>
             </div>
 
+            {/* 17/09/2026 (direzione): ordine — 1° guidatore con Fascia,
+                2° guidatore, garanti 1-2-3, poi residenza; date e veicolo dopo. */}
+            <div className="mb-4 sm:mb-6 space-y-4">
+              {sezioneForm('secondo') && (
+              <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
+                <div className="flex items-center mb-4">
+                  <input
+                    type="checkbox"
+                    id="has_second_driver"
+                    checked={formData.has_second_driver}
+                    onChange={(e) => setFormData(prev => ({ ...prev, has_second_driver: e.target.checked }))}
+                    className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
+                  />
+                  <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
+                    Aggiungi Secondo Guidatore
+                    {(() => {
+                      const tier = customerTier?.tier
+                      const price = tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
+                      return ` (+€${price}/giorno)`
+                    })()}
+                  </label>
+                </div>
+
+                {formData.has_second_driver && (
+                  <div className="space-y-4 animate-fadeIn">
+                    {/* Toggle between Select Customer and New Driver */}
+                    <div className="flex items-center gap-4 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => setNewSecondDriverMode(false)}
+                        className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                      >
+                        Seleziona Cliente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewSecondDriverMode(true)}
+                        className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                      >
+                        Nuovo Guidatore
+                      </button>
+                    </div>
+
+                    {newSecondDriverMode ? (
+                      // New Driver Mode - Manual Entry
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          label="Nome *"
+                          required
+                          value={formData.second_driver_name}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_name: e.target.value }))}
+                        />
+                        <Input
+                          label="Cognome *"
+                          required
+                          value={formData.second_driver_surname}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_surname: e.target.value }))}
+                        />
+                        <div>
+                          <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
+                          <div className="flex gap-2">
+                            <input
+                              required
+                              value={formData.second_driver_codice_fiscale}
+                              onChange={(e) => setFormData(prev => ({ ...prev, second_driver_codice_fiscale: e.target.value.toUpperCase() }))}
+                              className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
+                            />
+                            <CalcolaCFButton
+                              className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                              config={{
+                                getCognome: () => formData.second_driver_surname,
+                                getNome: () => formData.second_driver_name,
+                                getDataNascita: () => formData.second_driver_birth_date,
+                                getSesso: () => formData.second_driver_sesso,
+                                getLuogoNascita: () => formData.second_driver_birth_place,
+                                getCodiceFiscale: () => formData.second_driver_codice_fiscale,
+                                setCodiceFiscale: (v) => setFormData(p => ({ ...p, second_driver_codice_fiscale: v })),
+                                setSesso: (v) => setFormData(p => ({ ...p, second_driver_sesso: v })),
+                                setDataNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_date: v })),
+                                setLuogoNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_place: v })),
+                                setProvinciaNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_provincia: v })),
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <Select
+                          label="Sesso *"
+                          required
+                          value={formData.second_driver_sesso}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_sesso: e.target.value }))}
+                          options={[
+                            { value: '', label: 'Seleziona...' },
+                            { value: 'M', label: 'Maschio' },
+                            { value: 'F', label: 'Femmina' }
+                          ]}
+                        />
+                        <Input
+                          label="Indirizzo *"
+                          required
+                          value={formData.second_driver_indirizzo}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_indirizzo: e.target.value }))}
+                        />
+                        <Input
+                          label="CAP *"
+                          required
+                          value={formData.second_driver_cap}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_cap: e.target.value }))}
+                        />
+                        <Input
+                          label="Città *"
+                          required
+                          value={formData.second_driver_citta}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_citta: e.target.value }))}
+                        />
+                        <Input
+                          label="Provincia *"
+                          required
+                          value={formData.second_driver_provincia}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_provincia: e.target.value.toUpperCase() }))}
+                          maxLength={2}
+                        />
+                        <Input
+                          label="Data di Nascita *"
+                          type="date"
+                          required
+                          value={formData.second_driver_birth_date}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_date: e.target.value }))}
+                        />
+                        <Input
+                          label="Città di Nascita *"
+                          required
+                          value={formData.second_driver_birth_place}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_place: e.target.value }))}
+                        />
+                        <Input
+                          label="Provincia di Nascita *"
+                          required
+                          value={formData.second_driver_birth_provincia}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_provincia: e.target.value.toUpperCase() }))}
+                          maxLength={2}
+                        />
+                        <Input
+                          label="Telefono *"
+                          type="tel"
+                          required
+                          value={formData.second_driver_phone}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_phone: e.target.value }))}
+                        />
+                        <Input
+                          label="E-mail *"
+                          type="email"
+                          required
+                          value={formData.second_driver_email}
+                          onChange={(e) => setFormData(prev => ({ ...prev, second_driver_email: e.target.value }))}
+                        />
+
+                        {/* License Details */}
+                        <div className="md:col-span-2 border-t border-theme-border-light pt-4 mt-2">
+                          <h4 className="text-theme-text-primary font-semibold mb-3">Dettagli Patente</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input
+                              label="Tipo di Patente *"
+                              required
+                              value={formData.second_driver_license_type}
+                              onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_type: e.target.value }))}
+                              placeholder="es. B"
+                            />
+                            <Input
+                              label="Numero Patente *"
+                              required
+                              value={formData.second_driver_license_number}
+                              onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_number: e.target.value }))}
+                            />
+                            <Input
+                              label="Emessa da *"
+                              required
+                              value={formData.second_driver_license_issued_by}
+                              onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issued_by: e.target.value }))}
+                              placeholder="es. Motorizzazione Civile"
+                            />
+                            <Input
+                              label="Data di Rilascio *"
+                              type="date"
+                              required
+                              value={formData.second_driver_license_issue_date}
+                              onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issue_date: e.target.value }))}
+                            />
+                            <Input
+                              label="Scadenza Patente *"
+                              type="date"
+                              required
+                              value={formData.second_driver_license_expiry}
+                              onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_expiry: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Select Existing Customer Mode
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Secondo Guidatore</label>
+                        <CustomerAutocomplete
+                          customers={customersPerRicerca}
+                          selectedCustomerId={formData.second_driver_id}
+                          onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, second_driver_id: customerId }))}
+                          placeholder="Inizia a scrivere nome, email o telefono..."
+                          required={false}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {/* ─── Garante / Fideiussore Solidale (max 3) ───────────────
+                  2026-05-29: progressive disclosure — niente form vuoti.
+                  Click "+ Aggiungi Garante" -> mostra card 1.
+                  Click "+ Aggiungi un altro garante" sotto la card N -> card N+1.
+                  Max 3. "Rimuovi garante" cancella SOLO quella card e
+                  ricompatta il counter mantenendo le altre intatte.
+
+                  I field name (guarantor_N_*) sono FROZEN per il PDF autofill
+                  Adobe Acrobat — vedi tabella in fondo all'implementazione. */}
+              {(() => {
+                // Interruttori ON/OFF: sezione Garante spenta per questo business.
+                if (!sezioneForm('garante')) return null
+                // Italian suffix list — corrisponde al naming permanente Adobe Acrobat
+                const GUARANTOR_SUFFIXES = [
+                  'nome_cognome','codice_fiscale','sesso','indirizzo','cap','citta','provincia',
+                  'data_nascita','citta_nascita','provincia_nascita','telefono','email'
+                ] as const
+                type GS = typeof GUARANTOR_SUFFIXES[number]
+                const renderGuarantorCard = (n: 1 | 2 | 3) => {
+                  const fk = (suffix: GS) => `garante_${n}_${suffix}` as keyof typeof formData
+                  const val = (suffix: GS) => String(formData[fk(suffix)] ?? '')
+                  const set = (suffix: GS, v: string) => setFormData(prev => ({ ...prev, [fk(suffix)]: v }))
+                  const upper = (suffix: GS, v: string, max?: number) => {
+                    const u = v.toUpperCase().slice(0, max ?? v.length)
+                    set(suffix, u)
+                  }
+                  const removeGuarantor = () => {
+                    // Rimuovi la card N: shifta le successive in giu' (N+1 -> N)
+                    // cosi' i field names restano coerenti dopo il delete.
+                    setFormData(prev => {
+                      const next = { ...prev }
+                      if (n === 1) {
+                        for (const f of GUARANTOR_SUFFIXES) {
+                          const k1 = `garante_1_${f}` as keyof typeof prev
+                          const k2 = `garante_2_${f}` as keyof typeof prev
+                          const k3 = `garante_3_${f}` as keyof typeof prev
+                          ;(next as Record<string, unknown>)[k1] = prev[k2]
+                          ;(next as Record<string, unknown>)[k2] = prev[k3]
+                          ;(next as Record<string, unknown>)[k3] = ''
+                        }
+                      } else if (n === 2) {
+                        for (const f of GUARANTOR_SUFFIXES) {
+                          const k2 = `garante_2_${f}` as keyof typeof prev
+                          const k3 = `garante_3_${f}` as keyof typeof prev
+                          ;(next as Record<string, unknown>)[k2] = prev[k3]
+                          ;(next as Record<string, unknown>)[k3] = ''
+                        }
+                      } else {
+                        for (const f of GUARANTOR_SUFFIXES) {
+                          const k3 = `garante_3_${f}` as keyof typeof prev
+                          ;(next as Record<string, unknown>)[k3] = ''
+                        }
+                      }
+                      next.garante_count = Math.max(0, prev.garante_count - 1) as 0 | 1 | 2 | 3
+                      return next
+                    })
+                  }
+                  // Lightweight client-side hints (no blocking save — direzione
+                  // ha imposto "additive only"; mostriamo solo segnali visivi).
+                  const cfRx = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/i
+                  const capRx = /^\d{5}$/
+                  const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                  const phoneRx = /^[+()\d\s\-./]{6,}$/
+                  const cf = val('codice_fiscale'); const cfWarn = cf && !cfRx.test(cf)
+                  const cap = val('cap'); const capWarn = cap && !capRx.test(cap)
+                  const em = val('email'); const emWarn = em && !emailRx.test(em)
+                  const ph = val('telefono'); const phWarn = ph && !phoneRx.test(ph)
+                  return (
+                    <div key={`guarantor-card-${n}`} className="rounded-lg border border-theme-border bg-theme-bg-primary overflow-hidden">
+                      {/* Header bar — dark title style (matches contract design) */}
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-theme-bg-tertiary border-b border-theme-border">
+                        <h5 className="text-theme-text-primary text-sm font-bold tracking-wide uppercase">
+                          {n}° Garante / Fideiussore Solidale
+                        </h5>
+                        <button
+                          type="button"
+                          onClick={removeGuarantor}
+                          className="text-xs font-medium text-red-500 hover:text-red-600 hover:underline transition-colors"
+                        >
+                          Rimuovi garante
+                        </button>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        {/* Cliente picker — auto-popola i 12 campi del garante
+                            leggendo da customers_extended. L'operatore puo' anche
+                            digitare a mano senza scegliere un cliente. */}
+                        <div>
+                          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                            Seleziona da clienti <span className="text-theme-text-muted text-xs font-normal">(opzionale — popola i campi)</span>
+                          </label>
+                          <CustomerAutocomplete
+                            customers={customersPerRicerca}
+                            selectedCustomerId=""
+                            onSelectCustomer={async (customerId) => {
+                              if (!customerId) return
+                              const { data: full } = await supabase
+                                .from('customers_extended')
+                                .select('*')
+                                .eq('id', customerId)
+                                .single()
+                              const basic = customers.find(c => c.id === customerId)
+                              if (!full && !basic) return
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const fc: any = full || {}
+                              const fullName = (fc.nome && fc.cognome)
+                                ? `${fc.nome} ${fc.cognome}`.trim()
+                                : (basic?.full_name || '')
+                              setFormData(prev => ({
+                                ...prev,
+                                [`garante_${n}_nome_cognome`]: fullName,
+                                [`garante_${n}_codice_fiscale`]: (fc.codice_fiscale || '').toUpperCase(),
+                                [`garante_${n}_sesso`]: fc.sesso || '',
+                                [`garante_${n}_indirizzo`]: fc.indirizzo || '',
+                                [`garante_${n}_cap`]: fc.codice_postale || fc.cap || '',
+                                [`garante_${n}_citta`]: fc.citta_residenza || fc.citta || '',
+                                [`garante_${n}_provincia`]: (fc.provincia_residenza || fc.provincia || '').toUpperCase(),
+                                [`garante_${n}_data_nascita`]: fc.data_nascita || '',
+                                [`garante_${n}_citta_nascita`]: fc.luogo_nascita || fc.citta_nascita || '',
+                                [`garante_${n}_provincia_nascita`]: (fc.provincia_nascita || '').toUpperCase(),
+                                [`garante_${n}_telefono`]: fc.telefono || basic?.phone || '',
+                                [`garante_${n}_email`]: fc.email || basic?.email || '',
+                              }))
+                            }}
+                            placeholder="Cerca nome, email o telefono..."
+                            required={false}
+                          />
+                        </div>
+                        {/* Row 1: Nome | CF | Sesso */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Input label="Nome e Cognome" value={val('nome_cognome')} onChange={(e) => set('nome_cognome', e.target.value)} />
+                          <Input label={`Codice Fiscale${cfWarn ? ' (formato non valido)' : ''}`} value={cf} onChange={(e) => upper('codice_fiscale', e.target.value, 16)} />
+                          <Select
+                            label="Sesso"
+                            value={val('sesso')}
+                            onChange={(e) => set('sesso', e.target.value)}
+                            options={[
+                              { value: '', label: 'Seleziona...' },
+                              { value: 'M', label: 'Maschio' },
+                              { value: 'F', label: 'Femmina' },
+                            ]}
+                          />
+                        </div>
+                        {/* Row 2: Indirizzo | CAP | Citta | Provincia */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {/* 28/08/2026: si scrive e cerca da solo; scegliendo
+                              un suggerimento CAP, citta' e provincia accanto si
+                              riempiono da soli. */}
+                          <Input label="Indirizzo" type="address" value={val('indirizzo')} onChange={(e) => set('indirizzo', e.target.value)}
+                            onAddressParts={(parti) => {
+                              if (parti.street) set('indirizzo', parti.street)
+                              if (parti.zip) set('cap', parti.zip)
+                              if (parti.city) set('citta', parti.city)
+                              const sigla = getProvinciaByCity(parti.city)
+                              if (sigla) set('provincia', sigla)
+                            }} />
+                          <Input label={`CAP${capWarn ? ' (5 cifre)' : ''}`} value={cap} onChange={(e) => set('cap', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} />
+                          <Input label="Città" value={val('citta')} onChange={(e) => set('citta', e.target.value)} />
+                          <Input label="Provincia" value={val('provincia')} onChange={(e) => upper('provincia', e.target.value, 2)} maxLength={2} />
+                        </div>
+                        {/* Row 3: Data | Citta Nascita | Prov Nascita */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Input label="Data di Nascita" type="date" value={val('data_nascita')} onChange={(e) => set('data_nascita', e.target.value)} />
+                          <Input label="Città di Nascita" value={val('citta_nascita')} onChange={(e) => set('citta_nascita', e.target.value)} />
+                          <Input label="Provincia di Nascita" value={val('provincia_nascita')} onChange={(e) => upper('provincia_nascita', e.target.value, 2)} maxLength={2} />
+                        </div>
+                        {/* Row 4: Telefono | Email */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input label={`Telefono${phWarn ? ' (formato non valido)' : ''}`} type="tel" value={ph} onChange={(e) => set('telefono', e.target.value)} />
+                          <Input label={`Email${emWarn ? ' (formato non valido)' : ''}`} type="email" value={em} onChange={(e) => set('email', e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                const addLabel = formData.garante_count === 0
+                  ? '+ Aggiungi Garante / Fideiussore'
+                  : '+ Aggiungi un altro garante'
+                return (
+                  <div className="md:col-span-2 p-4 rounded-lg border border-theme-border space-y-4">
+                    <h4 className="text-theme-text-primary font-semibold">Garante / Fideiussore Solidale</h4>
+                    {formData.garante_count >= 1 && renderGuarantorCard(1)}
+                    {formData.garante_count >= 2 && renderGuarantorCard(2)}
+                    {formData.garante_count >= 3 && renderGuarantorCard(3)}
+                    {formData.garante_count < 3 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, garante_count: (prev.garante_count + 1) as 0 | 1 | 2 | 3 }))}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-dashed border-dr7-gold/50 bg-dr7-gold/5 hover:bg-dr7-gold/10 text-dr7-gold text-sm font-semibold transition-colors"
+                      >
+                        {addLabel}
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* Residenza Cliente — come in Preventivi (Residente / Non
+                  Residente). Incide su TUTTO (prezzo, assicurazione,
+                  cauzioni), per questo sta in alto e non dentro la
+                  cauzione. Il bottone attivo riflette la residenza
+                  auto-rilevata dalla provincia finché l'admin non sceglie. */}
+              <div className="p-3 sm:p-4 rounded-lg border border-theme-border">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Residenza Cliente</label>
+                <div className="flex gap-2">
+                  {([true, false] as const).map(val => (
+                    <button
+                      key={String(val)}
+                      type="button"
+                      onClick={() => setResidencyOverride(val ? 'residente' : 'non_residente')}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                        isResidenteSardegna === val
+                          ? 'bg-dr7-gold text-white'
+                          : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                      }`}
+                    >
+                      {val ? 'Residente Sardegna' : 'Non Residente'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* Service Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* DATE SELECTION FIRST - Moved before vehicle selection */}
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4  rounded-lg border border-theme-border">
+              {/* 17/09/2026 (direzione): un campo per riga — data, ora, luogo ritiro, poi riconsegna. */}
+              <div className="md:col-span-2 grid grid-cols-1 gap-4 p-4  rounded-lg border border-theme-border">
                 <div className="space-y-3">
                   <Input
                     label="Data Ritiro"
@@ -10076,7 +10496,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               </div>
             </div>
 
-            {/* Second Driver Section */}
             {/* ── Noleggio Mare: Conduzione, Patente Nautica, Passeggeri ──
                 25/08/2026: questi tre blocchi vivevano nella vecchia
                 MareBookingModal, che dal 14/08 non e' piu' montata da nessuna
@@ -10221,414 +10640,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 )}
               </div>
             )}
-
-            {sezioneForm('secondo') && (
-            <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
-              <div className="flex items-center mb-4">
-                <input
-                  type="checkbox"
-                  id="has_second_driver"
-                  checked={formData.has_second_driver}
-                  onChange={(e) => setFormData(prev => ({ ...prev, has_second_driver: e.target.checked }))}
-                  className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
-                />
-                <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
-                  Aggiungi Secondo Guidatore
-                  {(() => {
-                    const tier = customerTier?.tier
-                    const price = tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
-                    return ` (+€${price}/giorno)`
-                  })()}
-                </label>
-              </div>
-
-              {formData.has_second_driver && (
-                <div className="space-y-4 animate-fadeIn">
-                  {/* Toggle between Select Customer and New Driver */}
-                  <div className="flex items-center gap-4 mb-4">
-                    <button
-                      type="button"
-                      onClick={() => setNewSecondDriverMode(false)}
-                      className={`px-4 py-2 rounded-full ${!newSecondDriverMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
-                    >
-                      Seleziona Cliente
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSecondDriverMode(true)}
-                      className={`px-4 py-2 rounded-full ${newSecondDriverMode ? 'bg-dr7-gold text-white font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
-                    >
-                      Nuovo Guidatore
-                    </button>
-                  </div>
-
-                  {newSecondDriverMode ? (
-                    // New Driver Mode - Manual Entry
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input
-                        label="Nome *"
-                        required
-                        value={formData.second_driver_name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_name: e.target.value }))}
-                      />
-                      <Input
-                        label="Cognome *"
-                        required
-                        value={formData.second_driver_surname}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_surname: e.target.value }))}
-                      />
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
-                        <div className="flex gap-2">
-                          <input
-                            required
-                            value={formData.second_driver_codice_fiscale}
-                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_codice_fiscale: e.target.value.toUpperCase() }))}
-                            className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
-                          />
-                          <CalcolaCFButton
-                            className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
-                            config={{
-                              getCognome: () => formData.second_driver_surname,
-                              getNome: () => formData.second_driver_name,
-                              getDataNascita: () => formData.second_driver_birth_date,
-                              getSesso: () => formData.second_driver_sesso,
-                              getLuogoNascita: () => formData.second_driver_birth_place,
-                              getCodiceFiscale: () => formData.second_driver_codice_fiscale,
-                              setCodiceFiscale: (v) => setFormData(p => ({ ...p, second_driver_codice_fiscale: v })),
-                              setSesso: (v) => setFormData(p => ({ ...p, second_driver_sesso: v })),
-                              setDataNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_date: v })),
-                              setLuogoNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_place: v })),
-                              setProvinciaNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_provincia: v })),
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <Select
-                        label="Sesso *"
-                        required
-                        value={formData.second_driver_sesso}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_sesso: e.target.value }))}
-                        options={[
-                          { value: '', label: 'Seleziona...' },
-                          { value: 'M', label: 'Maschio' },
-                          { value: 'F', label: 'Femmina' }
-                        ]}
-                      />
-                      <Input
-                        label="Indirizzo *"
-                        required
-                        value={formData.second_driver_indirizzo}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_indirizzo: e.target.value }))}
-                      />
-                      <Input
-                        label="CAP *"
-                        required
-                        value={formData.second_driver_cap}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_cap: e.target.value }))}
-                      />
-                      <Input
-                        label="Città *"
-                        required
-                        value={formData.second_driver_citta}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_citta: e.target.value }))}
-                      />
-                      <Input
-                        label="Provincia *"
-                        required
-                        value={formData.second_driver_provincia}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_provincia: e.target.value.toUpperCase() }))}
-                        maxLength={2}
-                      />
-                      <Input
-                        label="Data di Nascita *"
-                        type="date"
-                        required
-                        value={formData.second_driver_birth_date}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_date: e.target.value }))}
-                      />
-                      <Input
-                        label="Città di Nascita *"
-                        required
-                        value={formData.second_driver_birth_place}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_place: e.target.value }))}
-                      />
-                      <Input
-                        label="Provincia di Nascita *"
-                        required
-                        value={formData.second_driver_birth_provincia}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_provincia: e.target.value.toUpperCase() }))}
-                        maxLength={2}
-                      />
-                      <Input
-                        label="Telefono *"
-                        type="tel"
-                        required
-                        value={formData.second_driver_phone}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_phone: e.target.value }))}
-                      />
-                      <Input
-                        label="E-mail *"
-                        type="email"
-                        required
-                        value={formData.second_driver_email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_email: e.target.value }))}
-                      />
-
-                      {/* License Details */}
-                      <div className="md:col-span-2 border-t border-theme-border-light pt-4 mt-2">
-                        <h4 className="text-theme-text-primary font-semibold mb-3">Dettagli Patente</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="Tipo di Patente *"
-                            required
-                            value={formData.second_driver_license_type}
-                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_type: e.target.value }))}
-                            placeholder="es. B"
-                          />
-                          <Input
-                            label="Numero Patente *"
-                            required
-                            value={formData.second_driver_license_number}
-                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_number: e.target.value }))}
-                          />
-                          <Input
-                            label="Emessa da *"
-                            required
-                            value={formData.second_driver_license_issued_by}
-                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issued_by: e.target.value }))}
-                            placeholder="es. Motorizzazione Civile"
-                          />
-                          <Input
-                            label="Data di Rilascio *"
-                            type="date"
-                            required
-                            value={formData.second_driver_license_issue_date}
-                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issue_date: e.target.value }))}
-                          />
-                          <Input
-                            label="Scadenza Patente *"
-                            type="date"
-                            required
-                            value={formData.second_driver_license_expiry}
-                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_expiry: e.target.value }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    // Select Existing Customer Mode
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente per Secondo Guidatore</label>
-                      <CustomerAutocomplete
-                        customers={customersPerRicerca}
-                        selectedCustomerId={formData.second_driver_id}
-                        onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, second_driver_id: customerId }))}
-                        placeholder="Inizia a scrivere nome, email o telefono..."
-                        required={false}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            )}
-
-            {/* ─── Garante / Fideiussore Solidale (max 3) ───────────────
-                2026-05-29: progressive disclosure — niente form vuoti.
-                Click "+ Aggiungi Garante" -> mostra card 1.
-                Click "+ Aggiungi un altro garante" sotto la card N -> card N+1.
-                Max 3. "Rimuovi garante" cancella SOLO quella card e
-                ricompatta il counter mantenendo le altre intatte.
-
-                I field name (guarantor_N_*) sono FROZEN per il PDF autofill
-                Adobe Acrobat — vedi tabella in fondo all'implementazione. */}
-            {(() => {
-              // Interruttori ON/OFF: sezione Garante spenta per questo business.
-              if (!sezioneForm('garante')) return null
-              // Italian suffix list — corrisponde al naming permanente Adobe Acrobat
-              const GUARANTOR_SUFFIXES = [
-                'nome_cognome','codice_fiscale','sesso','indirizzo','cap','citta','provincia',
-                'data_nascita','citta_nascita','provincia_nascita','telefono','email'
-              ] as const
-              type GS = typeof GUARANTOR_SUFFIXES[number]
-              const renderGuarantorCard = (n: 1 | 2 | 3) => {
-                const fk = (suffix: GS) => `garante_${n}_${suffix}` as keyof typeof formData
-                const val = (suffix: GS) => String(formData[fk(suffix)] ?? '')
-                const set = (suffix: GS, v: string) => setFormData(prev => ({ ...prev, [fk(suffix)]: v }))
-                const upper = (suffix: GS, v: string, max?: number) => {
-                  const u = v.toUpperCase().slice(0, max ?? v.length)
-                  set(suffix, u)
-                }
-                const removeGuarantor = () => {
-                  // Rimuovi la card N: shifta le successive in giu' (N+1 -> N)
-                  // cosi' i field names restano coerenti dopo il delete.
-                  setFormData(prev => {
-                    const next = { ...prev }
-                    if (n === 1) {
-                      for (const f of GUARANTOR_SUFFIXES) {
-                        const k1 = `garante_1_${f}` as keyof typeof prev
-                        const k2 = `garante_2_${f}` as keyof typeof prev
-                        const k3 = `garante_3_${f}` as keyof typeof prev
-                        ;(next as Record<string, unknown>)[k1] = prev[k2]
-                        ;(next as Record<string, unknown>)[k2] = prev[k3]
-                        ;(next as Record<string, unknown>)[k3] = ''
-                      }
-                    } else if (n === 2) {
-                      for (const f of GUARANTOR_SUFFIXES) {
-                        const k2 = `garante_2_${f}` as keyof typeof prev
-                        const k3 = `garante_3_${f}` as keyof typeof prev
-                        ;(next as Record<string, unknown>)[k2] = prev[k3]
-                        ;(next as Record<string, unknown>)[k3] = ''
-                      }
-                    } else {
-                      for (const f of GUARANTOR_SUFFIXES) {
-                        const k3 = `garante_3_${f}` as keyof typeof prev
-                        ;(next as Record<string, unknown>)[k3] = ''
-                      }
-                    }
-                    next.garante_count = Math.max(0, prev.garante_count - 1) as 0 | 1 | 2 | 3
-                    return next
-                  })
-                }
-                // Lightweight client-side hints (no blocking save — direzione
-                // ha imposto "additive only"; mostriamo solo segnali visivi).
-                const cfRx = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/i
-                const capRx = /^\d{5}$/
-                const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-                const phoneRx = /^[+()\d\s\-./]{6,}$/
-                const cf = val('codice_fiscale'); const cfWarn = cf && !cfRx.test(cf)
-                const cap = val('cap'); const capWarn = cap && !capRx.test(cap)
-                const em = val('email'); const emWarn = em && !emailRx.test(em)
-                const ph = val('telefono'); const phWarn = ph && !phoneRx.test(ph)
-                return (
-                  <div key={`guarantor-card-${n}`} className="rounded-lg border border-theme-border bg-theme-bg-primary overflow-hidden">
-                    {/* Header bar — dark title style (matches contract design) */}
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-theme-bg-tertiary border-b border-theme-border">
-                      <h5 className="text-theme-text-primary text-sm font-bold tracking-wide uppercase">
-                        {n}° Garante / Fideiussore Solidale
-                      </h5>
-                      <button
-                        type="button"
-                        onClick={removeGuarantor}
-                        className="text-xs font-medium text-red-500 hover:text-red-600 hover:underline transition-colors"
-                      >
-                        Rimuovi garante
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      {/* Cliente picker — auto-popola i 12 campi del garante
-                          leggendo da customers_extended. L'operatore puo' anche
-                          digitare a mano senza scegliere un cliente. */}
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                          Seleziona da clienti <span className="text-theme-text-muted text-xs font-normal">(opzionale — popola i campi)</span>
-                        </label>
-                        <CustomerAutocomplete
-                          customers={customersPerRicerca}
-                          selectedCustomerId=""
-                          onSelectCustomer={async (customerId) => {
-                            if (!customerId) return
-                            const { data: full } = await supabase
-                              .from('customers_extended')
-                              .select('*')
-                              .eq('id', customerId)
-                              .single()
-                            const basic = customers.find(c => c.id === customerId)
-                            if (!full && !basic) return
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const fc: any = full || {}
-                            const fullName = (fc.nome && fc.cognome)
-                              ? `${fc.nome} ${fc.cognome}`.trim()
-                              : (basic?.full_name || '')
-                            setFormData(prev => ({
-                              ...prev,
-                              [`garante_${n}_nome_cognome`]: fullName,
-                              [`garante_${n}_codice_fiscale`]: (fc.codice_fiscale || '').toUpperCase(),
-                              [`garante_${n}_sesso`]: fc.sesso || '',
-                              [`garante_${n}_indirizzo`]: fc.indirizzo || '',
-                              [`garante_${n}_cap`]: fc.codice_postale || fc.cap || '',
-                              [`garante_${n}_citta`]: fc.citta_residenza || fc.citta || '',
-                              [`garante_${n}_provincia`]: (fc.provincia_residenza || fc.provincia || '').toUpperCase(),
-                              [`garante_${n}_data_nascita`]: fc.data_nascita || '',
-                              [`garante_${n}_citta_nascita`]: fc.luogo_nascita || fc.citta_nascita || '',
-                              [`garante_${n}_provincia_nascita`]: (fc.provincia_nascita || '').toUpperCase(),
-                              [`garante_${n}_telefono`]: fc.telefono || basic?.phone || '',
-                              [`garante_${n}_email`]: fc.email || basic?.email || '',
-                            }))
-                          }}
-                          placeholder="Cerca nome, email o telefono..."
-                          required={false}
-                        />
-                      </div>
-                      {/* Row 1: Nome | CF | Sesso */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Input label="Nome e Cognome" value={val('nome_cognome')} onChange={(e) => set('nome_cognome', e.target.value)} />
-                        <Input label={`Codice Fiscale${cfWarn ? ' (formato non valido)' : ''}`} value={cf} onChange={(e) => upper('codice_fiscale', e.target.value, 16)} />
-                        <Select
-                          label="Sesso"
-                          value={val('sesso')}
-                          onChange={(e) => set('sesso', e.target.value)}
-                          options={[
-                            { value: '', label: 'Seleziona...' },
-                            { value: 'M', label: 'Maschio' },
-                            { value: 'F', label: 'Femmina' },
-                          ]}
-                        />
-                      </div>
-                      {/* Row 2: Indirizzo | CAP | Citta | Provincia */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* 28/08/2026: si scrive e cerca da solo; scegliendo
-                            un suggerimento CAP, citta' e provincia accanto si
-                            riempiono da soli. */}
-                        <Input label="Indirizzo" type="address" value={val('indirizzo')} onChange={(e) => set('indirizzo', e.target.value)}
-                          onAddressParts={(parti) => {
-                            if (parti.street) set('indirizzo', parti.street)
-                            if (parti.zip) set('cap', parti.zip)
-                            if (parti.city) set('citta', parti.city)
-                            const sigla = getProvinciaByCity(parti.city)
-                            if (sigla) set('provincia', sigla)
-                          }} />
-                        <Input label={`CAP${capWarn ? ' (5 cifre)' : ''}`} value={cap} onChange={(e) => set('cap', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} />
-                        <Input label="Città" value={val('citta')} onChange={(e) => set('citta', e.target.value)} />
-                        <Input label="Provincia" value={val('provincia')} onChange={(e) => upper('provincia', e.target.value, 2)} maxLength={2} />
-                      </div>
-                      {/* Row 3: Data | Citta Nascita | Prov Nascita */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Input label="Data di Nascita" type="date" value={val('data_nascita')} onChange={(e) => set('data_nascita', e.target.value)} />
-                        <Input label="Città di Nascita" value={val('citta_nascita')} onChange={(e) => set('citta_nascita', e.target.value)} />
-                        <Input label="Provincia di Nascita" value={val('provincia_nascita')} onChange={(e) => upper('provincia_nascita', e.target.value, 2)} maxLength={2} />
-                      </div>
-                      {/* Row 4: Telefono | Email */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label={`Telefono${phWarn ? ' (formato non valido)' : ''}`} type="tel" value={ph} onChange={(e) => set('telefono', e.target.value)} />
-                        <Input label={`Email${emWarn ? ' (formato non valido)' : ''}`} type="email" value={em} onChange={(e) => set('email', e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-              const addLabel = formData.garante_count === 0
-                ? '+ Aggiungi Garante / Fideiussore'
-                : '+ Aggiungi un altro garante'
-              return (
-                <div className="md:col-span-2 p-4 rounded-lg border border-theme-border space-y-4">
-                  <h4 className="text-theme-text-primary font-semibold">Garante / Fideiussore Solidale</h4>
-                  {formData.garante_count >= 1 && renderGuarantorCard(1)}
-                  {formData.garante_count >= 2 && renderGuarantorCard(2)}
-                  {formData.garante_count >= 3 && renderGuarantorCard(3)}
-                  {formData.garante_count < 3 && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, garante_count: (prev.garante_count + 1) as 0 | 1 | 2 | 3 }))}
-                      className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-dashed border-dr7-gold/50 bg-dr7-gold/5 hover:bg-dr7-gold/10 text-dr7-gold text-sm font-semibold transition-colors"
-                    >
-                      {addLabel}
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
 
             {/* Kasko & Deposit */}
             {/* 2026-08-14 (roadmap #11): Assicurazione, Km, Sforo e Cauzione
@@ -11081,52 +11092,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 vedi nota sopra. */}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                label="Stato Pagamento"
-                required
-                value={formData.payment_status}
-                onChange={(e) => {
-                  const newStatus = e.target.value
-                  let newAmountPaid = formData.amount_paid
-
-                  // Auto-update amount_paid based on status
-                  if (newStatus === 'paid') {
-                    // 2026-05-30: total_amount È GIÀ il totale pieno (consegna/ritiro inclusi).
-                    const fullTotalCents = eurToCents(formData.total_amount || '0')
-                    newAmountPaid = centsToEurStr(fullTotalCents)
-                  } else if (newStatus === 'unpaid') {
-                    newAmountPaid = '0' // No payment
-                  } else if (newStatus === 'partial') {
-                    // 2026-05-28: switching to 'partial' from 'paid' kept the
-                    // full amount_paid, making the system treat it as fully
-                    // paid even though status said partial. Reset to 0 unless
-                    // the existing amount is already a true partial (strictly
-                    // less than total). Admin then types the partial amount.
-                    const fullTotalCents = eurToCents(formData.total_amount || '0')
-                    const currentPaidCents = eurToCents(formData.amount_paid || '0')
-                    if (currentPaidCents >= fullTotalCents || currentPaidCents <= 0) {
-                      newAmountPaid = '0'
-                    }
-                    // else: already a valid partial — preserve admin's input
-                  }
-                  // If 'pending' (Da Saldare), leave amount_paid as is (allows partial)
-
-                  setFormData({
-                    ...formData,
-                    payment_status: newStatus,
-                    amount_paid: newAmountPaid,
-                    // Map payment status to booking status consistently
-                    status: newStatus === 'paid' ? 'confirmed'
-                      : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
-                    payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
-                  })
-                }}
-                options={[
-                  { value: 'pending', label: 'Da Saldare' },
-                  { value: 'partial', label: 'Parziale' },
-                  { value: 'paid', label: 'Pagato' }
-                ]}
-              />
               {(
                 <Select
                   label="Metodo di Pagamento"
@@ -11484,8 +11449,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               {/* Experience Services & DR7 Flex */}
               {sezioneForm('servizi') && (
               <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
-                <h4 className="text-theme-text-primary font-semibold mb-3">Servizi Experience</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 17/09/2026 (direzione): lista lunga — si apre con la casella.
+                    Aperta da sola se ci sono gia' servizi scelti, per non nasconderli. */}
+                {(() => {
+                  const scelti = Object.values(formData.experience_services || {}).filter(q => Number(q) > 0).length
+                  const aperti = serviziExperienceAperti || scelti > 0
+                  return (
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={aperti}
+                        disabled={scelti > 0}
+                        onChange={(e) => setServiziExperienceAperti(e.target.checked)}
+                        className="w-4 h-4 accent-dr7-gold"
+                      />
+                      <span className="text-theme-text-primary font-semibold">Servizi Experience</span>
+                      {scelti > 0 && <span className="text-xs text-theme-text-muted">({scelti} selezionati)</span>}
+                    </label>
+                  )
+                })()}
+                {(serviziExperienceAperti || Object.values(formData.experience_services || {}).some(q => Number(q) > 0)) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                   {(() => {
                     const tier = customerTier?.tier || 'TIER_1'
                     // 2026-07-18: leggi i servizi DINAMICAMENTE dalla Centralina
@@ -11544,41 +11528,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     })
                   })()}
                 </div>
+                )}
                 {/* DR7 FLEX rimosso come addon dedicato — ora è un servizio
                     in EXPERIENCE_SERVICES via Centralina Pro. */}
               </div>
-              )}
-
-              <Input
-                label="Importo Totale (€)"
-                type="number"
-                step="0.01"
-                required
-                value={formData.total_amount}
-                onChange={(e) => {
-                  const newTotal = e.target.value
-                  // 2026-05-18: admin sta digitando il totale a mano → blocca
-                  // i recalc effects dall'overridarlo (consegna/ritiro/pacchetti
-                  // non possono piu' modificare il totale dopo questa azione).
-                  setTotalLock(true)
-                  // 2026-08-03 BUG (direzione): scrivere qui il TOTALE cambiava
-                  // anche l'IMPORTO PAGATO. Con stato "Pagato" l'acconto gia'
-                  // incassato veniva riscritto col totale — e mentre si cancella
-                  // il campo per ridigitarlo (newTotal = '') l'importo pagato
-                  // spariva del tutto. Un campo modifica SOLO se stesso: il
-                  // pagato si tocca dal suo campo o cambiando Stato Pagamento
-                  // (che continua a precompilarlo).
-                  setFormData(prev => ({ ...prev, total_amount: newTotal }))
-                }}
-              />
-              {totalAmountManuallyOverriddenRef.current && (
-                <p className="text-xs text-amber-400 mt-1">
-                  Importo bloccato — modifiche a consegna/ritiro/pacchetti non lo cambieranno piu'.
-                  <button type="button" className="ml-2 underline text-dr7-gold"
-                    onClick={() => setTotalLock(false)}>
-                    Sblocca ricalcolo automatico
-                  </button>
-                </p>
               )}
               <div>
                 <Input
@@ -11925,6 +11878,88 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </div>
               )
             })()}
+
+            {/* 17/09/2026 (direzione): Stato Pagamento e Importo Totale
+                in fondo al modal, uno per riga. */}
+            <div className="mt-4 space-y-4">
+              <Select
+                label="Stato Pagamento"
+                required
+                value={formData.payment_status}
+                onChange={(e) => {
+                  const newStatus = e.target.value
+                  let newAmountPaid = formData.amount_paid
+
+                  // Auto-update amount_paid based on status
+                  if (newStatus === 'paid') {
+                    // 2026-05-30: total_amount È GIÀ il totale pieno (consegna/ritiro inclusi).
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                    newAmountPaid = centsToEurStr(fullTotalCents)
+                  } else if (newStatus === 'unpaid') {
+                    newAmountPaid = '0' // No payment
+                  } else if (newStatus === 'partial') {
+                    // 2026-05-28: switching to 'partial' from 'paid' kept the
+                    // full amount_paid, making the system treat it as fully
+                    // paid even though status said partial. Reset to 0 unless
+                    // the existing amount is already a true partial (strictly
+                    // less than total). Admin then types the partial amount.
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                    const currentPaidCents = eurToCents(formData.amount_paid || '0')
+                    if (currentPaidCents >= fullTotalCents || currentPaidCents <= 0) {
+                      newAmountPaid = '0'
+                    }
+                    // else: already a valid partial — preserve admin's input
+                  }
+                  // If 'pending' (Da Saldare), leave amount_paid as is (allows partial)
+
+                  setFormData({
+                    ...formData,
+                    payment_status: newStatus,
+                    amount_paid: newAmountPaid,
+                    // Map payment status to booking status consistently
+                    status: newStatus === 'paid' ? 'confirmed'
+                      : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
+                    payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
+                  })
+                }}
+                options={[
+                  { value: 'pending', label: 'Da Saldare' },
+                  { value: 'partial', label: 'Parziale' },
+                  { value: 'paid', label: 'Pagato' }
+                ]}
+              />
+              <Input
+                label="Importo Totale (€)"
+                type="number"
+                step="0.01"
+                required
+                value={formData.total_amount}
+                onChange={(e) => {
+                  const newTotal = e.target.value
+                  // 2026-05-18: admin sta digitando il totale a mano → blocca
+                  // i recalc effects dall'overridarlo (consegna/ritiro/pacchetti
+                  // non possono piu' modificare il totale dopo questa azione).
+                  setTotalLock(true)
+                  // 2026-08-03 BUG (direzione): scrivere qui il TOTALE cambiava
+                  // anche l'IMPORTO PAGATO. Con stato "Pagato" l'acconto gia'
+                  // incassato veniva riscritto col totale — e mentre si cancella
+                  // il campo per ridigitarlo (newTotal = '') l'importo pagato
+                  // spariva del tutto. Un campo modifica SOLO se stesso: il
+                  // pagato si tocca dal suo campo o cambiando Stato Pagamento
+                  // (che continua a precompilarlo).
+                  setFormData(prev => ({ ...prev, total_amount: newTotal }))
+                }}
+              />
+              {totalAmountManuallyOverriddenRef.current && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Importo bloccato — modifiche a consegna/ritiro/pacchetti non lo cambieranno piu'.
+                  <button type="button" className="ml-2 underline text-dr7-gold"
+                    onClick={() => setTotalLock(false)}>
+                    Sblocca ricalcolo automatico
+                  </button>
+                </p>
+              )}
+            </div>
 
             <div className="flex flex-wrap gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
