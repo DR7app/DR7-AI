@@ -51,7 +51,25 @@ export const handler: Handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || "{}")
-    const { customerEmail, customerPhone, customerName, source } = body
+    const { customerEmail, customerPhone, customerName, source, candidateId } = body
+
+    // 17/09/2026: un candidato bloccato a mano non riceve codici. Stessa
+    // regola di isBloccatoManualmente() nella tab Recensioni (comprese le
+    // righe storiche salvate come 'SENT').
+    if (candidateId) {
+      const { data: cand } = await supabase
+        .from("review_candidates")
+        .select("send_status, exclusion_reason_code")
+        .eq("id", candidateId)
+        .maybeSingle()
+      if (cand && cand.exclusion_reason_code === "ALREADY_REVIEWED"
+        && (cand.send_status === "BLOCKED" || cand.send_status === "SENT")) {
+        return {
+          statusCode: 409,
+          body: JSON.stringify({ error: "Cliente bloccato: sbloccalo prima di inviare un codice" }),
+        }
+      }
+    }
 
     if (!customerEmail && !customerPhone) {
       return {

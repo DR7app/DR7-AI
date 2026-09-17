@@ -702,6 +702,10 @@ export default function ReviewManagementTab() {
   // Messaggi di Sistema Pro — qui passiamo le variabili reali, niente codici
   // inventati.
   async function handleGenerateAndSendCode(candidate: ReviewCandidate) {
+    if (isBloccatoManualmente(candidate)) {
+      toast.error('Cliente bloccato: sbloccalo prima di inviare un codice')
+      return
+    }
     if (!candidate.customer_phone && !candidate.customer_email) {
       toast.error('Nessun contatto disponibile per inviare il codice')
       return
@@ -718,6 +722,7 @@ export default function ReviewManagementTab() {
           customerEmail: candidate.customer_email || undefined,
           customerPhone: candidate.customer_phone || undefined,
           customerName: candidate.customer_name || undefined,
+          candidateId: candidate.id,
           source: 'review',
         }),
       })
@@ -1554,6 +1559,10 @@ export default function ReviewManagementTab() {
           const isEligible = candidate.eligibility_status === 'ELIGIBLE'
           const isToReview = candidate.eligibility_status === 'TO_REVIEW'
           const isExcluded = candidate.eligibility_status === 'EXCLUDED'
+          // 17/09/2026: una riga bloccata a mano e' ferma del tutto. Prima
+          // Copia e Codice sconto restavano cliccabili e si poteva mandare un
+          // codice a un cliente bloccato. Resta solo Sblocca.
+          const bloccato = isBloccatoManualmente(candidate)
           return (
             <div className="flex gap-1.5 justify-end items-center flex-wrap">
               {isEligible && (
@@ -1578,6 +1587,7 @@ export default function ReviewManagementTab() {
                       Invia
                     </button>
                   )}
+                  {!bloccato && (
                   <button
                     onClick={() => handleCopiaMessaggio(candidate)}
                     disabled={copyingId === candidate.id}
@@ -1588,7 +1598,8 @@ export default function ReviewManagementTab() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   </button>
-                  {(candidate.customer_email || candidate.customer_phone) && (
+                  )}
+                  {!bloccato && (candidate.customer_email || candidate.customer_phone) && (
                     <button
                       onClick={() => handleGenerateAndSendCode(candidate)}
                       disabled={generatingCodeId === candidate.id}
@@ -1605,7 +1616,7 @@ export default function ReviewManagementTab() {
                       2026-08-22: la condizione era `send_status === 'SENT'`, che
                       confondeva "richiesta inviata" e "bloccato a mano". Ora usa
                       isBloccatoManualmente() + il caso richiesta gia' inviata. */}
-                  {isBloccatoManualmente(candidate) || candidate.send_status === 'SENT' ? (
+                  {bloccato || candidate.send_status === 'SENT' ? (
                     <button
                       onClick={() => handleSblocca(candidate.id)}
                       disabled={sendingId === candidate.id}
