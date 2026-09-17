@@ -10875,7 +10875,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </div>
                 {/* 17/09/2026 (direzione): prima i pacchetti — KM Illimitati come
                     primo pacchetto — poi, sotto, il limite km. */}
-                <h4 className="text-sm font-semibold text-theme-text-secondary">PACCHETTI KM:</h4>
+                {/* 17/09/2026 (direzione): un solo titolo, sopra KM Illimitati, e le
+                    card tutte di seguito: Illimitati e' un pacchetto come gli altri. */}
+                <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (cumulativi)</h4>
                 {/* 17/09/2026 (direzione): KM Illimitati nella stessa forma dei
                     pacchetti, con il +. Stessa logica della vecchia casella. */}
                 {(() => {
@@ -10950,8 +10953,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     )
                   }
                   return (
-                    <div className="space-y-2 mt-2">
-                      <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (cumulativi)</h4>
+                    <div className="space-y-2">
                       {pkgs.map(pkg => {
                         // 2026-05-16: multi-select cumulativo. Ogni pacchetto ha
                         // qty indipendente in formData.km_packages.
@@ -11014,6 +11016,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     </div>
                   )
                 })()}
+                </div>
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
                   {/* Show computed KM included from config formula */}
