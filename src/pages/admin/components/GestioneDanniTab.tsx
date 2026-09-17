@@ -23,18 +23,40 @@ const PENALI_KEYWORDS = [
   'subnoleggio', 'neopatentati', 'non abilitati', 'patente', 'riconsegna',
 ]
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function classifyInvoiceItems(items: any[]): 'danni' | 'penali' | null {
-  for (const item of items) {
-    const desc = (item.description || '').toLowerCase()
-    if (desc.includes('danno prenotazione')) return 'danni'
-    if (!desc.includes('penale prenotazione')) continue
+/**
+ * 2026-09-17: classifica UNA riga di fattura. generate-penalty-invoice scrive
+ * "Penale - <nome>" / "Danno - <nome>" da mesi, ma qui si riconosceva solo il
+ * vecchio "Penale prenotazione XXXX - ...": le fatture nuove sparivano dalla
+ * tab quando la prenotazione non aveva la lista in booking_details. Si
+ * classifica riga per riga perche' una fattura puo' mescolare noleggio,
+ * penali e danni. null = riga che non e' una penale ne' un danno.
+ */
+function classifyInvoiceLine(description: string): 'danni' | 'penali' | null {
+  const desc = (description || '').toLowerCase().trim()
+  if (desc.includes('danno prenotazione')) return 'danni'
+  if (desc.includes('penale prenotazione')) {
     const dashIdx = desc.indexOf(' - ')
     const motivo = dashIdx >= 0 ? desc.substring(dashIdx + 3) : desc
     for (const kw of DANNI_KEYWORDS) { if (motivo.includes(kw.toLowerCase())) return 'danni' }
     for (const kw of PENALI_KEYWORDS) { if (motivo.includes(kw.toLowerCase())) return 'penali' }
+    return 'penali'
   }
-  return 'penali'
+  if (desc.startsWith('danno')) return 'danni'
+  if (desc.startsWith('penale')) return 'penali'
+  return null
+}
+
+/** Descrizione di fattura senza il prefisso "Penale - " / "Danno - ", per confrontarla con l'etichetta in booking_details. */
+function nomeVoceFattura(description: string): string {
+  return (description || '').toLowerCase().trim().replace(/^(penale|danno)\s*-\s*/, '')
+}
+
+function stessaVoce(etichetta: string, description: string): boolean {
+  const a = (etichetta || '').toLowerCase().trim()
+  const b = nomeVoceFattura(description)
+  if (!a || !b) return false
+  if (a === b) return true
+  return a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -167,14 +189,25 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
       const businessBookingIds = new Set<string>(businessBookings.map(b => String(b.id)))
 
       // 2. Fetch penalty/damage fatture
-      const { data: fatture, error: fErr } = await supabase
-        .from('fatture')
-        // 2026-08-24: serve `data_emissione`. Senza, ogni voce fatturata nasceva
-        // con date:'' e il filtro periodo (Mese/Trimestre) la scartava, facendo
-        // sparire quasi tutto appena si sceglieva un preset.
-        .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email, data_emissione')
-
-      if (fErr) throw fErr
+      // 2026-09-17: paginata come le prenotazioni (810 fatture oggi, il tetto
+      // PostgREST e' 1000) e con `stato`, che dice se la fattura e' pagata.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fatture: any[] = []
+      for (let page = 0; page < 30; page++) {
+        const { data: batch, error: fErr } = await supabase
+          .from('fatture')
+          // 2026-08-24: serve `data_emissione`. Senza, ogni voce fatturata nasceva
+          // con date:'' e il filtro periodo (Mese/Trimestre) la scartava, facendo
+          // sparire quasi tutto appena si sceglieva un preset.
+          .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email, data_emissione, stato')
+          .order('id', { ascending: true })
+          .range(page * 1000, page * 1000 + 999)
+        if (fErr) throw fErr
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const got = (batch || []) as any[]
+        fatture.push(...got)
+        if (got.length < 1000) break
+      }
 
       // Build a booking lookup for fatture
       const bookingMap = new Map<string, { customer_name: string; customer_email: string; vehicle_name: string; pickup_date: string }>()
@@ -202,6 +235,10 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
         return g
       }
 
+      // Voci lette da booking_details, per prenotazione: servono al punto 3b
+      // per agganciare la fattura alla voce invece di contarla due volte.
+      const vociDaDettagli = new Map<string, PenaltyDannoItem[]>()
+
       // 3a. Scan bookings for pending penalties & danni
       for (const b of businessBookings) {
         const details = b.booking_details || {}
@@ -213,7 +250,12 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           entries.forEach((entry: any, idx: number) => {
             const g = getOrCreate(b.customer_name || '', b.customer_email || '')
-            const total = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+            // 2026-09-17: `total` in booking_details e' il LISTINO; DanniPenaliModal
+            // salva a parte `discount` (listino - prezzo finale). Qui lo sconto non
+            // si toglieva: 38 penali mostravano 6.048 EUR in piu' del dovuto.
+            // Stessa regola di report-danni: conta sempre il prezzo finale.
+            const lordo = Number(entry.total || (entry.amount || 0) * (entry.quantity || 1)) || 0
+            const total = Math.max(0, Math.round((lordo - (Number(entry.discount) || 0)) * 100) / 100)
             const amountPaid = entry.amountPaid || 0
             const paymentStatus: 'pending' | 'partial' | 'paid' =
               entry.paymentStatus === 'paid' ? 'paid' :
@@ -238,6 +280,9 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
               arrayIndex: idx,
               photos: arrayKey === 'danni' && entry.photos ? entry.photos : undefined,
             }
+            const perPrenotazione = vociDaDettagli.get(String(b.id)) || []
+            perPrenotazione.push(item)
+            vociDaDettagli.set(String(b.id), perPrenotazione)
             if (arrayKey === 'penalties') {
               g.penaliItems.push(item)
               g.penaliTotal += total
@@ -256,32 +301,47 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
       }
 
       // 3b. Scan fatture for invoiced penalty/damage items
-      // Track which booking IDs already have entries from booking_details to avoid duplicates
-      const bookingIdsWithDetails = new Set<string>()
-      for (const b of businessBookings) {
-        const details = b.booking_details || {}
-        const hasPenalties = Array.isArray(details.penalties) && details.penalties.length > 0
-        const hasDanni = Array.isArray(details.danni) && details.danni.length > 0
-        if (hasPenalties || hasDanni) bookingIdsWithDetails.add(b.id)
-      }
-
+      // 2026-09-17: prima una fattura veniva saltata INTERA appena la sua
+      // prenotazione aveva una lista in booking_details. Cosi' una penale
+      // fatturata a parte (es. "Penale - Sforo Km") non compariva mai, e le
+      // voci della lista non mostravano il numero di fattura. Ora ogni riga
+      // di fattura si aggancia alla voce gemella in booking_details (che resta
+      // la fonte: importo, pagamenti, modifica) e solo le righe senza gemella
+      // diventano voci "fatturate" a se'.
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items)) continue
         // Fattura di un ALTRO business: fuori. Le fatture senza prenotazione
         // collegata restano solo sul Noleggio Terra, dove sono sempre state.
         if (f.booking_id) { if (!businessBookingIds.has(String(f.booking_id))) continue }
         else if (biz !== 'rental') continue
-        // Skip if this booking's penalties/danni were already added from booking_details
-        if (f.booking_id && bookingIdsWithDetails.has(f.booking_id)) continue
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const hasPenalty = f.items.some((item: any) =>
-          item.description && (item.description.includes('Penale prenotazione') || item.description.includes('Danno prenotazione'))
-        )
-        if (!hasPenalty) continue
+        const righe = (f.items as any[])
+          .filter(fi => typeof fi?.description === 'string')
+          .map(fi => ({ fi, tipo: classifyInvoiceLine(fi.description) }))
+        // Vecchio formato "Penale prenotazione ...": la PRIMA riga decide per
+        // tutta la fattura, come fa ancora report-danni (classifyInvoice).
+        const primaLegacy = righe.find(r => r.fi.description.toLowerCase().includes('penale prenotazione'))
+        if (primaLegacy) {
+          for (const r of righe) {
+            if (r.fi.description.toLowerCase().includes('penale prenotazione')) r.tipo = primaLegacy.tipo
+          }
+        }
+        const righePenali = righe.filter(r => r.tipo !== null)
+        if (righePenali.length === 0) continue
 
-        const classification = classifyInvoiceItems(f.items)
-        if (!classification) continue
+        // Sconto della fattura (riga negativa "Sconto" di generate-penalty-invoice):
+        // si ripartisce sulle righe solo se la fattura contiene SOLO penali/danni,
+        // altrimenti non si sa a quale riga appartenga.
+        const altreRighe = righe.filter(r => r.tipo === null && r.fi.description.trim().toLowerCase() !== 'sconto')
+        const sconto = righe
+          .filter(r => r.fi.description.trim().toLowerCase() === 'sconto')
+          .reduce((s, r) => s + Math.abs(Number(r.fi.total ?? r.fi.unit_price) || 0), 0)
+        const lordoPenali = righePenali.reduce((s, r) => s + (Number(r.fi.total || (r.fi.unit_price || 0) * (r.fi.quantity || 1)) || 0), 0)
+        const quotaSconto = altreRighe.length === 0 && sconto > 0 && lordoPenali > 0 ? Math.min(1, sconto / lordoPenali) : 0
+
+        const statoFattura = String(f.stato || '').toLowerCase()
+        const fatturaPagata = statoFattura === 'paid' || statoFattura === 'pagata'
 
         // Resolve customer name
         let custName = f.customer_name || ''
@@ -291,26 +351,41 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           if (!custName) custName = bk.customer_name
           if (!custEmail) custEmail = bk.customer_email
         }
-        if (!custName) continue
-
-        const g = getOrCreate(custName, custEmail)
         const bookingInfo = f.booking_id ? bookingMap.get(f.booking_id) : null
         const bookingLabel = bookingInfo
           ? `${bookingInfo.vehicle_name || '—'} — ${bookingInfo.pickup_date || '—'}`
           : `Fattura ${f.numero_fattura || ''}`
+        const gemelle = f.booking_id ? (vociDaDettagli.get(String(f.booking_id)) || []) : []
 
-        // Each fattura item becomes one entry
-        for (const fi of f.items) {
-          if (!fi.description) continue
+        for (const { fi, tipo } of righePenali) {
           const desc = fi.description as string
-          if (!desc.includes('Penale prenotazione') && !desc.includes('Danno prenotazione')) continue
 
-          const total = fi.total || (fi.unit_price || 0) * (fi.quantity || 1)
-          const fiAmountPaid = fi.amountPaid ?? total
+          // Voce gia' presente in booking_details: le si da' solo la fattura.
+          const gemella = gemelle.find(v => !v.fatturaId && stessaVoce(v.label, desc))
+          if (gemella) {
+            gemella.fatturaId = f.id || undefined
+            gemella.fatturaNumero = f.numero_fattura || undefined
+            continue
+          }
+          // La prenotazione ha gia' la sua lista e questa riga non ci si abbina:
+          // sui dati reali sono quasi sempre fatture riemesse (stessa penale su
+          // 2-3 numeri diversi). La lista resta la fonte, come prima: aggiungerla
+          // la conterebbe due volte.
+          if (gemelle.length > 0) continue
+          if (!custName) continue
+
+          const lordo = Number(fi.total || (fi.unit_price || 0) * (fi.quantity || 1)) || 0
+          const total = Math.round(lordo * (1 - quotaSconto) * 100) / 100
+          const fiAmountPaid = fi.amountPaid != null
+            ? Math.round(Number(fi.amountPaid) * (1 - quotaSconto) * 100) / 100
+            : (fatturaPagata ? total : 0)
           const fiPaymentStatus: 'pending' | 'partial' | 'paid' =
             fi.paymentStatus === 'partial' ? 'partial' :
             fi.paymentStatus === 'pending' ? 'pending' :
-            fiAmountPaid < total ? 'partial' : 'paid'
+            fi.paymentStatus === 'paid' ? 'paid' :
+            fiAmountPaid >= total - 0.005 ? 'paid' :
+            fiAmountPaid > 0 ? 'partial' : 'pending'
+          const g = getOrCreate(custName, custEmail)
           const item: PenaltyDannoItem = {
             bookingId: f.booking_id || '',
             bookingLabel,
@@ -325,10 +400,10 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
             status: 'invoiced',
             fatturaNumero: f.numero_fattura || undefined,
             fatturaId: f.id || undefined,
-            arrayKey: classification === 'danni' ? 'danni' : 'penalties',
+            arrayKey: tipo === 'danni' ? 'danni' : 'penalties',
             arrayIndex: -1,
           }
-          if (classification === 'penali') {
+          if (tipo === 'penali') {
             g.penaliItems.push(item)
             g.penaliTotal += total
           } else {
@@ -666,7 +741,9 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           }
 
           if (idx >= 0) {
-            arr[idx] = { ...arr[idx], amount: newTotal, total: newTotal, quantity: 1 }
+            // 2026-09-17: l'importo digitato e' il prezzo FINALE (quello mostrato),
+            // quindi lo sconto salvato va azzerato, o verrebbe tolto una seconda volta.
+            arr[idx] = { ...arr[idx], amount: newTotal, total: newTotal, quantity: 1, discount: 0 }
             const { error: updateErr } = await supabase
               .from('bookings')
               .update({ booking_details: { ...details, [item.arrayKey]: arr } })
@@ -743,8 +820,11 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
         if (arr[item.arrayIndex]) {
           const existing = arr[item.arrayIndex]
           const newAmountPaid = (existing.amountPaid || 0) + paymentAmount
-          const total = existing.total || (existing.amount || 0) * (existing.quantity || 1)
-          const fullyPaid = newAmountPaid >= total
+          // 2026-09-17: il dovuto e' il prezzo finale (listino - sconto), come in
+          // tabella: senza togliere lo sconto la voce non risultava mai saldata.
+          const lordo = Number(existing.total || (existing.amount || 0) * (existing.quantity || 1)) || 0
+          const total = Math.max(0, Math.round((lordo - (Number(existing.discount) || 0)) * 100) / 100)
+          const fullyPaid = newAmountPaid >= total - 0.005
           const nowIso = new Date().toISOString()
           // Storico pagamenti per supportare report tipo "quanto tempo
           // ha impiegato il cliente a saldare". paidAt = data dell'ultimo
@@ -1357,7 +1437,9 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
           )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {item.paymentStatus === 'paid' || item.status === 'invoiced' ? (
-              item.status === 'invoiced' && item.fatturaId ? (
+              // 2026-09-17: anche le voci di booking_details agganciate a una
+              // fattura mostrano il numero cliccabile.
+              item.fatturaId ? (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); openFatturaPdf(item.fatturaId!) }}
