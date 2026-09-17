@@ -2119,10 +2119,24 @@ export default function UnpaidBookingsTab() {
       }
 
       // 6. Fattura succeeded (or no items) — NOW mark everything as paid in DB
+      // 2026-09-17 BUG FIX (fatture doppie): le tre scritture qui sotto
+      // (estensioni, penali, danni) partivano TUTTE dalla stessa copia di
+      // booking_details letta all'apertura della tab. Ognuna cancellava la
+      // precedente: alla fine restavano pagati solo i danni, mentre estensioni
+      // e penali tornavano "da saldare". L'operatore le risegnava pagate e
+      // partiva una seconda fattura (Locci 12/08: DR7-2026-1790 + 1791 + 1792;
+      // Cecconi 1601 + 1602; Pilloni 1702 + 1703). Ora ogni scrittura rilegge
+      // i dati freschi dal database e cambia solo la sua parte.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dettagliFreschi = async (id: string, fallback: any): Promise<any> => {
+        const { data, error: readErr } = await supabase.from('bookings').select('booking_details').eq('id', id).maybeSingle()
+        if (readErr) throw readErr
+        return data?.booking_details || fallback || {}
+      }
       for (const { bookingId, extensions, booking } of noleggioUpdates) {
         const noleggioUpdate: Record<string, unknown> = {
           payment_status: 'paid', status: 'confirmed',
-          booking_details: { ...booking.booking_details, extension_history: extensions }
+          booking_details: { ...(await dettagliFreschi(bookingId, booking.booking_details)), extension_history: extensions }
         }
         if (paymentMethod) noleggioUpdate.payment_method = paymentMethod
         await supabase.from('bookings').update(noleggioUpdate).eq('id', bookingId)
@@ -2193,7 +2207,7 @@ export default function UnpaidBookingsTab() {
       }
 
       for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
-        const details = booking.booking_details || {}
+        const details = await dettagliFreschi(bookingId, booking.booking_details)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details.penalties || [])]
         for (const idx of indices) {
@@ -2206,7 +2220,7 @@ export default function UnpaidBookingsTab() {
       }
 
       for (const [bookingId, { booking, indices }] of danniBookingUpdates) {
-        const details = booking.booking_details || {}
+        const details = await dettagliFreschi(bookingId, booking.booking_details)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details.danni || [])]
         for (const idx of indices) {

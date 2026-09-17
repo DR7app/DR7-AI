@@ -199,7 +199,7 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           // 2026-08-24: serve `data_emissione`. Senza, ogni voce fatturata nasceva
           // con date:'' e il filtro periodo (Mese/Trimestre) la scartava, facendo
           // sparire quasi tutto appena si sceglieva un preset.
-          .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email, data_emissione, stato')
+          .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email, data_emissione, stato, tipo_fattura, related_invoice_id')
           .order('id', { ascending: true })
           .range(page * 1000, page * 1000 + 999)
         if (fErr) throw fErr
@@ -308,8 +308,14 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
       // di fattura si aggancia alla voce gemella in booking_details (che resta
       // la fonte: importo, pagamenti, modifica) e solo le righe senza gemella
       // diventano voci "fatturate" a se'.
+      // Una nota di credito ripete le righe della fattura che annulla: ne' lei
+      // ne' la fattura annullata (che resta con stato 'paid') sono un addebito.
+      const fattureAnnullate = new Set<string>(
+        fatture.filter(f => f.tipo_fattura === 'nota_di_credito' && f.related_invoice_id).map(f => String(f.related_invoice_id))
+      )
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items)) continue
+        if (f.tipo_fattura === 'nota_di_credito' || fattureAnnullate.has(String(f.id))) continue
         // Fattura di un ALTRO business: fuori. Le fatture senza prenotazione
         // collegata restano solo sul Noleggio Terra, dove sono sempre state.
         if (f.booking_id) { if (!businessBookingIds.has(String(f.booking_id))) continue }
