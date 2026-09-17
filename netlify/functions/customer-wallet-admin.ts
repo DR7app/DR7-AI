@@ -7,6 +7,86 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// 17/09/2026 (direzione): la tab Credit Wallet mostra tutti i clienti della
+// Lead, anche chi non si e' mai iscritto al sito. Il wallet vive sull'account
+// del sito: se la scheda non ne ha uno, lo si crea qui (con l'email della
+// scheda, gia' confermata) e lo si aggancia alla scheda, senza doppioni.
+// Il cliente entra poi sul sito con "Password dimenticata".
+// `id` puo' essere l'id della scheda oppure, per chi non ha scheda, l'id
+// dell'account stesso.
+async function accountDelCliente(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  id: string,
+): Promise<{ userId: string | null; errore?: string }> {
+  const { data: scheda } = await db
+    .from('customers_extended')
+    .select('id, user_id, email')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (!scheda) {
+    // Riga della lista senza scheda: l'id e' gia' quello dell'account.
+    const { data: utente } = await db.auth.admin.getUserById(id);
+    return utente?.user?.id ? { userId: utente.user.id } : { userId: null, errore: 'Cliente non trovato' };
+  }
+  if (scheda.user_id) return { userId: scheda.user_id };
+
+  const email = String(scheda.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return { userId: null, errore: 'Il cliente non ha un account sul sito e nella scheda manca l\'email: aggiungila in Lead e riprova.' };
+  }
+
+  let userId: string | null = null;
+  const { data: creato, error: errCrea } = await db.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: { creato_da: 'gestionale_credit_wallet' },
+  });
+  if (creato?.user?.id) {
+    userId = creato.user.id;
+  } else {
+    // Email gia' registrata: si usa quell'account. generateLink restituisce
+    // l'utente senza inviare nulla.
+    const { data: link } = await db.auth.admin.generateLink({ type: 'magiclink', email });
+    userId = link?.user?.id || null;
+    if (!userId) {
+      return { userId: null, errore: `Impossibile creare l'account sito del cliente: ${errCrea?.message || 'errore sconosciuto'}` };
+    }
+  }
+
+  // Il trigger su auth.users puo' aver gia' agganciato questa scheda, oppure
+  // aver creato una scheda nuova vuota per lo stesso account: in quel caso la
+  // scheda nuova si toglie (solo se creata ora dall'iscrizione) e l'account
+  // va sulla scheda dell'ufficio.
+  const { data: giaCollegate } = await db
+    .from('customers_extended')
+    .select('id, source, created_at')
+    .eq('user_id', userId);
+  const righe = (giaCollegate || []) as Array<{ id: string; source: string | null; created_at: string }>;
+  if (righe.some(r => r.id === scheda.id)) return { userId };
+
+  const appenaCreate = righe.filter(r =>
+    r.source === 'website_registration' && Date.now() - new Date(r.created_at).getTime() < 5 * 60 * 1000);
+  if (appenaCreate.length === righe.length && righe.length > 0) {
+    await db.from('customers_extended').delete().in('id', appenaCreate.map(r => r.id));
+  } else if (righe.length > 0) {
+    // L'account esiste gia' ed e' di un'altra scheda (cliente gia' iscritto):
+    // si usa quello, le schede non si toccano.
+    return { userId };
+  }
+
+  const { error: errAggancio } = await db
+    .from('customers_extended')
+    .update({ user_id: userId, updated_at: new Date().toISOString() })
+    .eq('id', scheda.id)
+    .is('user_id', null);
+  if (errAggancio) {
+    console.error('[customer-wallet-admin] aggancio account fallito:', errAggancio);
+  }
+  return { userId };
+}
+
 const handler: Handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
@@ -240,19 +320,13 @@ const handler: Handler = async (event) => {
           process.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
-        // Find customer's user_id
-        const { data: customer } = await serviceSupabase
-          .from('customers_extended')
-          .select('user_id, email, telefono')
-          .eq('id', customer_id)
-          .single();
-
-        const userId = customer?.user_id;
+        // Account sito del cliente: se manca, lo si crea e lo si aggancia.
+        const { userId, errore: erroreAccount } = await accountDelCliente(serviceSupabase, customer_id);
         if (!userId) {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'Cliente non ha un account website (user_id mancante). Credito non applicabile.' }),
+            body: JSON.stringify({ error: erroreAccount || 'Account sito del cliente non trovato.' }),
           };
         }
 
