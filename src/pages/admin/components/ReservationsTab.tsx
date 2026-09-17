@@ -61,6 +61,9 @@ function eurToCents(eur: string | number): number {
 }
 
 /** Convert integer cents to EUR string with exactly 2 decimal places (no floating point) */
+/** 17/09/2026: sezione Garanti 1-2-3 tolta dal modulo prenotazione (direzione). */
+const SEZIONE_GARANTI_NEL_MODULO = false as boolean
+
 function centsToEurStr(cents: number): string {
   const rounded = Math.round(cents)
   const negative = rounded < 0
@@ -1326,9 +1329,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [residencyOverride, setResidencyOverride] = useState<ResidencyOverride>('auto')
   // Reset override quando cambia cliente — il nuovo cliente puo' avere
   // residenza diversa, non vogliamo trascinare l'override del precedente.
-  // Il link "Correggi" mostra i bottoni anche quando la residenza e' rilevata.
-  const [correggiResidenza, setCorreggiResidenza] = useState(false)
-  useEffect(() => { setResidencyOverride('auto'); setCorreggiResidenza(false) }, [formData.customer_id])
+  useEffect(() => { setResidencyOverride('auto') }, [formData.customer_id])
   const isResidenteSardegnaAuto = customerProvincia ? SARDEGNA_PROVINCES.has(customerProvincia) : true
   const isResidenteSardegna = residencyOverride === 'auto'
     ? isResidenteSardegnaAuto
@@ -9567,6 +9568,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         />
                       </div>
                     </div>
+                    {/* 17/09/2026 (direzione): residenza sotto la fascia, automatica e non
+                        modificabile — la sanno gia' i dati del cliente. */}
+                    {(formData.customer_id || newCustomerMode) && (
+                      <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 border ${!customerProvincia ? 'bg-theme-bg-tertiary/40 border-theme-border' : isResidenteSardegna ? 'bg-green-900/20 border-green-600/50' : 'bg-amber-900/20 border-amber-600/50'}`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${!customerProvincia ? 'bg-gray-500' : isResidenteSardegna ? 'bg-green-600' : 'bg-amber-600'}`}>
+                          {!customerProvincia ? 'RESIDENZA ?' : isResidenteSardegna ? 'RESIDENTE SARDEGNA' : 'NON RESIDENTE'}
+                        </span>
+                        <span className="text-sm text-theme-text-secondary">
+                          {!customerProvincia
+                            ? 'Provincia non presente nella scheda cliente: completala nella scheda.'
+                            : `Dai dati del cliente${customerProvincia !== 'ALTRO' ? ` (provincia ${customerProvincia})` : ''}`}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
@@ -9750,6 +9765,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         </span>
                         <span className="text-sm text-theme-text-secondary">
                           {customerTier.reason} — Età: {customerTier.driverAge}, Patente: {customerTier.licenseYears} anni
+                        </span>
+                      </div>
+                    )}
+                    {/* 17/09/2026 (direzione): residenza sotto la fascia, automatica e non
+                        modificabile — la sanno gia' i dati del cliente. */}
+                    {(formData.customer_id || newCustomerMode) && (
+                      <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 border ${!customerProvincia ? 'bg-theme-bg-tertiary/40 border-theme-border' : isResidenteSardegna ? 'bg-green-900/20 border-green-600/50' : 'bg-amber-900/20 border-amber-600/50'}`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${!customerProvincia ? 'bg-gray-500' : isResidenteSardegna ? 'bg-green-600' : 'bg-amber-600'}`}>
+                          {!customerProvincia ? 'RESIDENZA ?' : isResidenteSardegna ? 'RESIDENTE SARDEGNA' : 'NON RESIDENTE'}
+                        </span>
+                        <span className="text-sm text-theme-text-secondary">
+                          {!customerProvincia
+                            ? 'Provincia non presente nella scheda cliente: completala nella scheda.'
+                            : `Dai dati del cliente${customerProvincia !== 'ALTRO' ? ` (provincia ${customerProvincia})` : ''}`}
                         </span>
                       </div>
                     )}
@@ -10016,6 +10045,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   I field name (guarantor_N_*) sono FROZEN per il PDF autofill
                   Adobe Acrobat — vedi tabella in fondo all'implementazione. */}
               {(() => {
+                // 17/09/2026 (direzione): i garanti 1-2-3 non stanno piu' nel modulo
+                // prenotazione. I dati gia' salvati restano (non si cancellano).
+                if (SEZIONE_GARANTI_NEL_MODULO !== true) return null
                 // Interruttori ON/OFF: sezione Garante spenta per questo business.
                 if (!sezioneForm('garante')) return null
                 // Italian suffix list — corrisponde al naming permanente Adobe Acrobat
@@ -10202,66 +10234,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 )
               })()}
 
-              {/* Residenza Cliente — come in Preventivi (Residente / Non
-                  Residente). Incide su TUTTO (prezzo, assicurazione,
-                  cauzioni), per questo sta in alto e non dentro la
-                  cauzione.
-                  17/09/2026 (direzione): la residenza la sa gia' il gestionale
-                  dai dati del cliente. Si mostra; i bottoni compaiono solo se
-                  l'indirizzo non basta o se si sceglie "Correggi". */}
-              <div className="p-3 sm:p-4 rounded-lg border border-theme-border">
-                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Residenza Cliente</label>
-                {(() => {
-                  const rilevata = !!customerProvincia
-                  const mostraBottoni = !rilevata || correggiResidenza || residencyOverride !== 'auto'
-                  return (
-                    <>
-                      {rilevata && (
-                        <div className={`px-3 py-2 rounded-lg flex items-center gap-2 border ${isResidenteSardegna ? 'bg-green-900/20 border-green-600/50' : 'bg-amber-900/20 border-amber-600/50'}`}>
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${isResidenteSardegna ? 'bg-green-600' : 'bg-amber-600'}`}>
-                            {isResidenteSardegna ? 'RESIDENTE SARDEGNA' : 'NON RESIDENTE'}
-                          </span>
-                          <span className="text-sm text-theme-text-secondary flex-1">
-                            {residencyOverride === 'auto'
-                              ? `Rilevata dai dati del cliente${customerProvincia !== 'ALTRO' ? ` (provincia ${customerProvincia})` : ''}`
-                              : 'Impostata a mano'}
-                          </span>
-                          {!mostraBottoni && (
-                            <button type="button" onClick={() => setCorreggiResidenza(true)} className="text-xs underline text-theme-text-muted hover:text-theme-text-primary">
-                              Correggi
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {!rilevata && (
-                        <p className="text-xs text-amber-400 mb-2">
-                          {formData.customer_id || newCustomerMode
-                            ? 'Provincia non trovata nei dati del cliente: scegli tu.'
-                            : 'Seleziona il cliente: la residenza si imposta da sola.'}
-                        </p>
-                      )}
-                      {mostraBottoni && (
-                        <div className={`flex gap-2 ${rilevata ? 'mt-2' : ''}`}>
-                          {([true, false] as const).map(val => (
-                            <button
-                              key={String(val)}
-                              type="button"
-                              onClick={() => setResidencyOverride(val ? 'residente' : 'non_residente')}
-                              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                                isResidenteSardegna === val
-                                  ? 'bg-dr7-gold text-white'
-                                  : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
-                              }`}
-                            >
-                              {val ? 'Residente Sardegna' : 'Non Residente'}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )
-                })()}
-              </div>
             </div>
 
             {/* Service Details */}
