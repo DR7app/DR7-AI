@@ -61,9 +61,6 @@ function eurToCents(eur: string | number): number {
 }
 
 /** Convert integer cents to EUR string with exactly 2 decimal places (no floating point) */
-/** 17/09/2026: sezione Garanti 1-2-3 tolta dal modulo prenotazione (direzione). */
-const SEZIONE_GARANTI_NEL_MODULO = false as boolean
-
 function centsToEurStr(cents: number): string {
   const rounded = Math.round(cents)
   const negative = rounded < 0
@@ -10069,9 +10066,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   I field name (guarantor_N_*) sono FROZEN per il PDF autofill
                   Adobe Acrobat — vedi tabella in fondo all'implementazione. */}
               {(() => {
-                // 17/09/2026 (direzione): i garanti 1-2-3 non stanno piu' nel modulo
-                // prenotazione. I dati gia' salvati restano (non si cancellano).
-                if (SEZIONE_GARANTI_NEL_MODULO !== true) return null
                 // Interruttori ON/OFF: sezione Garante spenta per questo business.
                 if (!sezioneForm('garante')) return null
                 // Italian suffix list — corrisponde al naming permanente Adobe Acrobat
@@ -10083,11 +10077,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 const renderGuarantorCard = (n: 1 | 2 | 3) => {
                   const fk = (suffix: GS) => `garante_${n}_${suffix}` as keyof typeof formData
                   const val = (suffix: GS) => String(formData[fk(suffix)] ?? '')
-                  const set = (suffix: GS, v: string) => setFormData(prev => ({ ...prev, [fk(suffix)]: v }))
-                  const upper = (suffix: GS, v: string, max?: number) => {
-                    const u = v.toUpperCase().slice(0, max ?? v.length)
-                    set(suffix, u)
-                  }
                   const removeGuarantor = () => {
                     // Rimuovi la card N: shifta le successive in giu' (N+1 -> N)
                     // cosi' i field names restano coerenti dopo il delete.
@@ -10119,16 +10108,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       return next
                     })
                   }
-                  // Lightweight client-side hints (no blocking save — direzione
-                  // ha imposto "additive only"; mostriamo solo segnali visivi).
-                  const cfRx = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/i
-                  const capRx = /^\d{5}$/
-                  const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-                  const phoneRx = /^[+()\d\s\-./]{6,}$/
-                  const cf = val('codice_fiscale'); const cfWarn = cf && !cfRx.test(cf)
-                  const cap = val('cap'); const capWarn = cap && !capRx.test(cap)
-                  const em = val('email'); const emWarn = em && !emailRx.test(em)
-                  const ph = val('telefono'); const phWarn = ph && !phoneRx.test(ph)
                   return (
                     <div key={`guarantor-card-${n}`} className="rounded-lg border border-theme-border bg-theme-bg-primary overflow-hidden">
                       {/* Header bar — dark title style (matches contract design) */}
@@ -10146,11 +10125,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       </div>
                       <div className="p-4 space-y-4">
                         {/* Cliente picker — auto-popola i 12 campi del garante
-                            leggendo da customers_extended. L'operatore puo' anche
-                            digitare a mano senza scegliere un cliente. */}
+                            leggendo da customers_extended.
+                            17/09/2026 (direzione): solo la ricerca, niente campi
+                            da compilare a mano; sotto un riepilogo del garante. */}
                         <div>
                           <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                            Seleziona da clienti <span className="text-theme-text-muted text-xs font-normal">(opzionale — popola i campi)</span>
+                            Cerca Cliente
                           </label>
                           <CustomerAutocomplete
                             customers={customersPerRicerca}
@@ -10189,49 +10169,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             required={false}
                           />
                         </div>
-                        {/* Row 1: Nome | CF | Sesso */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Input label="Nome e Cognome" value={val('nome_cognome')} onChange={(e) => set('nome_cognome', e.target.value)} />
-                          <Input label={`Codice Fiscale${cfWarn ? ' (formato non valido)' : ''}`} value={cf} onChange={(e) => upper('codice_fiscale', e.target.value, 16)} />
-                          <Select
-                            label="Sesso"
-                            value={val('sesso')}
-                            onChange={(e) => set('sesso', e.target.value)}
-                            options={[
-                              { value: '', label: 'Seleziona...' },
-                              { value: 'M', label: 'Maschio' },
-                              { value: 'F', label: 'Femmina' },
-                            ]}
-                          />
-                        </div>
-                        {/* Row 2: Indirizzo | CAP | Citta | Provincia */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {/* 28/08/2026: si scrive e cerca da solo; scegliendo
-                              un suggerimento CAP, citta' e provincia accanto si
-                              riempiono da soli. */}
-                          <Input label="Indirizzo" type="address" value={val('indirizzo')} onChange={(e) => set('indirizzo', e.target.value)}
-                            onAddressParts={(parti) => {
-                              if (parti.street) set('indirizzo', parti.street)
-                              if (parti.zip) set('cap', parti.zip)
-                              if (parti.city) set('citta', parti.city)
-                              const sigla = getProvinciaByCity(parti.city)
-                              if (sigla) set('provincia', sigla)
-                            }} />
-                          <Input label={`CAP${capWarn ? ' (5 cifre)' : ''}`} value={cap} onChange={(e) => set('cap', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} />
-                          <Input label="Città" value={val('citta')} onChange={(e) => set('citta', e.target.value)} />
-                          <Input label="Provincia" value={val('provincia')} onChange={(e) => upper('provincia', e.target.value, 2)} maxLength={2} />
-                        </div>
-                        {/* Row 3: Data | Citta Nascita | Prov Nascita */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Input label="Data di Nascita" type="date" value={val('data_nascita')} onChange={(e) => set('data_nascita', e.target.value)} />
-                          <Input label="Città di Nascita" value={val('citta_nascita')} onChange={(e) => set('citta_nascita', e.target.value)} />
-                          <Input label="Provincia di Nascita" value={val('provincia_nascita')} onChange={(e) => upper('provincia_nascita', e.target.value, 2)} maxLength={2} />
-                        </div>
-                        {/* Row 4: Telefono | Email */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input label={`Telefono${phWarn ? ' (formato non valido)' : ''}`} type="tel" value={ph} onChange={(e) => set('telefono', e.target.value)} />
-                          <Input label={`Email${emWarn ? ' (formato non valido)' : ''}`} type="email" value={em} onChange={(e) => set('email', e.target.value)} />
-                        </div>
+                        {val('nome_cognome') && (
+                          <div className="px-3 py-2 rounded-lg border border-theme-border bg-theme-bg-tertiary/40 text-sm text-theme-text-secondary space-y-0.5">
+                            <div className="font-semibold text-theme-text-primary">{val('nome_cognome')}</div>
+                            {[
+                              val('codice_fiscale') && `CF ${val('codice_fiscale')}`,
+                              val('data_nascita') && `nato/a il ${val('data_nascita').split('-').reverse().join('/')}${val('citta_nascita') ? ` a ${val('citta_nascita')}` : ''}`,
+                              [val('indirizzo'), val('cap'), val('citta'), val('provincia') && `(${val('provincia')})`].filter(Boolean).join(' '),
+                              [val('telefono'), val('email')].filter(Boolean).join(' · '),
+                            ].filter(Boolean).map((riga, i) => <div key={i}>{riga}</div>)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -10846,41 +10794,45 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 {/* 17/09/2026 (direzione): prima i pacchetti — KM Illimitati come
                     primo pacchetto — poi, sotto, il limite km. */}
                 <h4 className="text-sm font-semibold text-theme-text-secondary">PACCHETTI KM:</h4>
-                <div className={`flex items-center gap-2 p-3 rounded-lg border ${formData.unlimited_km ? 'border-blue-500 bg-blue-900/10' : 'border-theme-border'}`}>
-                  <input
-                    type="checkbox"
-                    id="unlimited_km"
-                    checked={formData.unlimited_km}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                      const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForCategory(selectedVeh, rentalConfig)
-                      setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
-                    }}
-                    className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
-                    KM Illimitati
-                    {(() => {
-                      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-                      if (selectedVehicle) {
-                        const tier = customerTier?.tier
-                        const price = getUnlimitedKmPriceRes(selectedVehicle, tier)
-                        // Diagnostic log — verifica quale prezzo stiamo leggendo da Centralina
-                        console.log('[ReservationsTab] KM Illimitati lookup', {
-                          vehicleName: selectedVehicle.display_name,
-                          category: selectedVehicle.category,
-                          customerTier: tier,
-                          priceReturned: price,
-                          rentalConfigUnlimitedExotic: rentalConfig?.unlimited_km?.exotic,
-                        })
-                        if (price === 0) return null // Urban: KM already unlimited
-                        return ` (+€${price}/giorno)`
-                      }
-                      return ''
-                    })()}
-                  </label>
-                </div>
+                {/* 17/09/2026 (direzione): KM Illimitati nella stessa forma dei
+                    pacchetti, con il +. Stessa logica della vecchia casella. */}
+                {(() => {
+                  const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+                  const prezzo = selectedVehicle ? getUnlimitedKmPriceRes(selectedVehicle, customerTier?.tier) : null
+                  const attivo = formData.unlimited_km
+                  const imposta = (checked: boolean) => {
+                    const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForCategory(selectedVehicle, rentalConfig)
+                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
+                  }
+                  return (
+                    <div
+                      id="unlimited_km"
+                      onClick={() => { if (!attivo) imposta(true) }}
+                      className={`p-3 rounded-md border transition-colors ${attivo ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted cursor-pointer'}`}
+                    >
+                      <div className="flex justify-between items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-theme-text-primary">Pacchetto KM Illimitati</div>
+                          {prezzo === 0 && <div className="text-xs text-theme-text-muted">Gia' inclusi per questa categoria</div>}
+                        </div>
+                        {attivo ? (
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={(e) => { e.stopPropagation(); imposta(false) }}
+                              className="w-7 h-7 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold">−</button>
+                            <span className="text-sm font-bold text-theme-text-primary min-w-[1.5rem] text-center">1</span>
+                            {prezzo != null && prezzo > 0 && <span className="text-sm font-bold text-dr7-gold ml-2">€{prezzo}/giorno</span>}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {prezzo != null && prezzo > 0 && <span className="text-sm font-bold text-dr7-gold">+€{prezzo}/giorno</span>}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); imposta(true) }}
+                              className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold">+</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* === PACCHETTI KM (2026-05-16) ===
                     Pacchetti extra acquistabili per la categoria del veicolo
