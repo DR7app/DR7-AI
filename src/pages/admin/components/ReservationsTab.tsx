@@ -1587,6 +1587,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   }, [depositOptionsForCurrentBooking, formData.deposit_option_id])
 
   const selectedDepositSurchargePerDay = useMemo(() => {
+    // 17/09/2026: la "Cauzione con veicolo" scelta dal menu accende
+    // include_cauzione_veicoli, che porta gia' la sua fee giornaliera nel
+    // totale (cauzioneVeicoliResolvedDaily). Contarla anche qui la raddoppiava.
+    if (selectedDepositOption && isVehicleDepositOpt(selectedDepositOption)) return 0
     const v = Number(selectedDepositOption?.surcharge_per_day)
     return Number.isFinite(v) && v > 0 ? v : 0
   }, [selectedDepositOption])
@@ -10804,7 +10808,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
             {/* 17/09/2026 (direzione): i km subito dopo il veicolo. */}
             <div className="md:col-span-2 mb-4 p-4 rounded-lg border border-theme-border">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Input
                     label="Sforo per KM (€)"
@@ -10843,41 +10847,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     )
                   })()}
                 </div>
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
-                  {/* Show computed KM included from config formula */}
-                  {formData.pickup_date && formData.return_date && !formData.unlimited_km && (() => {
-                    const pickup = new Date(formData.pickup_date)
-                    const ret = new Date(formData.return_date)
-                    const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
-                    const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                    const cat = selectedVeh?.category || '_global'
-                    const km = getKmIncluded(rentalConfig, days, cat)
-                    if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
-                    return (
-                      <div className="p-3 rounded-md border border-green-600/40 bg-green-900/10">
-                        <span className="text-green-400 font-bold text-sm">{km} km inclusi</span>
-                        <span className="text-theme-text-muted text-xs ml-2">({days} {days === 1 ? 'giorno' : 'giorni'})</span>
-                      </div>
-                    )
-                  })()}
-                  {/* 2026-05-28: rimosso preset hardcoded "100 Km / Giorno".
-                      L'admin ha gia':
-                      - "{km} km inclusi" sopra (auto-calcolato da Centralina)
-                      - "Limite KM Personale" input sotto (override manuale)
-                      - "KM Illimitati" checkbox (Illimitati)
-                      Il pacchetto a 100 km fisso non e' piu' un'opzione valida. */}
-                </div>
-
-                {/* Manual KM Input - Fallback if not using presets */}
-                <Input
-                  label="Limite KM Personale"
-                  type="number"
-                  value={formData.km_limit}
-                  onChange={(e) => { const v = e.target.value; kmLimitManualRef.current = true; setFormData(prev => ({ ...prev, km_limit: v })) }}
-                  placeholder="es. 150 (Lascia vuoto se Illimitati)"
-                  disabled={formData.unlimited_km}
-                />
+                {/* 17/09/2026 (direzione): prima i pacchetti — KM Illimitati come
+                    primo pacchetto — poi, sotto, il limite km. */}
+                <h4 className="text-sm font-semibold text-theme-text-secondary">PACCHETTI KM:</h4>
                 <div className={`flex items-center gap-2 p-3 rounded-lg border ${formData.unlimited_km ? 'border-blue-500 bg-blue-900/10' : 'border-theme-border'}`}>
                   <input
                     type="checkbox"
@@ -11012,6 +10984,41 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     </div>
                   )
                 })()}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
+                  {/* Show computed KM included from config formula */}
+                  {formData.pickup_date && formData.return_date && !formData.unlimited_km && (() => {
+                    const pickup = new Date(formData.pickup_date)
+                    const ret = new Date(formData.return_date)
+                    const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
+                    const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                    const cat = selectedVeh?.category || '_global'
+                    const km = getKmIncluded(rentalConfig, days, cat)
+                    if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
+                    return (
+                      <div className="p-3 rounded-md border border-green-600/40 bg-green-900/10">
+                        <span className="text-green-400 font-bold text-sm">{km} km inclusi</span>
+                        <span className="text-theme-text-muted text-xs ml-2">({days} {days === 1 ? 'giorno' : 'giorni'})</span>
+                      </div>
+                    )
+                  })()}
+                  {/* 2026-05-28: rimosso preset hardcoded "100 Km / Giorno".
+                      L'admin ha gia':
+                      - "{km} km inclusi" sopra (auto-calcolato da Centralina)
+                      - "Limite KM Personale" input sotto (override manuale)
+                      - "KM Illimitati" checkbox (Illimitati)
+                      Il pacchetto a 100 km fisso non e' piu' un'opzione valida. */}
+                </div>
+
+                {/* Manual KM Input - Fallback if not using presets */}
+                <Input
+                  label="Limite KM Personale"
+                  type="number"
+                  value={formData.km_limit}
+                  onChange={(e) => { const v = e.target.value; kmLimitManualRef.current = true; setFormData(prev => ({ ...prev, km_limit: v })) }}
+                  placeholder="es. 150 (Lascia vuoto se Illimitati)"
+                  disabled={formData.unlimited_km}
+                />
               </div>
             </div>
 
@@ -11116,7 +11123,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             {!isAltroBusiness && (
             <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
               <h4 className="text-theme-text-primary font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 17/09/2026 (direzione): una voce per riga, le opzioni cauzione sotto l'assicurazione. */}
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Assicurazione</label>
                   <select
@@ -11214,9 +11222,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     )
                   })()}
                 </div>
-                {!formData.cauzione_auto && (
+                {/* 17/09/2026 (direzione): il menu resta sempre visibile; la
+                    cauzione con veicolo si sceglie da qui (niente piu' caselle). */}
+                {(
                   <>
-                    <div className="md:col-span-2">
+                    <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                         Opzione Cauzione · {customerTier?.tier === 'TIER_1' ? 'Fascia B' : 'Fascia A'} · {isResidenteSardegna ? 'Residente' : 'Non residente'}
                       </label>
@@ -11235,8 +11245,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             const opt = depositOptionsForCurrentBooking.find(o => o.id === optId)
                             const amount = Number(opt?.amount)
                             const isNoDep = opt ? isNoDepositOpt(opt) : false
+                            // "Cauzione con veicolo": apre targa + proprietario.
+                            const isVeicolo = opt ? isVehicleDepositOpt(opt) : false
                             setFormData(prev => ({
                               ...prev,
+                              include_cauzione_veicoli: isVeicolo,
+                              cauzione_auto: isVeicolo,
+                              ...(!isVeicolo && prev.cauzione_auto && {
+                                cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
+                                cauzione_proprietario_tipo: 'guidatore' as const,
+                                garante_customer_id: '', garante_nome: '', garante_cognome: '', garante_codice_fiscale: '',
+                                garante_sesso: '', garante_indirizzo: '', garante_cap: '', garante_citta: '', garante_provincia: '',
+                                garante_birth_date: '', garante_birth_place: '', garante_birth_provincia: '', garante_phone: '', garante_email: '',
+                              }),
                               deposit_option_id: optId,
                               deposit: optId
                                 ? (Number.isFinite(amount) ? String(amount) : '0')
@@ -11265,7 +11286,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       )}
                       {selectedDepositOption && (
                         <p className="text-xs text-blue-400 mt-1">
-                          {isNoDepositOpt(selectedDepositOption)
+                          {isVehicleDepositOpt(selectedDepositOption)
+                            ? `Cauzione con veicolo${cauzioneVeicoliResolvedDaily > 0 ? ` · Supplemento €${cauzioneVeicoliResolvedDaily}/giorno aggiunto al totale` : ''} — inserisci la targa qui sotto`
+                            : isNoDepositOpt(selectedDepositOption)
                             ? 'Senza cauzione'
                             : `Importo: €${Number(selectedDepositOption.amount || 0).toLocaleString('it-IT')}`}
                           {selectedDepositSurchargePerDay > 0 && ` · Supplemento €${selectedDepositSurchargePerDay}/giorno aggiunto al totale`}
@@ -11318,84 +11341,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         <p className="text-xs text-amber-400 mt-1">No Cauzione richiede una Kasko attiva</p>
                       )}
                     </div>
-                    {/* 2026-05-27: Cauzione Veicoli opt-in. Stesso pattern di
-                        PreventiviTab — l'admin spunta, la fee giornaliera
-                        configurata in Centralina Pro entra nel totale, e il
-                        toggle Centralina Pro > Automazioni > Cauzione Veicoli
-                        decide se la fee viaggia col coefficiente o sta a
-                        listino. */}
-                    {/* 2026-05-30: "Cauzione Veicolo" e "Auto come Cauzione" sono
-                        la stessa cosa concettualmente — il cliente lascia il suo
-                        veicolo come cauzione. Spuntare uno apre anche l'altro
-                        (apre la sezione targa + dati garante). Sticchando uno
-                        si chiude anche l'altro. */}
-                    <label className="md:col-span-2 flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-                      <input
-                        type="checkbox"
-                        checked={!!formData.include_cauzione_veicoli}
-                        onChange={(e) => {
-                          const checked = e.target.checked
-                          setFormData(prev => ({
-                            ...prev,
-                            include_cauzione_veicoli: checked,
-                            // Sincronizza con "Auto come Cauzione": spuntando
-                            // questa, l'admin vede SUBITO i campi targa/garante
-                            // sotto. Stoglienzo, resetta anche i campi.
-                            cauzione_auto: checked,
-                            ...(!checked && {
-                              cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
-                              cauzione_proprietario_tipo: 'guidatore' as const,
-                              garante_customer_id: '', garante_nome: '', garante_cognome: '', garante_codice_fiscale: '',
-                              garante_sesso: '', garante_indirizzo: '', garante_cap: '', garante_citta: '', garante_provincia: '',
-                              garante_birth_date: '', garante_birth_place: '', garante_birth_provincia: '', garante_phone: '', garante_email: '',
-                            }),
-                          }))
-                        }}
-                        className="w-4 h-4 accent-dr7-gold"
-                        disabled={cauzioneVeicoliResolvedDaily <= 0}
-                      />
-                      <span className={`text-sm ${cauzioneVeicoliResolvedDaily > 0 ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
-                        Cauzione Veicolo {cauzioneVeicoliResolvedDaily > 0
-                          ? `(€${cauzioneVeicoliResolvedDaily}/giorno)`
-                          : '(non configurata in Centralina Pro per questa categoria)'}
-                      </span>
-                    </label>
                   </>
                 )}
               </div>
 
-              {/* Cauzione Auto Toggle */}
+              {/* Cauzione con veicolo: targa e proprietario. Si apre scegliendo
+                  "Cauzione con veicolo" nel menu Opzione Cauzione (17/09/2026). */}
               <div className="mt-4">
-                <div className="flex items-center mb-3">
-                  <input
-                    type="checkbox"
-                    id="cauzione_auto"
-                    checked={formData.cauzione_auto}
-                    onChange={(e) => {
-                      const checked = e.target.checked
-                      setFormData(prev => ({
-                        ...prev,
-                        cauzione_auto: checked,
-                        // 2026-05-30: sincronizza con "Cauzione Veicolo".
-                        // Sono lo stesso concetto: il cliente lascia il suo
-                        // veicolo come cauzione. Apri/chiudi entrambi insieme.
-                        include_cauzione_veicoli: checked,
-                        ...(!checked && {
-                          cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
-                          cauzione_proprietario_tipo: 'guidatore' as const,
-                          garante_customer_id: '', garante_nome: '', garante_cognome: '', garante_codice_fiscale: '',
-                          garante_sesso: '', garante_indirizzo: '', garante_cap: '', garante_citta: '', garante_provincia: '',
-                          garante_birth_date: '', garante_birth_place: '', garante_birth_provincia: '', garante_phone: '', garante_email: '',
-                        })
-                      }))
-                    }}
-                    className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
-                  />
-                  <label htmlFor="cauzione_auto" className="ml-2 text-sm font-medium text-theme-text-secondary">
-                    Auto come Cauzione
-                  </label>
-                </div>
-
                 {formData.cauzione_auto && (
                   <div className="space-y-4 animate-fadeIn">
                     {/* Targa Lookup */}
@@ -11603,6 +11555,34 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   </button>
                 </p>
               )}
+              {/* 17/09/2026 (direzione): Importo Pagato subito sotto Importo Totale. */}
+              <div>
+                <Input
+                  label="Importo Pagato (€)"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={formData.amount_paid}
+                  onChange={(e) => {
+                    // Simply update the amount_paid without auto-calculating payment_status
+                    // The user controls payment_status via the dropdown above
+                    const v = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      amount_paid: v
+                    }))
+                  }}
+                />
+                {/* 2026-08-03: il totale non riscrive piu' il pagato (bug: cancellava
+                    l'acconto). Se restano disallineati su "Pagato" lo si segnala —
+                    avviso, mai un blocco. */}
+                {formData.payment_status === 'paid'
+                  && eurToCents(formData.amount_paid || '0') !== eurToCents(formData.total_amount || '0') && (
+                  <p className="text-xs text-amber-400 mt-1">
+                    Stato "Pagato" ma importo pagato diverso dal totale — correggilo qui se serve (il totale non lo aggiorna piu' da solo).
+                  </p>
+                )}
+              </div>
               {/* Revenue Management — Prezzo Suggerito/Auto */}
               {(revenueSuggestion || revenueLoading) && (
                 <div className={`border rounded-lg p-3 space-y-2 ${
@@ -12003,33 +11983,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   { value: 'paid', label: 'Pagato' }
                 ]}
               />
-              <div>
-                <Input
-                  label="Importo Pagato (€)"
-                  type="number"
-                  step="0.01"
-                  required
-                  value={formData.amount_paid}
-                  onChange={(e) => {
-                    // Simply update the amount_paid without auto-calculating payment_status
-                    // The user controls payment_status via the dropdown above
-                    const v = e.target.value
-                    setFormData(prev => ({
-                      ...prev,
-                      amount_paid: v
-                    }))
-                  }}
-                />
-                {/* 2026-08-03: il totale non riscrive piu' il pagato (bug: cancellava
-                    l'acconto). Se restano disallineati su "Pagato" lo si segnala —
-                    avviso, mai un blocco. */}
-                {formData.payment_status === 'paid'
-                  && eurToCents(formData.amount_paid || '0') !== eurToCents(formData.total_amount || '0') && (
-                  <p className="text-xs text-amber-400 mt-1">
-                    Stato "Pagato" ma importo pagato diverso dal totale — correggilo qui se serve (il totale non lo aggiorna piu' da solo).
-                  </p>
-                )}
-              </div>
               <Input
                 label="Valuta"
                 value={formData.currency}
