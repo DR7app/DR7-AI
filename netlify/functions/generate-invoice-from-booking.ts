@@ -1650,6 +1650,9 @@ async function handleWalletPurchaseFattura(
             exempt_amount: exemptAmount,
             sdi_status: 'draft',
             note: notesMarker,
+            // 17/09/2026: stessa chiave della nota, unica a database — due
+            // callback insieme non emettono piu' due fatture.
+            fattura_dedup_key: notesMarker,
             updated_at: new Date().toISOString(),
         }
 
@@ -1659,6 +1662,10 @@ async function handleWalletPurchaseFattura(
             .select()
             .single()
 
+        if (insertError && (insertError as any).code === '23505') {
+            console.warn(`[Wallet Fattura] ${notesMarker} gia' in emissione da un'altra chiamata`)
+            return { statusCode: 200, body: JSON.stringify({ message: 'Fattura already exists', skipped: true }) }
+        }
         if (insertError || !invoice) {
             console.error('[Wallet Fattura] Insert failed:', insertError)
             return {
@@ -1873,6 +1880,9 @@ async function handleMembershipPurchaseFattura(
             exempt_amount: 0,
             sdi_status: 'draft',
             note: notesMarker,
+            // 17/09/2026: stessa chiave della nota, unica a database — due
+            // callback insieme non emettono piu' due fatture.
+            fattura_dedup_key: notesMarker,
             updated_at: new Date().toISOString(),
         }
 
@@ -1882,6 +1892,10 @@ async function handleMembershipPurchaseFattura(
             .select()
             .single()
 
+        if (insertError && (insertError as any).code === '23505') {
+            console.warn(`[Club Fattura] ${notesMarker} gia' in emissione da un'altra chiamata`)
+            return { statusCode: 200, body: JSON.stringify({ message: 'Fattura already exists', skipped: true }) }
+        }
         if (insertError || !invoice) {
             console.error('[Club Fattura] Insert failed:', insertError)
             return { statusCode: 500, body: JSON.stringify({ error: 'Failed to insert fattura', details: insertError?.message }) }
@@ -2066,6 +2080,9 @@ async function handlePrevenditaFattura(
             exempt_amount: 0,
             sdi_status: 'draft',
             note: notesMarker,
+            // 17/09/2026: stessa chiave della nota, unica a database — due
+            // callback insieme non emettono piu' due fatture.
+            fattura_dedup_key: notesMarker,
             updated_at: new Date().toISOString(),
         }
 
@@ -2075,6 +2092,10 @@ async function handlePrevenditaFattura(
             .select()
             .single()
 
+        if (insertError && (insertError as any).code === '23505') {
+            console.warn(`[Prevendita Fattura] ${notesMarker} gia' in emissione da un'altra chiamata`)
+            return { statusCode: 200, body: JSON.stringify({ message: 'Fattura already exists', skipped: true }) }
+        }
         if (insertError || !invoice) {
             console.error('[Prevendita Fattura] Insert failed:', insertError)
             return { statusCode: 500, body: JSON.stringify({ error: 'Failed to insert fattura', details: insertError?.message }) }
