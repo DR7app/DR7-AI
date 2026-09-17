@@ -784,6 +784,44 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // nell'email a direzione.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [overrideDetails, setOverrideDetails] = useState<any>(undefined)
+  // 17/09/2026: la richiesta OTP di "Cancella" (dall'elenco) mostrava i dati del
+  // MODULO, che a modulo chiuso sono quelli di partenza: "Contanti", totale 0,
+  // nessun cliente. Qui i dati veri della prenotazione da cancellare.
+  const [dettagliCancellazione, setDettagliCancellazione] = useState<Record<string, unknown> | null>(null)
+  function dettagliDaPrenotazione(b: Booking | undefined, motivo: string): Record<string, unknown> {
+    const quando = (iso?: string | null) => {
+      if (!iso) return ''
+      const d = new Date(iso)
+      return isNaN(d.getTime()) ? String(iso) : d.toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    }
+    const riga = (dst: Record<string, string>, k: string, v: unknown) => {
+      const t = v === null || v === undefined ? '' : String(v).trim()
+      if (t) dst[k] = t
+    }
+    const gate: Record<string, string> = {}
+    const customer: Record<string, string> = {}
+    const operation: Record<string, string> = {}
+    const meta: Record<string, string> = {}
+    riga(gate, 'Motivo richiesta', motivo)
+    if (b) {
+      riga(customer, 'Nome', b.customer_name)
+      riga(customer, 'Email', b.customer_email)
+      riga(customer, 'Telefono', b.customer_phone)
+      riga(operation, 'Tipo operazione', 'Cancellazione prenotazione')
+      riga(operation, 'Riferimento', `DR7-${b.id.slice(0, 8).toUpperCase()}`)
+      riga(operation, 'Veicolo', `${b.vehicle_name || ''}${b.vehicle_plate ? ` (${b.vehicle_plate})` : ''}`)
+      riga(operation, 'Ritiro', quando(b.pickup_date))
+      riga(operation, 'Riconsegna', quando(b.dropoff_date))
+      if (Number(b.price_total) > 0) riga(operation, 'Importo totale', `€${centsToEurStr(Number(b.price_total))}`)
+      riga(operation, 'Metodo pagamento', b.payment_method)
+      riga(operation, 'Stato pagamento', b.payment_status)
+      riga(operation, 'Stato prenotazione', b.status)
+    }
+    const operatorEmail = typeof window !== 'undefined' ? (sessionStorage.getItem('admin-email') || null) : null
+    riga(meta, 'Operatore', operatorEmail)
+    riga(meta, 'Data richiesta', new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }))
+    return { gate, customer, operation, meta }
+  }
 
   // Helper: costruisce il payload "Dettaglio richiesta" che finisce nella
   // mail OTP a direzione, in forma STRUTTURATA (gate/customer/operation/meta).
@@ -1288,7 +1326,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [residencyOverride, setResidencyOverride] = useState<ResidencyOverride>('auto')
   // Reset override quando cambia cliente — il nuovo cliente puo' avere
   // residenza diversa, non vogliamo trascinare l'override del precedente.
-  useEffect(() => { setResidencyOverride('auto') }, [formData.customer_id])
+  // Il link "Correggi" mostra i bottoni anche quando la residenza e' rilevata.
+  const [correggiResidenza, setCorreggiResidenza] = useState(false)
+  useEffect(() => { setResidencyOverride('auto'); setCorreggiResidenza(false) }, [formData.customer_id])
   const isResidenteSardegnaAuto = customerProvincia ? SARDEGNA_PROVINCES.has(customerProvincia) : true
   const isResidenteSardegna = residencyOverride === 'auto'
     ? isResidenteSardegnaAuto
@@ -1998,11 +2038,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             second_driver_birth_provincia: fullCustomer.provincia_nascita || '',
             second_driver_phone: fullCustomer.telefono || selectedCustomer.phone || '',
             second_driver_email: fullCustomer.email || selectedCustomer.email || '',
-            second_driver_license_type: fullCustomer.categoria_patente || '',
-            second_driver_license_number: fullCustomer.numero_patente || selectedCustomer.driver_license_number || '',
-            second_driver_license_issued_by: fullCustomer.ente_rilascio || '',
-            second_driver_license_issue_date: fullCustomer.data_rilascio || '',
-            second_driver_license_expiry: fullCustomer.data_scadenza || ''
+            // 17/09/2026: le colonne vere della scheda sono tipo_patente,
+            // emessa_da, data_rilascio_patente, scadenza_patente (spesso solo in
+            // metadata.patente). Si leggevano nomi inesistenti: la data di
+            // rilascio restava vuota e la fascia del 2° guidatore non usciva.
+            second_driver_license_type: fullCustomer.tipo_patente || fullCustomer.categoria_patente || fullCustomer.metadata?.patente?.tipo || '',
+            second_driver_license_number: fullCustomer.numero_patente || fullCustomer.metadata?.patente?.numero || selectedCustomer.driver_license_number || '',
+            second_driver_license_issued_by: fullCustomer.emessa_da || fullCustomer.patente_rilasciata_da || fullCustomer.metadata?.patente?.emessa_da || fullCustomer.ente_rilascio || '',
+            second_driver_license_issue_date: fullCustomer.data_rilascio_patente || fullCustomer.metadata?.patente?.rilascio || fullCustomer.data_rilascio || '',
+            second_driver_license_expiry: fullCustomer.scadenza_patente || fullCustomer.metadata?.patente?.scadenza || fullCustomer.data_scadenza || ''
           }))
         }
 
@@ -4225,6 +4269,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // Test bookings (veicolo TEST*) bypassano sempre l'OTP.
     const bookingToDelete = bookings.find(b => b.id === bookingId)
     if (!isTestBooking(bookingToDelete) && !hasOverride('booking.delete')) {
+      setDettagliCancellazione(dettagliDaPrenotazione(bookingToDelete, 'Eliminare una prenotazione richiede autorizzazione direzionale.'))
       const bypassed = requestOverride('booking.delete', 'Eliminare una prenotazione richiede autorizzazione direzionale.')
       if (!bypassed && !hasOverride('booking.delete')) {
         // OTP modal aperto: memorizza la cancellazione così, dopo l'approvazione,
@@ -7496,18 +7541,23 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       if (isCreditWallet(formData.payment_method) && insertedBooking?.id) {
         try {
           const movimento = await leggiMovimentoWallet(insertedBooking.id)
-          if (movimento.addebitato > 0) {
+          // 17/09/2026: `movimento.saldo` e' il solo saldo LIBERO (balance_after
+          // del registro). Con credito vincolato il messaggio diceva "Saldo del
+          // cliente: € 0,00" a chi aveva ancora 171 EUR. Si mostra il totale
+          // spendibile, libero + vincolato, come nel modulo.
+          if (movimento.addebitato !== 0) {
+            const saldoDopo = await leggiSaldoWallet(formData.customer_id, serviceType)
+            setSaldoWallet(saldoDopo)
+            const saldoTot = saldoDopo.saldo ?? movimento.saldo ?? 0
+            const dettaglio = saldoDopo.vincolato > 0
+              ? ` (${formattaEuro(saldoDopo.saldoLibero)} libero + ${formattaEuro(saldoDopo.vincolato)} vincolato)`
+              : ''
             toast.success(
-              `Credit Wallet: addebitati ${formattaEuro(movimento.addebitato)}. Saldo del cliente: ${formattaEuro(movimento.saldo ?? 0)}.`,
+              movimento.addebitato > 0
+                ? `Credit Wallet: addebitati ${formattaEuro(movimento.addebitato)}. Saldo del cliente: ${formattaEuro(saldoTot)}${dettaglio}.`
+                : `Credit Wallet: restituiti ${formattaEuro(Math.abs(movimento.addebitato))}. Saldo del cliente: ${formattaEuro(saldoTot)}${dettaglio}.`,
               { duration: 6000 },
             )
-            leggiSaldoWallet(formData.customer_id, serviceType).then(setSaldoWallet)
-          } else if (movimento.addebitato < 0) {
-            toast.success(
-              `Credit Wallet: restituiti ${formattaEuro(Math.abs(movimento.addebitato))}. Saldo del cliente: ${formattaEuro(movimento.saldo ?? 0)}.`,
-              { duration: 6000 },
-            )
-            leggiSaldoWallet(formData.customer_id, serviceType).then(setSaldoWallet)
           } else if (['paid', 'succeeded', 'completed', 'partial'].includes((formData.payment_status || '').toLowerCase())) {
             // Nessun movimento a registro. Due cause diverse, e dirne una per
             // l'altra manda l'operatore a cercare un problema che non c'e':
@@ -9293,7 +9343,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             // gate driver, gate slot) usiamo quelli; altrimenti
             // costruiamo al volo le righe base dallo stato corrente.
             limitationState.isOpen
-              ? (overrideDetails && overrideDetails.length > 0
+              ? (limitationState.limitationCode === 'booking.delete' && dettagliCancellazione
+                ? dettagliCancellazione
+                : overrideDetails && overrideDetails.length > 0
                   ? overrideDetails
                   : buildOverrideDetailsBase([
                       { label: 'Motivo richiesta', value: limitationState.limitationMessage || '' },
@@ -9733,6 +9785,33 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
                 {formData.has_second_driver && (
                   <div className="space-y-4 animate-fadeIn">
+                    {/* 17/09/2026 (direzione): fascia del 2° guidatore, da sola,
+                        dalla sua data di nascita e di rilascio patente. */}
+                    {(() => {
+                      const nascita = formData.second_driver_birth_date
+                      const rilascio = formData.second_driver_license_issue_date
+                      if (!nascita || !rilascio) {
+                        return (formData.second_driver_id || newSecondDriverMode) ? (
+                          <p className="text-xs text-theme-text-muted">
+                            Fascia 2° guidatore: servono data di nascita e data di rilascio patente.
+                          </p>
+                        ) : null
+                      }
+                      const t = classifyDriverTier(calculateAge(nascita), calculateLicenseYears(rilascio))
+                      const colore = t.tier === 'TIER_2'
+                        ? 'bg-green-900/20 border-green-600/50'
+                        : t.tier === 'TIER_1' ? 'bg-amber-900/20 border-amber-600/50' : 'bg-red-900/20 border-red-600/50'
+                      const etichetta = t.tier === 'TIER_2' ? 'FASCIA A' : t.tier === 'TIER_1' ? 'FASCIA B' : 'NON IDONEO'
+                      const badge = t.tier === 'TIER_2' ? 'bg-green-600' : t.tier === 'TIER_1' ? 'bg-amber-600' : 'bg-red-600'
+                      return (
+                        <div className={`px-3 py-2 rounded-lg flex items-center gap-2 border ${colore}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${badge}`}>{etichetta}</span>
+                          <span className="text-sm text-theme-text-secondary">
+                            2° guidatore — {t.reason} — Età: {t.driverAge}, Patente: {t.licenseYears} anni
+                          </span>
+                        </div>
+                      )
+                    })()}
                     {/* Toggle between Select Customer and New Driver */}
                     <div className="flex items-center gap-4 mb-4">
                       <button
@@ -10122,26 +10201,62 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               {/* Residenza Cliente — come in Preventivi (Residente / Non
                   Residente). Incide su TUTTO (prezzo, assicurazione,
                   cauzioni), per questo sta in alto e non dentro la
-                  cauzione. Il bottone attivo riflette la residenza
-                  auto-rilevata dalla provincia finché l'admin non sceglie. */}
+                  cauzione.
+                  17/09/2026 (direzione): la residenza la sa gia' il gestionale
+                  dai dati del cliente. Si mostra; i bottoni compaiono solo se
+                  l'indirizzo non basta o se si sceglie "Correggi". */}
               <div className="p-3 sm:p-4 rounded-lg border border-theme-border">
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Residenza Cliente</label>
-                <div className="flex gap-2">
-                  {([true, false] as const).map(val => (
-                    <button
-                      key={String(val)}
-                      type="button"
-                      onClick={() => setResidencyOverride(val ? 'residente' : 'non_residente')}
-                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                        isResidenteSardegna === val
-                          ? 'bg-dr7-gold text-white'
-                          : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
-                      }`}
-                    >
-                      {val ? 'Residente Sardegna' : 'Non Residente'}
-                    </button>
-                  ))}
-                </div>
+                {(() => {
+                  const rilevata = !!customerProvincia
+                  const mostraBottoni = !rilevata || correggiResidenza || residencyOverride !== 'auto'
+                  return (
+                    <>
+                      {rilevata && (
+                        <div className={`px-3 py-2 rounded-lg flex items-center gap-2 border ${isResidenteSardegna ? 'bg-green-900/20 border-green-600/50' : 'bg-amber-900/20 border-amber-600/50'}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${isResidenteSardegna ? 'bg-green-600' : 'bg-amber-600'}`}>
+                            {isResidenteSardegna ? 'RESIDENTE SARDEGNA' : 'NON RESIDENTE'}
+                          </span>
+                          <span className="text-sm text-theme-text-secondary flex-1">
+                            {residencyOverride === 'auto'
+                              ? `Rilevata dai dati del cliente${customerProvincia !== 'ALTRO' ? ` (provincia ${customerProvincia})` : ''}`
+                              : 'Impostata a mano'}
+                          </span>
+                          {!mostraBottoni && (
+                            <button type="button" onClick={() => setCorreggiResidenza(true)} className="text-xs underline text-theme-text-muted hover:text-theme-text-primary">
+                              Correggi
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {!rilevata && (
+                        <p className="text-xs text-amber-400 mb-2">
+                          {formData.customer_id || newCustomerMode
+                            ? 'Provincia non trovata nei dati del cliente: scegli tu.'
+                            : 'Seleziona il cliente: la residenza si imposta da sola.'}
+                        </p>
+                      )}
+                      {mostraBottoni && (
+                        <div className={`flex gap-2 ${rilevata ? 'mt-2' : ''}`}>
+                          {([true, false] as const).map(val => (
+                            <button
+                              key={String(val)}
+                              type="button"
+                              onClick={() => setResidencyOverride(val ? 'residente' : 'non_residente')}
+                              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                                isResidenteSardegna === val
+                                  ? 'bg-dr7-gold text-white'
+                                  : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                              }`}
+                            >
+                              {val ? 'Residente Sardegna' : 'Non Residente'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             </div>
 

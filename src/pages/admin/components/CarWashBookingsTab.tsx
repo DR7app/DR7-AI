@@ -2391,8 +2391,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       try {
         const movimento = await leggiMovimentoWallet(data.id)
         if (movimento.addebitato > 0) {
+          // 17/09/2026: saldo spendibile (libero + vincolato), non il solo
+          // libero del registro, che con credito vincolato diceva € 0,00.
+          const saldoDopo = await leggiSaldoWallet(formData.customer_id, 'car_wash')
           toast.success(
-            `Credit Wallet: addebitati ${formattaEuro(movimento.addebitato)}. Saldo del cliente: ${formattaEuro(movimento.saldo ?? 0)}.`,
+            `Credit Wallet: addebitati ${formattaEuro(movimento.addebitato)}. Saldo del cliente: ${formattaEuro(saldoDopo.saldo ?? movimento.saldo ?? 0)}.`,
             { duration: 6000 },
           )
         } else if (['paid', 'succeeded', 'completed', 'partial'].includes((formData.payment_status || '').toLowerCase())) {
