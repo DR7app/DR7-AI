@@ -9,16 +9,33 @@ import MissingFieldsModal from './MissingFieldsModal'
 // detta all'operatore. Se la scheda non ha un'email si apre "Dati mancanti":
 // l'email inserita finisce nella scheda cliente e il codice parte subito dopo.
 
+export interface ClienteWallet {
+  /** id della scheda (customers_extended) se la schermata lo conosce */
+  customerId?: string | null
+  /** account sito del cliente (bookings.user_id) */
+  userId?: string | null
+  email?: string | null
+}
+
 interface Props {
   isOpen: boolean
-  customerId: string
+  /** Scheda cliente. In alternativa `cliente` con account sito o email. */
+  customerId?: string | null
+  cliente?: ClienteWallet
   customerName?: string
   importo: number
   draftSessionId: string
-  onAutorizzato: (overrideId: string) => void
+  onAutorizzato: (overrideId: string, customerId: string) => void
   onCancel: () => void
   /** Chiamata dopo che l'email e' stata salvata nella scheda cliente. */
   onEmailSalvata?: () => void
+}
+
+export interface AutorizzazioneWallet {
+  overrideId: string
+  /** id della scheda cliente risolto dal server */
+  customerId: string
+  importo: number
 }
 
 function euro(n: number): string {
@@ -27,7 +44,8 @@ function euro(n: number): string {
 
 export default function AutorizzazioneWalletClienteModal({
   isOpen,
-  customerId,
+  customerId: customerIdProp,
+  cliente,
   customerName,
   importo,
   draftSessionId,
@@ -36,6 +54,8 @@ export default function AutorizzazioneWalletClienteModal({
   onEmailSalvata,
 }: Props) {
   const [overrideId, setOverrideId] = useState<string | null>(null)
+  // Id della scheda: quello passato, oppure quello trovato dal server.
+  const [customerId, setCustomerId] = useState<string>(customerIdProp || cliente?.customerId || '')
   const [emailInviata, setEmailInviata] = useState('')
   const [codice, setCodice] = useState('')
   const [invioInCorso, setInvioInCorso] = useState(false)
@@ -51,14 +71,16 @@ export default function AutorizzazioneWalletClienteModal({
     setCodice('')
     setErrore('')
     setSchedaPerEmail(null)
-  }, [isOpen, customerId, importo])
+    setCustomerId(customerIdProp || cliente?.customerId || '')
+  }, [isOpen, customerIdProp, cliente?.customerId, cliente?.userId, cliente?.email, importo])
 
   if (!isOpen) return null
 
-  const apriDatiMancanti = async () => {
-    let scheda: Record<string, unknown> = { id: customerId }
+  const apriDatiMancanti = async (idScheda: string) => {
+    setCustomerId(idScheda)
+    let scheda: Record<string, unknown> = { id: idScheda }
     try {
-      const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
+      const resp = await authFetch(`/.netlify/functions/get-customer?id=${idScheda}`)
       if (resp.ok) scheda = (await resp.json()).customer || scheda
     } catch { /* si apre lo stesso con l'id */ }
     setSchedaPerEmail(scheda)
@@ -72,18 +94,27 @@ export default function AutorizzazioneWalletClienteModal({
       const res = await authFetch('/.netlify/functions/wallet-autorizzazione-cliente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', customerId, importo, draftSessionId }),
+        body: JSON.stringify({
+          action: 'send',
+          customerId: customerId || undefined,
+          userId: cliente?.userId || undefined,
+          email: cliente?.email || undefined,
+          importo,
+          draftSessionId,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 422 && data?.emailMancante) {
         toast('Il cliente non ha un\'email: inseriscila per inviare il codice', { duration: 5000 })
-        await apriDatiMancanti()
+        if (!data.customerId) throw new Error('Scheda cliente non trovata')
+        await apriDatiMancanti(data.customerId)
         return
       }
       if (!res.ok || !data?.overrideId) {
         throw new Error(data?.error || `HTTP ${res.status}`)
       }
       setOverrideId(data.overrideId)
+      if (data.customerId) setCustomerId(data.customerId)
       setEmailInviata(data.email || '')
       setCodice('')
       toast.success(`Codice inviato a ${data.email || 'cliente'}`)
@@ -111,7 +142,7 @@ export default function AutorizzazioneWalletClienteModal({
         throw new Error(data?.error || `HTTP ${res.status}`)
       }
       toast.success('Autorizzazione del cliente confermata')
-      onAutorizzato(overrideId)
+      onAutorizzato(overrideId, customerId)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setErrore(msg)

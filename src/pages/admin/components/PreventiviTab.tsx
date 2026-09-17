@@ -3578,6 +3578,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     confirm_booking: boolean
     second_driver?: SecondoGuidatoreArgs | null
     guarantors?: GaranteArgs[]
+    // 17/09/2026: autorizzazione del cliente al prelievo Credit Wallet,
+    // gia' nel formato di booking_details (vuota se il metodo non e' il wallet).
+    wallet_booking_details?: Record<string, unknown>
   }) {
     const { preventivo, customer_id, payment_method, payment_status, amount_paid_eur, confirm_booking } = args
     const secondoGuidatore = args.second_driver || null
@@ -3688,6 +3691,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       customer_email: customerEmail,
       customer_phone: customerPhone,
       booking_details: {
+        ...(args.wallet_booking_details || {}),
         from_preventivo: p.id,
         source: 'admin_preventivo_accept',
         // Mezzo del catalogo: il calendario e i report lo cercano qui.

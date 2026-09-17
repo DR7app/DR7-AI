@@ -21,6 +21,7 @@ import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet, perBookingDetails } from '../../../hooks/useAutorizzazioneWallet'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -139,6 +140,9 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   // fallback su `main`: prima si leggeva sempre Terra, quindi i metodi
   // configurati sul Mare venivano salvati e mai mostrati (roadmap #16).
   const paymentMethods = usePaymentMethods('boat_rental')
+  // 17/09/2026 (direzione): Credit Wallet = codice di autorizzazione via email
+  // al cliente, appena si sceglie il metodo e di nuovo prima di salvare.
+  const autWallet = useAutorizzazioneWallet({ onEmailSalvata: () => { loadCustomers() } })
   const isEdit = !!booking
 
   /* ── Sezioni attive (Interruttori ON/OFF) ── */
@@ -444,6 +448,22 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     return () => { cancelled = true }
   }, [assetName, pickupDate, pickupTime, dropoffDate, dropoffTime, rentalDays, booking?.id])
 
+  // 17/09/2026: dati per la richiesta di autorizzazione Credit Wallet.
+  function richiestaWallet() {
+    const cliente = customers.find(c => c.id === customerId)
+    return {
+      cliente: {
+        customerId: customerId || null,
+        userId: cliente?.user_id || booking?.user_id || null,
+        email: customerEmail.trim() || cliente?.email || null,
+      },
+      customerName: customerName.trim() || cliente?.full_name,
+      totaleEur: (eurToCents(priceFinal) || computedCents) / 100,
+      bookingId: booking?.id || null,
+      bookingDetails: booking?.booking_details || null,
+    }
+  }
+
   /* ── Salvataggio ── */
   async function save() {
     if (!customerName.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
@@ -459,11 +479,16 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     }
     setSaving(true); setFormError('')
 
+    // 17/09/2026 (direzione): senza il codice del cliente il Credit Wallet non si usa.
+    const esitoWallet = await autWallet.chiediSeWallet(payMethod, richiestaWallet())
+    if (esitoWallet === null) { setSaving(false); return }
+
     // Preserva le chiavi già presenti (es. tour_departure_id) e riscrive le nostre.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const d: Record<string, any> = { ...origDetails.current }
     d.rental_days = rentalDays
     d.customer_email = customerEmail.trim() || null
+    Object.assign(d, perBookingDetails(esitoWallet))
     if (on('conduzione')) d.con_skipper = conSkipper
     d.manually_confirmed = conferma
     if (on('luoghi')) {
@@ -1241,6 +1266,8 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                   <select className={INPUT_CLS} value={payMethod} onChange={e => {
                     const m = e.target.value
                     setPayMethod(m)
+                    // 17/09/2026 (direzione): Credit Wallet -> richiesta codice al cliente subito.
+                    autWallet.chiediSeWallet(m, richiestaWallet())
                     // Nexi Pay by Link = pagamento in sospeso -> Da Saldare.
                     // Qualsiasi altro metodo scelto = incassato -> Pagato.
                     if (!m) return
@@ -1279,6 +1306,8 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
           loadCustomers(clientId)
         }}
       />
+      {/* 17/09/2026: il click dentro il popup wallet non deve chiudere la modale. */}
+      <div onClick={e => e.stopPropagation()}>{autWallet.modale}</div>
     </div>
   )
 }

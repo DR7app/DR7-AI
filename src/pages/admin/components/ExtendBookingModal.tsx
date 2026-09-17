@@ -26,6 +26,8 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import TimeSelect from './TimeSelect'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet, perBookingDetails, type RichiestaWallet } from '../../../hooks/useAutorizzazioneWallet'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { INPUT_CLS, eurToCents, centsToEur, toRomeIso } from './noleggioFormBits'
 import type { BookingLike } from './useBookingRowActions'
 
@@ -61,6 +63,29 @@ export default function ExtendBookingModal({ booking, serviceType, assetLabel, o
     const totaleAttuale = Number(booking.price_total || 0)
     const nuovoTotale = totaleAttuale + importoCents
 
+    // 17/09/2026 (direzione): Credit Wallet = codice del cliente via email.
+    // Cosa preleva davvero il database: se la PRENOTAZIONE e' in wallet, alzando
+    // price_total il trigger preleva la differenza (si autorizza il nuovo
+    // totale, il gia' prelevato viene scalato dal hook). Se la prenotazione non
+    // e' in wallet e solo l'estensione lo e', il trigger non preleva nulla:
+    // si autorizza comunque il supplemento, e l'autorizzazione resta nella
+    // voce di extension_history, non in cima a booking_details.
+    const autWallet = useAutorizzazioneWallet()
+    const prenotazioneInWallet = isCreditWallet(booking.payment_method)
+    const richiestaWallet = (metodoScelto: string, centsAggiuntivi: number): { metodo: string | null | undefined; r: RichiestaWallet } => {
+        const r: RichiestaWallet = {
+            cliente: {
+                userId: (booking as { user_id?: string | null }).user_id || null,
+                email: booking.customer_email || booking.booking_details?.customer?.email || null,
+            },
+            customerName: booking.customer_name || undefined,
+            totaleEur: 0,
+        }
+        return prenotazioneInWallet
+            ? { metodo: booking.payment_method, r: { ...r, totaleEur: (totaleAttuale + centsAggiuntivi) / 100, bookingId: booking.id, bookingDetails: booking.booking_details as RichiestaWallet['bookingDetails'] } }
+            : { metodo: metodoScelto, r: { ...r, totaleEur: centsAggiuntivi / 100 } }
+    }
+
     async function salva() {
         setErrore('')
         if (!data || !ora) { setErrore('Indica data e ora della nuova riconsegna.'); return }
@@ -74,6 +99,11 @@ export default function ExtendBookingModal({ booking, serviceType, assetLabel, o
             setErrore('Indica con quale metodo è stata pagata l\'estensione.')
             return
         }
+
+        // 17/09/2026: codice del cliente prima di scrivere (null = annullato).
+        const rw = richiestaWallet(metodo, importoCents)
+        const esitoWallet = importoCents > 0 ? await autWallet.chiediSeWallet(rw.metodo, rw.r) : false
+        if (esitoWallet === null) return
 
         setSalvando(true)
         try {
@@ -91,8 +121,10 @@ export default function ExtendBookingModal({ booking, serviceType, assetLabel, o
                         payment_status: statoPagamento,
                         payment_method: metodo || undefined,
                         notes: note.trim() || undefined,
+                        ...(!prenotazioneInWallet ? perBookingDetails(esitoWallet) : {}),
                     },
                 ],
+                ...(prenotazioneInWallet ? perBookingDetails(esitoWallet) : {}),
             }
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -197,7 +229,15 @@ export default function ExtendBookingModal({ booking, serviceType, assetLabel, o
                         </div>
                         <div>
                             <label className="text-xs text-theme-text-muted">Metodo di pagamento</label>
-                            <select className={INPUT_CLS} value={metodo} onChange={e => setMetodo(e.target.value)} disabled={statoPagamento !== 'paid'}>
+                            <select className={INPUT_CLS} value={metodo} onChange={e => {
+                                const v = e.target.value
+                                setMetodo(v)
+                                // 17/09/2026: scegliendo Credit Wallet parte subito la richiesta.
+                                if (isCreditWallet(v) && importoCents > 0) {
+                                    const rw = richiestaWallet(v, importoCents)
+                                    autWallet.chiediSeWallet(rw.metodo, rw.r)
+                                }
+                            }} disabled={statoPagamento !== 'paid'}>
                                 <option value="">— seleziona —</option>
                                 {paymentMethods.map(m => <option key={m.key} value={m.label}>{m.label}</option>)}
                             </select>
@@ -211,6 +251,8 @@ export default function ExtendBookingModal({ booking, serviceType, assetLabel, o
 
                     {errore && <p className="text-xs text-red-400 font-semibold">{errore}</p>}
                 </div>
+
+                {autWallet.modale}
 
                 <div className="px-5 py-4 border-t border-theme-border flex justify-end gap-2">
                     <button onClick={onClose} disabled={salvando} className="px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover">

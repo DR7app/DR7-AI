@@ -6,6 +6,8 @@ import Button from './Button'
 import Select from './Select'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet, perBookingDetails } from '../../../hooks/useAutorizzazioneWallet'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 
 /** Convert EUR to integer cents using string parsing (no floating point) */
 function eurToCents(eur: number): number {
@@ -35,10 +37,26 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
   const [converting, setConverting] = useState(false)
 
   const selectedCustomer = customers.find(c => c.id === customerId)
+  // 17/09/2026 (direzione): Credit Wallet = codice di autorizzazione via email
+  // al cliente, appena si sceglie il metodo e di nuovo prima di creare la
+  // prenotazione se manca.
+  const autWallet = useAutorizzazioneWallet()
+  const richiestaWallet = (idCliente: string) => {
+    const c = customers.find(x => x.id === idCliente)
+    return {
+      cliente: { customerId: idCliente || null, email: c?.email || null },
+      customerName: c?.full_name,
+      totaleEur: Number(preventivo.total_amount) || 0,
+    }
+  }
 
   const handleConvert = async () => {
     if (!customerId) { toast.error('Seleziona un cliente per convertire'); return }
     if (!selectedCustomer) return
+
+    // 17/09/2026: senza autorizzazione del cliente niente prelievo dal wallet.
+    const esitoWallet = await autWallet.chiediSeWallet(paymentMethod, richiestaWallet(customerId))
+    if (esitoWallet === null) return
 
     setConverting(true)
     try {
@@ -113,6 +131,7 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
           pickup_enabled: preventivo.pickup_enabled,
           pickup_address: preventivo.pickup_enabled ? { street: preventivo.pickup_street || '', city: preventivo.pickup_city || '', zip: preventivo.pickup_zip || '', province: preventivo.pickup_province || '', notes: preventivo.pickup_notes || '' } : null,
           pickup_fee: eurToCents(preventivo.pickup_fee || 0),
+          ...perBookingDetails(esitoWallet),
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -209,7 +228,12 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
             label="Metodo di Pagamento"
             required
             value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
+            onChange={(e) => {
+              const metodo = e.target.value
+              setPaymentMethod(metodo)
+              // 17/09/2026: scelto il Credit Wallet parte subito la richiesta al cliente.
+              if (isCreditWallet(metodo) && customerId) autWallet.chiediSeWallet(metodo, richiestaWallet(customerId))
+            }}
             options={PAYMENT_METHODS}
           />
         </div>
@@ -221,6 +245,7 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
           <Button variant="secondary" onClick={onClose}>Annulla</Button>
         </div>
       </div>
+      {autWallet.modale}
     </div>
   )
 }

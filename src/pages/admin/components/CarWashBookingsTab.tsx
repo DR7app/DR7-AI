@@ -10,6 +10,7 @@ import { LeadPicker } from './LeadPicker'
 import NewClientModal from './NewClientModal'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useAutorizzazioneWallet } from '../../../hooks/useAutorizzazioneWallet'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -424,6 +425,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Lettura del Credit Wallet: solo quando il metodo scelto e' il wallet e
   // c'e' un cliente selezionato. Lo stato vive accanto all'hook override.
   const metodoEWallet = isCreditWallet(formData.payment_method)
+
+  // 17/09/2026 (direzione): col Credit Wallet il prelievo lo autorizza il
+  // cliente con un codice via email. La richiesta parte appena si sceglie il
+  // metodo (anche "Da saldare") e di nuovo al salvataggio se manca.
+  // Hook condiviso con Prenotazioni: useAutorizzazioneWallet.
+  const autWallet = useAutorizzazioneWallet({ onEmailSalvata: () => { loadData() } })
   useEffect(() => {
     let annullato = false
     if (!metodoEWallet || !formData.customer_id) {
@@ -2162,6 +2169,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
 
+    // 17/09/2026 (direzione): autorizzazione del cliente al prelievo wallet.
+    // Senza codice la prenotazione non si salva.
+    let esitoWalletCrea: Awaited<ReturnType<typeof autWallet.chiediSeWallet>> = false
+    if (!currentVehicleIsTest && isCreditWallet(formData.payment_method)) {
+      const clienteWallet = customers.find(c => c.id === formData.customer_id)
+      esitoWalletCrea = await autWallet.chiediSeWallet(formData.payment_method, {
+        cliente: { customerId: formData.customer_id || null, email: clienteWallet?.email || null },
+        customerName: clienteWallet?.full_name,
+        totaleEur: getFinalPrice(),
+      })
+      if (esitoWalletCrea === null) {
+        pendingCreateBookingRef.current = null
+        createBookingLockRef.current = false
+        setSubmitting(false)
+        return
+      }
+    }
+
     // 2026-05-19: validazione cliente per tipo (persona_fisica / azienda /
     // pubblica_amministrazione). Indirizzo struttura DIVERSA per ogni tipo:
     //  - persona_fisica → indirizzo + citta_residenza + codice_postale
@@ -2295,6 +2320,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       amountPaid: accontoCents,
       adminOverride: forceBooking,
       createdBy: 'admin_panel',
+      ...autWallet.perBookingDetails(esitoWalletCrea),
       cartItems: cartItems,
       totalDuration: getTotalDuration(),
       customer: { customerId: formData.customer_id },
@@ -5380,6 +5406,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             updates.amount_paid = '0'
                           }
                           setFormData(prev => ({ ...prev, ...updates }))
+                          // 17/09/2026 (direzione): Credit Wallet -> richiesta
+                          // di autorizzazione al cliente subito, senza aspettare "Pagato".
+                          if (isCreditWallet(method) && formData.customer_id) {
+                            const clienteWallet = customers.find(c => c.id === formData.customer_id)
+                            autWallet.chiediSeWallet(method, {
+                              cliente: { customerId: formData.customer_id, email: clienteWallet?.email || null },
+                              customerName: clienteWallet?.full_name,
+                              totaleEur: getFinalPrice(),
+                            })
+                          }
                         }}
                         className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
@@ -6242,7 +6278,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo per il resto</label>
                           <select
                             value={editingBooking.booking_details?.remainderMethod || ''}
-                            onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), remainderMethod: e.target.value }, payment_method: e.target.value })}
+                            onChange={(e) => {
+                              setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), remainderMethod: e.target.value }, payment_method: e.target.value })
+                              // 17/09/2026 (direzione): Credit Wallet -> autorizzazione del cliente subito.
+                              if (isCreditWallet(e.target.value)) {
+                                autWallet.chiediSeWallet(e.target.value, {
+                                  cliente: { userId: editingBooking.user_id || null, email: editingBooking.customer_email || null, customerId: editingBooking.booking_details?.customer?.customerId || null },
+                                  customerName: editingBooking.customer_name,
+                                  totaleEur: (editingBooking.price_total || 0) / 100,
+                                  bookingId: editingBooking.id,
+                                  bookingDetails: editingBooking.booking_details,
+                                })
+                              }
+                            }}
                             className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                           >
                             <option value="">-- Seleziona --</option>
@@ -6258,7 +6306,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento</label>
                       <select
                         value={editingBooking.payment_method || ''}
-                        onChange={(e) => setEditingBooking({ ...editingBooking, payment_method: e.target.value })}
+                        onChange={(e) => {
+                          setEditingBooking({ ...editingBooking, payment_method: e.target.value })
+                              // 17/09/2026 (direzione): Credit Wallet -> autorizzazione del cliente subito.
+                              if (isCreditWallet(e.target.value)) {
+                                autWallet.chiediSeWallet(e.target.value, {
+                                  cliente: { userId: editingBooking.user_id || null, email: editingBooking.customer_email || null, customerId: editingBooking.booking_details?.customer?.customerId || null },
+                                  customerName: editingBooking.customer_name,
+                                  totaleEur: (editingBooking.price_total || 0) / 100,
+                                  bookingId: editingBooking.id,
+                                  bookingDetails: editingBooking.booking_details,
+                                })
+                              }
+                        }}
                         className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
@@ -6475,6 +6535,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       // l'ora di N ore quando il browser admin non era in Rome TZ.
                       const _apptIso = _dateStr ? combineRomeDateTimeToISO(_dateStr, _timeStr) : null
 
+                      // 17/09/2026 (direzione): col Credit Wallet serve il codice del
+                      // cliente. Annullato il popup, la modifica non si salva.
+                      const esitoWalletModifica = isTestBooking(editingBooking) ? false : await autWallet.chiediSeWallet(editingBooking.payment_method, {
+                        cliente: { userId: editingBooking.user_id || null, email: editingBooking.customer_email || null, customerId: editingBooking.booking_details?.customer?.customerId || null },
+                        customerName: editingBooking.customer_name,
+                        totaleEur: (updatedPrice || 0) / 100,
+                        bookingId: editingBooking.id,
+                        bookingDetails: editingBooking.booking_details,
+                      })
+                      if (esitoWalletModifica === null) return
+
                       const { error } = await supabase
                         .from('bookings')
                         .update({
@@ -6490,7 +6561,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           status: finalStatus,
                           payment_status: editingBooking.payment_status,
                           payment_method: editingBooking.payment_method || null,
-                          booking_details: updatedDetails,
+                          booking_details: { ...updatedDetails, ...autWallet.perBookingDetails(esitoWalletModifica) },
                         })
                         .eq('id', editingBooking.id)
 
@@ -6648,7 +6719,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           await handleResendPaymentLink({
                             ...editingBooking,
                             price_total: updatedPrice,
-                            booking_details: { ...updatedDetails, amountPaid: giaIncassatoCents },
+                            booking_details: { ...updatedDetails, ...autWallet.perBookingDetails(esitoWalletModifica), amountPaid: giaIncassatoCents },
                           })
                         } else if (dovutoCents > 0 && editingBooking.payment_method) {
                           toast(`Restano EUR ${(dovutoCents / 100).toFixed(2)} da incassare (metodo: ${editingBooking.payment_method}). Nessun link inviato.`, { duration: 6000, icon: 'i' })
@@ -6803,6 +6874,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       )}
 
       {/* OTP Modal for manual category */}
+      {autWallet.modale}
       <LimitationOverrideModal
         isOpen={override.limitationState.isOpen}
         limitationCode={override.limitationState.limitationCode}

@@ -2,6 +2,8 @@ import { useState, useEffect, memo } from 'react'
 import { createPortal } from 'react-dom'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet, perBookingDetails } from '../../../hooks/useAutorizzazioneWallet'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
@@ -101,6 +103,12 @@ export interface AcceptConfirmArgs {
      */
     second_driver: SecondoGuidatoreArgs | null
     guarantors: GaranteArgs[]
+    /**
+     * 17/09/2026: autorizzazione del cliente al prelievo Credit Wallet, gia'
+     * nella forma di booking_details ({ wallet_autorizzazione_cliente }).
+     * Vuoto se il metodo non e' il wallet. Va fuso nel booking_details creato.
+     */
+    wallet_booking_details?: Record<string, unknown>
 }
 
 /** Imperative open helper. Call from anywhere — no React state involved. */
@@ -131,6 +139,18 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
     const [conSecondoGuidatore, setConSecondoGuidatore] = useState(false)
     const [secondoGuidatore, setSecondoGuidatore] = useState<SecondoGuidatoreArgs>({ ...GUIDATORE_VUOTO })
     const [garanti, setGaranti] = useState<GaranteArgs[]>([])
+    // 17/09/2026 (direzione): Credit Wallet = codice via email al cliente,
+    // appena si sceglie il metodo e di nuovo alla conferma se manca.
+    const autWallet = useAutorizzazioneWallet()
+    const richiestaWallet = (idCliente: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const c = customers.find((x: any) => x.id === idCliente)
+        return {
+            cliente: { customerId: idCliente || null, email: c?.email || null },
+            customerName: c?.full_name || c?.name,
+            totaleEur: Number(preventivo?.total_final) || 0,
+        }
+    }
 
     useEffect(() => {
         function handleOpen(e: Event) {
@@ -181,6 +201,9 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
             setError('Garante senza nome: compila o rimuovilo.')
             return
         }
+        // 17/09/2026: senza autorizzazione del cliente niente prelievo dal wallet.
+        const esitoWallet = await autWallet.chiediSeWallet(paymentMethod, richiestaWallet(customerId))
+        if (esitoWallet === null) return
         setSubmitting(true)
         setError(null)
         try {
@@ -197,6 +220,7 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                     ? secondoGuidatore
                     : null,
                 guarantors: garanti.filter(g => g.nome_cognome.trim() !== ''),
+                wallet_booking_details: perBookingDetails(esitoWallet),
             })
             setPreventivo(null)
         } catch (err: unknown) {
@@ -263,7 +287,12 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
                     <select
                         value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        onChange={(e) => {
+                            const metodo = e.target.value
+                            setPaymentMethod(metodo)
+                            // 17/09/2026: scelto il Credit Wallet parte subito la richiesta al cliente.
+                            if (isCreditWallet(metodo) && customerId) autWallet.chiediSeWallet(metodo, richiestaWallet(customerId))
+                        }}
                         className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
                     >
                         {PAYMENT_METHODS.map(pm => (
@@ -551,7 +580,7 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
         </div>
     )
 
-    return createPortal(modal, document.body)
+    return createPortal(<>{modal}{autWallet.modale}</>, document.body)
 }
 
 /**

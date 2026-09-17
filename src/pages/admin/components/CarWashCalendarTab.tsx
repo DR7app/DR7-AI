@@ -12,6 +12,9 @@ import { authFetch } from '../../../utils/authFetch'
 import { logger } from '../../../utils/logger'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet } from '../../../hooks/useAutorizzazioneWallet'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
+import { isTestBooking } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -63,6 +66,7 @@ interface CarWashBooking {
   vehicle_name?: string
   vehicle_plate?: string
   payment_method?: string
+  user_id?: string | null
 }
 
 const isRientroBooking = (booking: CarWashBooking): boolean => {
@@ -201,6 +205,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const saveEditLockRef = useRef(false)
   // 2026-06-04: metodi pagamento dalla fonte unica (Centralina Pro), non piu' hardcoded.
   const paymentMethods = usePaymentMethods()
+  // 17/09/2026 (direzione): col Credit Wallet il prelievo lo autorizza il
+  // cliente con un codice via email (hook condiviso con Prenotazioni e Lavaggi).
+  const autWallet = useAutorizzazioneWallet({ onEmailSalvata: () => { loadData() } })
 
   // Edit modal: services catalog + selections
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
@@ -1545,7 +1552,19 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Metodo di pagamento</label>
                 <select
                   value={editingBooking.booking_details?.paymentMethod || editingBooking.payment_method || ''}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, payment_method: e.target.value, booking_details: { ...(editingBooking.booking_details || {}), paymentMethod: e.target.value } })}
+                  onChange={(e) => {
+                    setEditingBooking({ ...editingBooking, payment_method: e.target.value, booking_details: { ...(editingBooking.booking_details || {}), paymentMethod: e.target.value } })
+                    // 17/09/2026 (direzione): Credit Wallet -> autorizzazione del cliente subito.
+                    if (isCreditWallet(e.target.value)) {
+                      autWallet.chiediSeWallet(e.target.value, {
+                        cliente: { userId: editingBooking.user_id || null, email: editingBooking.customer_email || null, customerId: editingBooking.booking_details?.customer?.customerId || null },
+                        customerName: editingBooking.customer_name,
+                        totaleEur: (editingBooking.price_total || Math.round(getEditTotal() * 100)) / 100,
+                        bookingId: editingBooking.id,
+                        bookingDetails: editingBooking.booking_details,
+                      })
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                 >
                   <option value="">-- Seleziona metodo --</option>
@@ -1582,6 +1601,17 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     const updatedServiceName = editService ? buildEditServiceNames() : editingBooking.service_name
                     const updatedPrice = editingBooking.price_total || Math.round(getEditTotal() * 100)
 
+                    // 17/09/2026 (direzione): col Credit Wallet serve il codice del
+                    // cliente. Annullato il popup, la modifica non si salva.
+                    const esitoWallet = isTestBooking(editingBooking) ? false : await autWallet.chiediSeWallet(editingBooking.payment_method, {
+                      cliente: { userId: editingBooking.user_id || null, email: editingBooking.customer_email || null, customerId: editingBooking.booking_details?.customer?.customerId || null },
+                      customerName: editingBooking.customer_name,
+                      totaleEur: (updatedPrice || 0) / 100,
+                      bookingId: editingBooking.id,
+                      bookingDetails: editingBooking.booking_details,
+                    })
+                    if (esitoWallet === null) return
+
                     const { error } = await supabase
                       .from('bookings')
                       .update({
@@ -1598,6 +1628,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         booking_details: {
                           ...(editingBooking.booking_details || {}),
                           cartItems: editService ? editCartItems : leggiServiziPrenotati(editingBooking.booking_details),
+                          ...autWallet.perBookingDetails(esitoWallet),
                         },
                       })
                       .eq('id', editingBooking.id)
@@ -1641,6 +1672,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           </div>
         </div>
       )}
+
+      {autWallet.modale}
 
       {/* Pianta dei sedili — servizi Prime Wash venduti a sedile. */}
       {seatPicker && (

@@ -11,6 +11,8 @@ import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet, perBookingDetails } from '../../../hooks/useAutorizzazioneWallet'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { LeadPicker } from './LeadPicker'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { INPUT_CLS, eur, eurToCents, centsToEur, missingTableHint, BTN_PRIMARY, BTN_GHOST } from './noleggioFormBits'
@@ -995,7 +997,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   // Prenotazione posti (carrello -> cliente)
   const [cartDep, setCartDep] = useState<string | null>(null)
   const [cartSeats, setCartSeats] = useState<Set<string>>(new Set())
-  const [cust, setCust] = useState({ name: '', phone: '' })
+  // 17/09/2026: `id` = scheda Lead scelta dal LeadPicker (serve al Credit Wallet).
+  const [cust, setCust] = useState<{ name: string; phone: string; id?: string }>({ name: '', phone: '' })
   const [seatNames, setSeatNames] = useState<Record<string, string>>({}) // seatId -> nome passeggero
   const [seatPhones, setSeatPhones] = useState<Record<string, string>>({}) // seatId -> telefono passeggero (se scelto dai clienti)
   const [tourNote, setTourNote] = useState('') // note prenotazione
@@ -1004,6 +1007,14 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [tourPayMethod, setTourPayMethod] = useState('')
   const [tourConfirm, setTourConfirm] = useState(false) // Conferma Prenotazione
   const tourPaymentMethods = usePaymentMethods(serviceType)
+  // 17/09/2026 (direzione): Credit Wallet = codice di autorizzazione via email
+  // al cliente, appena si sceglie il metodo e di nuovo prima di salvare.
+  const autWallet = useAutorizzazioneWallet()
+  const richiestaWalletTour = (totaleEur: number) => ({
+    cliente: { customerId: cust.id || null },
+    customerName: cust.name.trim(),
+    totaleEur,
+  })
   const [booking, setBooking] = useState(false)
   const [manageMode, setManageMode] = useState<Set<string>>(new Set()) // partenze in modalità "gestisci posti"
 
@@ -1136,6 +1147,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const ids = Array.from(cartSeats)
     if (!ids.length) return
     if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
+    // 17/09/2026: il Credit Wallet appartiene a una scheda Lead: senza, non si sa a chi chiedere il codice.
+    if (isCreditWallet(tourPayMethod) && !cust.id) { setError('Credit Wallet: seleziona il cliente dai Lead.'); return }
     const chosen = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
     const priceOf = (s: TourSeat) => s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))
     // Prezzo manuale: se l'operatore ha scritto un importo, quello è il TOTALE
@@ -1145,6 +1158,9 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
     const labelsStr = chosen.map(s => s.seat_label).join(', ')
     setBooking(true); setError('')
+    // 17/09/2026 (direzione): senza il codice del cliente il Credit Wallet non si usa.
+    const esitoWallet = await autWallet.chiediSeWallet(tourPayMethod, richiestaWalletTour(totalCents / 100))
+    if (esitoWallet === null) { setBooking(false); return }
     const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (seatNames[s.id] || '').trim() || cust.name.trim(), phone: (seatPhones[s.id] || '').trim() || undefined }))
     const passengersLabel = passengersDetail.map(p => `Posto ${p.seat}: ${p.name}`).join('\n')
     const { data: bk, error: be } = await supabase.from('bookings').insert({
@@ -1164,7 +1180,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       // manually_confirmed NON è una colonna di bookings: va in booking_details (come ReservationsTab).
       // vehicle_id = id del mezzo a catalogo: e' l'aggancio che il Report usa
       // per attribuire l'incasso. Senza, resta solo il nome esatto (vedi sopra).
-      booking_details: { tour_departure_id: dep.id, ...(selectedAsset?.id ? { vehicle_id: selectedAsset.id } : {}), seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}) },
+      booking_details: { tour_departure_id: dep.id, ...(selectedAsset?.id ? { vehicle_id: selectedAsset.id } : {}), seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}), ...perBookingDetails(esitoWallet) },
       created_at: new Date().toISOString(),
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
@@ -1402,6 +1418,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
         <button onClick={openNewDeparture} disabled={!assetId} className={BTN_PRIMARY}>+ Nuova partenza</button>
       } />
       {error && <ErrorBox msg={error} />}
+      {autWallet.modale}
 
       {assets.length === 0 && !error && (
         <EmptyBox msg={`Nessun ${labels.asset.toLowerCase()} nel catalogo. Aggiungi prima un ${labels.asset.toLowerCase()} nella tab Catalogo: sarà il tour da programmare.`} />
@@ -1519,9 +1536,9 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                           </button>
                         )}
                       </div>
-                      <LeadPicker onPick={(name, phone) => setCust({ name: name || cust.name, phone: phone || cust.phone })} />
+                      <LeadPicker onPick={(name, phone, id) => setCust({ name: name || cust.name, phone: phone || cust.phone, id })} />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input className={INPUT_CLS} placeholder="Nome cliente (contatto)" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value })} />
+                        <input className={INPUT_CLS} placeholder="Nome cliente (contatto)" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value, id: undefined })} />
                         <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false}
                           placeholder="Telefono" value={cust.phone} onChange={v => setCust({ ...cust, phone: v })} />
                       </div>
@@ -1568,7 +1585,16 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                         </div>
                         <div>
                           <label className="text-xs text-theme-text-muted">Metodo di Pagamento</label>
-                          <select className={INPUT_CLS} value={tourPayMethod} onChange={e => setTourPayMethod(e.target.value)}>
+                          <select className={INPUT_CLS} value={tourPayMethod} onChange={e => {
+                            const m = e.target.value
+                            setTourPayMethod(m)
+                            // 17/09/2026 (direzione): Credit Wallet -> richiesta codice al cliente subito.
+                            if (isCreditWallet(m) && cust.id) {
+                              autWallet.chiediSeWallet(m, richiestaWalletTour(cartTotalCents / 100))
+                            } else if (isCreditWallet(m)) {
+                              toast.error('Credit Wallet: seleziona il cliente dai Lead per chiedere il codice.')
+                            }
+                          }}>
                             <option value="">— seleziona —</option>
                             {tourPaymentMethods.filter(m => m.is_enabled !== false).map(m => <option key={m.key || m.label} value={m.label}>{m.label}</option>)}
                           </select>

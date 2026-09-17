@@ -13,6 +13,9 @@ import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { useAutorizzazioneWallet, perBookingDetails } from '../../../hooks/useAutorizzazioneWallet'
+import { isCreditWallet as isMetodoCreditWallet } from '../../../utils/paymentMethodMatchers'
+import { leggiMovimentoWallet } from '../../../utils/walletCliente'
 import MoneyInput from '../../../components/MoneyInput'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 
@@ -245,6 +248,51 @@ export default function UnpaidBookingsTab() {
   const [selectedPayMethod, setSelectedPayMethod] = useState<string>('Contanti')
   // 2026-06-04: metodi pagamento dalla fonte unica (Centralina Pro).
   const paymentMethods = usePaymentMethods()
+
+  // 17/09/2026 (direzione): segnare pagata col Credit Wallet una prenotazione
+  // (anche se il metodo era gia' wallet) richiede il codice del cliente via
+  // email. Un solo codice per cliente anche su "Salda Tutto": si autorizza la
+  // somma di quello che il database preleva. Ritorna, per ogni prenotazione,
+  // le chiavi da fondere in booking_details; null = l'operatore ha annullato.
+  const autWallet = useAutorizzazioneWallet()
+
+  async function autorizzaWallet(prenotazioni: { id: string; metodo?: string | null }[]): Promise<Record<string, Record<string, unknown>> | null> {
+    const esiti: Record<string, Record<string, unknown>> = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const daAutorizzare: { riga: any; residuo: number; metodo: string }[] = []
+    for (const p of prenotazioni) {
+      const { data: riga } = await supabase.from('bookings').select('*').eq('id', p.id).maybeSingle()
+      if (!riga) continue
+      const metodo = p.metodo || riga.payment_method
+      if (!isMetodoCreditWallet(metodo)) continue
+      const gia = (await leggiMovimentoWallet(p.id)).addebitato || 0
+      const residuo = Math.round(((Number(riga.price_total) || 0) / 100 - gia) * 100) / 100
+      if (residuo <= 0) continue
+      daAutorizzare.push({ riga, residuo, metodo })
+    }
+    if (daAutorizzare.length === 0) return esiti
+    const primo = daAutorizzare[0].riga
+    const cliente = {
+      customerId: primo.customer_id || null,
+      userId: primo.user_id || null,
+      email: primo.customer_email || primo.booking_details?.customer?.email || null,
+    }
+    const customerName = primo.customer_name || primo.booking_details?.customer?.fullName
+    const esito = daAutorizzare.length === 1
+      ? await autWallet.chiediSeWallet(daAutorizzare[0].metodo, {
+          cliente, customerName,
+          totaleEur: (Number(primo.price_total) || 0) / 100,
+          bookingId: primo.id,
+          bookingDetails: primo.booking_details,
+        })
+      : await autWallet.chiediSeWallet(daAutorizzare[0].metodo, {
+          cliente, customerName,
+          totaleEur: Math.round(daAutorizzare.reduce((t, d) => t + d.residuo, 0) * 100) / 100,
+        })
+    if (esito === null) return null
+    for (const d of daAutorizzare) esiti[d.riga.id] = perBookingDetails(esito)
+    return esiti
+  }
 
   function askPaymentMethod(description: string, onConfirm: (method: string) => void | Promise<void>) {
     setSelectedPayMethod('Contanti')
@@ -674,6 +722,9 @@ export default function UnpaidBookingsTab() {
   // inesistente. Bug reale: Michele Concas, 0/800 → seconda fattura da €350.
   async function updatePaymentStatus(bookingId: string, newStatus: string, paymentMethod?: string, remainingEurBeingPaid?: number) {
     try {
+      // 17/09/2026: Credit Wallet = codice del cliente prima di scrivere.
+      const extraWallet = await autorizzaWallet([{ id: bookingId, metodo: paymentMethod }])
+      if (extraWallet === null) return
       // When marking paid, also set amount_paid = price_total so the calendar
       // detail panel (and any other consumer that computes remaining as
       // total - amount_paid) shows zero owed. Without this, "segna pagato"
@@ -702,6 +753,14 @@ export default function UnpaidBookingsTab() {
           }
           updatePayload.booking_details = newDetails
         }
+      }
+      if (extraWallet[bookingId]) {
+        let baseDetails = updatePayload.booking_details as Record<string, unknown> | undefined
+        if (!baseDetails) {
+          const { data: rigaBd } = await supabase.from('bookings').select('booking_details').eq('id', bookingId).maybeSingle()
+          baseDetails = rigaBd?.booking_details || {}
+        }
+        updatePayload.booking_details = { ...baseDetails, ...extraWallet[bookingId] }
       }
       const { error } = await supabase
         .from('bookings')
@@ -1742,6 +1801,10 @@ export default function UnpaidBookingsTab() {
         booking = fresh as unknown as UnpaidBooking
       }
 
+      // 17/09/2026: prenotazione col Credit Wallet = codice del cliente.
+      const extraWallet = await autorizzaWallet([{ id: bookingId }])
+      if (extraWallet === null) return
+
       const details = booking.booking_details || {}
       const currentPaid = Number(details.amountPaid) || 0
       const newPaid = currentPaid + Math.round(amount * 100)
@@ -1750,7 +1813,7 @@ export default function UnpaidBookingsTab() {
       const { error } = await supabase
         .from('bookings')
         .update({
-          booking_details: { ...details, amountPaid: newPaid },
+          booking_details: { ...details, amountPaid: newPaid, ...(extraWallet[bookingId] || {}) },
           payment_status: isFullyPaid ? 'paid' : 'partial'
         })
         .eq('id', bookingId)
@@ -1861,6 +1924,9 @@ export default function UnpaidBookingsTab() {
 
   async function markBookingAndExtensionsPaid(booking: UnpaidBooking) {
     try {
+      // 17/09/2026: Credit Wallet = codice del cliente, prima della fattura.
+      const extraWallet = await autorizzaWallet([{ id: booking.id }])
+      if (extraWallet === null) return
       const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
       const vehicle = booking.vehicle_name || booking.booking_details?.vehicle?.name || 'Noleggio'
       const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || ''
@@ -1963,7 +2029,7 @@ export default function UnpaidBookingsTab() {
         payment_status: 'paid',
         status: 'confirmed',
         amount_paid: totalCents,
-        booking_details: { ...booking.booking_details, amountPaid: totalCents, extension_history: extensions, penalties: penaltiesArr, danni: danniArr }
+        booking_details: { ...booking.booking_details, amountPaid: totalCents, extension_history: extensions, penalties: penaltiesArr, danni: danniArr, ...(extraWallet[booking.id] || {}) }
       }).eq('id', booking.id)
       if (error) throw error
       await propagatePaidToCarwashShadows(booking.id, true, booking.payment_method)
@@ -1993,6 +2059,12 @@ export default function UnpaidBookingsTab() {
     if (processingKey) return
     setProcessingKey(key)
     try {
+      // 17/09/2026: Credit Wallet = un codice del cliente per tutto il saldo,
+      // prima della fattura e di qualunque scrittura.
+      const extraWallet = await autorizzaWallet(
+        [...group.noleggioBookings, ...group.primeWashBookings].map(b => ({ id: b.id, metodo: paymentMethod }))
+      )
+      if (extraWallet === null) return
       // Collect ALL line items for ONE combined fattura
       const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
 
@@ -2136,7 +2208,7 @@ export default function UnpaidBookingsTab() {
       for (const { bookingId, extensions, booking } of noleggioUpdates) {
         const noleggioUpdate: Record<string, unknown> = {
           payment_status: 'paid', status: 'confirmed',
-          booking_details: { ...(await dettagliFreschi(bookingId, booking.booking_details)), extension_history: extensions }
+          booking_details: { ...(await dettagliFreschi(bookingId, booking.booking_details)), extension_history: extensions, ...(extraWallet[bookingId] || {}) }
         }
         if (paymentMethod) noleggioUpdate.payment_method = paymentMethod
         await supabase.from('bookings').update(noleggioUpdate).eq('id', bookingId)
@@ -2194,6 +2266,7 @@ export default function UnpaidBookingsTab() {
       for (const pwId of primeWashBookingIds) {
         const pwUpdate: Record<string, unknown> = { payment_status: 'paid', status: 'confirmed' }
         if (paymentMethod) pwUpdate.payment_method = paymentMethod
+        if (extraWallet[pwId]) pwUpdate.booking_details = { ...(await dettagliFreschi(pwId, undefined)), ...extraWallet[pwId] }
         await supabase.from('bookings').update(pwUpdate).eq('id', pwId)
         // Propaga ai blocchi cortesia/supercar collegati a questo lavaggio.
         await propagatePaidToCarwashShadows(pwId, true, paymentMethod)
@@ -4423,6 +4496,9 @@ export default function UnpaidBookingsTab() {
           </div>
         </div>
       </div>
+
+      {/* 17/09/2026: autorizzazione del cliente per il Credit Wallet. */}
+      {autWallet.modale}
 
       {/* Payment-method picker — opens before any "Segna Pagato" / "Salda Tutto"
           path so the booking row is stamped with HOW the customer paid. */}

@@ -96,7 +96,7 @@ import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlo
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import { numeroLeggibile } from '../../../utils/prefissiPaesi'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
-import AutorizzazioneWalletClienteModal from '../../../components/AutorizzazioneWalletClienteModal'
+import { useAutorizzazioneWallet, type AutorizzazioneWallet } from '../../../hooks/useAutorizzazioneWallet'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
@@ -1256,42 +1256,38 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const metodoEWallet = isCreditWallet(formData.payment_method)
 
   // 17/09/2026 (direzione): il prelievo dal Credit Wallet va autorizzato dal
-  // CLIENTE con un codice ricevuto via email (AutorizzazioneWalletClienteModal).
-  // L'autorizzazione vale per quel cliente e fino a quell'importo: se cambia
-  // uno dei due se ne chiede un'altra. Il ref serve al gate in
-  // processBookingSubmission, che riparte da un setTimeout dopo la conferma
-  // e vedrebbe lo stato vecchio.
-  const [autorizzazioneWallet, setAutorizzazioneWallet] = useState<{ overrideId: string; customerId: string; importo: number } | null>(null)
-  const autorizzazioneWalletRef = useRef<{ overrideId: string; customerId: string; importo: number } | null>(null)
-  const [mostraAutorizzazioneWallet, setMostraAutorizzazioneWallet] = useState(false)
-  const pendingWalletSubmitRef = useRef<{ skipValidation: boolean; overrideCustomerId?: string } | null>(null)
-  // In modifica il database preleva solo la differenza: quello gia' addebitato
-  // a questa prenotazione non va autorizzato una seconda volta.
-  const [giaAddebitatoWallet, setGiaAddebitatoWallet] = useState(0)
-  const aggiornaAutorizzazioneWallet = (v: { overrideId: string; customerId: string; importo: number } | null) => {
+  // CLIENTE con un codice ricevuto via email. La richiesta parte appena si
+  // sceglie "Credit Wallet", per il totale, anche con stato "Da saldare"
+  // (hook condiviso useAutorizzazioneWallet, lo stesso di tutte le schermate).
+  // Il ref serve al salvataggio, che legge l'autorizzazione dopo un await.
+  const autWallet = useAutorizzazioneWallet({ onEmailSalvata: () => { loadData() } })
+  const [autorizzazioneWallet, setAutorizzazioneWallet] = useState<AutorizzazioneWallet | null>(null)
+  const autorizzazioneWalletRef = useRef<AutorizzazioneWallet | null>(null)
+  const aggiornaAutorizzazioneWallet = (v: AutorizzazioneWallet | null) => {
     autorizzazioneWalletRef.current = v
     setAutorizzazioneWallet(v)
   }
-  const importoDaAutorizzareWallet = (): number => {
-    const dovuto = importoDovutoWallet({
-      metodo: formData.payment_method,
-      statoPagamento: formData.payment_status,
-      totaleEur: parseFloat(formData.total_amount || '0') || 0,
-      acconoEur: parseFloat(formData.amount_paid || '0') || 0,
-    })
-    return Math.max(0, Math.round((dovuto - giaAddebitatoWallet) * 100) / 100)
-  }
-  const walletAutorizzatoPer = (customerId: string | undefined, importo: number) => {
-    const a = autorizzazioneWalletRef.current
-    return !!a && !!customerId && a.customerId === customerId && a.importo + 0.001 >= importo
-  }
-
+  // In modifica il database preleva solo la differenza: quello gia' addebitato
+  // a questa prenotazione non va autorizzato una seconda volta.
+  const [giaAddebitatoWallet, setGiaAddebitatoWallet] = useState(0)
   useEffect(() => {
     let annullato = false
     if (!editingId || !metodoEWallet) { setGiaAddebitatoWallet(0); return }
     leggiMovimentoWallet(editingId).then(m => { if (!annullato) setGiaAddebitatoWallet(m.addebitato || 0) })
     return () => { annullato = true }
   }, [editingId, metodoEWallet])
+  const chiediAutorizzazioneWallet = async (metodo: string, datiForm: typeof formData = formData) => {
+    const cliente = customers.find(c => c.id === datiForm.customer_id)
+    const esito = await autWallet.chiediSeWallet(metodo, {
+      cliente: { customerId: datiForm.customer_id || null, email: cliente?.email || null },
+      customerName: cliente?.full_name,
+      totaleEur: parseFloat(datiForm.total_amount || '0') || 0,
+      bookingId: editingId,
+      bookingDetails: editingBookingRef.current?.booking_details || null,
+    })
+    if (esito) aggiornaAutorizzazioneWallet(esito)
+    return esito
+  }
 
   useEffect(() => {
     let annullato = false
@@ -4986,6 +4982,32 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const additionalAmount = additionalAmountCents / 100
       const newTotal = Math.round(extendingBooking.price_total + additionalAmountCents)
 
+      // 17/09/2026 (direzione): se la prenotazione e' pagata col Credit Wallet
+      // il database preleva anche il supplemento dell'estensione; se e' il
+      // supplemento a essere pagato col wallet, e' quello l'importo. In
+      // entrambi i casi serve il codice del cliente.
+      const walletPrenotazione = isCreditWallet(extendingBooking.payment_method)
+      const metodoWalletEstensione = walletPrenotazione
+        ? extendingBooking.payment_method
+        : (isCreditWallet(extendData.extension_payment_method) ? extendData.extension_payment_method : '')
+      let esitoWalletEstensione: Awaited<ReturnType<typeof autWallet.chiediSeWallet>> = false
+      if (metodoWalletEstensione && additionalAmountCents > 0) {
+        esitoWalletEstensione = await autWallet.chiediSeWallet(metodoWalletEstensione, {
+          cliente: {
+            userId: extendingBooking.user_id || null,
+            email: extendingBooking.customer_email || extendingBooking.booking_details?.customer?.email || null,
+          },
+          customerName: extendingBooking.customer_name || undefined,
+          totaleEur: walletPrenotazione ? newTotal / 100 : additionalAmount,
+          bookingId: walletPrenotazione ? extendingBooking.id : null,
+          bookingDetails: walletPrenotazione ? extendingBooking.booking_details : null,
+        })
+        if (esitoWalletEstensione === null) {
+          setIsExtending(false)
+          return
+        }
+      }
+
       // Resolve new vehicle if car change requested
       let newVehicle: Vehicle | null = null
       if (extendData.change_vehicle && extendData.new_vehicle_id) {
@@ -5007,6 +5029,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
         ...extendingBooking.booking_details,
+        ...autWallet.perBookingDetails(esitoWalletEstensione),
         // 2026-05-28: protezione anti-auto-cancel. Una volta che direzione
         // conferma un'estensione il booking NON deve essere cancellato dal
         // cron `cancel-unpaid-nexi-bookings` anche se payment_status resta
@@ -6320,12 +6343,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           }
         }
 
-        // 17/09/2026 (direzione): credito sufficiente, ma il prelievo lo
-        // autorizza il cliente con il codice via email. Senza codice non si salva.
-        const daAutorizzare = importoDaAutorizzareWallet()
-        if (daAutorizzare > 0 && !walletAutorizzatoPer(formData.customer_id, daAutorizzare)) {
-          pendingWalletSubmitRef.current = { skipValidation, overrideCustomerId }
-          setMostraAutorizzazioneWallet(true)
+      }
+
+      // 17/09/2026 (direzione): col Credit Wallet il prelievo lo autorizza il
+      // cliente con il codice via email, qualunque sia lo stato pagamento.
+      // Senza codice non si salva.
+      if (isCreditWallet(formData.payment_method) && formData.customer_id) {
+        const esitoWallet = await chiediAutorizzazioneWallet(formData.payment_method)
+        if (esitoWallet === null) {
           setIsSubmitting(false)
           submitLockRef.current = false
           return
@@ -8799,8 +8824,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   function resetForm() {
     setCustomerTier(null)
     aggiornaAutorizzazioneWallet(null)
-    setMostraAutorizzazioneWallet(false)
-    pendingWalletSubmitRef.current = null
+    autWallet.reset()
     setAutistiRitiro([])
     setAutistiRiconsegna([])
     editFormSnapshotRef.current = null
@@ -11862,9 +11886,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     // vettura: quando si mette il pagato lo decide chi sta
                     // davanti allo schermo, non il metodo scelto.
                     setFormData(prev => ({ ...prev, ...updates }))
-                    if (isCreditWallet(method) && formData.customer_id && formData.payment_status === 'paid'
-                        && !walletAutorizzatoPer(formData.customer_id, (parseFloat(formData.total_amount || '0') || 0) - giaAddebitatoWallet)) {
-                      setMostraAutorizzazioneWallet(true)
+                    // 17/09/2026 (direzione): scegliendo Credit Wallet parte subito
+                    // la richiesta di autorizzazione al cliente, senza aspettare "Pagato".
+                    if (isCreditWallet(method) && formData.customer_id) {
+                      chiediAutorizzazioneWallet(method, { ...formData, ...updates })
                     }
                   }}
                   options={(() => {
@@ -11950,11 +11975,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     )}
                     {/* 17/09/2026 (direzione): il prelievo lo autorizza il cliente. */}
                     {!insufficiente && (() => {
-                      const daAutorizzare = importoDaAutorizzareWallet()
+                      const daAutorizzare = Math.round(((parseFloat(formData.total_amount || '0') || 0) - giaAddebitatoWallet) * 100) / 100
                       if (daAutorizzare <= 0) return null
-                      const ok = !!autorizzazioneWallet
-                        && autorizzazioneWallet.customerId === formData.customer_id
-                        && autorizzazioneWallet.importo + 0.001 >= daAutorizzare
+                      const salvata = editingBookingRef.current?.booking_details?.wallet_autorizzazione_cliente
+                      const ok = (!!autorizzazioneWallet
+                        && (!autorizzazioneWallet.customerId || autorizzazioneWallet.customerId === formData.customer_id)
+                        && autorizzazioneWallet.importo + 0.001 >= daAutorizzare)
+                        || (!!salvata?.override_id && Number(salvata.importo) + 0.001 >= daAutorizzare
+                          && (!salvata.customer_id || salvata.customer_id === formData.customer_id))
                       return ok ? (
                         <p className="pt-1 font-semibold text-green-600 dark:text-green-400">
                           Prelievo autorizzato dal cliente.
@@ -11964,7 +11992,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           <span className="text-amber-600 dark:text-amber-400 font-semibold">Serve l'autorizzazione del cliente</span>
                           <button
                             type="button"
-                            onClick={() => setMostraAutorizzazioneWallet(true)}
+                            onClick={() => { chiediAutorizzazioneWallet(formData.payment_method) }}
                             className="px-3 py-1.5 rounded-full bg-dr7-gold text-white text-xs font-semibold hover:opacity-90 transition-opacity"
                           >
                             Richiedi autorizzazione
@@ -12014,13 +12042,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
-                  // 17/09/2026 (direzione): Credit Wallet + Pagato/Parziale apre
-                  // subito la richiesta di autorizzazione al cliente.
-                  if (isCreditWallet(formData.payment_method) && formData.customer_id
-                      && (newStatus === 'paid' || newStatus === 'partial')
-                      && !(newStatus === 'paid' && walletAutorizzatoPer(formData.customer_id, (parseFloat(formData.total_amount || '0') || 0) - giaAddebitatoWallet))) {
-                    setMostraAutorizzazioneWallet(true)
-                  }
                 }}
                 options={[
                   { value: 'pending', label: 'Da Saldare' },
@@ -12608,37 +12629,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           toggle spento si auto-approva in silenzio, ed e' cosi' che era
           passata una prenotazione senza credito. Qui si esce e basta: si
           cambia metodo di pagamento. */}
-      {mostraAutorizzazioneWallet && formData.customer_id && (() => {
-        const importo = importoDaAutorizzareWallet()
-        const cliente = customers.find(c => c.id === formData.customer_id)
-        return (
-          <AutorizzazioneWalletClienteModal
-            isOpen
-            customerId={formData.customer_id}
-            customerName={cliente?.full_name}
-            importo={importo > 0 ? importo : (parseFloat(formData.total_amount || '0') || 0)}
-            draftSessionId={draftSessionId}
-            onEmailSalvata={() => { loadData() }}
-            onCancel={() => {
-              setMostraAutorizzazioneWallet(false)
-              pendingWalletSubmitRef.current = null
-            }}
-            onAutorizzato={(overrideId) => {
-              aggiornaAutorizzazioneWallet({
-                overrideId,
-                customerId: formData.customer_id,
-                importo: importo > 0 ? importo : (parseFloat(formData.total_amount || '0') || 0),
-              })
-              setMostraAutorizzazioneWallet(false)
-              const pending = pendingWalletSubmitRef.current
-              pendingWalletSubmitRef.current = null
-              if (pending) {
-                setTimeout(() => { processBookingSubmission(pending.skipValidation, pending.overrideCustomerId) }, 50)
-              }
-            }}
-          />
-        )
-      })()}
+      {autWallet.modale}
 
       {walletInsufficiente && (
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
@@ -13348,7 +13339,21 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">Metodo Pagamento Estensione</label>
                     <select
                       value={extendData.extension_payment_method}
-                      onChange={(e) => setExtendData({ ...extendData, extension_payment_method: e.target.value })}
+                      onChange={(e) => {
+                        setExtendData({ ...extendData, extension_payment_method: e.target.value })
+                        // 17/09/2026 (direzione): Credit Wallet -> codice al cliente subito.
+                        const supplemento = eurToCents(extendData.additional_amount || '0') / 100
+                        if (extendingBooking && isCreditWallet(e.target.value) && supplemento > 0) {
+                          autWallet.chiediSeWallet(e.target.value, {
+                            cliente: {
+                              userId: extendingBooking.user_id || null,
+                              email: extendingBooking.customer_email || extendingBooking.booking_details?.customer?.email || null,
+                            },
+                            customerName: extendingBooking.customer_name || undefined,
+                            totaleEur: supplemento,
+                          })
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                     >
                       <option value="">-- Seleziona --</option>

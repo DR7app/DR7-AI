@@ -9,6 +9,7 @@ import { authFetch } from '../../../utils/authFetch'
 import WalletAnalytics from './WalletAnalytics'
 import MoneyInput from '../../../components/MoneyInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import { useAutorizzazioneWallet } from '../../../hooks/useAutorizzazioneWallet'
 
 interface CustomerResult {
   id: string
@@ -71,6 +72,11 @@ export default function CustomerWalletTab() {
   // Distinta dall'OTP operatore gia' presente in questa tab: quello conferma
   // che l'operazione e' voluta, questa autorizza un'eccezione alla regola.
   const overrideDir = useLimitationOverride()
+  // 17/09/2026 (direzione): un addebito manuale dal wallet lo autorizza anche
+  // il CLIENTE, con il codice che riceve via email. Solo per l'addebito, non
+  // per il caricamento. Ogni addebito vuole il suo codice: dopo l'esito o la
+  // chiusura del popup le autorizzazioni ottenute si azzerano.
+  const autWallet = useAutorizzazioneWallet()
   // Modal state
   const [modalCustomer, setModalCustomer] = useState<CustomerResult | null>(null)
   const [modalAction, setModalAction] = useState<'credit' | 'debit'>('credit')
@@ -363,6 +369,7 @@ export default function CustomerWalletTab() {
 
   function closeModal() {
     setModalCustomer(null)
+    autWallet.reset()
     setOtpSent(false)
     setOtpVerified(false)
     setSentOtp('')
@@ -486,6 +493,19 @@ export default function CustomerWalletTab() {
     if (!amount) return
     const parsedAmount = parseFloat(amount)
     if (!parsedAmount || parsedAmount <= 0) return
+
+    if (modalAction === 'debit') {
+      const esitoCliente = await autWallet.chiediSeWallet('Credit Wallet', {
+        cliente: {
+          customerId: modalCustomer.user_id && modalCustomer.id === modalCustomer.user_id ? null : modalCustomer.id,
+          userId: modalCustomer.user_id || null,
+          email: modalCustomer.email,
+        },
+        customerName: modalCustomer.full_name,
+        totaleEur: parsedAmount,
+      })
+      if (esitoCliente === null) return
+    }
 
     if (!otpVerified) {
       sendOtp()
@@ -1416,6 +1436,7 @@ export default function CustomerWalletTab() {
         onCancel={overrideDir.cancelLimitation}
         onOverrideApproved={overrideDir.handleOverrideApproved}
       />
+      {autWallet.modale}
     </div>
   )
 }

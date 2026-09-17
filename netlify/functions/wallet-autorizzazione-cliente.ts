@@ -14,8 +14,10 @@ import { getEmailFrom } from './utils/emailFrom'
 // Si appoggia alla tabella limitation_overrides, come gli altri OTP del
 // gestionale (limitation_code = 'wallet_autorizzazione_cliente').
 //
-// action 'send'   { customerId, importo, draftSessionId }
-//                 -> { overrideId, email } | 422 { emailMancante: true }
+// action 'send'   { customerId? | userId? | email?, importo, draftSessionId }
+//                 -> { overrideId, email, customerId } | 422 { emailMancante, customerId }
+//                 Il cliente si cerca per id scheda, poi per account sito, poi
+//                 per email: non tutte le schermate hanno l'id della scheda.
 // action 'verify' { overrideId, code } -> { success, customerId, importo }
 
 const LIMITATION_CODE = 'wallet_autorizzazione_cliente'
@@ -59,26 +61,36 @@ export const handler: Handler = async (event) => {
     const body = JSON.parse(event.body || '{}')
 
     if (body.action === 'send') {
-      const { customerId, draftSessionId } = body
+      const { draftSessionId } = body
       const importo = Math.round((Number(body.importo) || 0) * 100) / 100
-      if (!customerId || !draftSessionId || importo <= 0) {
+      if (!(body.customerId || body.userId || body.email) || !draftSessionId || importo <= 0) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Dati mancanti: cliente, sessione o importo' }) }
       }
 
       // L'indirizzo si legge qui dalla scheda, mai dal browser: il codice deve
       // arrivare al titolare del wallet, non a un indirizzo digitato a caso.
-      const { data: cliente } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .eq('id', customerId)
-        .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let cliente: any = null
+      if (body.customerId) {
+        const { data } = await supabase.from('customers_extended').select('*').eq('id', body.customerId).maybeSingle()
+        cliente = data
+      }
+      if (!cliente && body.userId) {
+        const { data } = await supabase.from('customers_extended').select('*').eq('user_id', body.userId).limit(1)
+        cliente = data?.[0] || null
+      }
+      if (!cliente && typeof body.email === 'string' && body.email.includes('@')) {
+        const { data } = await supabase.from('customers_extended').select('*').ilike('email', body.email.trim()).limit(1)
+        cliente = data?.[0] || null
+      }
 
       if (!cliente) {
         return { statusCode: 404, headers, body: JSON.stringify({ error: 'Cliente non trovato in Lead' }) }
       }
+      const customerId = cliente.id as string
       const email = String(cliente.email || '').trim()
       if (!email || !email.includes('@')) {
-        return { statusCode: 422, headers, body: JSON.stringify({ emailMancante: true, error: 'Email del cliente mancante' }) }
+        return { statusCode: 422, headers, body: JSON.stringify({ emailMancante: true, customerId, error: 'Email del cliente mancante' }) }
       }
 
       const finestra = new Date(Date.now() - OTP_TTL_MINUTES * 60 * 1000).toISOString()
@@ -165,7 +177,7 @@ export const handler: Handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: `Invio email non riuscito: ${emailError.message}` }) }
       }
 
-      return { statusCode: 200, headers, body: JSON.stringify({ success: true, overrideId: riga.id, email: mascheraEmail(email) }) }
+      return { statusCode: 200, headers, body: JSON.stringify({ success: true, overrideId: riga.id, email: mascheraEmail(email), customerId }) }
     }
 
     if (body.action === 'verify') {
