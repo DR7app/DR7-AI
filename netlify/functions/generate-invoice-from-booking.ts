@@ -1160,6 +1160,30 @@ export const handler: Handler = async (event) => {
 
         // Create invoice
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        // 17/09/2026 — LAVAGGIO CON DUE FATTURE (DR7-2026-2035/2036). Il
+        // callback Nexi e il "segna pagato" arrivano a volte nello stesso
+        // istante senza chiave: entrambi leggono "nessuna fattura" e
+        // inseriscono. L'indice sulla fattura principale per prenotazione non
+        // esiste in produzione (la migrazione 20260901 lo salta finche' ci sono
+        // vecchi doppioni gia' trasmessi), quindi la seconda passava. La
+        // fattura principale nuova porta sempre la chiave della prenotazione:
+        // l'indice unico su fattura_dedup_key, che c'e', respinge la gemella e
+        // il ramo 23505 qui sotto la riaggancia alla prima.
+        // Solo sull'inserimento: un aggiornamento puo' toccare una riga di una
+        // prenotazione che ha gia' doppioni, e la chiave collidere.
+        const chiaveInserimento = existingInvoice
+            ? chiaveIdempotenza
+            : (extensionAmount ? chiaveIdempotenza : `principale:${bookingId}`)
+        // Una principale annullata (nota di credito, riemissione) non conta piu'
+        // come principale: libera la chiave, o la nuova verrebbe respinta.
+        if (!existingInvoice && !extensionAmount) {
+            await supabase
+                .from('fatture')
+                .update({ fattura_dedup_key: null })
+                .eq('fattura_dedup_key', chiaveInserimento)
+                .eq('stato', 'cancelled')
+        }
+
         const invoiceData = {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
@@ -1196,7 +1220,7 @@ export const handler: Handler = async (event) => {
             exempt_amount: exemptAmount,
             sdi_status: 'draft',
             updated_at: new Date().toISOString(),
-            ...(chiaveIdempotenza ? { fattura_dedup_key: chiaveIdempotenza } : {}),
+            ...(chiaveInserimento ? { fattura_dedup_key: chiaveInserimento } : {}),
             // 2026-09-01: la fattura di estensione dice di esserlo. Prima era
             // indistinguibile dalla fattura principale (`extension_index` non
             // l'ha mai scritto nessuno), quindi una prenotazione con una
@@ -1223,7 +1247,7 @@ export const handler: Handler = async (event) => {
         // non e' ancora passata su questo database la colonna non esiste e
         // l'inserimento fallisce. Si riprova senza la chiave — si perde la
         // protezione contro il callback ripetuto, non l'emissione della fattura.
-        if (insertError && String((insertError as any).code) === '42703' && chiaveIdempotenza) {
+        if (insertError && String((insertError as any).code) === '42703' && chiaveInserimento) {
             console.warn('[Invoice] colonna fattura_dedup_key assente — reinserisco senza chiave di idempotenza')
             const senzaChiave = { ...(invoiceData as any) }
             delete senzaChiave.fattura_dedup_key
@@ -1244,11 +1268,11 @@ export const handler: Handler = async (event) => {
         if (insertError && (insertError as any).code === '23505' && !existingInvoice) {
             console.warn(`[Invoice] Inserimento in conflitto per ${bookingId} — riprendo la fattura gia' creata`)
             let vincente: any = null
-            if (chiaveIdempotenza) {
+            if (chiaveInserimento) {
                 const { data: perChiave } = await supabase
                     .from('fatture')
                     .select('id, numero_fattura')
-                    .eq('fattura_dedup_key', chiaveIdempotenza)
+                    .eq('fattura_dedup_key', chiaveInserimento)
                     .maybeSingle()
                 vincente = perChiave || null
             }
@@ -1262,18 +1286,18 @@ export const handler: Handler = async (event) => {
                 vincente = (righe || []).filter(isFatturaPrincipale)[0] || null
             }
             if (vincente) {
-                // Il numero e' gia' stato assegnato dall'altra chiamata: si tiene
-                // quello, altrimenti la stessa prenotazione avrebbe due numeri.
-                const senzaNumero = { ...(invoiceData as any) }
-                delete senzaNumero.numero_fattura
-                const ripresa = await supabase
-                    .from('fatture')
-                    .update(senzaNumero)
-                    .eq('id', vincente.id)
-                    .select()
-                    .single()
-                invoice = ripresa.data
-                insertError = ripresa.error
+                // 17/09/2026: l'altra chiamata sta gia' portando questa fattura
+                // allo SDI e al cliente. Riscriverla qui la riportava a 'draft'
+                // mentre partiva, e proseguire la ricaricava su Aruba e la
+                // rimandava su WhatsApp. Ci si ferma e si restituisce quella.
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: `Fattura ${vincente.numero_fattura} gia' in emissione per questa prenotazione.`,
+                        invoice: vincente,
+                        skipped: true,
+                    })
+                }
             }
         }
 
