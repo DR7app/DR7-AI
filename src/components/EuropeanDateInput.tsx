@@ -50,6 +50,11 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
   const [displayValue, setDisplayValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const nativeRef = useRef<HTMLInputElement | null>(null);
+  // 17/09/2026 (direzione): il calendario del browser si apre sotto l'elemento
+  // che lo chiama. Chiamarlo dall'input dell'icona (tutto a destra) lo faceva
+  // uscire dalla finestra. Questo input invisibile copre tutto il campo: il
+  // calendario compare sotto la data, allineato a sinistra.
+  const ancoraRef = useRef<HTMLInputElement | null>(null);
 
   const isoToEuropean = (isoDate: string): string => {
     if (!isoDate) return '';
@@ -156,6 +161,16 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
   return (
     <div className={`relative inline-flex items-center ${isFullWidth ? 'w-full' : ''} ${wrapperClassName}`.trim()}>
       <input
+        ref={ancoraRef}
+        type="date"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="absolute left-0 top-0 h-full w-full opacity-0 pointer-events-none"
+      />
+      <input
         type="text"
         name={name}
         id={id}
@@ -165,7 +180,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         onBlur={handleBlur}
         // 17/09/2026 (direzione): un clic su tutto il campo apre il calendario,
         // non solo l'icona in fondo a destra. Si puo' ancora digitare GG/MM/AAAA.
-        onClick={() => { if (!disabled && !readOnly) openPickerFromNative(nativeRef.current) }}
+        onClick={() => { if (!disabled && !readOnly) openPickerFromNative(ancoraRef.current) }}
         placeholder={placeholder}
         required={required}
         disabled={disabled}
@@ -197,7 +212,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => openPickerFromNative(e.currentTarget)}
+        onClick={() => openPickerFromNative(ancoraRef.current)}
         disabled={disabled}
         tabIndex={-1}
         aria-label="Apri calendario"
