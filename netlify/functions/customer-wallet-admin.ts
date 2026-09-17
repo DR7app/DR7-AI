@@ -36,7 +36,7 @@ const handler: Handler = async (event) => {
     }
 
     const { action, customer_id, user_id, amount, description, query, nature, overrideId,
-            destinatari, scadenza, servizi } = JSON.parse(event.body || '{}');
+            destinatari, scadenza, servizi, clientOverrideId } = JSON.parse(event.body || '{}');
 
     switch (action) {
       case 'list_all_balances': {
@@ -288,6 +288,28 @@ const handler: Handler = async (event) => {
             };
           }
           console.log(`[customer-wallet-admin] Saldo negativo (€${newBalance.toFixed(2)}) AUTORIZZATO dalla direzione per ${userId}`);
+        }
+
+        // 17/09/2026 (direzione): l'addebito manuale vuole il codice del
+        // CLIENTE (email). Il database verifica che il codice sia confermato,
+        // del titolare di questo wallet e che copra l'importo, e lo consuma.
+        // Se la funzione SQL non e' ancora installata si prosegue (il
+        // gestionale non deve fermarsi per una migrazione non ancora lanciata).
+        if (!isCredit) {
+          const { error: autErr } = await serviceSupabase.rpc('dr7_wallet_consuma_autorizzazione', {
+            p_override: clientOverrideId || null,
+            p_account: userId,
+            p_importo: amountEur,
+            p_riferimento: { tipo: 'addebito_manuale', operatore: user.email || null },
+          });
+          if (autErr) {
+            const funzioneAssente = autErr.code === 'PGRST202' || autErr.code === '42883'
+              || /could not find the function/i.test(autErr.message || '');
+            if (!funzioneAssente) {
+              return { statusCode: 400, headers, body: JSON.stringify({ error: autErr.message }) };
+            }
+            console.warn('[customer-wallet-admin] dr7_wallet_consuma_autorizzazione non installata: addebito senza verifica del codice cliente');
+          }
         }
 
         if (!creditBalance) {

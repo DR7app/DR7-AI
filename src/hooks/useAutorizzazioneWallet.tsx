@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { authFetch } from '../utils/authFetch'
 import AutorizzazioneWalletClienteModal, { type AutorizzazioneWallet, type ClienteWallet } from '../components/AutorizzazioneWalletClienteModal'
 import { isCreditWallet } from '../utils/paymentMethodMatchers'
 import { leggiMovimentoWallet } from '../utils/walletCliente'
@@ -75,15 +76,30 @@ export function useAutorizzazioneWallet(opzioni?: { onEmailSalvata?: () => void 
   // annullata, cosi' nessuna schermata resta appesa a una promessa mai risolta.
   const resolveApertaRef = useRef<((v: EsitoWallet) => void) | null>(null)
 
-  const coperta = (r: RichiestaWallet, importo: number): AutorizzazioneWallet | null => {
+  // Un codice gia' ottenuto vale solo se gli resta abbastanza: il database lo
+  // scala a ogni prelievo, quindi si chiede al server quanto ne rimane.
+  const coperta = async (r: RichiestaWallet, importo: number): Promise<AutorizzazioneWallet | null> => {
     const ids = chiaviCliente(r.cliente)
-    const trovata = ottenuteRef.current.find(o =>
-      o.aut.importo + 0.001 >= importo && o.chiavi.some(k => ids.includes(k)))
-    if (trovata) return trovata.aut
+    const candidati: AutorizzazioneWallet[] = ottenuteRef.current
+      .filter(o => o.chiavi.some(k => ids.includes(k)))
+      .map(o => o.aut)
     const salvata = r.bookingDetails?.wallet_autorizzazione_cliente
-    if (salvata?.override_id && Number(salvata.importo) + 0.001 >= importo
+    if (salvata?.override_id
         && (!salvata.customer_id || !r.cliente.customerId || salvata.customer_id === r.cliente.customerId)) {
-      return { overrideId: salvata.override_id, customerId: salvata.customer_id || '', importo: Number(salvata.importo) }
+      candidati.push({ overrideId: salvata.override_id, customerId: salvata.customer_id || '', importo: Number(salvata.importo) || 0 })
+    }
+    for (const c of candidati) {
+      try {
+        const res = await authFetch('/.netlify/functions/wallet-autorizzazione-cliente', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'residuo', overrideId: c.overrideId }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (res.ok && d?.valido && Number(d.residuo) + 0.001 >= importo) {
+          return { ...c, customerId: d.customerId || c.customerId }
+        }
+      } catch { /* si chiede un codice nuovo */ }
     }
     return null
   }
@@ -96,7 +112,7 @@ export function useAutorizzazioneWallet(opzioni?: { onEmailSalvata?: () => void 
     if (r.bookingId) gia = (await leggiMovimentoWallet(r.bookingId)).addebitato || 0
     const importo = Math.round((totale - gia) * 100) / 100
     if (importo <= 0) return false
-    const esistente = coperta(r, importo)
+    const esistente = await coperta(r, importo)
     if (esistente) return esistente
     return new Promise<EsitoWallet>(resolve => {
       resolveApertaRef.current?.(null)

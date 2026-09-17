@@ -19,6 +19,9 @@ import { getEmailFrom } from './utils/emailFrom'
 //                 Il cliente si cerca per id scheda, poi per account sito, poi
 //                 per email: non tutte le schermate hanno l'id della scheda.
 // action 'verify' { overrideId, code } -> { success, customerId, importo }
+// action 'residuo' { overrideId } -> { valido, customerId, residuo }
+//                 Quanto resta di un codice gia' confermato: il database lo
+//                 scala a ogni prelievo (dr7_wallet_consuma_autorizzazione).
 
 const LIMITATION_CODE = 'wallet_autorizzazione_cliente'
 const OTP_TTL_MINUTES = 10
@@ -230,6 +233,19 @@ export const handler: Handler = async (event) => {
         .eq('id', overrideId)
 
       return { statusCode: 200, headers, body: JSON.stringify(risposta) }
+    }
+
+    if (body.action === 'residuo') {
+      const { data: riga } = await supabase
+        .from('limitation_overrides')
+        .select('otp_verified, status, metadata')
+        .eq('id', body.overrideId || '00000000-0000-0000-0000-000000000000')
+        .eq('limitation_code', LIMITATION_CODE)
+        .maybeSingle()
+      const meta = (riga?.metadata || {}) as { customer_id?: string; importo?: number; residuo?: number }
+      const residuo = Number(meta.residuo ?? meta.importo ?? 0) || 0
+      const valido = !!riga?.otp_verified && riga.status !== 'consumed' && riga.status !== 'revoked' && residuo > 0
+      return { statusCode: 200, headers, body: JSON.stringify({ valido, customerId: meta.customer_id || null, residuo }) }
     }
 
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Azione non valida' }) }

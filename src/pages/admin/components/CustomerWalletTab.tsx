@@ -534,8 +534,9 @@ export default function CustomerWalletTab() {
     const parsedAmount = parseFloat(amount)
     if (!parsedAmount || parsedAmount <= 0) return
 
+    let esitoCliente: Awaited<ReturnType<typeof autWallet.chiediSeWallet>> = false
     if (modalAction === 'debit') {
-      const esitoCliente = await autWallet.chiediSeWallet('Credit Wallet', {
+      esitoCliente = await autWallet.chiediSeWallet('Credit Wallet', {
         cliente: {
           customerId: modalCustomer.user_id && modalCustomer.id === modalCustomer.user_id ? null : modalCustomer.id,
           userId: modalCustomer.user_id || null,
@@ -565,6 +566,8 @@ export default function CustomerWalletTab() {
         // Presente solo dopo l'autorizzazione della direzione: il server lo
         // rilegge da limitation_overrides, non si fida di questo campo.
         overrideId: overrideDir.activeOverrides.find(o => o.limitationCode === 'wallet.saldo_negativo')?.overrideId,
+        // 17/09/2026: codice del cliente, verificato e consumato dal server.
+        clientOverrideId: esitoCliente ? esitoCliente.overrideId : undefined,
       })
 
       if (data.success) {
