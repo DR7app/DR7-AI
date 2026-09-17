@@ -10641,6 +10641,310 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               </div>
             )}
 
+            {/* 17/09/2026 (direzione): i km subito dopo il veicolo. */}
+            <div className="md:col-span-2 mb-4 p-4 rounded-lg border border-theme-border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Input
+                    label="Sforo per KM (€)"
+                    type="number"
+                    step="0.01"
+                    value={formData.km_overage_fee}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_overage_fee: v })) }}
+                    placeholder="es. 0.50"
+                    disabled={formData.unlimited_km}
+                  />
+                  {formData.vehicle_id && !formData.unlimited_km && (() => {
+                    // Mostra il default da Centralina Pro per la categoria del veicolo.
+                    const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                    const cfgSforo = getSforoForCategory(sv, rentalConfig)
+                    if (!cfgSforo || Number(cfgSforo) <= 0) return null
+                    // BUG FIX 2026-05-16 (v2): legge la label da vehicle_categories
+                    // con alias supercars↔exotic. Prima il fix v1 leggeva
+                    // direttamente vehicle_categories[catId] ma convertProConfig
+                    // scrive sotto chiave 'exotic' quando Pro id e' 'supercars'
+                    // (mapping PRO_TO_DB_CATEGORY). Quindi per Lamborghini
+                    // (category='supercars') la chiave era 'exotic' → label
+                    // non trovata → si mostrava il raw id "supercars". Fix:
+                    // alias come negli altri lookup category.
+                    const _svCat = (sv?.category as string | undefined) || ''
+                    const aliases = _svCat === 'supercars' ? ['supercars', 'exotic']
+                      : _svCat === 'exotic' ? ['exotic', 'supercars']
+                      : _svCat ? [_svCat] : []
+                    let fromConfig = ''
+                    for (const k of aliases) {
+                      const found = rentalConfig?.vehicle_categories?.[k]?.label
+                      if (found) { fromConfig = found; break }
+                    }
+                    const catLabel = fromConfig || _svCat
+                    return (
+                      <p className="text-xs text-amber-400 mt-1">Default Centralina ({catLabel}): €{cfgSforo}/km</p>
+                    )
+                  })()}
+                </div>
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
+                  {/* Show computed KM included from config formula */}
+                  {formData.pickup_date && formData.return_date && !formData.unlimited_km && (() => {
+                    const pickup = new Date(formData.pickup_date)
+                    const ret = new Date(formData.return_date)
+                    const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
+                    const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                    const cat = selectedVeh?.category || '_global'
+                    const km = getKmIncluded(rentalConfig, days, cat)
+                    if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
+                    return (
+                      <div className="p-3 rounded-md border border-green-600/40 bg-green-900/10">
+                        <span className="text-green-400 font-bold text-sm">{km} km inclusi</span>
+                        <span className="text-theme-text-muted text-xs ml-2">({days} {days === 1 ? 'giorno' : 'giorni'})</span>
+                      </div>
+                    )
+                  })()}
+                  {/* 2026-05-28: rimosso preset hardcoded "100 Km / Giorno".
+                      L'admin ha gia':
+                      - "{km} km inclusi" sopra (auto-calcolato da Centralina)
+                      - "Limite KM Personale" input sotto (override manuale)
+                      - "KM Illimitati" checkbox (Illimitati)
+                      Il pacchetto a 100 km fisso non e' piu' un'opzione valida. */}
+                </div>
+
+                {/* Manual KM Input - Fallback if not using presets */}
+                <Input
+                  label="Limite KM Personale"
+                  type="number"
+                  value={formData.km_limit}
+                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_limit: v })) }}
+                  placeholder="es. 150 (Lascia vuoto se Illimitati)"
+                  disabled={formData.unlimited_km}
+                />
+                <div className={`flex items-center gap-2 p-3 rounded-lg border ${formData.unlimited_km ? 'border-blue-500 bg-blue-900/10' : 'border-theme-border'}`}>
+                  <input
+                    type="checkbox"
+                    id="unlimited_km"
+                    checked={formData.unlimited_km}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                      const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForCategory(selectedVeh, rentalConfig)
+                      setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
+                    }}
+                    className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
+                    KM Illimitati
+                    {(() => {
+                      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+                      if (selectedVehicle) {
+                        const tier = customerTier?.tier
+                        const price = getUnlimitedKmPriceRes(selectedVehicle, tier)
+                        // Diagnostic log — verifica quale prezzo stiamo leggendo da Centralina
+                        console.log('[ReservationsTab] KM Illimitati lookup', {
+                          vehicleName: selectedVehicle.display_name,
+                          category: selectedVehicle.category,
+                          customerTier: tier,
+                          priceReturned: price,
+                          rentalConfigUnlimitedExotic: rentalConfig?.unlimited_km?.exotic,
+                        })
+                        if (price === 0) return null // Urban: KM already unlimited
+                        return ` (+€${price}/giorno)`
+                      }
+                      return ''
+                    })()}
+                  </label>
+                </div>
+
+                {/* === PACCHETTI KM (2026-05-16) ===
+                    Pacchetti extra acquistabili per la categoria del veicolo
+                    selezionato. Letti da rentalConfig.pacchetti_km (popolato da
+                    convertProConfig). Mutuamente esclusivi con KM Illimitati.
+                    Cliccando una card → seleziona/deseleziona il pacchetto. */}
+                {(() => {
+                  const selVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
+                  if (!selVeh) {
+                    return (
+                      <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
+                        Seleziona prima un veicolo per vedere i pacchetti KM disponibili.
+                      </div>
+                    )
+                  }
+                  const cat = String(selVeh.category || '').toLowerCase().trim()
+                  if (!cat) return null
+                  if (!pkgsByCat) {
+                    return (
+                      <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
+                        Nessun pacchetto KM configurato. Vai in Centralina Pro {'>'} KM per aggiungerli.
+                      </div>
+                    )
+                  }
+                  const pkgs = resolvePacchetti(cat, pkgsByCat)
+                  if (pkgs.length === 0) {
+                    return (
+                      <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
+                        Nessun pacchetto KM per la categoria <b>{cat}</b>. Aggiungili da Centralina Pro {'>'} KM {'>'} {cat}.
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="space-y-2 mt-2">
+                      <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (cumulativi)</h4>
+                      {pkgs.map(pkg => {
+                        // 2026-05-16: multi-select cumulativo. Ogni pacchetto ha
+                        // qty indipendente in formData.km_packages.
+                        const isDisabled = formData.unlimited_km
+                        const isQtyBuyable = !!(pkg as { is_quantity_buyable?: boolean }).is_quantity_buyable
+                        const maxQty = isQtyBuyable ? Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2) : 1
+                        const qty = formData.km_packages?.[pkg.id] || 0
+                        const isSelected = qty > 0
+                        const setQty = (q: number) => {
+                          const clamped = Math.max(0, Math.min(maxQty, q))
+                          setFormData(prev => {
+                            const next = { ...(prev.km_packages || {}) }
+                            if (clamped === 0) delete next[pkg.id]
+                            else next[pkg.id] = clamped
+                            return { ...prev, km_packages: next }
+                          })
+                        }
+                        return (
+                          <div key={pkg.id}
+                            onClick={() => { if (!isSelected && !isDisabled) setQty(1) }}
+                            className={`p-3 rounded-md border transition-colors ${
+                              isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border'
+                              : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
+                              : 'border-theme-border hover:border-theme-text-muted cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-theme-text-primary">{pkg.label} <span className="text-theme-text-muted font-normal">({pkg.km} km)</span></div>
+                                {pkg.sconto_pct > 0 && (
+                                  <div className="text-xs text-theme-text-muted">Sconto {pkg.sconto_pct}% sul sforo</div>
+                                )}
+                                {isQtyBuyable && !isSelected && (
+                                  <div className="text-xs text-dr7-gold mt-0.5">+ Aggiungi più volte (max {maxQty})</div>
+                                )}
+                                {isSelected && qty > 1 && (
+                                  <div className="text-xs text-dr7-gold font-medium">Totale: {qty * pkg.km} km — €{(pkg.price * qty).toFixed(2)}</div>
+                                )}
+                              </div>
+                              {isSelected ? (
+                                <div className="flex items-center gap-2">
+                                  <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(qty - 1) }}
+                                    className="w-7 h-7 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold disabled:opacity-50">−</button>
+                                  <span className="text-sm font-bold text-theme-text-primary min-w-[1.5rem] text-center">{qty}</span>
+                                  <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setQty(qty + 1) }}
+                                    className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold disabled:opacity-50">+</button>
+                                  <span className="text-sm font-bold text-dr7-gold ml-2">€{(pkg.price * qty).toFixed(2)}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-dr7-gold">+€{pkg.price.toFixed(2)}</span>
+                                  <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(1) }}
+                                    className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold disabled:opacity-50">+</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+
+            {/* 17/09/2026 (direzione): servizi dopo i km, prima di cauzioni e assicurazioni. */}
+            <div className="mb-4">
+              {/* Experience Services & DR7 Flex */}
+              {sezioneForm('servizi') && (
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                {/* 17/09/2026 (direzione): lista lunga — si apre con la casella.
+                    Aperta da sola se ci sono gia' servizi scelti, per non nasconderli. */}
+                {(() => {
+                  const scelti = Object.values(formData.experience_services || {}).filter(q => Number(q) > 0).length
+                  const aperti = serviziExperienceAperti || scelti > 0
+                  return (
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={aperti}
+                        disabled={scelti > 0}
+                        onChange={(e) => setServiziExperienceAperti(e.target.checked)}
+                        className="w-4 h-4 accent-dr7-gold"
+                      />
+                      <span className="text-theme-text-primary font-semibold">Servizi Experience</span>
+                      {scelti > 0 && <span className="text-xs text-theme-text-muted">({scelti} selezionati)</span>}
+                    </label>
+                  )
+                })()}
+                {(serviziExperienceAperti || Object.values(formData.experience_services || {}).some(q => Number(q) > 0)) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  {(() => {
+                    const tier = customerTier?.tier || 'TIER_1'
+                    // 2026-07-18: leggi i servizi DINAMICAMENTE dalla Centralina
+                    // Pro (rentalConfig.experience_services), mantenendo i
+                    // DISATTIVATI con is_active così vengono mostrati GRIGI e non
+                    // aggiungibili (non nascosti). Prima usava una lista hardcoded
+                    // che ignorava del tutto l'on/off della Centralina Pro.
+                    const raw = rentalConfig?.experience_services || []
+                    const availableServices = (raw.length > 0
+                      ? raw.map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit as string, tierOnly: (s.tier_only ?? null) as string | null, is_active: s.is_active !== false }))
+                      : getExperienceServicesForTier(tier).map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit as string, tierOnly: ((s as { tierOnly?: string | null }).tierOnly ?? null), is_active: true }))
+                    ).filter(s => s.unit !== 'per_km' && (!s.tierOnly || s.tierOnly === tier))
+                    return availableServices.map(svc => {
+                      const qty = formData.experience_services[svc.id] || 0
+                      const unitLabel = svc.unit === 'per_day' ? '/giorno' : svc.unit === 'per_hour' ? '/ora' : svc.unit === 'per_item' ? '/unità' : ''
+                      // Disattivato in Centralina Pro → grigio e non aggiungibile.
+                      // Ma se è GIÀ presente sulla prenotazione (qty>0), lascialo
+                      // gestibile per non corrompere prenotazioni esistenti.
+                      const svcDisabled = svc.is_active === false && qty <= 0
+                      return (
+                        <div key={svc.id} className={`flex items-center justify-between p-2 rounded-md border ${svcDisabled ? 'opacity-50 border-theme-border' : qty > 0 ? 'border-dr7-gold bg-dr7-gold/5' : 'border-theme-border'}`}>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-theme-text-primary">{svc.name}</span>
+                            <span className="text-xs text-theme-text-muted ml-1">€{svc.price.toFixed(2)}{unitLabel}</span>
+                            {svcDisabled && <span className="text-xs text-theme-text-muted ml-2">(Disattivato)</span>}
+                          </div>
+                          {svcDisabled ? (
+                            <button type="button" disabled className="ml-2 px-3 py-1 rounded text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed opacity-60">Disattivato</button>
+                          ) : (svc.unit === 'per_item' || svc.unit === 'per_hour') ? (
+                            <div className="flex items-center gap-1 ml-2">
+                              <button type="button" onClick={() => setFormData(prev => {
+                                const es = { ...prev.experience_services }
+                                if ((es[svc.id] || 0) > 0) es[svc.id] = (es[svc.id] || 0) - 1
+                                if (es[svc.id] === 0) delete es[svc.id]
+                                return { ...prev, experience_services: es }
+                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">-</button>
+                              <span className="w-6 text-center text-sm text-theme-text-primary">{qty}</span>
+                              <button type="button" onClick={() => setFormData(prev => {
+                                const es = { ...prev.experience_services }
+                                es[svc.id] = (es[svc.id] || 0) + 1
+                                return { ...prev, experience_services: es }
+                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">+</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setFormData(prev => {
+                              const es = { ...prev.experience_services }
+                              if (es[svc.id]) delete es[svc.id]
+                              else es[svc.id] = 1
+                              return { ...prev, experience_services: es }
+                            })} className={`ml-2 px-3 py-1 rounded text-xs font-medium ${qty > 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border'}`}>
+                              {qty > 0 ? 'Aggiunto' : 'Aggiungi'}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+                )}
+                {/* DR7 FLEX rimosso come addon dedicato — ora è un servizio
+                    in EXPERIENCE_SERVICES via Centralina Pro. */}
+              </div>
+              )}
+            </div>
+
             {/* Kasko & Deposit */}
             {/* 2026-08-14 (roadmap #11): Assicurazione, Km, Sforo e Cauzione
                 sono concetti del Noleggio Terra. Una barca non fa chilometri e
@@ -11091,122 +11395,53 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             {/* Home Pickup UI rimossa per allinearsi a PreventiviTab —
                 vedi nota sopra. */}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(
-                <Select
-                  label="Metodo di Pagamento"
-                  required
-                  value={formData.payment_method}
-                  onChange={(e) => {
-                    const method = e.target.value
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const updates: any = { payment_method: method }
-                    // 2026-05-22: auto-reset a pending SOLO se l'admin
-                    // non ha gia' selezionato un payment_status esplicito
-                    // diverso da pending. Cosi' "Pagato" + "Nexi Pay by
-                    // Link" (es. cliente ha gia' pagato via link manualmente
-                    // o via POS Nexi) NON forza il booking a pending.
-                    // Match anche label "Nexi - Pay by Link" via matcher
-                    // tollerante (era hardcoded a "Nexi Pay by Link" → mai matchava).
-                    if (isNexiPayByLink(method)
-                        && formData.payment_status !== 'paid'
-                        && formData.payment_status !== 'partial') {
-                      updates.payment_status = 'pending'
-                      updates.status = 'pending'
-                      updates.amount_paid = '0'
-                    }
-                    // 17/09/2026 (direzione): scegliere Credit Wallet NON
-                    // segna pagato da solo. Per un attimo lo faceva — il
-                    // database preleva solo dalle prenotazioni pagate — ma
-                    // "Pagato" cambia lo stato della prenotazione e blocca la
-                    // vettura: quando si mette il pagato lo decide chi sta
-                    // davanti allo schermo, non il metodo scelto.
-                    setFormData(prev => ({ ...prev, ...updates }))
-                  }}
-                  options={(() => {
-                    const opts = paymentMethods.map(pm => ({ value: pm.label, label: pm.label }))
-                    // 2026-06-01: dedup case/punctuation-insensitive. Prima
-                    // un booking salvato come "Nexi Pay by Link" e una opzione
-                    // curated "Nexi - Pay by Link" generavano DUE voci nel
-                    // dropdown ("Nexi - Pay by Link" + "Nexi Pay by Link").
-                    // Adesso confrontiamo le stringhe normalizzate (lowercase,
-                    // niente spazi/punteggiatura) prima di aggiungere il legacy.
-                    const norm = (s: string) => (s || '').toString().toLowerCase().replace(/[\s\-_]+/g, ' ').trim()
-                    if (formData.payment_method && !opts.some(o => norm(o.value) === norm(formData.payment_method))) {
-                      opts.push({ value: formData.payment_method, label: formData.payment_method })
-                    }
-                    return opts
-                  })()}
-                />
+            {/* Note */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, notes: v })) }}
+                placeholder="Note interne sulla prenotazione..."
+                rows={2}
+                className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold text-sm resize-none"
+              />
+            </div>
+
+            {/* 17/09/2026 (direzione): tutto il pagamento in fondo, un campo per riga —
+                importo totale, metodo, stato, conferma, importo pagato. */}
+            <div className="mt-4 p-4 rounded-lg border border-theme-border space-y-4">
+              <h4 className="text-theme-text-primary font-semibold">Pagamento</h4>
+              <Input
+                label="Importo Totale (€)"
+                type="number"
+                step="0.01"
+                required
+                value={formData.total_amount}
+                onChange={(e) => {
+                  const newTotal = e.target.value
+                  // 2026-05-18: admin sta digitando il totale a mano → blocca
+                  // i recalc effects dall'overridarlo (consegna/ritiro/pacchetti
+                  // non possono piu' modificare il totale dopo questa azione).
+                  setTotalLock(true)
+                  // 2026-08-03 BUG (direzione): scrivere qui il TOTALE cambiava
+                  // anche l'IMPORTO PAGATO. Con stato "Pagato" l'acconto gia'
+                  // incassato veniva riscritto col totale — e mentre si cancella
+                  // il campo per ridigitarlo (newTotal = '') l'importo pagato
+                  // spariva del tutto. Un campo modifica SOLO se stesso: il
+                  // pagato si tocca dal suo campo o cambiando Stato Pagamento
+                  // (che continua a precompilarlo).
+                  setFormData(prev => ({ ...prev, total_amount: newTotal }))
+                }}
+              />
+              {totalAmountManuallyOverriddenRef.current && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Importo bloccato — modifiche a consegna/ritiro/pacchetti non lo cambieranno piu'.
+                  <button type="button" className="ml-2 underline text-dr7-gold"
+                    onClick={() => setTotalLock(false)}>
+                    Sblocca ricalcolo automatico
+                  </button>
+                </p>
               )}
-              {/* ── Credit Wallet: saldo del cliente e importo che verra' prelevato ──
-                  L'addebito lo esegue il database al salvataggio. Questo riquadro
-                  serve all'operatore per vedere, prima di salvare, da quale wallet
-                  escono i soldi e quanto resta dopo. Se il credito non basta la
-                  prenotazione non si salva: si cambia metodo di pagamento. */}
-              {metodoEWallet && (() => {
-                const dovuto = importoDovutoWallet({
-                  metodo: formData.payment_method,
-                  statoPagamento: formData.payment_status,
-                  totaleEur: parseFloat(formData.total_amount || '0') || 0,
-                  acconoEur: parseFloat(formData.amount_paid || '0') || 0,
-                })
-                if (!formData.customer_id) {
-                  return (
-                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-500 dark:text-amber-400">
-                      Seleziona prima il cliente: l'addebito sul Credit Wallet ha bisogno di sapere a chi appartiene il credito.
-                    </div>
-                  )
-                }
-                if (saldoWalletInCaricamento) {
-                  return (
-                    <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 text-sm text-theme-text-muted">
-                      Lettura del Credit Wallet del cliente...
-                    </div>
-                  )
-                }
-                if (!saldoWallet?.userId) {
-                  return (
-                    <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm font-semibold text-red-600 dark:text-red-400">
-                      Il cliente non ha un Credit Wallet: cambia metodo di pagamento.
-                    </div>
-                  )
-                }
-                const saldo = saldoWallet.saldo ?? 0
-                const residuo = Math.round((saldo - dovuto) * 100) / 100
-                const insufficiente = dovuto > 0 && residuo < 0
-                return (
-                  <div className={`rounded-lg border p-3 space-y-1 text-sm ${
-                    insufficiente
-                      ? 'border-red-500/40 bg-red-500/5'
-                      : 'border-theme-border bg-theme-bg-tertiary'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary">Credit Wallet del cliente</span>
-                      <span className="font-semibold text-theme-text-primary">{formattaEuro(saldo)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary">
-                        {dovuto > 0 ? 'Verrà prelevato ora' : 'Nessun prelievo con questo stato pagamento'}
-                      </span>
-                      <span className="font-semibold text-theme-text-primary">{formattaEuro(dovuto)}</span>
-                    </div>
-                    {/* 16/09/2026 (direzione): mai mostrare un saldo negativo, il
-                        wallet non ci puo' andare. Con credito insufficiente
-                        compare solo l'avviso di cambiare metodo di pagamento. */}
-                    {insufficiente ? (
-                      <p className="pt-1 font-semibold text-red-600 dark:text-red-400">
-                        Credito insufficiente: cambia metodo di pagamento.
-                      </p>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
-                        <span className="font-semibold text-theme-text-primary">{formattaEuro(residuo)}</span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
               {/* Revenue Management — Prezzo Suggerito/Auto */}
               {(revenueSuggestion || revenueLoading) && (
                 <div className={`border rounded-lg p-3 space-y-2 ${
@@ -11446,301 +11681,167 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   )}
                 </div>
               )}
-              {/* Experience Services & DR7 Flex */}
-              {sezioneForm('servizi') && (
-              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
-                {/* 17/09/2026 (direzione): lista lunga — si apre con la casella.
-                    Aperta da sola se ci sono gia' servizi scelti, per non nasconderli. */}
-                {(() => {
-                  const scelti = Object.values(formData.experience_services || {}).filter(q => Number(q) > 0).length
-                  const aperti = serviziExperienceAperti || scelti > 0
-                  return (
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={aperti}
-                        disabled={scelti > 0}
-                        onChange={(e) => setServiziExperienceAperti(e.target.checked)}
-                        className="w-4 h-4 accent-dr7-gold"
-                      />
-                      <span className="text-theme-text-primary font-semibold">Servizi Experience</span>
-                      {scelti > 0 && <span className="text-xs text-theme-text-muted">({scelti} selezionati)</span>}
-                    </label>
-                  )
-                })()}
-                {(serviziExperienceAperti || Object.values(formData.experience_services || {}).some(q => Number(q) > 0)) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  {(() => {
-                    const tier = customerTier?.tier || 'TIER_1'
-                    // 2026-07-18: leggi i servizi DINAMICAMENTE dalla Centralina
-                    // Pro (rentalConfig.experience_services), mantenendo i
-                    // DISATTIVATI con is_active così vengono mostrati GRIGI e non
-                    // aggiungibili (non nascosti). Prima usava una lista hardcoded
-                    // che ignorava del tutto l'on/off della Centralina Pro.
-                    const raw = rentalConfig?.experience_services || []
-                    const availableServices = (raw.length > 0
-                      ? raw.map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit as string, tierOnly: (s.tier_only ?? null) as string | null, is_active: s.is_active !== false }))
-                      : getExperienceServicesForTier(tier).map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit as string, tierOnly: ((s as { tierOnly?: string | null }).tierOnly ?? null), is_active: true }))
-                    ).filter(s => s.unit !== 'per_km' && (!s.tierOnly || s.tierOnly === tier))
-                    return availableServices.map(svc => {
-                      const qty = formData.experience_services[svc.id] || 0
-                      const unitLabel = svc.unit === 'per_day' ? '/giorno' : svc.unit === 'per_hour' ? '/ora' : svc.unit === 'per_item' ? '/unità' : ''
-                      // Disattivato in Centralina Pro → grigio e non aggiungibile.
-                      // Ma se è GIÀ presente sulla prenotazione (qty>0), lascialo
-                      // gestibile per non corrompere prenotazioni esistenti.
-                      const svcDisabled = svc.is_active === false && qty <= 0
-                      return (
-                        <div key={svc.id} className={`flex items-center justify-between p-2 rounded-md border ${svcDisabled ? 'opacity-50 border-theme-border' : qty > 0 ? 'border-dr7-gold bg-dr7-gold/5' : 'border-theme-border'}`}>
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm text-theme-text-primary">{svc.name}</span>
-                            <span className="text-xs text-theme-text-muted ml-1">€{svc.price.toFixed(2)}{unitLabel}</span>
-                            {svcDisabled && <span className="text-xs text-theme-text-muted ml-2">(Disattivato)</span>}
-                          </div>
-                          {svcDisabled ? (
-                            <button type="button" disabled className="ml-2 px-3 py-1 rounded text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed opacity-60">Disattivato</button>
-                          ) : (svc.unit === 'per_item' || svc.unit === 'per_hour') ? (
-                            <div className="flex items-center gap-1 ml-2">
-                              <button type="button" onClick={() => setFormData(prev => {
-                                const es = { ...prev.experience_services }
-                                if ((es[svc.id] || 0) > 0) es[svc.id] = (es[svc.id] || 0) - 1
-                                if (es[svc.id] === 0) delete es[svc.id]
-                                return { ...prev, experience_services: es }
-                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">-</button>
-                              <span className="w-6 text-center text-sm text-theme-text-primary">{qty}</span>
-                              <button type="button" onClick={() => setFormData(prev => {
-                                const es = { ...prev.experience_services }
-                                es[svc.id] = (es[svc.id] || 0) + 1
-                                return { ...prev, experience_services: es }
-                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">+</button>
-                            </div>
-                          ) : (
-                            <button type="button" onClick={() => setFormData(prev => {
-                              const es = { ...prev.experience_services }
-                              if (es[svc.id]) delete es[svc.id]
-                              else es[svc.id] = 1
-                              return { ...prev, experience_services: es }
-                            })} className={`ml-2 px-3 py-1 rounded text-xs font-medium ${qty > 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border'}`}>
-                              {qty > 0 ? 'Aggiunto' : 'Aggiungi'}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })
-                  })()}
-                </div>
-                )}
-                {/* DR7 FLEX rimosso come addon dedicato — ora è un servizio
-                    in EXPERIENCE_SERVICES via Centralina Pro. */}
-              </div>
-              )}
-              <div>
-                <Input
-                  label="Sforo per KM (€)"
-                  type="number"
-                  step="0.01"
-                  value={formData.km_overage_fee}
-                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_overage_fee: v })) }}
-                  placeholder="es. 0.50"
-                  disabled={formData.unlimited_km}
-                />
-                {formData.vehicle_id && !formData.unlimited_km && (() => {
-                  // Mostra il default da Centralina Pro per la categoria del veicolo.
-                  const sv = vehicles.find(v => v.id === formData.vehicle_id)
-                  const cfgSforo = getSforoForCategory(sv, rentalConfig)
-                  if (!cfgSforo || Number(cfgSforo) <= 0) return null
-                  // BUG FIX 2026-05-16 (v2): legge la label da vehicle_categories
-                  // con alias supercars↔exotic. Prima il fix v1 leggeva
-                  // direttamente vehicle_categories[catId] ma convertProConfig
-                  // scrive sotto chiave 'exotic' quando Pro id e' 'supercars'
-                  // (mapping PRO_TO_DB_CATEGORY). Quindi per Lamborghini
-                  // (category='supercars') la chiave era 'exotic' → label
-                  // non trovata → si mostrava il raw id "supercars". Fix:
-                  // alias come negli altri lookup category.
-                  const _svCat = (sv?.category as string | undefined) || ''
-                  const aliases = _svCat === 'supercars' ? ['supercars', 'exotic']
-                    : _svCat === 'exotic' ? ['exotic', 'supercars']
-                    : _svCat ? [_svCat] : []
-                  let fromConfig = ''
-                  for (const k of aliases) {
-                    const found = rentalConfig?.vehicle_categories?.[k]?.label
-                    if (found) { fromConfig = found; break }
-                  }
-                  const catLabel = fromConfig || _svCat
-                  return (
-                    <p className="text-xs text-amber-400 mt-1">Default Centralina ({catLabel}): €{cfgSforo}/km</p>
-                  )
-                })()}
-              </div>
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
-                {/* Show computed KM included from config formula */}
-                {formData.pickup_date && formData.return_date && !formData.unlimited_km && (() => {
-                  const pickup = new Date(formData.pickup_date)
-                  const ret = new Date(formData.return_date)
-                  const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
-                  const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                  const cat = selectedVeh?.category || '_global'
-                  const km = getKmIncluded(rentalConfig, days, cat)
-                  if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
-                  return (
-                    <div className="p-3 rounded-md border border-green-600/40 bg-green-900/10">
-                      <span className="text-green-400 font-bold text-sm">{km} km inclusi</span>
-                      <span className="text-theme-text-muted text-xs ml-2">({days} {days === 1 ? 'giorno' : 'giorni'})</span>
-                    </div>
-                  )
-                })()}
-                {/* 2026-05-28: rimosso preset hardcoded "100 Km / Giorno".
-                    L'admin ha gia':
-                    - "{km} km inclusi" sopra (auto-calcolato da Centralina)
-                    - "Limite KM Personale" input sotto (override manuale)
-                    - "KM Illimitati" checkbox (Illimitati)
-                    Il pacchetto a 100 km fisso non e' piu' un'opzione valida. */}
-              </div>
-
-              {/* Manual KM Input - Fallback if not using presets */}
-              <Input
-                label="Limite KM Personale"
-                type="number"
-                value={formData.km_limit}
-                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_limit: v })) }}
-                placeholder="es. 150 (Lascia vuoto se Illimitati)"
-                disabled={formData.unlimited_km}
-              />
-              <div className={`flex items-center gap-2 p-3 rounded-lg border ${formData.unlimited_km ? 'border-blue-500 bg-blue-900/10' : 'border-theme-border'}`}>
-                <input
-                  type="checkbox"
-                  id="unlimited_km"
-                  checked={formData.unlimited_km}
+              {(
+                <Select
+                  label="Metodo di Pagamento"
+                  required
+                  value={formData.payment_method}
                   onChange={(e) => {
-                    const checked = e.target.checked
-                    const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                    const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForCategory(selectedVeh, rentalConfig)
-                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
-                  }}
-                  className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
-                />
-                <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
-                  KM Illimitati
-                  {(() => {
-                    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-                    if (selectedVehicle) {
-                      const tier = customerTier?.tier
-                      const price = getUnlimitedKmPriceRes(selectedVehicle, tier)
-                      // Diagnostic log — verifica quale prezzo stiamo leggendo da Centralina
-                      console.log('[ReservationsTab] KM Illimitati lookup', {
-                        vehicleName: selectedVehicle.display_name,
-                        category: selectedVehicle.category,
-                        customerTier: tier,
-                        priceReturned: price,
-                        rentalConfigUnlimitedExotic: rentalConfig?.unlimited_km?.exotic,
-                      })
-                      if (price === 0) return null // Urban: KM already unlimited
-                      return ` (+€${price}/giorno)`
+                    const method = e.target.value
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const updates: any = { payment_method: method }
+                    // 2026-05-22: auto-reset a pending SOLO se l'admin
+                    // non ha gia' selezionato un payment_status esplicito
+                    // diverso da pending. Cosi' "Pagato" + "Nexi Pay by
+                    // Link" (es. cliente ha gia' pagato via link manualmente
+                    // o via POS Nexi) NON forza il booking a pending.
+                    // Match anche label "Nexi - Pay by Link" via matcher
+                    // tollerante (era hardcoded a "Nexi Pay by Link" → mai matchava).
+                    if (isNexiPayByLink(method)
+                        && formData.payment_status !== 'paid'
+                        && formData.payment_status !== 'partial') {
+                      updates.payment_status = 'pending'
+                      updates.status = 'pending'
+                      updates.amount_paid = '0'
                     }
-                    return ''
+                    // 17/09/2026 (direzione): scegliere Credit Wallet NON
+                    // segna pagato da solo. Per un attimo lo faceva — il
+                    // database preleva solo dalle prenotazioni pagate — ma
+                    // "Pagato" cambia lo stato della prenotazione e blocca la
+                    // vettura: quando si mette il pagato lo decide chi sta
+                    // davanti allo schermo, non il metodo scelto.
+                    setFormData(prev => ({ ...prev, ...updates }))
+                  }}
+                  options={(() => {
+                    const opts = paymentMethods.map(pm => ({ value: pm.label, label: pm.label }))
+                    // 2026-06-01: dedup case/punctuation-insensitive. Prima
+                    // un booking salvato come "Nexi Pay by Link" e una opzione
+                    // curated "Nexi - Pay by Link" generavano DUE voci nel
+                    // dropdown ("Nexi - Pay by Link" + "Nexi Pay by Link").
+                    // Adesso confrontiamo le stringhe normalizzate (lowercase,
+                    // niente spazi/punteggiatura) prima di aggiungere il legacy.
+                    const norm = (s: string) => (s || '').toString().toLowerCase().replace(/[\s\-_]+/g, ' ').trim()
+                    if (formData.payment_method && !opts.some(o => norm(o.value) === norm(formData.payment_method))) {
+                      opts.push({ value: formData.payment_method, label: formData.payment_method })
+                    }
+                    return opts
                   })()}
-                </label>
-              </div>
-
-              {/* === PACCHETTI KM (2026-05-16) ===
-                  Pacchetti extra acquistabili per la categoria del veicolo
-                  selezionato. Letti da rentalConfig.pacchetti_km (popolato da
-                  convertProConfig). Mutuamente esclusivi con KM Illimitati.
-                  Cliccando una card → seleziona/deseleziona il pacchetto. */}
-              {(() => {
-                const selVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
-                if (!selVeh) {
+                />
+              )}
+              {/* ── Credit Wallet: saldo del cliente e importo che verra' prelevato ──
+                  L'addebito lo esegue il database al salvataggio. Questo riquadro
+                  serve all'operatore per vedere, prima di salvare, da quale wallet
+                  escono i soldi e quanto resta dopo. Se il credito non basta la
+                  prenotazione non si salva: si cambia metodo di pagamento. */}
+              {metodoEWallet && (() => {
+                const dovuto = importoDovutoWallet({
+                  metodo: formData.payment_method,
+                  statoPagamento: formData.payment_status,
+                  totaleEur: parseFloat(formData.total_amount || '0') || 0,
+                  acconoEur: parseFloat(formData.amount_paid || '0') || 0,
+                })
+                if (!formData.customer_id) {
                   return (
-                    <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
-                      Seleziona prima un veicolo per vedere i pacchetti KM disponibili.
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-500 dark:text-amber-400">
+                      Seleziona prima il cliente: l'addebito sul Credit Wallet ha bisogno di sapere a chi appartiene il credito.
                     </div>
                   )
                 }
-                const cat = String(selVeh.category || '').toLowerCase().trim()
-                if (!cat) return null
-                if (!pkgsByCat) {
+                if (saldoWalletInCaricamento) {
                   return (
-                    <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
-                      Nessun pacchetto KM configurato. Vai in Centralina Pro {'>'} KM per aggiungerli.
+                    <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary p-3 text-sm text-theme-text-muted">
+                      Lettura del Credit Wallet del cliente...
                     </div>
                   )
                 }
-                const pkgs = resolvePacchetti(cat, pkgsByCat)
-                if (pkgs.length === 0) {
+                if (!saldoWallet?.userId) {
                   return (
-                    <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
-                      Nessun pacchetto KM per la categoria <b>{cat}</b>. Aggiungili da Centralina Pro {'>'} KM {'>'} {cat}.
+                    <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm font-semibold text-red-600 dark:text-red-400">
+                      Il cliente non ha un Credit Wallet: cambia metodo di pagamento.
                     </div>
                   )
                 }
+                const saldo = saldoWallet.saldo ?? 0
+                const residuo = Math.round((saldo - dovuto) * 100) / 100
+                const insufficiente = dovuto > 0 && residuo < 0
                 return (
-                  <div className="space-y-2 mt-2">
-                    <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (cumulativi)</h4>
-                    {pkgs.map(pkg => {
-                      // 2026-05-16: multi-select cumulativo. Ogni pacchetto ha
-                      // qty indipendente in formData.km_packages.
-                      const isDisabled = formData.unlimited_km
-                      const isQtyBuyable = !!(pkg as { is_quantity_buyable?: boolean }).is_quantity_buyable
-                      const maxQty = isQtyBuyable ? Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2) : 1
-                      const qty = formData.km_packages?.[pkg.id] || 0
-                      const isSelected = qty > 0
-                      const setQty = (q: number) => {
-                        const clamped = Math.max(0, Math.min(maxQty, q))
-                        setFormData(prev => {
-                          const next = { ...(prev.km_packages || {}) }
-                          if (clamped === 0) delete next[pkg.id]
-                          else next[pkg.id] = clamped
-                          return { ...prev, km_packages: next }
-                        })
-                      }
-                      return (
-                        <div key={pkg.id}
-                          onClick={() => { if (!isSelected && !isDisabled) setQty(1) }}
-                          className={`p-3 rounded-md border transition-colors ${
-                            isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border'
-                            : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
-                            : 'border-theme-border hover:border-theme-text-muted cursor-pointer'
-                          }`}
-                        >
-                          <div className="flex justify-between items-center gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-theme-text-primary">{pkg.label} <span className="text-theme-text-muted font-normal">({pkg.km} km)</span></div>
-                              {pkg.sconto_pct > 0 && (
-                                <div className="text-xs text-theme-text-muted">Sconto {pkg.sconto_pct}% sul sforo</div>
-                              )}
-                              {isQtyBuyable && !isSelected && (
-                                <div className="text-xs text-dr7-gold mt-0.5">+ Aggiungi più volte (max {maxQty})</div>
-                              )}
-                              {isSelected && qty > 1 && (
-                                <div className="text-xs text-dr7-gold font-medium">Totale: {qty * pkg.km} km — €{(pkg.price * qty).toFixed(2)}</div>
-                              )}
-                            </div>
-                            {isSelected ? (
-                              <div className="flex items-center gap-2">
-                                <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(qty - 1) }}
-                                  className="w-7 h-7 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold disabled:opacity-50">−</button>
-                                <span className="text-sm font-bold text-theme-text-primary min-w-[1.5rem] text-center">{qty}</span>
-                                <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setQty(qty + 1) }}
-                                  className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold disabled:opacity-50">+</button>
-                                <span className="text-sm font-bold text-dr7-gold ml-2">€{(pkg.price * qty).toFixed(2)}</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-dr7-gold">+€{pkg.price.toFixed(2)}</span>
-                                <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(1) }}
-                                  className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold disabled:opacity-50">+</button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                  <div className={`rounded-lg border p-3 space-y-1 text-sm ${
+                    insufficiente
+                      ? 'border-red-500/40 bg-red-500/5'
+                      : 'border-theme-border bg-theme-bg-tertiary'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary">Credit Wallet del cliente</span>
+                      <span className="font-semibold text-theme-text-primary">{formattaEuro(saldo)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary">
+                        {dovuto > 0 ? 'Verrà prelevato ora' : 'Nessun prelievo con questo stato pagamento'}
+                      </span>
+                      <span className="font-semibold text-theme-text-primary">{formattaEuro(dovuto)}</span>
+                    </div>
+                    {/* 16/09/2026 (direzione): mai mostrare un saldo negativo, il
+                        wallet non ci puo' andare. Con credito insufficiente
+                        compare solo l'avviso di cambiare metodo di pagamento. */}
+                    {insufficiente ? (
+                      <p className="pt-1 font-semibold text-red-600 dark:text-red-400">
+                        Credito insufficiente: cambia metodo di pagamento.
+                      </p>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-theme-text-secondary">Saldo dopo il salvataggio</span>
+                        <span className="font-semibold text-theme-text-primary">{formattaEuro(residuo)}</span>
+                      </div>
+                    )}
                   </div>
                 )
               })()}
+              <Select
+                label="Stato Pagamento"
+                required
+                value={formData.payment_status}
+                onChange={(e) => {
+                  const newStatus = e.target.value
+                  let newAmountPaid = formData.amount_paid
 
+                  // Auto-update amount_paid based on status
+                  if (newStatus === 'paid') {
+                    // 2026-05-30: total_amount È GIÀ il totale pieno (consegna/ritiro inclusi).
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                    newAmountPaid = centsToEurStr(fullTotalCents)
+                  } else if (newStatus === 'unpaid') {
+                    newAmountPaid = '0' // No payment
+                  } else if (newStatus === 'partial') {
+                    // 2026-05-28: switching to 'partial' from 'paid' kept the
+                    // full amount_paid, making the system treat it as fully
+                    // paid even though status said partial. Reset to 0 unless
+                    // the existing amount is already a true partial (strictly
+                    // less than total). Admin then types the partial amount.
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                    const currentPaidCents = eurToCents(formData.amount_paid || '0')
+                    if (currentPaidCents >= fullTotalCents || currentPaidCents <= 0) {
+                      newAmountPaid = '0'
+                    }
+                    // else: already a valid partial — preserve admin's input
+                  }
+                  // If 'pending' (Da Saldare), leave amount_paid as is (allows partial)
+
+                  setFormData({
+                    ...formData,
+                    payment_status: newStatus,
+                    amount_paid: newAmountPaid,
+                    // Map payment status to booking status consistently
+                    status: newStatus === 'paid' ? 'confirmed'
+                      : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
+                    payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
+                  })
+                }}
+                options={[
+                  { value: 'pending', label: 'Da Saldare' },
+                  { value: 'partial', label: 'Parziale' },
+                  { value: 'paid', label: 'Pagato' }
+                ]}
+              />
               {/* Conferma Prenotazione — non scade dopo 1h, visibile in rosso con nome cliente */}
               {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
                 <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
@@ -11757,7 +11858,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   </label>
                 </div>
               )}
-
               <div>
                 <Input
                   label="Importo Pagato (€)"
@@ -11788,18 +11888,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 label="Valuta"
                 value={formData.currency}
                 onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, currency: v })) }}
-              />
-            </div>
-
-            {/* Note */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, notes: v })) }}
-                placeholder="Note interne sulla prenotazione..."
-                rows={2}
-                className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold text-sm resize-none"
               />
             </div>
 
@@ -11878,88 +11966,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </div>
               )
             })()}
-
-            {/* 17/09/2026 (direzione): Stato Pagamento e Importo Totale
-                in fondo al modal, uno per riga. */}
-            <div className="mt-4 space-y-4">
-              <Select
-                label="Stato Pagamento"
-                required
-                value={formData.payment_status}
-                onChange={(e) => {
-                  const newStatus = e.target.value
-                  let newAmountPaid = formData.amount_paid
-
-                  // Auto-update amount_paid based on status
-                  if (newStatus === 'paid') {
-                    // 2026-05-30: total_amount È GIÀ il totale pieno (consegna/ritiro inclusi).
-                    const fullTotalCents = eurToCents(formData.total_amount || '0')
-                    newAmountPaid = centsToEurStr(fullTotalCents)
-                  } else if (newStatus === 'unpaid') {
-                    newAmountPaid = '0' // No payment
-                  } else if (newStatus === 'partial') {
-                    // 2026-05-28: switching to 'partial' from 'paid' kept the
-                    // full amount_paid, making the system treat it as fully
-                    // paid even though status said partial. Reset to 0 unless
-                    // the existing amount is already a true partial (strictly
-                    // less than total). Admin then types the partial amount.
-                    const fullTotalCents = eurToCents(formData.total_amount || '0')
-                    const currentPaidCents = eurToCents(formData.amount_paid || '0')
-                    if (currentPaidCents >= fullTotalCents || currentPaidCents <= 0) {
-                      newAmountPaid = '0'
-                    }
-                    // else: already a valid partial — preserve admin's input
-                  }
-                  // If 'pending' (Da Saldare), leave amount_paid as is (allows partial)
-
-                  setFormData({
-                    ...formData,
-                    payment_status: newStatus,
-                    amount_paid: newAmountPaid,
-                    // Map payment status to booking status consistently
-                    status: newStatus === 'paid' ? 'confirmed'
-                      : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
-                    payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
-                  })
-                }}
-                options={[
-                  { value: 'pending', label: 'Da Saldare' },
-                  { value: 'partial', label: 'Parziale' },
-                  { value: 'paid', label: 'Pagato' }
-                ]}
-              />
-              <Input
-                label="Importo Totale (€)"
-                type="number"
-                step="0.01"
-                required
-                value={formData.total_amount}
-                onChange={(e) => {
-                  const newTotal = e.target.value
-                  // 2026-05-18: admin sta digitando il totale a mano → blocca
-                  // i recalc effects dall'overridarlo (consegna/ritiro/pacchetti
-                  // non possono piu' modificare il totale dopo questa azione).
-                  setTotalLock(true)
-                  // 2026-08-03 BUG (direzione): scrivere qui il TOTALE cambiava
-                  // anche l'IMPORTO PAGATO. Con stato "Pagato" l'acconto gia'
-                  // incassato veniva riscritto col totale — e mentre si cancella
-                  // il campo per ridigitarlo (newTotal = '') l'importo pagato
-                  // spariva del tutto. Un campo modifica SOLO se stesso: il
-                  // pagato si tocca dal suo campo o cambiando Stato Pagamento
-                  // (che continua a precompilarlo).
-                  setFormData(prev => ({ ...prev, total_amount: newTotal }))
-                }}
-              />
-              {totalAmountManuallyOverriddenRef.current && (
-                <p className="text-xs text-amber-400 mt-1">
-                  Importo bloccato — modifiche a consegna/ritiro/pacchetti non lo cambieranno piu'.
-                  <button type="button" className="ml-2 underline text-dr7-gold"
-                    onClick={() => setTotalLock(false)}>
-                    Sblocca ricalcolo automatico
-                  </button>
-                </p>
-              )}
-            </div>
 
             <div className="flex flex-wrap gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
