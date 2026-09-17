@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -7,6 +7,8 @@ import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 import { sanitizeMoney } from '../../../utils/money'
+import { useWalletPenale } from '../../../components/WalletPenale'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 
 interface PenaltyModalProps {
     /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
@@ -227,6 +229,28 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
     const vehicleTypeLabel = isSupercar ? 'Supercar' : vehicleCategory === 'aziendali' ? 'Aziendali' : 'Urban / Utilitarie'
 
+    // 17/09/2026 (direzione): Credit Wallet = saldo visibile, codice del
+    // cliente e prelievo vero (components/WalletPenale). Importo = totale
+    // (con prezzo finale), come la fattura.
+    const subtotaleWallet = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
+    const prezzoFinaleWallet = parseFloat(finalPriceInput)
+    const importoWallet = Number.isFinite(prezzoFinaleWallet) && prezzoFinaleWallet > 0 && prezzoFinaleWallet < subtotaleWallet
+        ? prezzoFinaleWallet : subtotaleWallet
+    const walletPenale = useWalletPenale({
+        cliente: {
+            customerId: booking.customer_id || null,
+            userId: booking.user_id || null,
+            email: booking.booking_details?.customer?.email || null,
+        },
+        customerName: booking.customer_name,
+        serviceType,
+        metodo: paymentMethod,
+        statoPagamento: paymentStatus,
+        importo: Math.round(importoWallet * 100) / 100,
+    })
+    // Un solo salvataggio alla volta: col wallet un doppio clic preleverebbe due volte.
+    const submitLockRef = useRef(false)
+
     if (!isOpen) return null
 
     function getCartQty(penaltyId: string): number {
@@ -286,13 +310,49 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const cartTotal = hasFinalPrice ? finalPriceParsed : cartSubtotal
 
     const handleSubmit = async () => {
+        if (submitLockRef.current) return
         setError('')
         if (cart.length === 0) { setError('Aggiungi almeno una penale.'); return }
         if (cartTotal <= 0) { setError('Il totale deve essere maggiore di zero.'); return }
 
+        submitLockRef.current = true
         setIsGenerating(true)
         try {
             if (paymentStatus === 'paid') {
+                // 17/09/2026: col Credit Wallet prima si preleva (credito + codice
+                // del cliente); se non riesce non si salva niente. Le penali si
+                // registrano SUBITO dopo il prelievo, prima della fattura: se la
+                // fattura fallisce, il prelievo resta comunque tracciato.
+                const esitoWallet = await walletPenale.verificaEPreleva(
+                    `Penale DR7-${(booking.id || '').substring(0, 8).toUpperCase()}: ${cart.map(c => c.label).join(', ')}`)
+                if (esitoWallet.errore) throw new Error(esitoWallet.errore)
+                const addebitoWallet = esitoWallet.addebito
+                if (addebitoWallet) {
+                    const { data: bWallet, error: errWallet } = await supabase
+                        .from('bookings').select('booking_details').eq('id', booking.id).single()
+                    const dWallet = bWallet?.booking_details || {}
+                    const oggiWallet = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                    const { error: errSalvaWallet } = errWallet ? { error: errWallet } : await supabase.from('bookings').update({
+                        booking_details: {
+                            ...dWallet,
+                            penalties: [...(dWallet.penalties || []), ...cart.map(c => ({
+                                label: c.label,
+                                amount: c.unitPrice,
+                                quantity: c.quantity,
+                                total: Math.round(c.unitPrice * c.quantity * 100) / 100,
+                                note: note || '',
+                                date: oggiWallet,
+                                paymentStatus: 'paid',
+                                paymentMethod,
+                                walletAddebito: addebitoWallet,
+                            }))],
+                        },
+                    }).eq('id', booking.id)
+                    if (errSalvaWallet) {
+                        throw new Error(`Errore nel salvataggio della penale. ATTENZIONE: dal Credit Wallet sono gia' stati prelevati € ${addebitoWallet.importo.toFixed(2)}.`)
+                    }
+                }
+
                 // PAGATO: generate fattura + send to SDI
                 const response = await authFetch('/.netlify/functions/generate-penalty-invoice', {
                     method: 'POST',
@@ -333,7 +393,8 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     .eq('id', booking.id)
                     .single()
 
-                if (!fetchErrPaid && currentBookingPaid) {
+                // 17/09/2026: col wallet le penali sono gia' state registrate sopra.
+                if (!fetchErrPaid && currentBookingPaid && !addebitoWallet) {
                     const detailsPaid = currentBookingPaid.booking_details || {}
                     const existingPenaltiesPaid = detailsPaid.penalties || []
                     const italyDatePaid = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
@@ -507,6 +568,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
             console.error('Error generating penalty:', err)
             setError(_errMsg || 'Errore nella generazione.')
         } finally {
+            submitLockRef.current = false
             setIsGenerating(false)
         }
     }
@@ -807,7 +869,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select
                             value={paymentStatus}
-                            onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link')}
+                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link'); walletPenale.chiedi(paymentMethod, e.target.value) }}
                             disabled={isGenerating}
                             className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                         >
@@ -823,7 +885,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             <span className="text-[13px] text-theme-text-muted">Metodo</span>
                             <select
                                 value={paymentMethod}
-                                onChange={e => setPaymentMethod(e.target.value)}
+                                onChange={e => { setPaymentMethod(e.target.value); if (isCreditWallet(e.target.value)) walletPenale.chiedi(e.target.value, paymentStatus) }}
                                 disabled={isGenerating}
                                 className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                             >
@@ -836,6 +898,8 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             </select>
                         </div>
                     )}
+
+                    {paymentStatus === 'paid' && walletPenale.riquadro}
 
                     {/* CTA buttons */}
                     <div className="flex gap-3 pt-1">
@@ -867,6 +931,9 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     </div>
                 </div>
             </div>
+            {/* 17/09/2026: popup del codice del cliente (Credit Wallet). Il clic
+                non deve arrivare allo sfondo, che chiude la modale. */}
+            <div onClick={e => e.stopPropagation()}>{walletPenale.modale}</div>
         </div>
     )
 }

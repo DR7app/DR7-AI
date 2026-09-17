@@ -7,6 +7,8 @@ import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 import { authFetch } from '../../../utils/authFetch'
 import { sanitizeMoney, parseMoney } from '../../../utils/money'
+import { useWalletPenale } from '../../../components/WalletPenale'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 
 interface DanniModalProps {
     /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
@@ -181,6 +183,23 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
         return danniByCategory[vehicleCategory] || []
     }, [danniByCategory, vehicleCategory])
 
+    // 17/09/2026 (direzione): Credit Wallet = saldo visibile, codice del
+    // cliente e prelievo vero (components/WalletPenale). Stesso importo del
+    // salvataggio: l'importo pagato, altrimenti il totale del carrello.
+    const importoWallet = amountPaid ? parseMoney(amountPaid) : cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
+    const walletPenale = useWalletPenale({
+        cliente: {
+            customerId: booking.customer_id || null,
+            userId: booking.user_id || null,
+            email: booking.customer_email || booking.booking_details?.customer?.email || null,
+        },
+        customerName: booking.customer_name,
+        serviceType,
+        metodo: paymentMethod,
+        statoPagamento: paymentStatus,
+        importo: Math.round(importoWallet * 100) / 100,
+    })
+
     if (!isOpen) return null
 
     function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -248,6 +267,13 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
         submitLockRef.current = true
         setIsGenerating(true)
         try {
+            // 17/09/2026: col Credit Wallet prima si preleva (credito + codice
+            // del cliente); se non riesce non si salva niente.
+            const esitoWallet = await walletPenale.verificaEPreleva(
+                `Danno DR7-${(booking.id || '').substring(0, 8).toUpperCase()}: ${cart.map(c => c.label).join(', ')}`)
+            if (esitoWallet.errore) throw new Error(esitoWallet.errore)
+            const addebitoWallet = esitoWallet.addebito
+
             // Upload photos if any
             let photoUrls: string[] = []
             if (photos.length > 0) {
@@ -293,6 +319,8 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
                     amountPaid: itemPaid,
                     photos: photoUrls,
+                    // 17/09/2026: traccia del prelievo dal Credit Wallet (una volta sola).
+                    ...(addebitoWallet ? { walletAddebito: addebitoWallet } : {}),
                 }
             })
 
@@ -306,7 +334,11 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 })
                 .eq('id', booking.id)
 
-            if (updateErr) throw new Error('Errore nel salvataggio del danno.')
+            if (updateErr) {
+                throw new Error(addebitoWallet
+                    ? `Errore nel salvataggio del danno. ATTENZIONE: dal Credit Wallet sono gia' stati prelevati € ${addebitoWallet.importo.toFixed(2)}.`
+                    : 'Errore nel salvataggio del danno.')
+            }
 
             const isFullyPaid = paymentStatus === 'paid' && paidAmount >= cartTotal
 
@@ -717,7 +749,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select
                             value={paymentStatus}
-                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link'); if (e.target.value !== 'paid') setAmountPaid('') }}
+                            onChange={e => { setPaymentStatus(e.target.value as 'paid' | 'pending' | 'nexi_pay_by_link'); if (e.target.value !== 'paid') setAmountPaid(''); walletPenale.chiedi(paymentMethod, e.target.value) }}
                             disabled={isGenerating}
                             className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
                         >
@@ -733,7 +765,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                             <span className="text-[13px] text-theme-text-muted">Metodo</span>
                             <select
                                 value={paymentMethod}
-                                onChange={e => setPaymentMethod(e.target.value)}
+                                onChange={e => { setPaymentMethod(e.target.value); if (isCreditWallet(e.target.value)) walletPenale.chiedi(e.target.value, paymentStatus) }}
                                 disabled={isGenerating}
                                 className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50"
                             >
@@ -762,6 +794,8 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                             />
                         </div>
                     )}
+
+                    {paymentStatus === 'paid' && walletPenale.riquadro}
 
                     {/* CTA buttons */}
                     <div className="flex gap-3 pt-1">
@@ -792,6 +826,9 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     </div>
                 </div>
             </div>
+            {/* 17/09/2026: popup del codice del cliente (Credit Wallet). Il clic
+                non deve arrivare allo sfondo, che chiude la modale. */}
+            <div onClick={e => e.stopPropagation()}>{walletPenale.modale}</div>
         </div>
     )
 }

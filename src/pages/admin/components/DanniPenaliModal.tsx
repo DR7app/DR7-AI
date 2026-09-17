@@ -7,6 +7,8 @@ import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 import { sanitizeMoney } from '../../../utils/money'
+import { useWalletPenale } from '../../../components/WalletPenale'
+import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 
 interface DanniPenaliModalProps {
     /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
@@ -405,6 +407,27 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [danniFromCfg, vehicleCategory])
 
+    // 17/09/2026 (direzione): Credit Wallet = saldo visibile, codice del
+    // cliente e prelievo vero (components/WalletPenale). Stesso importo del
+    // salvataggio: l'importo pagato, altrimenti il totale (con prezzo finale).
+    const subtotaleWallet = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
+    const prezzoFinaleWallet = parseFloat(finalPriceInput)
+    const totaleWallet = Number.isFinite(prezzoFinaleWallet) && prezzoFinaleWallet > 0 && prezzoFinaleWallet < subtotaleWallet
+        ? prezzoFinaleWallet : subtotaleWallet
+    const importoWallet = amountPaid ? parseFloat(amountPaid) : totaleWallet
+    const walletPenale = useWalletPenale({
+        cliente: {
+            customerId: booking.customer_id || null,
+            userId: booking.user_id || null,
+            email: booking.customer_email || booking.booking_details?.customer?.email || null,
+        },
+        customerName: booking.customer_name,
+        serviceType,
+        metodo: paymentMethod,
+        statoPagamento: paymentStatus,
+        importo: Number.isFinite(importoWallet) ? Math.round(importoWallet * 100) / 100 : 0,
+    })
+
     if (!isOpen) return null
 
     const danniItems = cart.filter(c => c.type === 'danno')
@@ -555,6 +578,13 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         submitLockRef.current = true
         setIsGenerating(true)
         try {
+            // 17/09/2026: col Credit Wallet prima si preleva (credito + codice
+            // del cliente); se non riesce non si salva niente.
+            const esitoWallet = await walletPenale.verificaEPreleva(
+                `${danniItems.length > 0 && penaliItems.length > 0 ? 'Danni/Penali' : danniItems.length > 0 ? 'Danno' : 'Penale'} DR7-${(booking.id || '').substring(0, 8).toUpperCase()}: ${cart.map(c => c.label).join(', ')}`)
+            if (esitoWallet.errore) throw new Error(esitoWallet.errore)
+            const addebitoWallet = esitoWallet.addebito
+
             // Upload photos
             let photoUrls: string[] = []
             if (photos.length > 0) photoUrls = await uploadDanniPhotos()
@@ -601,6 +631,8 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     paymentStatus: isPartial ? 'partial' : paymentStatus,
                     paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
                     amountPaid: itemPaid, photos: photoUrls,
+                    // 17/09/2026: traccia del prelievo dal Credit Wallet (una volta sola).
+                    ...(addebitoWallet ? { walletAddebito: addebitoWallet } : {}),
                 }
             })
 
@@ -625,6 +657,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     paymentStatus: isPartial ? 'partial' : paymentStatus,
                     paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
                     amountPaid: itemPaid,
+                    ...(addebitoWallet ? { walletAddebito: addebitoWallet } : {}),
                 }
             })
 
@@ -637,7 +670,11 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 .from('bookings')
                 .update({ booking_details: updatedDetails })
                 .eq('id', booking.id)
-            if (updateErr) throw new Error('Errore nel salvataggio.')
+            if (updateErr) {
+                throw new Error(addebitoWallet
+                    ? `Errore nel salvataggio. ATTENZIONE: dal Credit Wallet sono gia' stati prelevati € ${addebitoWallet.importo.toFixed(2)}.`
+                    : 'Errore nel salvataggio.')
+            }
 
             // Determine what we're saving
             const hasDanni = danniItems.length > 0
@@ -1235,7 +1272,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     <div className="flex items-center gap-3">
                         <span className="text-[13px] text-theme-text-muted">Stato pagamento</span>
                         <select value={paymentStatus}
-                            onChange={e => { setPaymentStatus(e.target.value as typeof paymentStatus); if (e.target.value !== 'paid') setAmountPaid('') }}
+                            onChange={e => { setPaymentStatus(e.target.value as typeof paymentStatus); if (e.target.value !== 'paid') setAmountPaid(''); walletPenale.chiedi(paymentMethod, e.target.value) }}
                             disabled={isGenerating}
                             className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                         >
@@ -1250,7 +1287,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         <>
                             <div className="flex items-center gap-3">
                                 <span className="text-[13px] text-theme-text-muted">Metodo</span>
-                                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} disabled={isGenerating}
+                                <select value={paymentMethod} onChange={e => { setPaymentMethod(e.target.value); if (isCreditWallet(e.target.value)) walletPenale.chiedi(e.target.value, paymentStatus) }} disabled={isGenerating}
                                     className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                                 >
                                     {paymentMethods.map(pm => (
@@ -1269,6 +1306,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                     className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50 placeholder-theme-text-muted/50"
                                 />
                             </div>
+                            {walletPenale.riquadro}
                         </>
                     )}
 
@@ -1296,6 +1334,9 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     </div>
                 </div>
             </div>
+            {/* 17/09/2026: popup del codice del cliente (Credit Wallet). Il clic
+                non deve arrivare allo sfondo, che chiude la modale. */}
+            <div onClick={e => e.stopPropagation()}>{walletPenale.modale}</div>
         </div>
     )
 }
