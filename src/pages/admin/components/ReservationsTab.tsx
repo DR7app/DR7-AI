@@ -727,6 +727,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // OTP email shows only what the operator actually changed.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editFormSnapshotRef = useRef<Record<string, any> | null>(null)
+  // 17/09/2026: la riga intera della prenotazione aperta in modifica.
+  // Il salvataggio riparte da TUTTO il suo booking_details (vedi
+  // processBookingSubmission): mai piu' una modifica che cancella i dati
+  // che il form non mostra.
+  const editingBookingRef = useRef<Booking | null>(null)
+  // 17/09/2026: l'operatore ha scritto i km a mano. Da quel momento nessun
+  // ricalcolo automatico li tocca (come totalAmountManuallyOverriddenRef).
+  const kmLimitManualRef = useRef<boolean>(false)
 
   // 2026-08-25: il form di prenotazione NON e' un overlay, e' un blocco in cima
   // alla pagina. Cliccando "Modifica" su una riga in fondo alla lista si apriva
@@ -1752,7 +1760,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // ricalcolarlo dopo (anche solo per re-render dello useEffect)
               // fa "cambiare i km" silenziosamente — bug riportato 2026-05-22.
               // Solo per booking nuove (editingId null) auto-popoliamo da config.
-              if (!prev.unlimited_km && !editingId) {
+              if (!prev.unlimited_km && !editingId && !kmLimitManualRef.current) {
                 const vehCategory = selectedVehicle?.category || ''
                 const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
                 const kmIncluded = getKmIncluded(rentalConfig, data.rentalDays, kmCat)
@@ -1918,7 +1926,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // Auto-calculate KM limit = base (da rental days) + km dei pacchetti
       // KM selezionati × quantita'. Admin vuole vedere subito il limite totale
       // gia' sommato, senza doverlo digitare a mano.
-      if (!formData.unlimited_km) {
+      // 17/09/2026: MAI in modifica (i km sono quelli del contratto: una
+      // prenotazione da 200 km tornava al valore di tabella appena si
+      // toccava la cauzione) e mai sopra un valore scritto a mano.
+      if (!formData.unlimited_km && !editingId && !kmLimitManualRef.current) {
         const vehCategory = selectedVehicle?.category || ''
         const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
         const kmIncluded = getKmIncluded(rentalConfig, revenueSuggestion.rentalDays, kmCat)
@@ -2674,6 +2685,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   // Auto-apply special pricing for VIP clients (Massimo, Jeanne)
   useEffect(() => {
+    // In modifica il prezzo e i km sono gia' concordati: non riscriverli.
+    if (editingId) return
     if (!formData.customer_id || !formData.pickup_date || !formData.return_date) return
 
     const customerName = customers.find(c => c.id === formData.customer_id)?.full_name
@@ -2695,10 +2708,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
       deposit: specialRule.noDeposit ? '0' : prev.deposit,
     }))
-  }, [formData.customer_id, formData.pickup_date, formData.return_date, customers])
+  }, [formData.customer_id, formData.pickup_date, formData.return_date, customers, editingId])
 
   // Reset insurance option when vehicle or tier changes
   useEffect(() => {
+    // 17/09/2026: in modifica, finche' veicolo e assicurazione sono quelli
+    // salvati, l'assicurazione della prenotazione resta la sua (la fascia o la
+    // config che arrivano dopo l'apertura non devono sostituirla da sole).
+    const snapEdit = editingId ? editFormSnapshotRef.current : null
+    if (snapEdit
+      && formData.vehicle_id === snapEdit.vehicle_id
+      && formData.insurance_option === snapEdit.insurance_option) return
     if (formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       if (!selectedVehicle) return;
@@ -2728,7 +2748,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // (scooter/urban/suv_luxury...) restava il fallback overlay (supercars
     // Kasko Base) invece dell'RCA della categoria — il booking salvava
     // l'assicurazione sbagliata in modo intermittente (bug 2026-06-08).
-  }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier, rentalConfig, configOverlay])
+  }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier, rentalConfig, configOverlay, editingId])
 
   // Default KM in base alla CATEGORIA del veicolo selezionato:
   //  - categorie configurate come illimitate in Centralina (tabella km vuota →
@@ -4767,6 +4787,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // only fields actually modified by the operator (not parsing/format
     // differences between booking_details shapes and the form's keys).
     editFormSnapshotRef.current = editSnap
+    editingBookingRef.current = booking
+    // Punto di partenza della cauzione = quello della prenotazione. Senza,
+    // il ref teneva i valori del form precedente e la prima esecuzione del
+    // ricalcolo vedeva un "cambio cauzione" mai fatto e riscriveva totale e km.
+    prevDepositRef.current = { status: editSnap.deposit_status, option_id: editSnap.deposit_option_id }
 
     // Restore tier from booking_details or re-compute from customer
     if (booking.booking_details?.driver_tier && booking.booking_details?.driver_age != null && booking.booking_details?.driver_license_years != null) {
@@ -6838,6 +6863,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         }
       })
 
+      // 17/09/2026: in modifica si riparte dalla prenotazione COM'E' ADESSO nel
+      // database. Prima il booking_details veniva ricostruito da una lista
+      // corta di chiavi prese dall'elenco (e se la prenotazione non era
+      // nell'elenco caricato, da niente): tutto il resto spariva al primo
+      // Salva. Se non si riesce a rileggerla non si salva.
+      let bookingOriginale: Booking | null = null
+      if (editingId) {
+        const { data: rigaFresca } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('id', editingId)
+          .maybeSingle()
+        bookingOriginale = (rigaFresca as Booking | null)
+          || (editingBookingRef.current?.id === editingId ? editingBookingRef.current : null)
+          || bookings.find(b => b.id === editingId)
+          || null
+        if (!bookingOriginale) {
+          throw new Error('Impossibile rileggere la prenotazione dal database. Salvataggio annullato per non perdere i dati: riprova tra un attimo.')
+        }
+      }
+
       const bookingData = {
         user_id: customerId, // Store customer ID to link booking to customer for contract generation
         guest_name: customerInfo?.full_name || 'N/A', // Required for guest bookings
@@ -6956,8 +7002,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // When editing, preserve metadata that the form doesn't manage
           // (extension history, contracts, deposit options, etc.)
           ...(editingId ? (() => {
-            const existingBooking = bookings.find(b => b.id === editingId)
-            const bd = existingBooking?.booking_details
+            const bd = bookingOriginale?.booking_details
             // 2026-06-06: quando una modifica salda interamente la prenotazione
             // (payment_status = 'paid'), marca come 'paid' anche le estensioni
             // ancora 'pending'/'partial'/'nexi_pay_by_link' in extension_history.
@@ -6973,33 +7018,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     : ext
                 ))
               : bd?.extension_history
-            return bd ? {
+            if (!bd) return {}
+            // TUTTO il booking_details salvato, poi sopra i campi del form.
+            // Le uniche chiavi tolte sono quelle che il form scrive solo se
+            // accese (conferma manuale): spegnerle deve cancellarle davvero.
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+            const { manually_confirmed: _mc, manually_confirmed_at: _mca, ...restoBd } = bd as any
+            return {
+              ...(confirmBooking ? bd : restoBd),
               extension_history: settledExtensionHistory,
-              extension_contracts: bd.extension_contracts,
-              contract_generated_at: bd.contract_generated_at,
-              depositOption: bd.depositOption,
-              noDepositSurcharge: bd.noDepositSurcharge,
-              // Preserve Nexi payment data
-              nexi_payment_link: bd.nexi_payment_link,
-              nexi_order_id: bd.nexi_order_id,
-              nexi_transaction_id: bd.nexi_transaction_id,
-              nexi_contract_id: bd.nexi_contract_id,
-              nexi_paid_at: bd.nexi_paid_at,
-              nexi_extension_paid_at: bd.nexi_extension_paid_at,
-              paymentStatus: bd.paymentStatus,
-              // Preserve danni & penali
-              danni: bd.danni,
-              penalties: bd.penalties,
-              // Preserve reminder flags (set by trigger-reminders)
-              deposit_reminder_sent: bd.deposit_reminder_sent,
-              deposit_reminder_sent_at: bd.deposit_reminder_sent_at,
-              day_before_reminder_sent: bd.day_before_reminder_sent,
-              day_before_reminder_sent_at: bd.day_before_reminder_sent_at,
-              pre_rental_offer_sent: bd.pre_rental_offer_sent,
-              iban_request_sent: bd.iban_request_sent,
-              // Preserve insurance field (read by invoice generator)
-              insurance: bd.insurance,
-            } : {}
+            }
           })() : {}),
           customer: {
             fullName: customerInfo?.full_name || '',
@@ -7061,6 +7089,24 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          // Prenotazioni nate sul sito: contratto e messaggi leggono anche
+          // kmPackage. Va allineato ai km del form, altrimenti la modifica
+          // dei km non arriverebbe mai sul contratto.
+          ...((() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pkg = (bookingOriginale?.booking_details as any)?.kmPackage
+            if (!pkg || typeof pkg !== 'object') return {}
+            if (formData.unlimited_km) {
+              return { kmPackage: { ...pkg, type: 'unlimited', distance: 'unlimited', includedKm: Math.max(9999, Number(pkg.includedKm) || 0) } }
+            }
+            const km = parseInt(String(formData.km_limit), 10)
+            if (!Number.isFinite(km) || km <= 0) {
+              // Illimitati tolto senza scrivere i km: il pacchetto non deve
+              // continuare a dire "illimitati".
+              return { kmPackage: { ...pkg, type: 'included', distance: '', includedKm: 0 } }
+            }
+            return { kmPackage: { ...pkg, type: 'included', distance: `${km} km`, includedKm: km } }
+          })()),
           // 2026-05-16: pacchetti KM CUMULATIVI (lista).
           // booking_details.km_packages = [] di tutti i pacchetti selezionati,
           // ciascuno con qty + totali. booking_details.km_package (singolo) =
@@ -7073,6 +7119,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
             const pkgs = resolvePacchetti(v?.category, pkgsByCat)
             const out: Array<{ id: string; label: string; km: number; sconto_pct: number; price: number; quantity: number; total_km: number; total_price: number }> = []
+            // Pacchetti gia' comprati che la config attuale non riconosce piu':
+            // restano come erano salvati invece di sparire.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const salvati: any[] = Array.isArray((bookingOriginale?.booking_details as any)?.km_packages)
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ? (bookingOriginale!.booking_details as any).km_packages : []
+            for (const vecchio of salvati) {
+              if (vecchio?.id && (list[vecchio.id] || 0) > 0 && !pkgs.some(p => p.id === vecchio.id)) out.push(vecchio)
+            }
             for (const found of pkgs) {
               const q = list[found.id] || 0
               if (q <= 0) continue
@@ -8620,6 +8675,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setAutistiRitiro([])
     setAutistiRiconsegna([])
     editFormSnapshotRef.current = null
+    editingBookingRef.current = null
+    kmLimitManualRef.current = false
     setTotalLock(false)
     // 2026-05-18: pulizia stato OTP residuo per evitare auto-resume su
     // form fresca dopo una sessione di approvazioni.
@@ -10713,7 +10770,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   label="Limite KM Personale"
                   type="number"
                   value={formData.km_limit}
-                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_limit: v })) }}
+                  onChange={(e) => { const v = e.target.value; kmLimitManualRef.current = true; setFormData(prev => ({ ...prev, km_limit: v })) }}
                   placeholder="es. 150 (Lascia vuoto se Illimitati)"
                   disabled={formData.unlimited_km}
                 />
