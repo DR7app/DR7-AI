@@ -96,6 +96,7 @@ import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlo
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import { numeroLeggibile } from '../../../utils/prefissiPaesi'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
+import AutorizzazioneWalletClienteModal from '../../../components/AutorizzazioneWalletClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
@@ -1253,6 +1254,44 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // Popup di blocco: credito wallet insufficiente. Vedi il gate in handleSubmit.
   const [walletInsufficiente, setWalletInsufficiente] = useState<{ saldo: number; dovuto: number } | null>(null)
   const metodoEWallet = isCreditWallet(formData.payment_method)
+
+  // 17/09/2026 (direzione): il prelievo dal Credit Wallet va autorizzato dal
+  // CLIENTE con un codice ricevuto via email (AutorizzazioneWalletClienteModal).
+  // L'autorizzazione vale per quel cliente e fino a quell'importo: se cambia
+  // uno dei due se ne chiede un'altra. Il ref serve al gate in
+  // processBookingSubmission, che riparte da un setTimeout dopo la conferma
+  // e vedrebbe lo stato vecchio.
+  const [autorizzazioneWallet, setAutorizzazioneWallet] = useState<{ overrideId: string; customerId: string; importo: number } | null>(null)
+  const autorizzazioneWalletRef = useRef<{ overrideId: string; customerId: string; importo: number } | null>(null)
+  const [mostraAutorizzazioneWallet, setMostraAutorizzazioneWallet] = useState(false)
+  const pendingWalletSubmitRef = useRef<{ skipValidation: boolean; overrideCustomerId?: string } | null>(null)
+  // In modifica il database preleva solo la differenza: quello gia' addebitato
+  // a questa prenotazione non va autorizzato una seconda volta.
+  const [giaAddebitatoWallet, setGiaAddebitatoWallet] = useState(0)
+  const aggiornaAutorizzazioneWallet = (v: { overrideId: string; customerId: string; importo: number } | null) => {
+    autorizzazioneWalletRef.current = v
+    setAutorizzazioneWallet(v)
+  }
+  const importoDaAutorizzareWallet = (): number => {
+    const dovuto = importoDovutoWallet({
+      metodo: formData.payment_method,
+      statoPagamento: formData.payment_status,
+      totaleEur: parseFloat(formData.total_amount || '0') || 0,
+      acconoEur: parseFloat(formData.amount_paid || '0') || 0,
+    })
+    return Math.max(0, Math.round((dovuto - giaAddebitatoWallet) * 100) / 100)
+  }
+  const walletAutorizzatoPer = (customerId: string | undefined, importo: number) => {
+    const a = autorizzazioneWalletRef.current
+    return !!a && !!customerId && a.customerId === customerId && a.importo + 0.001 >= importo
+  }
+
+  useEffect(() => {
+    let annullato = false
+    if (!editingId || !metodoEWallet) { setGiaAddebitatoWallet(0); return }
+    leggiMovimentoWallet(editingId).then(m => { if (!annullato) setGiaAddebitatoWallet(m.addebitato || 0) })
+    return () => { annullato = true }
+  }, [editingId, metodoEWallet])
 
   useEffect(() => {
     let annullato = false
@@ -6280,6 +6319,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             return
           }
         }
+
+        // 17/09/2026 (direzione): credito sufficiente, ma il prelievo lo
+        // autorizza il cliente con il codice via email. Senza codice non si salva.
+        const daAutorizzare = importoDaAutorizzareWallet()
+        if (daAutorizzare > 0 && !walletAutorizzatoPer(formData.customer_id, daAutorizzare)) {
+          pendingWalletSubmitRef.current = { skipValidation, overrideCustomerId }
+          setMostraAutorizzazioneWallet(true)
+          setIsSubmitting(false)
+          submitLockRef.current = false
+          return
+        }
       }
 
       // ===== VALIDATION: Check dates are valid before parsing =====
@@ -7095,6 +7145,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               extension_history: settledExtensionHistory,
             }
           })() : {}),
+          // 17/09/2026: traccia dell'autorizzazione del cliente al prelievo wallet.
+          ...(isCreditWallet(formData.payment_method) && autorizzazioneWalletRef.current
+            && autorizzazioneWalletRef.current.customerId === formData.customer_id
+            ? { wallet_autorizzazione_cliente: { override_id: autorizzazioneWalletRef.current.overrideId, importo: autorizzazioneWalletRef.current.importo, autorizzato_il: new Date().toISOString() } }
+            : {}),
           customer: {
             fullName: customerInfo?.full_name || '',
             email: customerInfo?.email || '',
@@ -8743,6 +8798,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   function resetForm() {
     setCustomerTier(null)
+    aggiornaAutorizzazioneWallet(null)
+    setMostraAutorizzazioneWallet(false)
+    pendingWalletSubmitRef.current = null
     setAutistiRitiro([])
     setAutistiRiconsegna([])
     editFormSnapshotRef.current = null
@@ -11804,6 +11862,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     // vettura: quando si mette il pagato lo decide chi sta
                     // davanti allo schermo, non il metodo scelto.
                     setFormData(prev => ({ ...prev, ...updates }))
+                    if (isCreditWallet(method) && formData.customer_id && formData.payment_status === 'paid'
+                        && !walletAutorizzatoPer(formData.customer_id, (parseFloat(formData.total_amount || '0') || 0) - giaAddebitatoWallet)) {
+                      setMostraAutorizzazioneWallet(true)
+                    }
                   }}
                   options={(() => {
                     const opts = paymentMethods.map(pm => ({ value: pm.label, label: pm.label }))
@@ -11886,6 +11948,30 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         <span className="font-semibold text-theme-text-primary">{formattaEuro(residuo)}</span>
                       </div>
                     )}
+                    {/* 17/09/2026 (direzione): il prelievo lo autorizza il cliente. */}
+                    {!insufficiente && (() => {
+                      const daAutorizzare = importoDaAutorizzareWallet()
+                      if (daAutorizzare <= 0) return null
+                      const ok = !!autorizzazioneWallet
+                        && autorizzazioneWallet.customerId === formData.customer_id
+                        && autorizzazioneWallet.importo + 0.001 >= daAutorizzare
+                      return ok ? (
+                        <p className="pt-1 font-semibold text-green-600 dark:text-green-400">
+                          Prelievo autorizzato dal cliente.
+                        </p>
+                      ) : (
+                        <div className="pt-2 flex items-center justify-between gap-2">
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold">Serve l'autorizzazione del cliente</span>
+                          <button
+                            type="button"
+                            onClick={() => setMostraAutorizzazioneWallet(true)}
+                            className="px-3 py-1.5 rounded-full bg-dr7-gold text-white text-xs font-semibold hover:opacity-90 transition-opacity"
+                          >
+                            Richiedi autorizzazione
+                          </button>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })()}
@@ -11928,6 +12014,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
+                  // 17/09/2026 (direzione): Credit Wallet + Pagato/Parziale apre
+                  // subito la richiesta di autorizzazione al cliente.
+                  if (isCreditWallet(formData.payment_method) && formData.customer_id
+                      && (newStatus === 'paid' || newStatus === 'partial')
+                      && !(newStatus === 'paid' && walletAutorizzatoPer(formData.customer_id, (parseFloat(formData.total_amount || '0') || 0) - giaAddebitatoWallet))) {
+                    setMostraAutorizzazioneWallet(true)
+                  }
                 }}
                 options={[
                   { value: 'pending', label: 'Da Saldare' },
@@ -12515,6 +12608,38 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           toggle spento si auto-approva in silenzio, ed e' cosi' che era
           passata una prenotazione senza credito. Qui si esce e basta: si
           cambia metodo di pagamento. */}
+      {mostraAutorizzazioneWallet && formData.customer_id && (() => {
+        const importo = importoDaAutorizzareWallet()
+        const cliente = customers.find(c => c.id === formData.customer_id)
+        return (
+          <AutorizzazioneWalletClienteModal
+            isOpen
+            customerId={formData.customer_id}
+            customerName={cliente?.full_name}
+            importo={importo > 0 ? importo : (parseFloat(formData.total_amount || '0') || 0)}
+            draftSessionId={draftSessionId}
+            onEmailSalvata={() => { loadData() }}
+            onCancel={() => {
+              setMostraAutorizzazioneWallet(false)
+              pendingWalletSubmitRef.current = null
+            }}
+            onAutorizzato={(overrideId) => {
+              aggiornaAutorizzazioneWallet({
+                overrideId,
+                customerId: formData.customer_id,
+                importo: importo > 0 ? importo : (parseFloat(formData.total_amount || '0') || 0),
+              })
+              setMostraAutorizzazioneWallet(false)
+              const pending = pendingWalletSubmitRef.current
+              pendingWalletSubmitRef.current = null
+              if (pending) {
+                setTimeout(() => { processBookingSubmission(pending.skipValidation, pending.overrideCustomerId) }, 50)
+              }
+            }}
+          />
+        )
+      })()}
+
       {walletInsufficiente && (
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
           <div className="w-full sm:max-w-md bg-theme-bg-secondary sm:rounded-lg border border-red-500/40 overflow-hidden">
