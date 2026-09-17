@@ -11275,7 +11275,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       >
                         <option value="da_incassare">Da incassare</option>
                         <option value="incassata">Incassata</option>
-                        {(!customerTier || customerTier.tier === 'TIER_2') && !isRcaInsurance(rentalConfig, formData.insurance_option) && (
+                        {/* 17/09/2026 (direzione): "No Cauzione" non si sceglie piu' qui
+                            ma solo da Opzione Cauzione ("Nessuna cauzione"). Resta
+                            visibile solo se e' gia' lo stato, per non mostrare un
+                            valore diverso da quello salvato. */}
+                        {formData.deposit_status === 'no_cauzione' && (
                           <option value="no_cauzione">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/giorno)</option>
                         )}
                       </select>
