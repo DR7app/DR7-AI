@@ -59,6 +59,8 @@ const TEAL_BORDER = '#3a6a6a'
 
 export default function CustomerWalletTab() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [righeVisibili, setRigheVisibili] = useState(200)
+  useEffect(() => { setRigheVisibili(200) }, [searchQuery])
   const [allWalletCustomers, setAllWalletCustomers] = useState<CustomerResult[]>([])
   const [loadingAll, setLoadingAll] = useState(true)
 
@@ -162,9 +164,21 @@ export default function CustomerWalletTab() {
       // customers_extended via userIdToCust costruito sopra.
       let siteUsers: Array<{ id: string; email: string | null; balance: number; nome: string; cognome: string; telefono: string }> = []
       try {
-        const { data: balances, error: balErr } = await supabase
-          .from('user_credit_balance')
-          .select('user_id, balance')
+        // 17/09/2026: PostgREST restituisce al massimo 1000 righe per
+        // richiesta: si legge a pagine, altrimenti oltre i 1000 saldi
+        // i clienti sparirebbero dalla lista.
+        let balErr: { message: string } | null = null
+        let balances: Array<{ user_id: string; balance: number | null }> | null = []
+        for (let da = 0; ; da += 1000) {
+          const { data: pagina, error } = await supabase
+            .from('user_credit_balance')
+            .select('user_id, balance')
+            .order('user_id', { ascending: true })
+            .range(da, da + 999)
+          if (error) { balErr = error; balances = null; break }
+          balances.push(...((pagina || []) as Array<{ user_id: string; balance: number | null }>))
+          if (!pagina || pagina.length < 1000) break
+        }
         if (balErr) {
           logger.error('[CustomerWalletTab] user_credit_balance error:', balErr.message)
           toast.error(`Errore caricamento wallet: ${balErr.message}`, { duration: 10000 })
@@ -218,6 +232,32 @@ export default function CustomerWalletTab() {
       // as an explicit "no-op" placeholder so future referral-wallet code
       // has a clear hook.
       // (No additional rows added.)
+
+      // 17/09/2026 (direzione): la lista mostra TUTTI i clienti della Lead,
+      // non solo chi ha gia' una riga di saldo. Chi non ce l'ha compare a
+      // € 0. Un cliente con piu' schede sullo stesso account compare una volta
+      // sola (la riga del saldo e' dell'account); le schede senza account
+      // compaiono tutte, una per scheda.
+      const accountInLista = new Set(mapped.map(m => m.user_id).filter(Boolean) as string[])
+      for (const cust of allCustomers) {
+        if (!cust?.id) continue
+        if (cust.user_id) {
+          if (accountInLista.has(cust.user_id)) continue
+          accountInLista.add(cust.user_id)
+        }
+        mapped.push({
+          id: cust.id,
+          full_name: (`${cust.nome || ''} ${cust.cognome || ''}`.trim()
+            || cust.ragione_sociale
+            || cust.denominazione
+            || cust.email
+            || 'N/A'),
+          email: cust.email || null,
+          phone: cust.telefono || null,
+          balance_cents: 0,
+          user_id: cust.user_id || null,
+        })
+      }
 
       // Sort: customers with balance first, then alphabetical
       mapped.sort((a, b) => {
@@ -809,7 +849,7 @@ export default function CustomerWalletTab() {
 
           {/* Rows */}
           <div className="divide-y divide-theme-border/50">
-            {sorted.map((customer) => (
+            {sorted.slice(0, righeVisibili).map((customer) => (
               <div
                 key={customer.id}
                 className="grid grid-cols-1 lg:grid-cols-[2fr_1.5fr_2fr_1fr_1.5fr_auto] gap-2 lg:gap-4 px-5 py-3.5 items-center hover:bg-white/[0.02] transition-colors"
@@ -1024,6 +1064,19 @@ export default function CustomerWalletTab() {
               </div>
             ))}
           </div>
+          {/* 17/09/2026: la lista contiene tutta la Lead: si disegna a blocchi da
+              200 righe per non bloccare la pagina. La ricerca guarda tutti. */}
+          {sorted.length > righeVisibili && (
+            <div className="p-3 border-t border-theme-border text-center">
+              <button
+                type="button"
+                onClick={() => setRigheVisibili(n => n + 200)}
+                className="px-4 py-2 rounded-full border border-theme-border text-sm font-semibold text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+              >
+                Mostra altri ({sorted.length - righeVisibili} rimanenti)
+              </button>
+            </div>
+          )}
         </div>
       )}
       </div>
