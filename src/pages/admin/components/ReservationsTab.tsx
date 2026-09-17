@@ -9806,45 +9806,21 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     onChange={(e) => setFormData(prev => ({ ...prev, has_second_driver: e.target.checked }))}
                     className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
                   />
-                  <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
-                    Aggiungi Secondo Guidatore
-                    {(() => {
-                      const tier = customerTier?.tier
-                      const price = tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
-                      return ` (+€${price}/giorno)`
-                    })()}
+                  {/* 17/09/2026 (direzione): stesso formato del 1° guidatore. */}
+                  <label htmlFor="has_second_driver" className="ml-2 text-theme-text-primary font-semibold cursor-pointer">
+                    2° Guidatore
+                    <span className="ml-2 text-xs font-normal text-theme-text-muted">
+                      {(() => {
+                        const tier = customerTier?.tier
+                        const price = tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
+                        return `facoltativo (+€${price}/giorno)`
+                      })()}
+                    </span>
                   </label>
                 </div>
 
                 {formData.has_second_driver && (
                   <div className="space-y-4 animate-fadeIn">
-                    {/* 17/09/2026 (direzione): fascia del 2° guidatore, da sola,
-                        dalla sua data di nascita e di rilascio patente. */}
-                    {(() => {
-                      const nascita = formData.second_driver_birth_date
-                      const rilascio = formData.second_driver_license_issue_date
-                      if (!nascita || !rilascio) {
-                        return (formData.second_driver_id || newSecondDriverMode) ? (
-                          <p className="text-xs text-theme-text-muted">
-                            Fascia 2° guidatore: servono data di nascita e data di rilascio patente.
-                          </p>
-                        ) : null
-                      }
-                      const t = classifyDriverTier(calculateAge(nascita), calculateLicenseYears(rilascio))
-                      const colore = t.tier === 'TIER_2'
-                        ? 'bg-green-900/20 border-green-600/50'
-                        : t.tier === 'TIER_1' ? 'bg-amber-900/20 border-amber-600/50' : 'bg-red-900/20 border-red-600/50'
-                      const etichetta = t.tier === 'TIER_2' ? 'FASCIA A' : t.tier === 'TIER_1' ? 'FASCIA B' : 'NON IDONEO'
-                      const badge = t.tier === 'TIER_2' ? 'bg-green-600' : t.tier === 'TIER_1' ? 'bg-amber-600' : 'bg-red-600'
-                      return (
-                        <div className={`px-3 py-2 rounded-lg flex items-center gap-2 border ${colore}`}>
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${badge}`}>{etichetta}</span>
-                          <span className="text-sm text-theme-text-secondary">
-                            2° guidatore — {t.reason} — Età: {t.driverAge}, Patente: {t.licenseYears} anni
-                          </span>
-                        </div>
-                      )
-                    })()}
                     {/* Toggle between Select Customer and New Driver */}
                     <div className="flex items-center gap-4 mb-4">
                       <button
@@ -10030,6 +10006,54 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         />
                       </div>
                     )}
+                    {/* 17/09/2026 (direzione): fascia del 2° guidatore, da sola,
+                        dalla sua data di nascita e di rilascio patente. */}
+                    {(() => {
+                      const nascita = formData.second_driver_birth_date
+                      const rilascio = formData.second_driver_license_issue_date
+                      if (!nascita || !rilascio) {
+                        return (formData.second_driver_id || newSecondDriverMode) ? (
+                          <p className="text-xs text-theme-text-muted">
+                            Fascia 2° guidatore: servono data di nascita e data di rilascio patente.
+                          </p>
+                        ) : null
+                      }
+                      const t = classifyDriverTier(calculateAge(nascita), calculateLicenseYears(rilascio))
+                      const colore = t.tier === 'TIER_2'
+                        ? 'bg-green-900/20 border-green-600/50'
+                        : t.tier === 'TIER_1' ? 'bg-amber-900/20 border-amber-600/50' : 'bg-red-900/20 border-red-600/50'
+                      const etichetta = t.tier === 'TIER_2' ? 'FASCIA A' : t.tier === 'TIER_1' ? 'FASCIA B' : 'NON IDONEO'
+                      const badge = t.tier === 'TIER_2' ? 'bg-green-600' : t.tier === 'TIER_1' ? 'bg-amber-600' : 'bg-red-600'
+                      return (
+                        <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 border ${colore}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${badge}`}>{etichetta}</span>
+                          <span className="text-sm text-theme-text-secondary">
+                            2° guidatore — {t.reason} — Età: {t.driverAge}, Patente: {t.licenseYears} anni
+                          </span>
+                        </div>
+                      )
+                    })()}
+                    {/* Residenza del 2° guidatore: automatica dai suoi dati, come per il 1°. */}
+                    {(formData.second_driver_id || newSecondDriverMode) && (() => {
+                      const prov = provinciaDaAnagrafica({
+                        provincia_residenza: formData.second_driver_provincia,
+                        indirizzo: formData.second_driver_indirizzo,
+                        codice_postale: formData.second_driver_cap,
+                      })
+                      const residente = prov ? SARDEGNA_PROVINCES.has(prov) : false
+                      return (
+                        <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 border ${!prov ? 'bg-theme-bg-tertiary/40 border-theme-border' : residente ? 'bg-green-900/20 border-green-600/50' : 'bg-amber-900/20 border-amber-600/50'}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${!prov ? 'bg-gray-500' : residente ? 'bg-green-600' : 'bg-amber-600'}`}>
+                            {!prov ? 'RESIDENZA ?' : residente ? 'RESIDENTE SARDEGNA' : 'NON RESIDENTE'}
+                          </span>
+                          <span className="text-sm text-theme-text-secondary">
+                            {!prov
+                              ? 'Provincia non presente nei dati del 2° guidatore.'
+                              : `2° guidatore — dai suoi dati${prov !== 'ALTRO' ? ` (provincia ${prov})` : ''}`}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>
