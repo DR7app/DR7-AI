@@ -54,7 +54,9 @@ export default function MoneyInput({ value, onChange, onBlur, min, max, title, c
         : title}
       className={`${className}${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
       onChange={(e) => {
-        const s = sanitizeMoney(e.target.value)
+        // 17/09/2026: niente zero davanti. Il campo parte spesso da "0" e
+        // digitando 100 usciva "0100" (lo zero restava). "0.5" resta com'e'.
+        const s = sanitizeMoney(e.target.value).replace(/^(-?)0+(?=\d)/, '$1')
         setBuffer(s)
         onChange(s)
       }}

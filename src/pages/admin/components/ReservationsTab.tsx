@@ -11888,22 +11888,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   { value: 'paid', label: 'Pagato' }
                 ]}
               />
-              {/* Conferma Prenotazione — non scade dopo 1h, visibile in rosso con nome cliente */}
-              {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
-                <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
-                  <input
-                    type="checkbox"
-                    id="confirm_booking"
-                    checked={confirmBooking}
-                    onChange={(e) => setConfirmBooking(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
-                  />
-                  <label htmlFor="confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
-                    <span className="font-semibold text-red-400">Conferma Prenotazione</span>
-                    <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadrà dopo 1h. In calendario apparirà in rosso con il nome del cliente invece di "Da Saldare".</span>
-                  </label>
-                </div>
-              )}
               <div>
                 <Input
                   label="Importo Pagato (€)"
@@ -11914,10 +11898,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   onChange={(e) => {
                     // Simply update the amount_paid without auto-calculating payment_status
                     // The user controls payment_status via the dropdown above
-                    setFormData({
-                      ...formData,
-                      amount_paid: e.target.value
-                    })
+                    const v = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      amount_paid: v
+                    }))
                   }}
                 />
                 {/* 2026-08-03: il totale non riscrive piu' il pagato (bug: cancellava
@@ -12013,6 +11998,23 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               )
             })()}
 
+            {/* Conferma Prenotazione — non scade dopo 1h, visibile in rosso con nome cliente.
+                17/09/2026 (direzione): di nuovo in fondo al modulo, sopra Salva. */}
+            {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
+              <div className={`mt-4 flex items-start gap-2 p-3 rounded-lg border ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
+                <input
+                  type="checkbox"
+                  id="confirm_booking"
+                  checked={confirmBooking}
+                  onChange={(e) => setConfirmBooking(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
+                />
+                <label htmlFor="confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
+                  <span className="font-semibold text-red-400">Conferma Prenotazione</span>
+                  <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadrà dopo 1h. In calendario apparirà in rosso con il nome del cliente invece di "Da Saldare".</span>
+                </label>
+              </div>
+            )}
             <div className="flex flex-wrap gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
                 {isSubmitting ? 'Salvataggio...' : 'Salva'}
