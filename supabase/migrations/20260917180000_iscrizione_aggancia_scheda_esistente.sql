@@ -12,14 +12,30 @@
 -- email (maiuscole e spazi ignorati) e lo stesso tipo cliente (o tipo non
 -- indicato). Se c'e', le si attacca l'account invece di crearne un'altra.
 --
--- Regola Lead (lead_dedup_rule): si aggancia SOLO per email. Mai per
--- telefono, mai per nome. Tipi cliente diversi non si fondono.
+-- Regola (direzione, 17/09/2026): e' la stessa persona se
+--   - l'email e' la stessa, oppure
+--   - nome E cognome sono uguali E il telefono e' lo stesso.
+-- Mai per solo telefono, mai per solo nome. Tipi cliente diversi non si fondono.
 -- Se le schede candidate sono piu' d'una si prende quella aggiornata piu'
 -- di recente: e' quella su cui l'ufficio sta lavorando.
 --
 -- Vale per ogni strada che crea un account (form di iscrizione, Google,
 -- inviti), perche' tutte passano da auth.users.
 -- ============================================================================
+
+-- Telefono confrontabile: solo cifre, senza 00 / +39 davanti.
+CREATE OR REPLACE FUNCTION public.dr7_telefono_normalizzato(p_tel TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN length(t) < 6 THEN NULL
+    WHEN length(t) > 10 AND left(t, 2) = '39' THEN substr(t, 3)
+    ELSE t
+  END
+  FROM (SELECT regexp_replace(regexp_replace(coalesce(p_tel, ''), '\D', '', 'g'), '^00', '') AS t) x
+$$;
 
 CREATE OR REPLACE FUNCTION public.sync_auth_user_to_customers()
 RETURNS trigger
@@ -31,6 +47,9 @@ DECLARE
   tipo_cliente_value TEXT;
   residency_zone_value TEXT;
   email_norm TEXT;
+  nome_norm TEXT;
+  cognome_norm TEXT;
+  tel_norm TEXT;
   scheda_esistente UUID;
 BEGIN
   BEGIN
@@ -49,6 +68,26 @@ BEGIN
        ORDER BY ce.updated_at DESC NULLS LAST, ce.created_at DESC NULLS LAST
        LIMIT 1
        FOR UPDATE;
+    END IF;
+
+    -- 17/09/2026: altrimenti stesso nome, stesso cognome e stesso telefono.
+    IF scheda_esistente IS NULL THEN
+      nome_norm := lower(btrim(coalesce(NEW.raw_user_meta_data->>'nome', '')));
+      cognome_norm := lower(btrim(coalesce(NEW.raw_user_meta_data->>'cognome', '')));
+      tel_norm := public.dr7_telefono_normalizzato(
+        coalesce(NEW.raw_user_meta_data->>'telefono', NEW.raw_user_meta_data->>'phone', NEW.phone));
+      IF nome_norm <> '' AND cognome_norm <> '' AND tel_norm IS NOT NULL THEN
+        SELECT ce.id INTO scheda_esistente
+          FROM public.customers_extended ce
+         WHERE ce.user_id IS NULL
+           AND lower(btrim(coalesce(ce.nome, ''))) = nome_norm
+           AND lower(btrim(coalesce(ce.cognome, ''))) = cognome_norm
+           AND public.dr7_telefono_normalizzato(ce.telefono) = tel_norm
+           AND (ce.tipo_cliente IS NULL OR ce.tipo_cliente = tipo_cliente_value)
+         ORDER BY ce.updated_at DESC NULLS LAST, ce.created_at DESC NULLS LAST
+         LIMIT 1
+         FOR UPDATE;
+      END IF;
     END IF;
 
     IF scheda_esistente IS NOT NULL THEN

@@ -25,6 +25,7 @@ CREATE SCHEMA auth;
 CREATE TABLE auth.users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text,
+  phone text,
   raw_user_meta_data jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
 );
@@ -33,6 +34,7 @@ CREATE TABLE public.customers_extended (
   user_id uuid UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   email text,
   nome text,
+  cognome text,
   telefono text,
   tipo_cliente text CHECK (tipo_cliente IN ('persona_fisica','azienda','pubblica_amministrazione')),
   residency_zone text,
@@ -70,7 +72,7 @@ u = await iscrivi('nuovo@mail.it')
 r = await schede('nuovo@mail.it')
 ok(r.length === 1 && r[0].user_id === u && r[0].source === 'website_registration', 'cliente nuovo: scheda creata')
 
-// 3. Stesso telefono ma email diversa: MAI agganciare (regola Lead).
+// 3. Stesso telefono ma email diversa e nome diverso: MAI agganciare.
 await q(`INSERT INTO customers_extended (email, telefono, nome, source) VALUES ('altro@mail.it', '3331234567', 'Luca', 'admin')`)
 u = await iscrivi('diverso@mail.it', { telefono: '3331234567' })
 ok((await schede('altro@mail.it'))[0].user_id === null, 'stesso telefono: scheda dell\'ufficio non toccata')
@@ -105,5 +107,22 @@ ok(r.length === 2 && r.find(x => x.nome === 'Recente').user_id === u && r.find(x
 // 8. Iscrizione senza email (es. telefono): nessun aggancio, scheda nuova.
 u = await iscrivi(null)
 ok((await q(`SELECT 1 FROM customers_extended WHERE user_id = $1`, [u])).length === 1, 'senza email: scheda nuova')
+
+// 9. 17/09/2026: stesso nome, cognome e telefono (scritto diverso), email diversa: agganciata.
+await q(`INSERT INTO customers_extended (email, nome, cognome, telefono, source) VALUES ('ufficio@mail.it', 'Anna', 'Bianchi', '333 765 4321', 'admin')`)
+u = await iscrivi('anna.sito@mail.it', { nome: ' anna ', cognome: 'BIANCHI', telefono: '+39 3337654321' })
+r = await schede('ufficio@mail.it')
+ok(r.length === 1 && r[0].user_id === u, 'nome + cognome + telefono: account agganciato alla scheda dell\'ufficio')
+ok((await q(`SELECT 1 FROM customers_extended WHERE user_id = $1`, [u])).length === 1, 'nome + cognome + telefono: nessuna scheda doppia')
+
+// 10. Stesso nome e cognome ma telefono diverso: nuova scheda.
+await q(`INSERT INTO customers_extended (email, nome, cognome, telefono, source) VALUES ('p1@mail.it', 'Paolo', 'Verdi', '3330000001', 'admin')`)
+u = await iscrivi('p2@mail.it', { nome: 'Paolo', cognome: 'Verdi', telefono: '3330000002' })
+ok((await schede('p1@mail.it'))[0].user_id === null, 'omonimo con telefono diverso: scheda dell\'ufficio non toccata')
+
+// 11. Stesso telefono e nome ma cognome diverso: nuova scheda.
+await q(`INSERT INTO customers_extended (email, nome, cognome, telefono, source) VALUES ('g1@mail.it', 'Giulia', 'Neri', '3330000003', 'admin')`)
+u = await iscrivi('g2@mail.it', { nome: 'Giulia', cognome: 'Rossi', telefono: '3330000003' })
+ok((await schede('g1@mail.it'))[0].user_id === null, 'cognome diverso: scheda dell\'ufficio non toccata')
 
 console.log('\nTutti i controlli superati.')

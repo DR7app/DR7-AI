@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../utils/authFetch'
 import MissingFieldsModal from './MissingFieldsModal'
@@ -63,6 +63,12 @@ export default function AutorizzazioneWalletClienteModal({
   const [errore, setErrore] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [schedaPerEmail, setSchedaPerEmail] = useState<any | null>(null)
+  // 17/09/2026 (direzione): il codice parte da solo all'apertura. L'operatore
+  // ha gia' premuto "Richiedi autorizzazione" (o scelto Credit Wallet): non
+  // deve premere una seconda volta. La chiave evita un doppio invio per la
+  // stessa richiesta.
+  const inviaRef = useRef<(() => void) | null>(null)
+  const ultimaRichiestaRef = useRef('')
 
   useEffect(() => {
     if (!isOpen) return
@@ -72,7 +78,16 @@ export default function AutorizzazioneWalletClienteModal({
     setErrore('')
     setSchedaPerEmail(null)
     setCustomerId(customerIdProp || cliente?.customerId || '')
-  }, [isOpen, customerIdProp, cliente?.customerId, cliente?.userId, cliente?.email, importo])
+    const chiave = [customerIdProp, cliente?.customerId, cliente?.userId, cliente?.email, importo, draftSessionId].join('|')
+    if (ultimaRichiestaRef.current !== chiave) {
+      ultimaRichiestaRef.current = chiave
+      setTimeout(() => inviaRef.current?.(), 0)
+    }
+  }, [isOpen, customerIdProp, cliente?.customerId, cliente?.userId, cliente?.email, importo, draftSessionId])
+
+  useEffect(() => {
+    if (!isOpen) ultimaRichiestaRef.current = ''
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -126,6 +141,8 @@ export default function AutorizzazioneWalletClienteModal({
       setInvioInCorso(false)
     }
   }
+
+  inviaRef.current = inviaCodice
 
   const verificaCodice = async () => {
     if (!overrideId || codice.length !== 6 || verificaInCorso) return
@@ -181,7 +198,7 @@ export default function AutorizzazioneWalletClienteModal({
               disabled={invioInCorso}
               className="w-full px-4 py-2.5 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {invioInCorso ? 'Invio in corso...' : overrideId ? 'Invia un nuovo codice' : 'Richiedi autorizzazione'}
+              {invioInCorso ? 'Invio del codice in corso...' : overrideId ? 'Invia un nuovo codice' : 'Invia di nuovo il codice'}
             </button>
 
             {overrideId && (
