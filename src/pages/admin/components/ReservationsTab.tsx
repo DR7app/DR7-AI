@@ -106,6 +106,7 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { isOtpRequired } from '../../../utils/otpConfigCache'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { scomponiIndirizzo } from '../../../utils/indirizzoFattura'
 import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import DateRangeFilter from '../../../components/DateRangeFilter'
@@ -1260,24 +1261,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const SARDEGNA_PROVINCES = useMemo(() => new Set(['CA', 'NU', 'OR', 'SS', 'SU', 'OG', 'OT', 'CI', 'VS']), [])
 
   const [customerProvincia, setCustomerProvincia] = useState<string>('')
-  useEffect(() => {
-    if (!formData.customer_id) {
-      setCustomerProvincia('')
-      return
-    }
-    let cancelled = false
-    fetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (cancelled) return
-        const cust = data?.customer
-        const prov = String(cust?.provincia_residenza || cust?.provincia || '').toUpperCase().trim()
-        setCustomerProvincia(prov)
-      })
-      .catch(() => { if (!cancelled) setCustomerProvincia('') })
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.customer_id])
+  // 17/09/2026 (direzione): la residenza deve arrivare da sola dall'indirizzo.
+  // Prima la chiamata partiva con fetch() senza login: get-customer rispondeva
+  // 401, la provincia restava vuota e il form diceva SEMPRE "Residente".
+  // Ora: provincia dell'anagrafica, altrimenti quella scritta nell'indirizzo,
+  // altrimenti il CAP (07/08/09 = Sardegna).
+  const provinciaDaAnagrafica = (cust: { provincia_residenza?: string; provincia?: string; indirizzo?: string; codice_postale?: string; cap?: string } | null | undefined): string => {
+    const diretta = String(cust?.provincia_residenza || cust?.provincia || '').toUpperCase().trim()
+    if (diretta) return diretta
+    const parti = scomponiIndirizzo(cust?.indirizzo)
+    if (parti?.provincia) return parti.provincia
+    const cap = String(cust?.codice_postale || cust?.cap || parti?.cap || '').trim()
+    if (/^\d{5}$/.test(cap)) return /^0[789]/.test(cap) ? 'SU' : 'ALTRO'
+    return ''
+  }
 
   // 2026-05-30: admin override sulla residenza per la cauzione. La direzione
   // si lamentava che la label "Residente" usciva sempre, anche per clienti
@@ -2230,6 +2227,28 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     driver_license_number: '',
     patente: ''
   })
+
+  // Residenza automatica (vedi provinciaDaAnagrafica): qui perche' legge anche il form Nuovo Cliente.
+  useEffect(() => {
+    if (newCustomerMode) {
+      setCustomerProvincia(provinciaDaAnagrafica(newCustomerData))
+      return
+    }
+    if (!formData.customer_id) {
+      setCustomerProvincia('')
+      return
+    }
+    let cancelled = false
+    authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled) return
+        setCustomerProvincia(provinciaDaAnagrafica(data?.customer))
+      })
+      .catch(() => { if (!cancelled) setCustomerProvincia('') })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.customer_id, newCustomerMode, newCustomerData.provincia_residenza, newCustomerData.indirizzo, newCustomerData.codice_postale])
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
   // 2026-06-01: filtro periodo (Da / A) condiviso con tutte le tab admin.
@@ -9343,42 +9362,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}
             <div className="mb-4 sm:mb-6 p-3 sm:p-4  rounded-lg border border-theme-border">
-              {/* 17/09/2026 (direzione): 1° guidatore obbligatorio, Fascia accanto. */}
-              <div className="flex flex-col md:flex-row md:items-end gap-3 mb-4">
-                <h4 className="flex-1 text-theme-text-primary font-semibold">
-                  1° Guidatore <span className="text-red-500">*</span>
-                  <span className="ml-2 text-xs font-normal text-theme-text-muted">obbligatorio</span>
-                </h4>
-                <div className="md:w-80">
-                  {/* Manual Fascia Selector — come PreventiviTab. Forza la fascia
-                      usata per pricing (km illimitati, secondo guidatore, DR7 Flex,
-                      insurance). Override su customerTier auto-classificato. */}
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Fascia Cliente</label>
-                  <select
-                    value={customerTier?.tier === 'TIER_1' || customerTier?.tier === 'TIER_2' ? customerTier.tier : ''}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      if (v === 'TIER_1' || v === 'TIER_2') {
-                        setCustomerTier({
-                          tier: v,
-                          reason: 'Fascia impostata manualmente',
-                          driverAge: customerTier?.driverAge || 0,
-                          licenseYears: customerTier?.licenseYears || 0,
-                        })
-                        // Cambio fascia a mano: si azzera l'assicurazione.
-                        // La prima valida per la nuova fascia arriva dalla
-                        // Centralina Pro (effetto di reset qui sopra).
-                        setFormData(prev => ({ ...prev, insurance_option: '' as KaskoTier }))
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  >
-                    <option value="">-- Seleziona Fascia --</option>
-                    <option value="TIER_2">Fascia A (26-69, patente 5+ anni)</option>
-                    <option value="TIER_1">Fascia B (21-25 o patente 3-4 anni)</option>
-                  </select>
-                </div>
-              </div>
+              {/* 17/09/2026 (direzione): 1° guidatore obbligatorio. La fascia non si
+                  sceglie a mano: la calcola il gestionale (badge sotto il cliente). */}
+              <h4 className="mb-4 text-theme-text-primary font-semibold">
+                1° Guidatore <span className="text-red-500">*</span>
+                <span className="ml-2 text-xs font-normal text-theme-text-muted">obbligatorio</span>
+              </h4>
               <div className="border-b border-theme-border pb-4">
                 <div className="flex flex-wrap items-center gap-3 mb-4">
                   <button
