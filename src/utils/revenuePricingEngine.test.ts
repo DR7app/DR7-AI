@@ -829,3 +829,44 @@ describe('vehicle_revenue_targets (Spinta Veicolo)', () => {
     expect(result.rawDailyRate).toBeCloseTo(108, 1)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GIORNI DI ADDEBITO — 19/09/2026
+// Il chiamante puo' passare i giorni gia' contati con la regola del contratto
+// (giorni di calendario + grace ritardo riconsegna). Senza quel valore resta
+// il vecchio `ceil(ore / 24)`.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('billingDays', () => {
+  it('senza billingDays conta ceil(ore / 24)', () => {
+    const config = makeConfig({ enabled: false })
+    // 21/09 10:00 → 23/09 09:00 = 47 ore → 2 giorni
+    const result = calculateDynamicPrice(config, makeInput({
+      pickupDate: '2026-09-21T10:00',
+      dropoffDate: '2026-09-23T09:00',
+    }))
+    expect(result.rentalDays).toBe(2)
+  })
+
+  it('con billingDays usa il numero del contratto', () => {
+    const config = makeConfig({ enabled: false })
+    // Stesse date: giorni di calendario 2 + grace superata = 3 in fattura.
+    const result = calculateDynamicPrice(config, makeInput({
+      pickupDate: '2026-09-21T10:00',
+      dropoffDate: '2026-09-23T09:00',
+      billingDays: 3,
+    }))
+    expect(result.rentalDays).toBe(3)
+    expect(result.finalTotalEur).toBeCloseTo(result.finalDailyRateEur * 3, 2)
+  })
+
+  it('billingDays a 0 o negativo non passa: si torna al calcolo interno', () => {
+    const config = makeConfig({ enabled: false })
+    const result = calculateDynamicPrice(config, makeInput({
+      pickupDate: '2026-09-21T10:00',
+      dropoffDate: '2026-09-23T09:00',
+      billingDays: 0,
+    }))
+    expect(result.rentalDays).toBe(2)
+  })
+})

@@ -18,7 +18,9 @@ import {
 } from '../../../utils/meteoConfig'
 import { mareFormSectionsOff } from './mareFormSections'
 import Paginazione from './Paginazione'
-import { isNexiPayByLink, isCreditWallet } from '../../../utils/paymentMethodMatchers'
+import { isNexiPayByLink, isCreditWallet, isContanti } from '../../../utils/paymentMethodMatchers'
+import { percentualeContanti, totaleConContanti } from '../../../utils/maggiorazioneContanti'
+import { giorniDiAddebito } from '../../../utils/giorniAddebito'
 import { leggiSaldoWallet, leggiMovimentoWallet, importoDovutoWallet, formattaEuro, type SaldoWallet } from '../../../utils/walletCliente'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import { romeDateFromParts } from '../../../utils/timezoneUtils'
@@ -1385,6 +1387,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     coefficient_experience?: boolean
     coefficient_delivery?: boolean
     coefficient_pickup?: boolean
+    // 19/09/2026: percentuale della maggiorazione contanti (default 20).
+    contanti_surcharge_pct?: number | ''
   }
   type CoeffFlags = {
     unlimited_km: boolean
@@ -1413,6 +1417,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     pickup:           !!a?.coefficient_pickup,
   })
   const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>(buildCoeffFlags(undefined))
+  // 19/09/2026 (direzione): la maggiorazione contanti non e' piu' il 20%
+  // scritto in duro qui dentro — si regola da Centralina Pro > Automazioni e
+  // vale anche sul preventivo.
+  const [pctContanti, setPctContanti] = useState<number>(percentualeContanti(undefined))
   // Regole "modifica su contratto gia' firmato": rifirma o riconduzione, voce
   // per voce. Scritte da Centralina Pro > Contratto & Modifiche. Fino al
   // 2026-08-25 questa config veniva salvata ma NON letta da nessuno: ogni
@@ -1469,6 +1477,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         (business ? pick(business) : null) ?? (main ? pick(main) : null) ?? null
       setProDeposits(scegli<Record<string, unknown>>(c => c.deposits))
       setCoeffFlags(buildCoeffFlags(scegli<ProAutomations>(c => c.automations) || undefined))
+      setPctContanti(percentualeContanti(scegli<ProAutomations>(c => c.automations) || undefined))
       setContrattoRegole(scegli<Record<string, ContrattoAzione>>(c => c.contratto_modifica))
       // Gli interruttori del form vivono SOLO sulla riga del business: qui non
       // c'e' fallback su `main`, altrimenti una sezione spenta su Terra
@@ -1808,8 +1817,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               const maxTotal = maxDaily != null ? maxDaily * data.rentalDays : null
               const minTotal = minDaily != null ? minDaily * data.rentalDays : null
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
-              if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
-              if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
+              // 19/09/2026: UNA sola clamp per render, con tolleranza di 0,50 EUR —
+              // stessa regola gia' in PreventiviTab e CarBookingWizard. Prima i due
+              // `if` giravano in sequenza: il max abbassava sotto il min, poi il min
+              // rialzava, e il prezzo finale non era ne' l'uno ne' l'altro.
+              if (maxTotal != null && afterRevenueNoExp > maxTotal + 0.5) afterRevenueNoExp = maxTotal
+              else if (minTotal != null && afterRevenueNoExp < minTotal - 0.5) afterRevenueNoExp = minTotal
               // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai
               // centesimi, come revenuePricingEngine (finalDailyRate). Arrotondare
               // solo il totale faceva perdere 1 cent (es. 624,9975/g → 1249,99
@@ -1821,7 +1834,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // 2026-05-27: experience + deliveryFees ora dentro extrasAtList/inCoeff
               // via sExp/sDel. Non aggiungerli di nuovo qui (double-count bug).
               const subtotal = Math.round((afterRevenueNoExp + extrasAtList) * 100) / 100
-              const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+              const total = totaleConContanti(subtotal, prev.payment_method, pctContanti)
               // Auto-calculate KM limit from rental days (only if not unlimited)
               // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
               const updates: Record<string, string> = {}
@@ -1980,8 +1993,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const maxTotal = maxDaily != null ? maxDaily * revenueSuggestion.rentalDays : null
       const minTotal = minDaily != null ? minDaily * revenueSuggestion.rentalDays : null
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
-      if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
-      if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
+      // 19/09/2026: una sola clamp, tolleranza 0,50 EUR (come PreventiviTab).
+      if (maxTotal != null && afterRevenueNoExp > maxTotal + 0.5) afterRevenueNoExp = maxTotal
+      else if (minTotal != null && afterRevenueNoExp < minTotal - 0.5) afterRevenueNoExp = minTotal
       // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai centesimi
       // (vedi nota path auto_apply). Evita la perdita di 1 cent amplificata dal
       // +20% Contanti (1249,99 → 1500,00 invece di 1499,99).
@@ -1991,7 +2005,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       }
       // 2026-05-27: experience + deliveryFees ora in extrasAtList/InCoeff via sExp/sDel.
       const subtotal = Math.round((afterRevenueNoExp + extrasAtList) * 100) / 100
-      const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+      const newTotal = totaleConContanti(subtotal, formData.payment_method, pctContanti)
       // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
       const updates: Record<string, string> = {}
       if (!totalAmountManuallyOverriddenRef.current) {
@@ -8064,7 +8078,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               let km = candidates.find(n => Number.isFinite(n) && n > 0)
               if (!km && vehicle && rentalConfig) {
                 const kmCat = vehicle.category === 'urban' ? 'urban' : (vehicle.category || '_global')
-                const rentalDaysForKm = Math.max(1, Math.ceil((new Date(returnDateTime).getTime() - new Date(pickupDateTime).getTime()) / (1000 * 60 * 60 * 24)))
+                // 19/09/2026: stessi giorni del prezzo e del contratto.
+                const rentalDaysForKm = giorniDiAddebito(new Date(pickupDateTime), new Date(returnDateTime))
                 const computed = getKmIncluded(rentalConfig, rentalDaysForKm, kmCat)
                 if (computed === 'unlimited') return 'Illimitati'
                 if (typeof computed === 'number' && computed > 0) km = computed
@@ -11712,15 +11727,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           const minTotal = minDaily != null ? minDaily * revenueSuggestion.rentalDays : null
                           let clampedNoExp = rawAfterCoeffNoExp
                           let clampHit: 'min' | 'max' | null = null
-                          if (maxTotal != null && clampedNoExp > maxTotal) { clampedNoExp = maxTotal; clampHit = 'max' }
-                          if (minTotal != null && clampedNoExp < minTotal) { clampedNoExp = minTotal; clampHit = 'min' }
+                          // 19/09/2026: una sola clamp, tolleranza 0,50 EUR — cosi' il
+                          // bandiera Max/Min mostra il limite che ha davvero tagliato.
+                          if (maxTotal != null && clampedNoExp > maxTotal + 0.5) { clampedNoExp = maxTotal; clampHit = 'max' }
+                          else if (minTotal != null && clampedNoExp < minTotal - 0.5) { clampedNoExp = minTotal; clampHit = 'min' }
                           const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceCost + deliveryFees + kmPackagesCost) * 100) / 100
                           const dynamicSubtotal = Math.round((clampedNoExp + experienceCost + deliveryFees + kmPackagesCost) * 100) / 100
-                          const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
-                          const uncappedGrand = formData.payment_method === 'Contanti' ? uncappedSubtotal * 1.20 : uncappedSubtotal
+                          const grandTotal = totaleConContanti(dynamicSubtotal, formData.payment_method, pctContanti)
+                          const uncappedGrand = totaleConContanti(uncappedSubtotal, formData.payment_method, pctContanti)
                           const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001
                           const discountPct = hasDiscount ? Math.round((1 - combinedCoeff) * 100) : 0
-                          const listGrandTotal = formData.payment_method === 'Contanti' ? listSubtotal * 1.20 : listSubtotal
+                          const listGrandTotal = totaleConContanti(listSubtotal, formData.payment_method, pctContanti)
                           return (
                             <>
                               {hasDiscount && (
@@ -11838,10 +11855,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             <span className="text-blue-400 font-mono">+EUR {parseFloat(formData.pickup_fee).toFixed(2)}</span>
                           </div>
                         )}
-                        {formData.payment_method === 'Contanti' && (
+                        {isContanti(formData.payment_method) && pctContanti > 0 && (
                           <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                             <span className="text-theme-text-muted">Maggiorazione contanti</span>
-                            <span className="text-red-400 font-mono">+20%</span>
+                            <span className="text-red-400 font-mono">+{pctContanti}%</span>
                           </div>
                         )}
                         {/* 2026-05-27: mirror del riepilogo admin Preventivi.

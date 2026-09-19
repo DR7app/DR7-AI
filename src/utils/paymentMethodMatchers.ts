@@ -78,3 +78,18 @@ export function isCartaPunti(paymentMethod: string | null | undefined): boolean 
   if (n === 'carta punti' || n === 'cartapunti') return true
   return n.includes('carta') && (n.includes('punti') || n.includes('punt'))
 }
+
+/**
+ * Pagamento in CONTANTI. Su questo metodo scatta la maggiorazione
+ * configurata in Centralina Pro > Automazioni > "Maggiorazione contanti".
+ *
+ * 19/09/2026: il gate era `payment_method === 'Contanti'`, quindi bastava
+ * rinominare la voce in Centralina Pro > Fiscale ("Contanti in sede",
+ * "CONTANTI", "Contante") perche' la maggiorazione sparisse in silenzio —
+ * stessa trappola dell'incidente Nexi del 13/05/2026.
+ */
+export function isContanti(paymentMethod: string | null | undefined): boolean {
+  const n = normalize(paymentMethod)
+  if (!n) return false
+  return n.includes('contant')
+}

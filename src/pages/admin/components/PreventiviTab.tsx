@@ -15,6 +15,7 @@ import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
 import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
+import { giorniDiAddebitoDaCampi } from '../../../utils/giorniAddebito'
 import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
@@ -23,6 +24,7 @@ import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import ItinerarioTappe from './ItinerarioTappe'
 import { formattaDurata, itinerarioVuoto, type ItinerarioValore } from '../../../utils/itinerario'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
+import { percentualeContanti, totaleConContanti } from '../../../utils/maggiorazioneContanti'
 import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
 import PreventivoAcceptModal, { openPreventivoAcceptModal, type SecondoGuidatoreArgs, type GaranteArgs } from './PreventivoAcceptModal'
 import Button from './Button'
@@ -725,12 +727,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     [vehicles, form.vehicle_id]
   )
 
-  const rentalDays = useMemo(() => {
-    if (!form.pickup_date || !form.return_date) return 0
-    const pickup = new Date(`${form.pickup_date}T${form.pickup_time}`)
-    const dropoff = new Date(`${form.return_date}T${form.return_time}`)
-    return Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
-  }, [form.pickup_date, form.return_date, form.pickup_time, form.return_time])
+  // 19/09/2026 (direzione): stessa formula di contratto, fattura e sito —
+  // giorni di calendario + grace ritardo riconsegna. Prima qui c'era
+  // `ceil(ore / 24)`: il preventivo poteva dire 2 giorni dove la fattura ne
+  // contava 3, e ogni voce (kasko, km, cauzione) seguiva il numero sbagliato.
+  const rentalDays = useMemo(
+    () => giorniDiAddebitoDaCampi(form.pickup_date, form.pickup_time, form.return_date, form.return_time),
+    [form.pickup_date, form.return_date, form.pickup_time, form.return_time]
+  )
 
   const insuranceOptions = useMemo(
     () => getInsuranceOptionsForVehicle(selectedVehicle, form.driver_tier, configOverlay, rentalConfig),
@@ -886,6 +890,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // listSubtotalNoExp (pre-coefficiente, % garantita di markup).
     maggiorazione: boolean
   }
+  // 19/09/2026 (direzione): maggiorazione contanti da Centralina Pro. Il
+  // preventivo la ignorava del tutto — convertito in contanti nasceva senza,
+  // mentre la stessa prenotazione creata a mano la prendeva.
+  const [pctContanti, setPctContanti] = useState<number>(percentualeContanti(undefined))
   const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>({
     unlimited_km: false,
     insurance: true,
@@ -920,12 +928,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           coefficient_delivery?: boolean
           coefficient_pickup?: boolean
           coefficient_maggiorazione?: boolean
+          contanti_surcharge_pct?: number | ''
         }
       }
       setProDeposits(c.deposits || null)
       setProServizi(c.servizi || null)
       setProKm(c.km || null)
       const a = c.automations || {}
+      setPctContanti(percentualeContanti(a))
       setCoeffFlags({
         unlimited_km:     !!a.coefficient_unlimited_km,
         insurance:        a.coefficient_insurance !== false,
@@ -1536,6 +1546,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     } else if (minTotal != null && afterRevenueTotalNoExp < minTotal - 0.5) {
       afterRevenueTotalNoExp = minTotal
       clampHit = 'min'
+    }
+    // 19/09/2026: stesso arrotondamento della prenotazione (01/06/2026) — la
+    // tariffa post-coefficiente si arrotonda ai centesimi PER GIORNO, non solo
+    // sul totale. Arrotondare solo alla fine perdeva 1 cent (624,9975/g x 2 =
+    // 1249,99 invece di 1250,00) e il preventivo chiudeva un centesimo sotto
+    // la prenotazione identica.
+    {
+      const _rd = rentalDays || 1
+      afterRevenueTotalNoExp = (Math.round((afterRevenueTotalNoExp / _rd) * 100) / 100) * _rd
     }
 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
@@ -3604,7 +3623,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // veniva generata a 0 EUR (anche se il cliente aveva effettivamente
     // pagato il link Nexi col totale corretto).
     const eurToCents = (eur: number) => Math.round((eur || 0) * 100)
-    const totalCents = eurToCents(p.total_final || (p as { subtotal?: number }).subtotal || 0)
+    // 19/09/2026: il metodo di pagamento si sceglie QUI, non sul preventivo:
+    // la maggiorazione contanti si applica al momento della conversione, con
+    // la stessa funzione usata dalle prenotazioni.
+    const totalCents = eurToCents(
+      totaleConContanti(p.total_final || (p as { subtotal?: number }).subtotal || 0, payment_method, pctContanti)
+    )
     // 2026-08-10 (roadmap #43, "avviso sempre, blocco mai"): un preventivo a
     // 0 EUR non e' sempre un errore — esiste il preventivo di cortesia o
     // l'omaggio deciso dalla direzione. Prima era un muro; ora si avvisa e si

@@ -8,6 +8,7 @@ import {
   type PricingTrace,
 } from '../../src/utils/revenuePricingEngine'
 import { computeVehicleMonthlyRevenue } from './utils/vehicleRevenue'
+import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -347,6 +348,16 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // 19/09/2026 (direzione): i giorni sono quelli del CONTRATTO — giorni di
+    // calendario piu' la grace sul ritardo di riconsegna (Centralina Pro >
+    // Automazioni). Prima il motore faceva `ceil(ore / 24)` e la stessa
+    // prenotazione valeva 2 giorni nel gestionale e 3 in fattura.
+    const billingDays = await computeRentalBillingDays(
+      new Date(pickup_date),
+      new Date(dropoff_date),
+      supabase,
+    )
+
     // 4. Build pricing input and run the shared engine
     const pricingInput: PricingInput = {
       vehicleId: vehicle.id,
@@ -359,6 +370,7 @@ export const handler: Handler = async (event) => {
       vehicleOwnOccupancyPct,
       calendarGapDays,
       vehicleMonthlyRevenueEur,
+      billingDays,
     }
 
     const trace: PricingTrace = calculateDynamicPrice(config, pricingInput)

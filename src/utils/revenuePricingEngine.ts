@@ -88,6 +88,12 @@ export interface PricingInput {
   // whether the per-vehicle revenue-target coefficient activates. Optional for
   // backward compat — when omitted, the per-vehicle boost never triggers.
   vehicleMonthlyRevenueEur?: number
+  // 19/09/2026 (direzione): giorni di addebito gia' calcolati dal chiamante con
+  // la regola del contratto (giorni di calendario + grace ritardo riconsegna).
+  // Il motore contava `ceil(ore / 24)`: stessa prenotazione, 2 giorni qui e 3
+  // in contratto/fattura/sito. Quando arriva, questo valore vince — cosi' anche
+  // il coefficiente di durata legge lo stesso numero di giorni della fattura.
+  billingDays?: number
 }
 
 export interface BreakdownItem {
@@ -442,7 +448,9 @@ export function calculateDynamicPrice(
   // ─── 2. Rental days ───
   const pickupMs = new Date(input.pickupDate).getTime()
   const dropoffMs = new Date(input.dropoffDate).getTime()
-  const rentalDays = Math.max(1, Math.ceil((dropoffMs - pickupMs) / (1000 * 60 * 60 * 24)))
+  const rentalDays = input.billingDays != null && input.billingDays > 0
+    ? Math.max(1, Math.floor(input.billingDays))
+    : Math.max(1, Math.ceil((dropoffMs - pickupMs) / (1000 * 60 * 60 * 24)))
 
   // ─── 3. Days ahead ───
   const nowMs = Date.now()

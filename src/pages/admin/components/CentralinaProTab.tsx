@@ -671,6 +671,9 @@ type AutomationsConfig = {
   cross_vehicle_gap_minutes: number | ''
   pre_pickup_carwash_buffer_minutes: number | ''
   late_return_grace_minutes: number | ''
+  /** Maggiorazione applicata al totale quando il pagamento e' in contanti.
+   *  Fino al 19/09/2026 era 20% scritto in duro dentro ReservationsTab. */
+  contanti_surcharge_pct?: number | ''
   /** Periodi in cui le prenotazioni LAVAGGIO sono BLOCCATE: il sito non
    *  permette di prenotare in quelle date. Vuoto = nessun blocco. */
   carwash_block_ranges?: { from: string; to: string; message?: string }[]
@@ -731,6 +734,7 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   cross_vehicle_gap_minutes: 15,
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
+  contanti_surcharge_pct: 20,
   carwash_block_ranges: [],
   cancellation_rules: [
     { id: 'standard',   label: 'Cancellazione standard',  applies_to: 'all',     requires_service: 'none',       min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
@@ -2815,6 +2819,9 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
   if (current.automations.pre_pickup_carwash_buffer_minutes !== saved.automations.pre_pickup_carwash_buffer_minutes) {
     out.push(`Buffer pre-pickup (lavaggio in corso): ${saved.automations.pre_pickup_carwash_buffer_minutes || 0} → ${current.automations.pre_pickup_carwash_buffer_minutes || 0} minuti`)
+  }
+  if (current.automations.contanti_surcharge_pct !== saved.automations.contanti_surcharge_pct) {
+    out.push(`Maggiorazione contanti: ${saved.automations.contanti_surcharge_pct ?? 20}% → ${current.automations.contanti_surcharge_pct ?? 20}%`)
   }
   if (current.automations.late_return_grace_minutes !== saved.automations.late_return_grace_minutes) {
     out.push(`Grace ritardo riconsegna: ${saved.automations.late_return_grace_minutes || 0} → ${current.automations.late_return_grace_minutes || 0} minuti`)
@@ -7353,6 +7360,39 @@ function AutomazioniSection({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
             <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (1h30 prima del pickup time).</p>
+          </label>
+        </div>
+      </section>
+
+      {/* 6) Maggiorazione contanti */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#f2f7ff] border-b border-[#007aff]/15">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#007aff] text-white items-center justify-center text-[12px] font-bold">6</span>
+            Maggiorazione contanti
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            Percentuale aggiunta al totale quando il pagamento e' <b>in contanti</b>. Vale sulla prenotazione, sul preventivo e sulla conversione preventivo → prenotazione. <b>0 = nessuna maggiorazione.</b>
+          </p>
+        </header>
+        <div className="p-5">
+          <label className="block max-w-xs">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={automations.contanti_surcharge_pct ?? 20}
+                onChange={(e) => {
+                  const v = e.target.value
+                  update({ contanti_surcharge_pct: v === '' ? '' : Number(v) })
+                }}
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">%</span>
+            </div>
+            <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 20%. Su 1.000 € il cliente paga 1.200 €.</p>
           </label>
         </div>
       </section>
