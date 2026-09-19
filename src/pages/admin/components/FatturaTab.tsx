@@ -19,6 +19,7 @@ import { fetchAllRows } from '../../../utils/fetchAllRows'
 // Stessa geometria del menu Gestisci: il pannello si vede intero, senza
 // scorrerlo e senza uscire dallo schermo.
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
+import { totaleDaRighe } from '../../../utils/totaleFattura'
 
 interface Invoice {
   id: string
@@ -42,6 +43,9 @@ interface Invoice {
   // SDI. Vedi utils/fattureDoppie.
   extension_index?: number | null
   aruba_invoice_id?: string | null
+  // 19/09/2026: acceso quando `importo_totale` era 0/vuoto e l'importo mostrato
+  // e' stato ricalcolato dalle righe (vedi utils/totaleFattura).
+  importo_ricalcolato?: boolean
 }
 
 // Chi può cambiare lo stato di pagamento delle fatture: il flag `role:payment-manager`
@@ -759,13 +763,39 @@ export default function FatturaTab() {
       )
 
       if (error) throw error
-      setInvoices(data)
+      setInvoices(await conImportiRicalcolati(data))
     } catch (error) {
       console.error('Failed to load invoices:', error)
     } finally {
       setLoading(false)
       setCaricandoStorico(false)
     }
+  }
+
+  // 19/09/2026 (direzione): due fatture comparivano a 0,00 EUR pur essendo
+  // partite con gli importi giusti. La lista legge la colonna `importo_totale`,
+  // mentre l'XML per lo SDI ricalcola SEMPRE dalle righe: con la colonna a 0 il
+  // documento era corretto e la tab no. Qui si rileggono le RIGHE delle sole
+  // fatture a zero e si mostra la somma vera. Nessuna scrittura: il database
+  // resta com'e', si corregge solo cio' che l'operatore vede.
+  async function conImportiRicalcolati(righe: Invoice[]): Promise<Invoice[]> {
+    const aZero = righe.filter(f => !(Number(f.importo_totale) > 0))
+    if (aZero.length === 0) return righe
+    const { data: conRighe, error } = await supabase
+      .from('fatture')
+      .select('id, items')
+      .in('id', aZero.map(f => f.id))
+    if (error || !conRighe) return righe
+    const calcolati = new Map<string, number>()
+    for (const r of conRighe as { id: string; items: unknown }[]) {
+      const t = totaleDaRighe(r.items)
+      if (t > 0) calcolati.set(r.id, t)
+    }
+    if (calcolati.size === 0) return righe
+    console.warn(`[Fatture] ${calcolati.size} fatture con importo_totale a zero: importo ripreso dalle righe`)
+    return righe.map(f => calcolati.has(f.id)
+      ? { ...f, importo_totale: calcolati.get(f.id)!, importo_ricalcolato: true }
+      : f)
   }
 
   const toggleSelect = (id: string) => {
@@ -1629,6 +1659,12 @@ export default function FatturaTab() {
                       </td>
                       <td className={`px-4 py-3 text-right tabular-nums whitespace-nowrap font-semibold ${isNotaCredito ? 'text-rose-400' : 'text-dr7-gold'}`}>
                         {isNotaCredito ? '−' : ''}{formatEur(Math.abs(Number(invoice.importo_totale) || 0))}
+                        {invoice.importo_ricalcolato && (
+                          <span
+                            className="ml-1 text-amber-400 cursor-help"
+                            title="Importo ripreso dalle righe della fattura: la colonna importo_totale e' a zero. E' la stessa cifra partita allo SDI."
+                          >*</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${statoClass}`}>

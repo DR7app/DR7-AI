@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { totaleDaRighe } from '../../src/utils/totaleFattura'
 import { createClient } from '@supabase/supabase-js'
 
 // Default invoice footer lines (legal/company info shown on every PDF).
@@ -337,12 +338,19 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
         summaryRows.push({ label: 'IVA 0% (Esente)', value: '€ 0.00' })
     }
 
-    summaryRows.push({ label: 'Totale fattura', value: `€ ${invoice.importo_totale.toFixed(2)}`, bold: true })
+    // 19/09/2026: se la colonna `importo_totale` e' a zero o vuota si prende la
+    // somma delle RIGHE — la stessa cifra che l'XML manda allo SDI. Senza questo
+    // il PDF stampava "Totale fattura € 0.00" su una fattura regolarmente emessa.
+    const totaleStampato = Number(invoice.importo_totale) > 0
+        ? Number(invoice.importo_totale)
+        : totaleDaRighe(invoice.items)
+
+    summaryRows.push({ label: 'Totale fattura', value: `€ ${totaleStampato.toFixed(2)}`, bold: true })
 
     if (invoice.stato === 'paid') {
         summaryRows.push({ label: 'Totale da pagare', value: '€ 0.00' })
     } else {
-        summaryRows.push({ label: 'Importo dovuto', value: `€ ${invoice.importo_totale.toFixed(2)}` })
+        summaryRows.push({ label: 'Importo dovuto', value: `€ ${totaleStampato.toFixed(2)}` })
     }
 
     summaryRows.forEach(row => {
