@@ -50,6 +50,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
   const [displayValue, setDisplayValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const nativeRef = useRef<HTMLInputElement | null>(null);
+  const testoRef = useRef<HTMLInputElement | null>(null);
   // 17/09/2026 (direzione): il calendario del browser si apre sotto l'elemento
   // che lo chiama. Chiamarlo dall'input dell'icona (tutto a destra) lo faceva
   // uscire dalla finestra. Questo input invisibile copre tutto il campo: il
@@ -143,6 +144,23 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
     }
   };
 
+  // 19/09/2026 (direzione): scelto il giorno sul calendario, il calendario si
+  // chiude da solo e la data compare subito nel campo. Prima restava aperto con
+  // il campo apparentemente VUOTO: la sincronizzazione del testo e' legata a
+  // useEffect([value, isFocused]) e veniva saltata perche' il campo era a fuoco,
+  // cosi' sembrava che il clic non avesse fatto nulla e si ricliccava (il
+  // calendario si riapriva all'infinito). Qui si toglie il fuoco a tutti e tre
+  // gli input — e' il fuoco che tiene aperto il popup del browser — e si scrive
+  // il testo GG/MM/AAAA senza aspettare l'effetto.
+  const applicaDataDalCalendario = (iso: string) => {
+    ancoraRef.current?.blur();
+    nativeRef.current?.blur();
+    testoRef.current?.blur();
+    setIsFocused(false);
+    setDisplayValue(iso ? isoToEuropean(iso) : '');
+    onChange(iso);
+  };
+
   // Il campo eredita la larghezza dal className del chiamante: se è w-full il
   // wrapper deve esserlo anche lui, altrimenti l'inline-flex collassa e il campo
   // diventa più stretto del layout originale (era un <input type="date"> pieno).
@@ -164,13 +182,14 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         ref={ancoraRef}
         type="date"
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => applicaDataDalCalendario(e.target.value)}
         disabled={disabled}
         tabIndex={-1}
         aria-hidden="true"
         className="absolute left-0 top-0 h-full w-full opacity-0 pointer-events-none"
       />
       <input
+        ref={testoRef}
         type="text"
         name={name}
         id={id}
@@ -211,7 +230,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         ref={nativeRef}
         type="date"
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => applicaDataDalCalendario(e.target.value)}
         onClick={() => openPickerFromNative(ancoraRef.current)}
         disabled={disabled}
         tabIndex={-1}

@@ -2260,8 +2260,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           vehicle_id: vehicle.id,
           pickup_date: dateStr,
           pickup_time: smartTime,
-          return_date: dateStr, // stesso giorno: noleggio a ore, prezzo di 1 giornata
-          return_time: suggestReturnTime(smartTime, dateStr, dateStr),
+          return_date: giornoDopo(dateStr), // giorno dopo, ora = ritiro - 1h30
+          return_time: suggestReturnTime(smartTime, dateStr, giornoDopo(dateStr)),
           // Recalculate based on logic if needed, but simple is better for now
           category: vehicle.category,
         }));
@@ -2501,6 +2501,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     const c = Math.max(0, Math.min(23 * 60 + 45, m))
     return `${String(Math.floor(c / 60)).padStart(2, '0')}:${String(c % 60).padStart(2, '0')}`
   }
+  // 19/09/2026 (direzione): la riconsegna proposta in automatico e' il GIORNO
+  // DOPO il ritiro (con l'ora a "ritiro - 1h30"). Resta possibile il noleggio a
+  // ore: basta riportare a mano la Data Riconsegna sullo stesso giorno del
+  // ritiro, e quella scelta non viene piu' toccata.
+  const giornoDopo = (iso: string): string => {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-').map(Number)
+    if (!y || !m || !d) return ''
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    dt.setUTCDate(dt.getUTCDate() + 1)
+    return dt.toISOString().split('T')[0]
+  }
+
   const suggestReturnTime = (pickupTime: string, pickupDate?: string, returnDate?: string): string => {
     if (!pickupTime) return ''
     const sameDay = !!pickupDate && !!returnDate && pickupDate === returnDate
@@ -10305,21 +10318,24 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     onChange={(e) => {
                       const v = e.target.value
                       setFormData(prev => {
-                        // 2026-09-12 (direzione): la Data Riconsegna si allinea
-                        // allo STESSO giorno del ritiro (prima era +1 giorno),
-                        // perche' si noleggia anche solo per qualche ora nella
-                        // stessa giornata pagando comunque una giornata piena.
-                        // Una riconsegna gia' scelta piu' avanti resta com'e'.
+                        // 19/09/2026 (direzione): la Data Riconsegna proposta e'
+                        // il GIORNO DOPO il ritiro (il 12/09 era stata allineata
+                        // allo stesso giorno). Si compila da sola solo se manca
+                        // o se e' rimasta PRIMA del ritiro: una riconsegna gia'
+                        // scelta — anche in giornata, per il noleggio a ore —
+                        // resta com'e'.
                         let nextReturn = prev.return_date
+                        let autoRiconsegna = false
                         if (v && (!prev.return_date || prev.return_date < v)) {
-                          nextReturn = v
+                          nextReturn = giornoDopo(v)
+                          autoRiconsegna = true
                         }
-                        // Nello stesso giorno l'ora di riconsegna deve stare
-                        // DOPO il ritiro, altrimenti il salvataggio viene
-                        // bloccato: la si risuggerisce solo se manca o non e'
-                        // piu' valida.
+                        // Ora riconsegna = ritiro - 1h30. Nello stesso giorno
+                        // finirebbe PRIMA del ritiro (salvataggio bloccato):
+                        // in quel caso suggestReturnTime propone la fine
+                        // dell'ultima fascia del giorno.
                         let nextReturnTime = prev.return_time
-                        if (v && nextReturn === v && prev.pickup_time && (!nextReturnTime || nextReturnTime <= prev.pickup_time)) {
+                        if (v && prev.pickup_time && (autoRiconsegna || (nextReturn === v && (!nextReturnTime || nextReturnTime <= prev.pickup_time)))) {
                           nextReturnTime = suggestReturnTime(prev.pickup_time, v, nextReturn)
                         }
                         return { ...prev, pickup_date: v, return_date: nextReturn, return_time: nextReturnTime }
@@ -10332,11 +10348,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     value={formData.pickup_time}
                     onChange={(e) => {
                       const pickupTime = e.target.value
-                      setFormData(prev => ({
-                        ...prev,
-                        pickup_time: pickupTime,
-                        return_time: suggestReturnTime(pickupTime, prev.pickup_date, prev.return_date),
-                      }))
+                      setFormData(prev => {
+                        // Se l'ora si sceglie prima della data, la riconsegna
+                        // resterebbe vuota: si propone comunque il giorno dopo.
+                        const nextReturn = prev.return_date || giornoDopo(prev.pickup_date)
+                        return {
+                          ...prev,
+                          pickup_time: pickupTime,
+                          return_date: nextReturn,
+                          return_time: suggestReturnTime(pickupTime, prev.pickup_date, nextReturn),
+                        }
+                      })
                     }}
                     options={buildRentalTimeOptions(formData.pickup_date, 'pickup')}
                   />
