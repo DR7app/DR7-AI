@@ -11781,8 +11781,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     <>
                       <div className="text-xs text-theme-text-muted">
                         EUR {centsToEurStr(Math.round(revenueSuggestion.finalDailyRateEur * 100))}/giorno x {revenueSuggestion.rentalDays} giorni
-                        {' '}({revenueSuggestion.selectedBaseRateSource === 'vehicle_override' ? 'override veicolo' :
-                              revenueSuggestion.selectedBaseRateSource === 'category_override' ? 'override categoria' : 'tariffa base'})
+                        {/* 19/09/2026: "tariffa base" non diceva da dove arriva il prezzo.
+                            E' il listino del mezzo (tab Veicoli), cioe' il ripiego di quando
+                            in Centralina Pro > Prezzo Dinamico non c'e' un prezzo base per
+                            quel veicolo ne' per la sua categoria. */}
+                        {' '}({revenueSuggestion.selectedBaseRateSource === 'vehicle_override' ? 'prezzo base veicolo (Centralina Pro)' :
+                              revenueSuggestion.selectedBaseRateSource === 'category_override' ? 'prezzo base categoria (Centralina Pro)' : 'listino del mezzo — nessun prezzo base in Centralina Pro'})
                         {revenueSuggestion.minHit && ' | Min raggiunto'}
                         {revenueSuggestion.maxHit && ' | Max raggiunto'}
                       </div>
