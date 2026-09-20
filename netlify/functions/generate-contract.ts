@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions'
+import { clausolaKasko } from '../../src/utils/clausolaKasko'
 import { tipoDaEtichetta } from '../../src/utils/tipoCategoria'
 import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
@@ -1681,6 +1682,30 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         }
         if (kaskoUnaVolta) {
             console.log('[generate-contract] Kasko modificata per questa prenotazione:', JSON.stringify(franchigieContratto))
+        }
+
+        // ─── La clausola Kasko la scrive la Centralina ──────────────────────
+        // 20/09/2026 (direzione): fino a oggi il paragrafo era scritto in duro
+        // con "€5.000 + 30%" per tutti, mentre la Centralina per questa
+        // categoria dice altro (Exotic Cars 15.000, Hypercar 10.000). Il
+        // cliente firmava numeri che non erano i suoi.
+        //
+        // Ora, quando la Centralina conosce la Kasko scelta, il paragrafo si
+        // costruisce con i SUOI dati: nome dell'opzione, descrizione della
+        // copertura e franchigia/scoperto realmente applicati — compresa la
+        // modifica valida solo per questa prenotazione (kasko una volta).
+        // Se la direzione ha scritto un testo dedicato per la categoria
+        // (contract_clauses) quello vince sempre, come prima.
+        if (!proInsuranceText && soloTerra && opzionePro && insuranceLabel) {
+            insuranceResponsibilityText = clausolaKasko({
+                etichettaCategoria: vehicleCategoryLabel,
+                nomeKasko: insuranceLabel,
+                copertura: String((opzionePro as { coverage?: unknown }).coverage || ''),
+                franchigiaEur: franchigieContratto.kasko.eur,
+                scopertoPerc: franchigieContratto.kasko.perc,
+                depositoObbligatorio: Number((opzionePro as { mandatory_deposit?: unknown }).mandatory_deposit || 0),
+            })
+            console.log(`[generate-contract] Clausola Kasko dalla Centralina: ${insuranceLabel} — ${franchigieContratto.kasko.eur || '—'} / ${franchigieContratto.kasko.perc || '—'}%`)
         }
 
         // 10/09/2026 — La tabella "PENALI E ADDEBITI" del contratto non ha piu'
