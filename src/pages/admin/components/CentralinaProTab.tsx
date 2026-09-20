@@ -3285,6 +3285,7 @@ function diffInsuranceList(
     if (prev.name !== o.name) out.push(`${prefix}: "${prev.name}" rinominata in "${o.name}"`)
     if (prev.daily_price !== o.daily_price) out.push(`${prefix} / ${o.name}: €/giorno ${prev.daily_price} → ${o.daily_price}`)
     if (prev.mandatory_deposit !== o.mandatory_deposit) out.push(`${prefix} / ${o.name}: deposito ${prev.mandatory_deposit} → ${o.mandatory_deposit}`)
+    if ((prev.coverage || '') !== (o.coverage || '')) out.push(`${prefix} / ${o.name}: descrizione sul sito modificata`)
     if (prev.deductible_fixed !== o.deductible_fixed) out.push(`${prefix} / ${o.name}: franchigia ${prev.deductible_fixed} → ${o.deductible_fixed}`)
     if (prev.deductible_percent !== o.deductible_percent) out.push(`${prefix} / ${o.name}: scoperto % ${prev.deductible_percent} → ${o.deductible_percent}`)
     // Franchigie del contratto: senza queste righe la barra diceva "0 modifiche
@@ -3600,7 +3601,11 @@ type InsuranceOption = {
   deductible_percent: number | ''
   /** 08/09/2026: franchigie per garanzia, stampate sul contratto. */
   franchigie?: FranchigieContratto
-  /** Testo libero della Kasko per il contratto (ogni Kasko ha il suo). */
+  /** 20/09/2026 (direzione): descrizione della copertura come e' scritta nel
+   *  contratto. Il sito la mostra sotto il nome della Kasko al posto della
+   *  frase fissa che aveva in codice: cosi' cio' che il cliente legge quando
+   *  sceglie e cio' che firma dicono la stessa cosa. Vuoto = frase standard. */
+  coverage?: string
   // 2026-05-15: ON/OFF toggle. When false l'opzione non appare in nuove
   // prenotazioni / preventivi (admin + website). Default true per
   // backwards compat (entries seedate prima del flag = sempre attive).
@@ -3790,6 +3795,24 @@ function InsuranceList({
               <FieldBox label="€ / giorno" value={opt.daily_price} onChange={(v) => patch(opt.id, { daily_price: v })} />
               <FieldBox label="Deposito €" value={opt.mandatory_deposit} onChange={(v) => patch(opt.id, { mandatory_deposit: v })} />
             </div>
+
+            {/* 20/09/2026 (direzione): la descrizione che il cliente legge sul
+                sito quando sceglie la Kasko. Va scritta come nel contratto. */}
+            <label className="block mt-3">
+              <span className="block text-[11px] uppercase tracking-wider text-theme-text-secondary mb-1">
+                Descrizione sul sito (come nel contratto)
+              </span>
+              <textarea
+                rows={2}
+                value={opt.coverage ?? ''}
+                onChange={(e) => patch(opt.id, { coverage: e.target.value })}
+                placeholder="RCA - Furto (solo in caso di restituzione chiave, altrimenti 100% del valore del veicolo) - Atti vandalici - Agenti atmosferici - Incendio - Danni & distruzione totale"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <span className="block text-[11px] text-theme-text-secondary mt-1">
+                Lasciando vuoto il sito mostra la frase standard. La riga "Da risarcire" resta calcolata da franchigia e scoperto.
+              </span>
+            </label>
 
             {/* 08/09/2026: franchigie per garanzia + testo Kasko, stampati sul
                 contratto. Stanno sulla singola opzione perche' il contratto
