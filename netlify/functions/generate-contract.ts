@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions'
+import { tipoDaEtichetta } from '../../src/utils/tipoCategoria'
 import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
 import { requireAuth } from './require-auth'
@@ -1293,8 +1294,23 @@ export const handler: Handler = async (event) => {
         // Legacy bucketing (fallback). Usato SOLO se Centralina Pro non ha
         // una clausola specifica per questa categoria. La direzione vede
         // questo testo finche' non sovrascrive in Centralina Pro > Contratti.
-        const isSupercarLegacy = vehicleCategory === 'supercar' || vehicleCategory === 'luxury'
-        const isUrbanLegacy = vehicleCategory === 'urban' || vehicleCategory === 'economy'
+        // 20/09/2026 (direzione): la clausola si sceglie dall'ETICHETTA della
+        // categoria, non dal suo id.
+        //
+        // Gli id sono storici: `urban` e' etichettato "Hypercar" (M8 800cv,
+        // GLE 63, SL55, Macan GTS) e finiva sul testo delle UTILITARIE, con
+        // "da risarcire €2.000 + 30%" su un contratto firmato mentre la
+        // Centralina per quella categoria dice 10.000 + 30%. E `supercars`
+        // non corrispondeva a `'supercar'` — mancava la s — quindi Ferrari e
+        // Lamborghini firmavano il testo generico, senza alcun importo Kasko.
+        //
+        // Il confronto per id resta come ripiego: serve ai contratti vecchi e
+        // alle categorie il cui nome non dice niente.
+        const tipoDallEtichetta = tipoDaEtichetta(vehicleCategoryLabel)
+        const isSupercarLegacy = tipoDallEtichetta === 'SUPERCAR'
+            || (tipoDallEtichetta === null && (vehicleCategory === 'supercar' || vehicleCategory === 'luxury'))
+        const isUrbanLegacy = tipoDallEtichetta === 'UTILITARIA' || tipoDallEtichetta === 'FURGONE'
+            || (tipoDallEtichetta === null && (vehicleCategory === 'urban' || vehicleCategory === 'economy'))
 
         let insuranceResponsibilityText = ''
 
