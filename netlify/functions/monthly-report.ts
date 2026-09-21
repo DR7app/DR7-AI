@@ -958,12 +958,36 @@ async function generateVehicleReport(
     }
     const idxA = idxGiorno(presenzaA)
     const conDate = !!(inFlottaDal || inFlottaAl)
-    const giorniInFlotta = !conDate
+    const giorniPresenza = !conDate
       ? elapsedDays
       : (idxA >= idxDa ? idxA - idxDa + 1 : 0)
-    const dentro = (d: number) => !conDate || (d >= idxDa && d <= idxA)
+    const dentroPresenza = (d: number) => !conDate || (d >= idxDa && d <= idxA)
+    // 21/09/2026 (direzione): pause = giorni in cui il mezzo non era
+    // noleggiabile (carrozzeria, prestato, fermo...). Escono dal conto come
+    // se il mezzo non ci fosse. Se in pausa c'e' comunque un noleggio, quel
+    // giorno resta noleggiato: il noleggio vince sempre.
+    // vehicles.metadata.pause_flotta = [{ dal, al, motivo }] (date incluse).
+    const pauseGrezze: Array<{ dal: string; al: string; motivo: string }> = Array.isArray(meta.pause_flotta)
+      ? meta.pause_flotta
+          .filter((p: any) => p && /^\d{4}-\d{2}-\d{2}$/.test(String(p.dal || '')) && /^\d{4}-\d{2}-\d{2}$/.test(String(p.al || '')) && String(p.al) >= String(p.dal))
+          .map((p: any) => ({ dal: String(p.dal), al: String(p.al), motivo: String(p.motivo || '') }))
+      : []
+    const giorniPausa = new Set<number>()
+    const pauseNelPeriodo: Array<{ dal: string; al: string; motivo: string }> = []
+    for (const p of pauseGrezze) {
+      const da = Math.max(idxGiorno(p.dal), 0)
+      const a = Math.min(idxGiorno(p.al), idxGiorno(monthEndISO))
+      if (a < da) continue
+      pauseNelPeriodo.push(p)
+      for (let d = da; d <= a; d++) {
+        if (dentroPresenza(d) && d <= idxA && !finalRentedDays.has(d)) giorniPausa.add(d)
+      }
+    }
+    const conPause = giorniPausa.size > 0
+    const dentro = (d: number) => dentroPresenza(d) && !giorniPausa.has(d)
+    const giorniInFlotta = Math.max(0, giorniPresenza - giorniPausa.size)
     const maintenanceCount = Array.from(finalMaintenanceDays).filter(dentro).length
-    const uniqueRentedDays = Array.from(finalRentedDays).filter(dentro).length
+    const uniqueRentedDays = Array.from(finalRentedDays).filter(dentroPresenza).length
     const denominatore = Math.max(1, giorniInFlotta)
     const idleCount = giorniInFlotta - uniqueRentedDays - maintenanceCount
 
@@ -986,7 +1010,9 @@ async function generateVehicleReport(
       inFlottaAl,
       giorniInFlotta,
       inFlottaDalManuale: !!dalManuale,
-      nonInFlotta: conDate && giorniInFlotta === 0,
+      giorniInPausa: giorniPausa.size,
+      pause: pauseNelPeriodo,
+      nonInFlotta: (conDate || conPause) && giorniInFlotta === 0 && uniqueRentedDays === 0,
       periodTotalDays: daysInMonth,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,

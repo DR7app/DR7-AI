@@ -10,6 +10,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { logger } from '../../../utils/logger'
 import { ORPHAN_PALETTE, getPaletteForCategory } from '../../../utils/categoryPalettes'
 import Miniatura from '../../../components/Miniatura'
+import InFlottaEditor, { leggiDatiFlotta, scriviDatiFlotta, type DatiFlotta } from './InFlottaEditor'
 
 // Estrae un messaggio leggibile da qualunque shape di errore (Error,
 // PostgrestError di Supabase, oggetto generico). Senza questa logica
@@ -114,6 +115,9 @@ export default function VehiclesTab() {
   const [loading, setLoading] = useState(() => !statoPronto('veicoli:righe'))
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // 21/09/2026 (direzione): data di arrivo, uscita e pause del mezzo, usate dal
+  // Report Noleggio per l'utilizzo. Stesse chiavi che si modificano dal report.
+  const [datiFlotta, setDatiFlotta] = useState<DatiFlotta>({ dal: '', al: '', pause: [] })
   // Quando l'admin clicca "Apri Scheda" su una riga, mostriamo
   // FleetVehicleDetail full-screen al posto della tabella. Il pulsante
   // "Indietro" in cima alla scheda fa setSchedaVehicleId(null).
@@ -377,7 +381,9 @@ export default function VehiclesTab() {
         daily_rate: Number.isFinite(parsedRate) ? parsedRate : 0,
         category: formData.category,
         metadata: {
-          ...existingMetadata,
+          // Le date in flotta si scrivono sempre da qui: la lista in memoria
+          // puo' essere piu' vecchia di una modifica fatta dal Report.
+          ...scriviDatiFlotta(existingMetadata, datiFlotta),
           unavailable_from: isUnavailable ? (formData.unavailable_from || null) : null,
           unavailable_until: isUnavailable ? (formData.unavailable_until || null) : null,
           unavailable_from_time: isUnavailable ? (formData.unavailable_from_time || null) : null,
@@ -584,6 +590,7 @@ export default function VehiclesTab() {
       acceleration_0_100: '',
       image_url: ''
     })
+    setDatiFlotta({ dal: '', al: '', pause: [] })
   }
 
   function handleEdit(vehicle: Vehicle) {
@@ -612,6 +619,7 @@ export default function VehiclesTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       image_url: (vehicle.metadata as any)?.image || ''
     })
+    setDatiFlotta(leggiDatiFlotta(vehicle.metadata))
     setEditingId(vehicle.id)
     setShowForm(true)
   }
@@ -1188,7 +1196,18 @@ export default function VehiclesTab() {
             </div>
           )}
 
-          <div className="mt-4">
+          <div className="mt-4 pt-4 border-t border-theme-border">
+            <p className="text-sm font-semibold text-theme-text-primary mb-2">Presenza in flotta</p>
+            <InFlottaEditor
+              vehicleId={editingId || 'nuovo'}
+              dati={datiFlotta}
+              onSave={(_, d) => {
+                if (d.dal && d.al && d.al < d.dal) { alert('La data di uscita viene prima di quella di arrivo.'); return }
+                setDatiFlotta(d)
+              }}
+              saving={false}
+            />
+            <p className="text-[11px] text-theme-text-muted">Senza data di arrivo il report usa il giorno in cui il veicolo e' stato inserito nel gestionale. Si salva con "Salva".</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ display: 'none' }}>
             {/* Hidden placeholder to maintain structure */}
