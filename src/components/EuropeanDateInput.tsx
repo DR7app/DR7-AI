@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { formattaDataEu, rimettiCursore } from '../utils/dataEuMentreScrivi';
 
 interface EuropeanDateInputProps {
   value: string; // ISO format (YYYY-MM-DD)
@@ -90,12 +91,11 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
   }, [value, isFocused]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target.value;
-    let formatted = input.replace(/\D/g, '');
-    if (formatted.length >= 2) formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
-    if (formatted.length >= 5) formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
-    if (formatted.length > 10) formatted = formatted.slice(0, 10);
+    // 21/09/2026: correggere solo il giorno non fa piu' scivolare le cifre
+    // ne' saltare il cursore sull'anno (vedi utils/dataEuMentreScrivi.ts).
+    const { testo: formatted, caret } = formattaDataEu(e.target.value, e.target.selectionStart);
     setDisplayValue(formatted);
+    rimettiCursore(e.target, caret);
     if (formatted.length === 10) {
       const isoDate = europeanToIso(formatted);
       if (isoDate) {

@@ -10,6 +10,7 @@ import CalendarRangePicker from '../../../components/admin/CalendarRangePicker'
 import { loadReportOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
 import { adjustVehicleReport, adjustWashReport, periodKeyOf } from '../../../utils/reportTotals'
+import { formattaDataEu, rimettiCursore } from '../../../utils/dataEuMentreScrivi'
 
 interface ProCategory { id: string; label: string }
 
@@ -186,13 +187,6 @@ function euToIso(eu: string): string | null {
   const dt = new Date(`${y}-${mo}-${d}T00:00:00`)
   if (Number.isNaN(dt.getTime())) return null
   return `${y}-${mo}-${d}`
-}
-function formatEUInput(raw: string): string {
-  // Auto-inserisce "/" mentre l'utente digita.
-  const digits = raw.replace(/[^0-9]/g, '').slice(0, 8)
-  if (digits.length <= 2) return digits
-  if (digits.length <= 4) return digits.slice(0, 2) + '/' + digits.slice(2)
-  return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
 }
 
 // 2026-06-15: Spese fisse mensili per veicolo (stipendi, rate auto, gestione…).
@@ -1516,8 +1510,10 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 maxLength={10}
                 value={fromDraft}
                 onChange={(e) => {
-                  const formatted = formatEUInput(e.target.value)
+                  const el = e.target
+                  const { testo: formatted, caret } = formattaDataEu(el.value, el.selectionStart)
                   setFromDraft(formatted)
+                  rimettiCursore(el, caret)
                   setRangePreset('custom')
                   const iso = euToIso(formatted)
                   if (iso) setCustomFrom(iso)
@@ -1533,8 +1529,10 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 maxLength={10}
                 value={toDraft}
                 onChange={(e) => {
-                  const formatted = formatEUInput(e.target.value)
+                  const el = e.target
+                  const { testo: formatted, caret } = formattaDataEu(el.value, el.selectionStart)
                   setToDraft(formatted)
+                  rimettiCursore(el, caret)
                   setRangePreset('custom')
                   const iso = euToIso(formatted)
                   if (iso) setCustomTo(iso)
