@@ -517,6 +517,25 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     )
   }
 
+  // Righe cliente tolte dal report (solo in "Modifica report"): si vedono e
+  // si rimettono con un clic. Mai nel PDF.
+  function righeTolte(v: VehicleReport) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tolte = ((v as any).bookingsRimosse || []) as BookingDetail[]
+    if (!editReport || tolte.length === 0) return null
+    return (
+      <div data-pdf-skip className="text-xs">
+        <p className="font-semibold text-theme-text-muted mb-1">Righe tolte dal report ({tolte.length})</p>
+        {tolte.map(b => (
+          <div key={b.booking_id} className="flex flex-wrap items-center gap-2 text-theme-text-muted mb-0.5">
+            <span className="line-through">{b.customer_name} · {formatDateIT(b.start_at)} - {formatDateIT(b.end_at)} · {formatCurrency(b.total_price)}</span>
+            <button onClick={() => handleRestoreRemovedBooking(b)} className="px-1.5 py-0.5 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary">Ripristina</button>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   // Date contate per un veicolo: il periodo scelto, ristretto ai giorni in
   // flotta e fermo a oggi se il periodo non e' finito (come fa il server).
   function periodoRiga(v: VehicleReport): { from: string; to: string; giorni: number } | null {
@@ -819,6 +838,29 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
       await deleteOverrideByRow(overrideScope, `${periodKey}|b|${row.booking_id}`)
       await fetchReport()
       toast.success('Valori originali ripristinati')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // 21/09/2026 (direzione): togliere una singola riga cliente dal report.
+  // Stessa chiave delle correzioni per cliente (`|b|`): i totali del veicolo
+  // e del report la scalano (utils/reportTotals.ts) e si puo' ripristinare.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRemoveBooking(row: any) {
+    if (!confirm(`Togliere la prenotazione di "${row.customer_name}" dal report? Importi e giorni escono dai totali. Si puo' ripristinare.`)) return
+    try {
+      const key = `${periodKey}|b|${row.booking_id}`
+      // Una correzione sulla stessa riga non serve piu': si parte pulita.
+      await deleteOverrideByRow(overrideScope, key)
+      await saveRemoveOverride(overrideScope, key, null)
+      await fetchReport()
+      toast.success('Riga tolta dal report')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRestoreRemovedBooking(row: any) {
+    try {
+      await deleteOverrideByRow(overrideScope, `${periodKey}|b|${row.booking_id}`)
+      await fetchReport()
+      toast.success('Riga ripristinata')
     } catch (e) { toast.error('Errore: ' + (e as Error).message) }
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1194,6 +1236,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             />
           </div>
         )}
+        {isExpanded && <div className="mt-2">{righeTolte(v)}</div>}
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <div className="mt-3 pt-3 border-t border-theme-border space-y-2">
             <p className="text-xs font-semibold text-theme-text-muted mb-1">Dettaglio Prenotazioni:</p>
@@ -1232,6 +1275,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                         title="Correggi gli importi di questa riga"
                         className="text-amber-400 hover:text-amber-300 text-[11px] leading-none shrink-0"
                       >✎</button>
+                    )}
+                    {editReport && (
+                      <button
+                        onClick={() => handleRemoveBooking(b)}
+                        title="Togli questa prenotazione dal report"
+                        className="text-red-400 hover:text-red-300 text-sm leading-none shrink-0 px-0.5"
+                      >×</button>
                     )}
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {(b as any)._edited && (
@@ -1477,6 +1527,11 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             </td>
           </tr>
         )}
+        {isExpanded && editReport && ((v as any).bookingsRimosse?.length || 0) > 0 && (
+          <tr key={`${v.vehicleId}-tolte`} data-pdf-skip>
+            <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">{righeTolte(v)}</td>
+          </tr>
+        )}
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <tr key={`${v.vehicleId}-details`}>
             <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">
@@ -1515,6 +1570,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                                 title="Correggi gli importi di questa riga"
                                 className="text-amber-400 hover:text-amber-300 text-[11px] leading-none"
                               >✎</button>
+                            )}
+                            {editReport && (
+                              <button
+                                onClick={() => handleRemoveBooking(b)}
+                                title="Togli questa prenotazione dal report"
+                                className="text-red-400 hover:text-red-300 text-sm leading-none px-0.5"
+                              >×</button>
                             )}
                             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                             {(b as any)._edited && (

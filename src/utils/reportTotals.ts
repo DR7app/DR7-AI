@@ -113,7 +113,23 @@ export function adjustVehicleReport(
     const base = Array.isArray(v.bookings) ? (v.bookings as any[]) : []
     if (base.length === 0) return v
     let dRental = 0, dPen = 0, dDan = 0, dSaldo = 0
-    const bookings = base.map((b) => {
+    // 21/09/2026 (direzione): una riga cliente si puo' togliere dal report.
+    // Esce dalla tabella e i suoi importi e giorni escono dai totali del
+    // veicolo; resta in `bookingsRimosse` per poterla ripristinare.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bookingsRimosse: any[] = []
+    let giorniTolti = 0
+    const bookings = base.filter((b) => {
+      const bKey = `${periodKey}|b|${b.booking_id}`
+      if (!ov.removed.has(bKey)) return true
+      dRental -= quotaMese(b)
+      dPen -= Number(b.penalty_amount) || 0
+      dDan -= Number(b.danni_amount) || 0
+      dSaldo -= Number(b.da_saldare) || 0
+      giorniTolti += Math.max(0, Math.min(Number(b.days_in_month) || 0, Number(b.billable_days) || 0))
+      bookingsRimosse.push({ ...b, _overrideNote: ov.notesByRow.get(bKey) || null })
+      return false
+    }).map((b) => {
       const bKey = `${periodKey}|b|${b.booking_id}`
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const copy: any = { ...b }
@@ -135,9 +151,20 @@ export function adjustVehicleReport(
     // la direzione ha scritto il totale del veicolo, non glielo si sposta
     // sotto i piedi.
     const fissato = (campo: string) => ov.edits.has(`${periodKey}|${v.vehicleId}::${campo}`)
+    const denominatore = Number(v.giorniInFlotta) || Number(v.elapsedDays) || 0
+    const giorniRimasti = Math.max(0, (Number(v.rentedDays) || 0) - giorniTolti)
     return {
       ...v,
       bookings,
+      bookingsRimosse,
+      ...(bookingsRimosse.length > 0 ? {
+        bookingsCount: Math.max(0, (Number(v.bookingsCount) || 0) - bookingsRimosse.length),
+        rentedDays: giorniRimasti,
+        idleDays: (Number(v.idleDays) || 0) + Math.min(giorniTolti, Number(v.rentedDays) || 0),
+        utilizationRate: denominatore > 0
+          ? Math.max(0, Math.min(1, Math.round(((Number(v.utilizationRate) || 0) - giorniTolti / denominatore) * 100) / 100))
+          : v.utilizationRate,
+      } : {}),
       rentalRevenue: fissato('rentalRevenue') ? v.rentalRevenue : (Number(v.rentalRevenue) || 0) + dRental,
       penaltyRevenue: fissato('penaltyRevenue') ? v.penaltyRevenue : (Number(v.penaltyRevenue) || 0) + dPen,
       danniRevenue: fissato('danniRevenue') ? v.danniRevenue : (Number(v.danniRevenue) || 0) + dDan,
