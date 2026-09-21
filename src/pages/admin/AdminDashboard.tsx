@@ -224,6 +224,37 @@ const precaricaTab = (tab: TabType) => {
   CHUNK_TAB[tab]?.preload()
 }
 
+// Scarica PDF: su ogni tab Report, riporta nel PDF tutto quello che il report
+// mostra (vedi utils/scaricaReportPdf.ts).
+function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivElement | null> }) {
+  const [inCorso, setInCorso] = useState(false)
+  const scarica = async () => {
+    if (!contenuto.current || inCorso) return
+    setInCorso(true)
+    try {
+      const { scaricaReportPdf } = await import('../../utils/scaricaReportPdf')
+      await scaricaReportPdf(contenuto.current)
+    } catch (e) {
+      console.error('[Report] PDF non generato:', e)
+      alert('PDF non generato: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setInCorso(false)
+    }
+  }
+  return (
+    <div className="flex justify-end mb-3">
+      <button
+        type="button"
+        onClick={scarica}
+        disabled={inCorso}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:opacity-90 transition-opacity disabled:opacity-50"
+      >
+        {inCorso ? 'Genero il PDF...' : 'Scarica PDF'}
+      </button>
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
   // (which triggers window.location.reload() in lazyWithRetry) does not
@@ -247,6 +278,8 @@ export default function AdminDashboard() {
     return 'reservations'
   }
   const [activeTab, _setActiveTab] = useState<TabType>(readSavedTab)
+  // Contenuto della tab: il PDF dei Report si costruisce da qui.
+  const contenutoTabRef = useRef<HTMLDivElement>(null)
   const [tabHistory, setTabHistory] = useState<TabType[]>([])
   const setActiveTab = (tab: TabType) => {
     setTabHistory(prev => [...prev.slice(-19), activeTab])
@@ -1486,7 +1519,10 @@ export default function AdminDashboard() {
         {/* Content */}
         <main className={`flex-1 bg-theme-bg-secondary ${(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'p-0' : 'p-3 sm:p-6 lg:p-8'}`}>
           <Suspense fallback={<TabLoader />}>
-          <div>
+          {(activeTab === 'reports' || activeTab.startsWith('report-')) && !isTabRestricted(activeTab) && (
+            <ScaricaPdfReport contenuto={contenutoTabRef} />
+          )}
+          <div ref={contenutoTabRef}>
           {activeTab === 'reservations' && (
             <RentalTabs
               initialData={initialReservationData}

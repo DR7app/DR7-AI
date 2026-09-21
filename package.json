@@ -37,6 +37,8 @@
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
     "googleapis": "^171.4.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "node-fetch": "^2.7.0",
