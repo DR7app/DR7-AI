@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
@@ -104,6 +105,17 @@ export default function ReportPenaliDanniTab() {
 
   // Filters
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: '30' })
+  // PDF dei Report: periodo sul PDF e PDF mese per mese.
+  useRegistraPeriodoReport({
+    imposta: (f, t) => setDateRange({ preset: 'custom', from: f, to: t }),
+    periodo: (() => {
+      if (dateRange.preset === 'all') return null
+      if (dateRange.preset === 'custom') return dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : null
+      const da = new Date(); da.setDate(da.getDate() - parseInt(dateRange.preset, 10))
+      return { from: isoLocale(da), to: isoLocale(new Date()) }
+    })(),
+    inCaricamento: loading,
+  })
   const [tableFilter, setTableFilter] = useState<TableFilter>('all')
 
   // Pagination for detail table

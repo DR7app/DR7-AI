@@ -11,6 +11,7 @@ import { loadReportOverrides, saveEditOverride, saveRemoveOverride, saveAddOverr
 import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
 import { adjustVehicleReport, adjustWashReport, periodKeyOf } from '../../../utils/reportTotals'
 import { formattaDataEu, rimettiCursore } from '../../../utils/dataEuMentreScrivi'
+import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 
 interface ProCategory { id: string; label: string }
 
@@ -604,6 +605,21 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null)
+  // 21/09/2026 (direzione): nel PDF ogni veicolo esce aperto, con tutte le
+  // sue prenotazioni (cliente, date, pagamento, importi).
+  const [pdfTuttoAperto, setPdfTuttoAperto] = useState(false)
+  useRegistraPeriodoReport({
+    imposta: (f, t) => {
+      setRangePreset('custom')
+      setCustomFrom(f)
+      setCustomTo(t)
+      setFromDraft(isoToEU(f))
+      setToDraft(isoToEU(t))
+    },
+    periodo: customFrom && customTo ? { from: customFrom, to: customTo } : null,
+    inCaricamento: loading,
+    preparaPdf: setPdfTuttoAperto,
+  })
 
   async function fetchReport() {
     setLoading(true)
@@ -929,7 +945,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
 
   // Mobile card view for a vehicle
   function renderVehicleCard(v: VehicleReport) {
-    const isExpanded = expandedVehicle === v.vehicleId
+    const isExpanded = pdfTuttoAperto || expandedVehicle === v.vehicleId
     return (
       <div
         key={v.vehicleId}
@@ -1116,6 +1132,11 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                     <span>{formatDateIT(b.start_at)} → {formatDateIT(b.end_at)}</span>
                   </div>
 
+                  <div className="flex justify-between text-theme-text-muted mb-1.5">
+                    <span>Metodo</span>
+                    <span className="text-theme-text-primary font-medium">{b.payment_method && b.payment_method !== '-' ? b.payment_method : '—'}</span>
+                  </div>
+
                   {/* Days: total / in-month */}
                   <div className="flex justify-between text-theme-text-muted mb-1.5">
                     <span>GG totali</span>
@@ -1216,7 +1237,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
 
   // Desktop table row for a vehicle (clickable to expand booking details)
   function renderVehicleRow(v: VehicleReport) {
-    const isExpanded = expandedVehicle === v.vehicleId
+    const isExpanded = pdfTuttoAperto || expandedVehicle === v.vehicleId
     return (
       <>
         <tr
@@ -1313,6 +1334,8 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                     <th className="text-center py-1 px-2">GG Tot.</th>
                     <th className="text-center py-1 px-2">GG Mese</th>
                     <th className="text-center py-1 px-2">Pagamento</th>
+                    {/* 21/09/2026 (direzione): come ha pagato il cliente, per ogni prenotazione. */}
+                    <th className="text-left py-1 px-2">Metodo</th>
                     <th className="text-right py-1 px-2">Totale</th>
                     <th className="text-right py-1 px-2">Penali</th>
                     <th className="text-right py-1 px-2">Danni</th>
@@ -1357,6 +1380,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                             {badge.label}
                           </span>
                         </td>
+                        <td className="py-1 px-2 text-theme-text-primary">{b.payment_method && b.payment_method !== '-' ? b.payment_method : '—'}</td>
                         <td className="text-right py-1 px-2 text-theme-text-primary">{formatCurrency(b.total_price)}</td>
                         <td className={`text-right py-1 px-2 font-semibold ${pen > 0 ? 'text-yellow-400' : 'text-theme-text-muted'}`}>
                           {pen > 0 ? formatCurrency(pen) : '—'}

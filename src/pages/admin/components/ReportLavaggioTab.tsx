@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRegistraPeriodoReport, periodoDelMese } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
@@ -97,6 +98,12 @@ export default function ReportLavaggioTab() {
     [washData, overrides]) // eslint-disable-line react-hooks/exhaustive-deps
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
+  // PDF dei Report: periodo sul PDF e PDF mese per mese.
+  useRegistraPeriodoReport({
+    imposta: (f) => setSelectedMonth(f.slice(0, 7)),
+    periodo: periodoDelMese(selectedMonth),
+    inCaricamento: loading || trendLoading,
+  })
 
   const { hasRole } = useAdminRole()
   const canEditStipendio = hasRole('stipendio-editor')

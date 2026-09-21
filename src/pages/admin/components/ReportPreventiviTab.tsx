@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useRegistraPeriodoReport, periodoDelMese } from '../../../utils/reportPeriodo'
 import { supabase } from '../../../supabaseClient'
 
 // Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
@@ -172,6 +173,14 @@ export default function ReportPreventiviTab() {
   const [prevMonthData, setPrevMonthData] = useState<Preventivo[]>([])
   const [loaded, setLoaded] = useState(false)
   const [activeSection, setActiveSection] = useState<Section>('overview')
+  // PDF: tutte le sezioni una sotto l'altra, non solo quella aperta.
+  const [pdfTutteSezioni, setPdfTutteSezioni] = useState(false)
+  useRegistraPeriodoReport({
+    imposta: (f) => setSelectedMonth(f.slice(0, 7)),
+    periodo: periodoDelMese(selectedMonth),
+    inCaricamento: loading,
+    preparaPdf: setPdfTutteSezioni,
+  })
   // Filters
   const [filterVehicle, setFilterVehicle] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
@@ -793,7 +802,7 @@ export default function ReportPreventiviTab() {
           </div>
 
           {/* ===== OVERVIEW ===== */}
-          {activeSection === 'overview' && (
+          {(pdfTutteSezioni || activeSection === 'overview') && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 <StatCard
@@ -909,7 +918,7 @@ export default function ReportPreventiviTab() {
           )}
 
           {/* ===== DOMANDA ===== */}
-          {activeSection === 'domanda' && (
+          {(pdfTutteSezioni || activeSection === 'domanda') && (
             <div className="space-y-6">
               <ReportTable
                 title="Top Veicoli per Preventivi"
@@ -966,7 +975,7 @@ export default function ReportPreventiviTab() {
           )}
 
           {/* ===== CONVERSIONE ===== */}
-          {activeSection === 'conversione' && (
+          {(pdfTutteSezioni || activeSection === 'conversione') && (
             <div className="space-y-6">
               {/* Funnel — 2026-08-27 (richiesta direzione): tabella, non barre. */}
               <ReportTable
@@ -1035,7 +1044,7 @@ export default function ReportPreventiviTab() {
           )}
 
           {/* ===== PERDITE ===== */}
-          {activeSection === 'perdite' && (
+          {(pdfTutteSezioni || activeSection === 'perdite') && (
             <div className="space-y-6">
               {/* Loss summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1154,7 +1163,7 @@ export default function ReportPreventiviTab() {
           )}
 
           {/* ===== AZIONI SUGGERITE ===== */}
-          {activeSection === 'azioni' && (
+          {(pdfTutteSezioni || activeSection === 'azioni') && (
             <div className="space-y-3">
               {azioni.length === 0 ? (
                 <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-8 text-center">

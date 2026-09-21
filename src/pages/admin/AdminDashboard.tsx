@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
+import { useControlloPeriodoReport, periodoDelMese, aspettaReportPronto } from '../../utils/reportPeriodo'
 import { listSavedAccounts, saveAccount, removeSavedAccount, type SavedAccount } from '../../utils/savedAccounts'
 import toast from 'react-hot-toast'
 import { createPortal } from 'react-dom'
@@ -225,32 +226,114 @@ const precaricaTab = (tab: TabType) => {
 }
 
 // Scarica PDF: su ogni tab Report, riporta nel PDF tutto quello che il report
-// mostra (vedi utils/scaricaReportPdf.ts).
+// mostra (vedi utils/scaricaReportPdf.ts), con le date del periodo in testa.
+// "PDF per mese": porta il report su ogni mese scelto e scarica un PDF per
+// mese (vedi utils/reportPeriodo.ts).
+function mesiFraDue(da: string, a: string): string[] {
+  const out: string[] = []
+  let [y, m] = da.split('-').map(Number)
+  const [y2, m2] = a.split('-').map(Number)
+  while (y < y2 || (y === y2 && m <= m2)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`)
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+  return out
+}
+const NOMI_MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
+
 function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivElement | null> }) {
-  const [inCorso, setInCorso] = useState(false)
+  const ctrl = useControlloPeriodoReport()
+  const [inCorso, setInCorso] = useState<string | null>(null)
+  const [pannello, setPannello] = useState(false)
+  const oggi = new Date()
+  const meseOggi = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`
+  const [daMese, setDaMese] = useState(`${oggi.getFullYear()}-01`)
+  const [aMese, setAMese] = useState(meseOggi)
+  // Ultimi 5 anni, dal piu' recente.
+  const opzioniMesi = mesiFraDue(`${oggi.getFullYear() - 4}-01`, meseOggi).reverse()
+  const etichettaMese = (ym: string) => { const [y, m] = ym.split('-').map(Number); return `${NOMI_MESI[m - 1]} ${y}` }
+
+  const stampa = async (periodo: { from: string; to: string } | null | undefined) => {
+    const { scaricaReportPdf } = await import('../../utils/scaricaReportPdf')
+    if (!contenuto.current) throw new Error('report non trovato')
+    await scaricaReportPdf(contenuto.current, { periodo })
+  }
+
   const scarica = async () => {
     if (!contenuto.current || inCorso) return
-    setInCorso(true)
+    setInCorso('Genero il PDF...')
     try {
-      const { scaricaReportPdf } = await import('../../utils/scaricaReportPdf')
-      await scaricaReportPdf(contenuto.current)
+      if (ctrl?.preparaPdf) { ctrl.preparaPdf(true); await new Promise(r => setTimeout(r, 400)) }
+      await stampa(ctrl ? ctrl.periodo() : undefined)
     } catch (e) {
       console.error('[Report] PDF non generato:', e)
       alert('PDF non generato: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
-      setInCorso(false)
+      ctrl?.preparaPdf?.(false)
+      setInCorso(null)
     }
   }
+
+  const scaricaPerMese = async () => {
+    if (!ctrl || inCorso) return
+    if (daMese > aMese) { alert('Il mese iniziale viene dopo quello finale.'); return }
+    const mesi = mesiFraDue(daMese, aMese)
+    const prima = ctrl.periodo()
+    try {
+      ctrl.preparaPdf?.(true)
+      for (let i = 0; i < mesi.length; i++) {
+        setInCorso(`${etichettaMese(mesi[i])} (${i + 1} di ${mesi.length})...`)
+        const p = periodoDelMese(mesi[i])
+        ctrl.imposta(p.from, p.to)
+        await aspettaReportPronto(ctrl)
+        await stampa(p)
+        // Il browser scarica meglio se i file non partono tutti insieme.
+        await new Promise(r => setTimeout(r, 700))
+      }
+      setPannello(false)
+    } catch (e) {
+      console.error('[Report] PDF per mese interrotto:', e)
+      alert('PDF per mese interrotto: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      ctrl.preparaPdf?.(false)
+      // Il report torna sul periodo che si stava guardando.
+      if (prima) ctrl.imposta(prima.from, prima.to)
+      setInCorso(null)
+    }
+  }
+
+  const btn = 'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-full transition-opacity disabled:opacity-50'
+  const sel = 'px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm'
   return (
-    <div className="flex justify-end mb-3">
-      <button
-        type="button"
-        onClick={scarica}
-        disabled={inCorso}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:opacity-90 transition-opacity disabled:opacity-50"
-      >
-        {inCorso ? 'Genero il PDF...' : 'Scarica PDF'}
-      </button>
+    <div className="flex flex-col items-end gap-2 mb-3">
+      <div className="flex flex-wrap justify-end items-center gap-2">
+        {inCorso && <span className="text-xs text-theme-text-muted">{inCorso}</span>}
+        {ctrl && (
+          <button type="button" onClick={() => setPannello(v => !v)} disabled={!!inCorso}
+            className={`${btn} border border-dr7-gold text-dr7-gold hover:opacity-80`}>
+            PDF per mese
+          </button>
+        )}
+        <button type="button" onClick={scarica} disabled={!!inCorso} className={`${btn} bg-dr7-gold text-white hover:opacity-90`}>
+          Scarica PDF
+        </button>
+      </div>
+      {ctrl && pannello && (
+        <div className="flex flex-wrap items-center justify-end gap-2 p-3 rounded-lg border border-theme-border bg-theme-bg-tertiary">
+          <span className="text-sm text-theme-text-secondary">Da</span>
+          <select value={daMese} onChange={e => setDaMese(e.target.value)} className={sel} disabled={!!inCorso}>
+            {opzioniMesi.map(m => <option key={m} value={m}>{etichettaMese(m)}</option>)}
+          </select>
+          <span className="text-sm text-theme-text-secondary">a</span>
+          <select value={aMese} onChange={e => setAMese(e.target.value)} className={sel} disabled={!!inCorso}>
+            {opzioniMesi.map(m => <option key={m} value={m}>{etichettaMese(m)}</option>)}
+          </select>
+          <button type="button" onClick={scaricaPerMese} disabled={!!inCorso} className={`${btn} bg-dr7-gold text-white hover:opacity-90`}>
+            Scarica {daMese <= aMese ? mesiFraDue(daMese, aMese).length : 0} PDF
+          </button>
+        </div>
+      )}
     </div>
   )
 }

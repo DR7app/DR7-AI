@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import { ScheletroRigheTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -69,6 +70,12 @@ function KpiCard({ label, value, sub, accent }: {
 export default function ReportAutistiTab() {
   const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [loading, setLoading] = useState(true)
+  // PDF dei Report: periodo sul PDF e PDF mese per mese.
+  useRegistraPeriodoReport({
+    imposta: (f, t) => setRange({ from: f, to: t }),
+    periodo: range.from && range.to ? { from: range.from, to: range.to } : null,
+    inCaricamento: loading,
+  })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookings, setBookings] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<Map<string, VehicleLite>>(new Map())

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import ReportClienteModal from './ReportClienteModal'
@@ -218,6 +219,19 @@ export default function ReportClientiTab() {
   // restano calcolati su TUTTI i clienti filtrati, non sulla pagina.
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
+  // PDF: tutti i clienti del periodo, non solo la pagina a video.
+  const [pdfTuttiClienti, setPdfTuttiClienti] = useState(false)
+  useRegistraPeriodoReport({
+    imposta: (f, t) => setDateRange({ preset: 'custom', from: f, to: t }),
+    periodo: (() => {
+      if (dateRange.preset === 'all') return null
+      if (dateRange.preset === 'custom') return dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : null
+      const da = new Date(); da.setDate(da.getDate() - parseInt(dateRange.preset, 10))
+      return { from: isoLocale(da), to: isoLocale(new Date()) }
+    })(),
+    inCaricamento: loading,
+    preparaPdf: setPdfTuttiClienti,
+  })
 
   // #38 Modifica manuale report
   const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
@@ -325,8 +339,8 @@ export default function ReportClientiTab() {
   const totalPages = Math.max(1, Math.ceil(sortedClienti.length / pageSize))
   const pageCorrente = Math.min(page, totalPages)
   const pageClienti = useMemo(
-    () => sortedClienti.slice((pageCorrente - 1) * pageSize, pageCorrente * pageSize),
-    [sortedClienti, pageCorrente, pageSize]
+    () => pdfTuttiClienti ? sortedClienti : sortedClienti.slice((pageCorrente - 1) * pageSize, pageCorrente * pageSize),
+    [sortedClienti, pageCorrente, pageSize, pdfTuttiClienti]
   )
   // Cambiare ricerca, periodo, ordinamento o dimensione pagina riporta in testa.
   useEffect(() => { setPage(1) }, [search, dateRange, sortField, sortAsc, pageSize])

@@ -8,7 +8,7 @@
 type Blocco =
   | { tipo: 'titolo'; testo: string; livello: number }
   | { tipo: 'testo'; testo: string }
-  | { tipo: 'tabella'; head: string[][]; body: string[][]; foot: string[][] }
+  | { tipo: 'tabella'; head: string[][]; body: string[][]; foot: string[][]; annidata?: boolean; conDettaglio?: boolean }
 
 const TAG_ESCLUSI = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SVG', 'svg', 'CANVAS', 'SCRIPT', 'STYLE', 'OPTION', 'IMG', 'VIDEO'])
 
@@ -63,24 +63,68 @@ function testoCella(el: Element): string {
   return pezzi(el).join(' ')
 }
 
+function riga(tr: Element): string[] {
+  return Array.from(tr.children).filter(c => !escluso(c)).map(testoCella)
+}
+
 function righe(sezione: Element | null): string[][] {
   if (!sezione) return []
   return Array.from(sezione.querySelectorAll(':scope > tr'))
-    .map(tr => Array.from(tr.children).filter(c => !escluso(c)).map(testoCella))
+    .map(riga)
     .filter(r => r.some(c => c !== ''))
 }
 
-function leggiTabella(t: HTMLTableElement): Blocco | null {
-  const head = righe(t.tHead)
-  const body = Array.from(t.tBodies).flatMap(b => righe(b))
-  const foot = righe(t.tFoot)
-  if (head.length === 0 && body.length === 0) return null
-  // Colonne vuote ovunque (di solito quella dei pulsanti) si tolgono.
-  const tutte = [...head, ...body, ...foot]
+/** Colonne vuote in tutta la tabella (di solito quella dei pulsanti): si tolgono, uguali per ogni pezzo. */
+function maschera(tutte: string[][]): boolean[] {
+  if (tutte.length === 0) return []
   const nCol = Math.max(...tutte.map(r => r.length))
-  const piene = Array.from({ length: nCol }, (_, i) => tutte.some(r => (r[i] || '') !== ''))
-  const taglia = (rs: string[][]) => rs.map(r => r.filter((_, i) => piene[i]))
-  return { tipo: 'tabella', head: taglia(head), body: taglia(body), foot: taglia(foot) }
+  return Array.from({ length: nCol }, (_, i) => tutte.some(r => (r[i] || '') !== ''))
+}
+
+/**
+ * Tabella, anche con righe che si aprono (es. Report Noleggio: sotto ogni
+ * veicolo la tabella delle sue prenotazioni). La riga aperta non si schiaccia
+ * in una cella: la tabella si spezza, sotto la riga del veicolo viene il suo
+ * dettaglio (clienti, date, pagamento, importi), poi si riprende col veicolo dopo.
+ */
+function leggiTabella(t: HTMLTableElement, annidata: boolean): Blocco[] {
+  const head = righe(t.tHead)
+  const foot = righe(t.tFoot)
+  const trs = Array.from(t.tBodies).flatMap(tb => Array.from(tb.querySelectorAll(':scope > tr'))).filter(tr => !escluso(tr))
+  const conDettaglio = trs.some(tr => !!tr.querySelector('table'))
+  const semplici = trs.filter(tr => !tr.querySelector('table')).map(riga)
+  const piene = maschera([...head, ...semplici, ...foot])
+  const taglia = (rs: string[][]) => rs.map(r => r.filter((_, i) => piene[i] !== false))
+
+  const out: Blocco[] = []
+  let pezzo: string[][] = []
+  const chiudi = () => {
+    if (pezzo.length === 0) return
+    out.push({ tipo: 'tabella', head: taglia(head), body: taglia(pezzo), foot: [], annidata, conDettaglio })
+    pezzo = []
+  }
+  for (const tr of trs) {
+    if (tr.querySelector('table')) {
+      chiudi()
+      tr.querySelectorAll(':scope > td, :scope > th').forEach(td => {
+        Array.from(td.children).forEach(c => raccogli(c, out, true))
+      })
+      continue
+    }
+    const r = riga(tr)
+    if (r.some(c => c !== '')) pezzo.push(r)
+  }
+  // Senza righe aperte il totale resta attaccato alla tabella; con righe aperte
+  // va in fondo, con le stesse colonne della tabella.
+  if (!conDettaglio && foot.length > 0 && pezzo.length > 0) {
+    out.push({ tipo: 'tabella', head: taglia(head), body: taglia(pezzo), foot: taglia(foot), annidata, conDettaglio })
+    pezzo = []
+  } else {
+    chiudi()
+    if (foot.length > 0) out.push({ tipo: 'tabella', head: taglia(head), body: [], foot: taglia(foot), annidata, conDettaglio })
+  }
+  if (out.length === 0 && head.length > 0) out.push({ tipo: 'tabella', head: taglia(head), body: [], foot: [], annidata })
+  return out
 }
 
 function eGriglia(el: Element): boolean {
@@ -91,11 +135,10 @@ function eGriglia(el: Element): boolean {
   return st.display === 'grid' || (st.display === 'flex' && st.flexWrap === 'wrap')
 }
 
-function raccogli(el: Element, out: Blocco[]) {
+function raccogli(el: Element, out: Blocco[], annidata = false) {
   if (escluso(el)) return
   if (el instanceof HTMLTableElement) {
-    const b = leggiTabella(el)
-    if (b) out.push(b)
+    out.push(...leggiTabella(el, annidata))
     return
   }
   const m = /^H([1-4])$/.exec(el.tagName)
@@ -114,7 +157,7 @@ function raccogli(el: Element, out: Blocco[]) {
         .map(p => [p[0], p[1] || '', p.slice(2).join(' ')])
       if (body.length > 0) {
         const conNota = body.some(r => r[2] !== '')
-        out.push({ tipo: 'tabella', head: [], body: conNota ? body : body.map(r => r.slice(0, 2)), foot: [] })
+        out.push({ tipo: 'tabella', head: [], body: conNota ? body : body.map(r => r.slice(0, 2)), foot: [], annidata })
       }
       return
     }
@@ -122,7 +165,7 @@ function raccogli(el: Element, out: Blocco[]) {
     if (t) out.push({ tipo: 'testo', testo: t })
     return
   }
-  Array.from(el.children).forEach(c => raccogli(c, out))
+  Array.from(el.children).forEach(c => raccogli(c, out, annidata))
 }
 
 function dataIt(v: string): string {
@@ -147,7 +190,17 @@ function filtri(root: Element): string {
   return out.join(' - ')
 }
 
-export async function scaricaReportPdf(root: HTMLElement, nomeFile?: string) {
+export interface OpzioniPdf {
+  /** Periodo del report: finisce in testa al PDF e nel nome del file. null = tutto. undefined = report senza periodo. */
+  periodo?: { from: string; to: string } | null
+}
+
+function dataIt10(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+export async function scaricaReportPdf(root: HTMLElement, opz: OpzioniPdf = {}) {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
@@ -179,6 +232,15 @@ export async function scaricaReportPdf(root: HTMLElement, nomeFile?: string) {
   doc.setFontSize(16)
   doc.text(titolo, M, y + 5)
   y += 9
+  // 21/09/2026 (direzione): le date del periodo SEMPRE scritte sul report.
+  if (opz.periodo !== undefined) {
+    doc.setFontSize(12)
+    const testoPeriodo = opz.periodo
+      ? `Periodo: dal ${dataIt10(opz.periodo.from)} al ${dataIt10(opz.periodo.to)}`
+      : 'Periodo: tutte le date'
+    doc.text(testoPeriodo, M, y + 4)
+    y += 7
+  }
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(110)
@@ -212,21 +274,27 @@ export async function scaricaReportPdf(root: HTMLElement, nomeFile?: string) {
       y += r.length * 4 + 2
     } else {
       spazio(12)
+      // Dettaglio sotto una riga (prenotazioni del veicolo): rientrato e piu'
+      // leggero, attaccato alla riga a cui appartiene.
+      const rientro = b.annidata ? 8 : 0
       autoTable(doc, {
         startY: y,
-        margin: { left: M, right: M },
+        margin: { left: M + rientro, right: M },
         head: b.head.length ? b.head : undefined,
         body: b.body,
         foot: b.foot.length ? b.foot : undefined,
         showHead: 'everyPage',
         showFoot: 'lastPage',
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', textColor: 20 },
-        headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: b.annidata ? 7.5 : 8, cellPadding: 1.5, overflow: 'linebreak', textColor: 20 },
+        headStyles: b.annidata
+          ? { fillColor: [225, 225, 225], textColor: 30, fontStyle: 'bold' }
+          : { fillColor: [30, 30, 30], textColor: 255, fontStyle: 'bold' },
+        bodyStyles: b.conDettaglio ? { fontStyle: 'bold' } : {},
         footStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' },
         alternateRowStyles: { fillColor: [248, 248, 248] },
       })
-      y = fineTabella() + 5
+      y = fineTabella() + (b.annidata ? 4 : 2)
     }
   }
 
@@ -235,10 +303,16 @@ export async function scaricaReportPdf(root: HTMLElement, nomeFile?: string) {
     doc.setPage(i)
     doc.setFontSize(8)
     doc.setTextColor(130)
-    doc.text(`${titolo} - pagina ${i} di ${pagine}`, larg - M, alt - 5, { align: 'right' })
+    const piede = opz.periodo ? `${titolo} - ${dataIt10(opz.periodo.from)} / ${dataIt10(opz.periodo.to)}` : titolo
+    doc.text(`${piede} - pagina ${i} di ${pagine}`, larg - M, alt - 5, { align: 'right' })
   }
 
-  const slug = (nomeFile || titolo).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const slug = titolo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const oggi = new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
-  doc.save(`${slug || 'report'}-${oggi}.pdf`)
+  const suffisso = opz.periodo
+    ? (opz.periodo.from.slice(0, 7) === opz.periodo.to.slice(0, 7) && opz.periodo.from.endsWith('-01')
+        ? opz.periodo.from.slice(0, 7)
+        : `${dataIt10(opz.periodo.from).replace(/\//g, '-')}_${dataIt10(opz.periodo.to).replace(/\//g, '-')}`)
+    : oggi
+  doc.save(`${slug || 'report'}-${suffisso}.pdf`)
 }
