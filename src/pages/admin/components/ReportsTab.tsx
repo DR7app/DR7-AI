@@ -1065,6 +1065,12 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                     <span className="font-semibold text-red-500">Uscita dalla flotta il {isoToEU(v.inFlottaAl)} · </span>
                   )}
                   dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg
+                  {/* 21/09/2026 (direzione): tutti i nomi delle prenotazioni sulla riga, senza aprirla. */}
+                  {(v.bookings?.length || 0) > 0 && (
+                    <span className="block mt-0.5 text-theme-text-secondary">
+                      {(v.bookings || []).map((b: BookingDetail) => `${b.customer_name} (${formatDateIT(b.start_at)} - ${formatDateIT(b.end_at)})`).join(' · ')}
+                    </span>
+                  )}
                 </span>
               )
             })()}
@@ -1377,6 +1383,12 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                     <span className="font-semibold text-red-500">Uscita dalla flotta il {isoToEU(v.inFlottaAl)} · </span>
                   )}
                   dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg
+                  {/* 21/09/2026 (direzione): tutti i nomi delle prenotazioni sulla riga, senza aprirla. */}
+                  {(v.bookings?.length || 0) > 0 && (
+                    <span className="block mt-0.5 text-theme-text-secondary">
+                      {(v.bookings || []).map((b: BookingDetail) => `${b.customer_name} (${formatDateIT(b.start_at)} - ${formatDateIT(b.end_at)})`).join(' · ')}
+                    </span>
+                  )}
                 </span>
               )
             })()}
