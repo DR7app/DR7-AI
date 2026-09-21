@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 import CalendarRangePicker from '../../../components/admin/CalendarRangePicker'
 import { loadReportOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
-import { adjustVehicleReport, adjustWashReport, periodKeyOf } from '../../../utils/reportTotals'
+import { adjustVehicleReport, adjustWashReport, periodKeyOf, CHIAVE_OVUNQUE } from '../../../utils/reportTotals'
 import { formattaDataEu, rimettiCursore } from '../../../utils/dataEuMentreScrivi'
 import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import InFlottaEditor, { leggiDatiFlotta, scriviDatiFlotta, type DatiFlotta } from './InFlottaEditor'
@@ -847,10 +847,11 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   async function handleRemoveBooking(row: any) {
     if (!confirm(`Togliere la prenotazione di "${row.customer_name}" dal report? Importi e giorni escono dai totali. Si puo' ripristinare.`)) return
     try {
-      const key = `${periodKey}|b|${row.booking_id}`
+      // Tolta OVUNQUE, non solo nel mese a video: una prenotazione a cavallo
+      // di due mesi, o il PDF mese per mese, la facevano ricomparire.
       // Una correzione sulla stessa riga non serve piu': si parte pulita.
-      await deleteOverrideByRow(overrideScope, key)
-      await saveRemoveOverride(overrideScope, key, null)
+      await deleteOverrideByRow(overrideScope, `${periodKey}|b|${row.booking_id}`)
+      await saveRemoveOverride(overrideScope, `${CHIAVE_OVUNQUE}|b|${row.booking_id}`, null)
       await fetchReport()
       toast.success('Riga tolta dal report')
     } catch (e) { toast.error('Errore: ' + (e as Error).message) }
@@ -858,7 +859,11 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleRestoreRemovedBooking(row: any) {
     try {
-      await deleteOverrideByRow(overrideScope, `${periodKey}|b|${row.booking_id}`)
+      // Via tutte le rimozioni di questa prenotazione, di qualunque mese.
+      const fine = `|b|${row.booking_id}`
+      const daTogliere = (overrides?.raw || []).filter(o => o.action === 'remove' && String(o.row_key).endsWith(fine))
+      for (const o of daTogliere) await deleteOverrideById(o.id)
+      await deleteOverrideByRow(overrideScope, `${CHIAVE_OVUNQUE}|b|${row.booking_id}`)
       await fetchReport()
       toast.success('Riga ripristinata')
     } catch (e) { toast.error('Errore: ' + (e as Error).message) }

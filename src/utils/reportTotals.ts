@@ -39,6 +39,9 @@ export const EMPTY_OVERRIDES: OverrideIndex = {
  * ("ultimi 30 giorni") cambiano intervallo ogni giorno — vedi il commento
  * esteso in ReportsTab.handleSaveRowEdit.
  */
+/** Periodo delle righe tolte "ovunque" (una prenotazione tolta non torna in nessun mese). */
+export const CHIAVE_OVUNQUE = 'ovunque'
+
 export function periodKeyOf(from: string | null | undefined): string {
   return String(from || '').slice(0, 7) || 'all'
 }
@@ -107,6 +110,14 @@ export function adjustVehicleReport(
     adjusted.push({ ...a.row, _overrideNote: a.note, _isManual: true, _manualId: a.id })
   }
 
+  // Prenotazioni tolte dal report, in qualunque mese siano state tolte (anche
+  // le vecchie righe salvate col mese): tolte ovunque.
+  const prenotazioniTolte = new Set<string>()
+  for (const k of ov.removed) {
+    const i = k.indexOf('|b|')
+    if (i >= 0) prenotazioniTolte.add(k.slice(i + 3))
+  }
+
   // 2. correzioni per CLIENTE, applicate come delta sul veicolo
   adjusted = adjusted.map((v) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,13 +132,16 @@ export function adjustVehicleReport(
     let giorniTolti = 0
     const bookings = base.filter((b) => {
       const bKey = `${periodKey}|b|${b.booking_id}`
-      if (!ov.removed.has(bKey)) return true
+      // Tolta in qualunque periodo: vale ovunque (una prenotazione a cavallo
+      // di due mesi tornava nell'altro mese e nel PDF mese per mese).
+      const bKeyOvunque = `${CHIAVE_OVUNQUE}|b|${b.booking_id}`
+      if (!prenotazioniTolte.has(String(b.booking_id))) return true
       dRental -= quotaMese(b)
       dPen -= Number(b.penalty_amount) || 0
       dDan -= Number(b.danni_amount) || 0
       dSaldo -= Number(b.da_saldare) || 0
       giorniTolti += Math.max(0, Math.min(Number(b.days_in_month) || 0, Number(b.billable_days) || 0))
-      bookingsRimosse.push({ ...b, _overrideNote: ov.notesByRow.get(bKey) || null })
+      bookingsRimosse.push({ ...b, _overrideNote: ov.notesByRow.get(bKeyOvunque) || ov.notesByRow.get(bKey) || null })
       return false
     }).map((b) => {
       const bKey = `${periodKey}|b|${b.booking_id}`
