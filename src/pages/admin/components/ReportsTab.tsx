@@ -1057,6 +1057,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                   {v.inFlottaDal && v.inFlottaDal > customFrom && v.inFlottaDal <= customTo && (
                     <span className="font-semibold text-dr7-gold">Entrata in flotta il {isoToEU(v.inFlottaDal)} · </span>
                   )}
+                  {/* 21/09/2026 (direzione): senza data scritta a mano l'utilizzo
+                      e' calcolato sul giorno in cui il mezzo e' stato inserito nel
+                      gestionale, che per i mezzi importati in blocco NON e' il
+                      giorno in cui e' arrivato. Va detto, o il dato sembra certo. */}
+                  {!v.inFlottaDalManuale && (
+                    <span className="font-semibold text-amber-500">Data di arrivo da confermare (presa dal gestionale) · </span>
+                  )}
                   {v.inFlottaAl && v.inFlottaAl >= customFrom && v.inFlottaAl < customTo && (
                     <span className="font-semibold text-red-500">Uscita dalla flotta il {isoToEU(v.inFlottaAl)} · </span>
                   )}
@@ -1371,6 +1378,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
                   {v.inFlottaDal && v.inFlottaDal > customFrom && v.inFlottaDal <= customTo && (
                     <span className="font-semibold text-dr7-gold">Entrata in flotta il {isoToEU(v.inFlottaDal)} · </span>
+                  )}
+                  {/* 21/09/2026 (direzione): senza data scritta a mano l'utilizzo
+                      e' calcolato sul giorno in cui il mezzo e' stato inserito nel
+                      gestionale, che per i mezzi importati in blocco NON e' il
+                      giorno in cui e' arrivato. Va detto, o il dato sembra certo. */}
+                  {!v.inFlottaDalManuale && (
+                    <span className="font-semibold text-amber-500">Data di arrivo da confermare (presa dal gestionale) · </span>
                   )}
                   {v.inFlottaAl && v.inFlottaAl >= customFrom && v.inFlottaAl < customTo && (
                     <span className="font-semibold text-red-500">Uscita dalla flotta il {isoToEU(v.inFlottaAl)} · </span>
