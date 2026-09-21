@@ -500,6 +500,23 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     }
   }
 
+  // 21/09/2026 (direzione): i nomi di tutte le prenotazioni del veicolo, a
+  // colpo d'occhio senza aprire la riga. Uno per etichetta, a capo quando
+  // serve. Solo a video: nel PDF ogni veicolo ha gia' la tabella completa.
+  function nomiPrenotazioni(v: VehicleReport) {
+    if (!(v.bookings?.length)) return null
+    return (
+      <div data-pdf-skip className="flex flex-wrap gap-1.5">
+        {v.bookings.map((b: BookingDetail) => (
+          <span key={b.booking_id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-[11px] text-theme-text-primary whitespace-nowrap">
+            <span className="font-medium">{b.customer_name}</span>
+            <span className="text-theme-text-muted">{formatDateIT(b.start_at)} - {formatDateIT(b.end_at)}</span>
+          </span>
+        ))}
+      </div>
+    )
+  }
+
   // Date contate per un veicolo: il periodo scelto, ristretto ai giorni in
   // flotta e fermo a oggi se il periodo non e' finito (come fa il server).
   function periodoRiga(v: VehicleReport): { from: string; to: string; giorni: number } | null {
@@ -1047,12 +1064,6 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                     <span key={i} className="font-semibold text-amber-500">Pausa {isoToEU(p.dal)} - {isoToEU(p.al)}{p.motivo ? ` (${p.motivo})` : ''} · </span>
                   ))}
                   dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg{v.giorniInPausa ? ` noleggiabili (${v.giorniInPausa} in pausa)` : ''}
-                  {/* 21/09/2026 (direzione): tutti i nomi delle prenotazioni sulla riga, senza aprirla. */}
-                  {(v.bookings?.length || 0) > 0 && (
-                    <span className="block mt-0.5 text-theme-text-secondary">
-                      {(v.bookings || []).map((b: BookingDetail) => `${b.customer_name} (${formatDateIT(b.start_at)} - ${formatDateIT(b.end_at)})`).join(' · ')}
-                    </span>
-                  )}
                 </span>
               )
             })()}
@@ -1149,6 +1160,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             </div>
           )}
         </div>
+        {!isExpanded && (v.bookings?.length || 0) > 0 && <div className="mt-2">{nomiPrenotazioni(v)}</div>}
         {/* Expanded booking details — same data as the desktop expanded
             row (Cliente, Ritiro, Riconsegna, GG Tot/Mese, Pagamento,
             Totale, Penali, Danni, Ricavo Mese) but stacked in cards so
@@ -1367,12 +1379,6 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                     <span key={i} className="font-semibold text-amber-500">Pausa {isoToEU(p.dal)} - {isoToEU(p.al)}{p.motivo ? ` (${p.motivo})` : ''} · </span>
                   ))}
                   dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg{v.giorniInPausa ? ` noleggiabili (${v.giorniInPausa} in pausa)` : ''}
-                  {/* 21/09/2026 (direzione): tutti i nomi delle prenotazioni sulla riga, senza aprirla. */}
-                  {(v.bookings?.length || 0) > 0 && (
-                    <span className="block mt-0.5 text-theme-text-secondary">
-                      {(v.bookings || []).map((b: BookingDetail) => `${b.customer_name} (${formatDateIT(b.start_at)} - ${formatDateIT(b.end_at)})`).join(' · ')}
-                    </span>
-                  )}
                 </span>
               )
             })()}
@@ -1432,6 +1438,11 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             </td>
           )}
         </tr>
+        {!isExpanded && (v.bookings?.length || 0) > 0 && (
+          <tr key={`${v.vehicleId}-nomi`} data-pdf-skip className="cursor-pointer" onClick={() => setExpandedVehicle(v.vehicleId)}>
+            <td colSpan={13} className="px-4 pb-3 pt-0">{nomiPrenotazioni(v)}</td>
+          </tr>
+        )}
         {isExpanded && business === 'rental' && (
           <tr key={`${v.vehicleId}-spese`}>
             <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">

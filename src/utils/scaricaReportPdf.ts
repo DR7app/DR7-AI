@@ -59,8 +59,29 @@ function pezzi(el: Element): string[] {
   return out
 }
 
+// Dentro una cella, cio' che a video va a capo (nome del veicolo, riga delle
+// date sotto) va a capo anche nel PDF, invece di finire tutto attaccato.
 function testoCella(el: Element): string {
-  return pezzi(el).join(' ')
+  const righe: string[] = []
+  let corrente: string[] = []
+  const aCapo = () => { if (corrente.length) { righe.push(corrente.join(' ')); corrente = [] } }
+  const giro = (n: Node) => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      const t = pulisci(n.textContent || '')
+      if (t) corrente.push(t)
+      return
+    }
+    if (n.nodeType !== Node.ELEMENT_NODE) return
+    const e = n as Element
+    if (escluso(e)) return
+    const blocco = e instanceof HTMLElement && ['block', 'flex', 'grid', 'list-item'].includes(window.getComputedStyle(e).display)
+    if (blocco) aCapo()
+    e.childNodes.forEach(giro)
+    if (blocco) aCapo()
+  }
+  el.childNodes.forEach(giro)
+  aCapo()
+  return righe.join('\n')
 }
 
 function riga(tr: Element): string[] {
