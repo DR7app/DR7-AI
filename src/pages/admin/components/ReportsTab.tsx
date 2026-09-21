@@ -12,6 +12,7 @@ import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/bu
 import { adjustVehicleReport, adjustWashReport, periodKeyOf } from '../../../utils/reportTotals'
 import { formattaDataEu, rimettiCursore } from '../../../utils/dataEuMentreScrivi'
 import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface ProCategory { id: string; label: string }
 
@@ -50,6 +51,11 @@ interface VehicleReport {
   // totali del periodo (mostrato come "su X giorni" in tooltip/sub).
   elapsedDays?: number
   periodTotalDays?: number
+  // 21/09/2026: presenza in flotta nel periodo (denominatore dell'utilizzo)
+  inFlottaDal?: string | null
+  inFlottaAl?: string | null
+  giorniInFlotta?: number
+  nonInFlotta?: boolean
   bookingsCount: number
   rentalRevenue: number
   penaltyRevenue: number
@@ -199,6 +205,31 @@ const sumFx = (list?: FixedExpense[]) => (list || []).reduce((a, e) => a + (Numb
 // Spese del business (ricorrenti + una tantum): si sommano ALLE spese fisse
 // per veicolo, non le sostituiscono — una rata auto non e' un affitto.
 // Vedi useReportSpese per la regola di calcolo sul periodo.
+// 21/09/2026 (direzione): quando il mezzo e' entrato (ed eventualmente
+// uscito) dalla flotta. Il report conta l'utilizzo solo sui giorni in flotta
+// e non mostra il mezzo nei periodi in cui non c'era.
+function InFlottaEditor({ vehicleId, dal, al, onSave, saving }: {
+  vehicleId: string
+  dal: string
+  al: string
+  onSave: (vehicleId: string, dal: string, al: string) => void
+  saving: boolean
+}) {
+  return (
+    <div onClick={e => e.stopPropagation()} className="flex flex-wrap items-center gap-2 mb-3">
+      <p className="text-xs font-semibold text-theme-text-muted mr-1">In flotta</p>
+      <span className="text-xs text-theme-text-muted">dal</span>
+      <EuropeanDateInput value={dal} onChange={v => onSave(vehicleId, v, al)} className="w-32 text-xs bg-theme-bg-tertiary border border-theme-border rounded px-2 py-0.5 text-theme-text-primary" />
+      <span className="text-xs text-theme-text-muted">al</span>
+      <EuropeanDateInput value={al} onChange={v => onSave(vehicleId, dal, v)} className="w-32 text-xs bg-theme-bg-tertiary border border-theme-border rounded px-2 py-0.5 text-theme-text-primary" placeholder="ancora in flotta" />
+      {(dal || al) && (
+        <button onClick={() => onSave(vehicleId, '', '')} className="text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-muted hover:text-theme-text-primary">Svuota</button>
+      )}
+      {saving && <span className="text-[10px] text-theme-text-muted">Salvataggio…</span>}
+    </div>
+  )
+}
+
 function FixedExpensesEditor({ vehicleId, revenue, initial, onSave, saving, fmt }: {
   vehicleId: string
   revenue: number
@@ -447,6 +478,45 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
       console.error('[ReportsTab] saveFixedExpenses failed', err)
     } finally {
       setSavingExpenses(null)
+    }
+  }
+
+  // 21/09/2026: date di entrata/uscita dalla flotta (vehicles.metadata
+  // in_flotta_dal / in_flotta_al). Il calcolo lo fa monthly-report.
+  const [inFlotta, setInFlotta] = useState<Record<string, { dal: string; al: string }>>({})
+  const [savingInFlotta, setSavingInFlotta] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.from('vehicles').select('id, metadata')
+      if (cancelled || !data) return
+      const map: Record<string, { dal: string; al: string }> = {}
+      for (const veh of data as Array<{ id: string; metadata: unknown }>) {
+        const m = (veh.metadata || {}) as { in_flotta_dal?: unknown; in_flotta_al?: unknown }
+        if (m.in_flotta_dal || m.in_flotta_al) map[veh.id] = { dal: String(m.in_flotta_dal || ''), al: String(m.in_flotta_al || '') }
+      }
+      setInFlotta(map)
+    })()
+    return () => { cancelled = true }
+  }, [])
+  async function saveInFlotta(vehicleId: string, dal: string, al: string) {
+    if (dal && al && al < dal) { alert('La data di uscita viene prima di quella di entrata.'); return }
+    setInFlotta(prev => ({ ...prev, [vehicleId]: { dal, al } }))
+    setSavingInFlotta(vehicleId)
+    try {
+      const { data: cur } = await supabase.from('vehicles').select('metadata').eq('id', vehicleId).single()
+      const meta = (cur?.metadata && typeof cur.metadata === 'object') ? { ...(cur.metadata as Record<string, unknown>) } : {}
+      if (dal) meta.in_flotta_dal = dal; else delete meta.in_flotta_dal
+      if (al) meta.in_flotta_al = al; else delete meta.in_flotta_al
+      const { error: upErr } = await supabase.from('vehicles').update({ metadata: meta }).eq('id', vehicleId)
+      if (upErr) throw upErr
+      // Utilizzo e giorni fermo si ricalcolano sul server.
+      fetchReport()
+    } catch (err) {
+      console.error('[ReportsTab] saveInFlotta failed', err)
+      alert('Date in flotta non salvate: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSavingInFlotta(null)
     }
   }
 
@@ -859,8 +929,10 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     const totalAnticipatedRevenue = vehicles.reduce((s, v) => s + (v.anticipatedRevenue || 0), 0)
     const totalDaSaldare = vehicles.reduce((s, v) => s + (v.daSaldareRevenue || 0), 0)
     const totalRevenue = vehicles.reduce((s, v) => s + v.totalRevenue, 0)
-    const avgUtil = vehicles.length > 0
-      ? vehicles.reduce((s, v) => s + v.utilizationRate, 0) / vehicles.length
+    // 21/09/2026: un mezzo che nel periodo non era in flotta non abbassa la media.
+    const presenti = vehicles.filter(v => !v.nonInFlotta)
+    const avgUtil = presenti.length > 0
+      ? presenti.reduce((s, v) => s + v.utilizationRate, 0) / presenti.length
       : 0
     return { totalRented, totalRentalRevenue, totalPenaltyRevenue, totalDanniRevenue, totalAnticipatedRevenue, totalDaSaldare, totalRevenue, avgUtil, count: vehicles.length }
   }
@@ -964,6 +1036,12 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
               {(v as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(v as any)._overrideNote}>✎</span>}
             </p>
             <p className="text-xs text-theme-text-muted">{v.plate}</p>
+            {(v.inFlottaDal || v.inFlottaAl) && (
+              <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
+                {v.inFlottaDal ? `in flotta dal ${isoToEU(v.inFlottaDal)}` : 'in flotta'}{v.inFlottaAl ? ` al ${isoToEU(v.inFlottaAl)}` : ''}
+                {typeof v.giorniInFlotta === 'number' && v.elapsedDays ? ` · ${v.giorniInFlotta} gg su ${v.elapsedDays}` : ''}
+              </span>
+            )}
             {editReport && (
               <span className="mt-2 inline-flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
                 <button onClick={() => setEditRow(v)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
@@ -1067,6 +1145,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             spariva al reload senza un errore: meglio non mostrare l'editor. */}
         {isExpanded && business === 'rental' && (
           <div className="mt-3 pt-3 border-t border-theme-border" onClick={e => e.stopPropagation()}>
+            <InFlottaEditor
+              vehicleId={v.vehicleId}
+              dal={inFlotta[v.vehicleId]?.dal || ''}
+              al={inFlotta[v.vehicleId]?.al || ''}
+              onSave={saveInFlotta}
+              saving={savingInFlotta === v.vehicleId}
+            />
             <FixedExpensesEditor
               vehicleId={v.vehicleId}
               revenue={v.totalRevenue}
@@ -1252,6 +1337,12 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             {(v as any)._isManual && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 align-middle">manuale</span>}
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {(v as any)._overrideNote && <span className="ml-2 text-[11px] text-amber-400 align-middle" title={(v as any)._overrideNote}>✎ modificato</span>}
+            {(v.inFlottaDal || v.inFlottaAl) && (
+              <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
+                {v.inFlottaDal ? `in flotta dal ${isoToEU(v.inFlottaDal)}` : 'in flotta'}{v.inFlottaAl ? ` al ${isoToEU(v.inFlottaAl)}` : ''}
+                {typeof v.giorniInFlotta === 'number' && v.elapsedDays ? ` · ${v.giorniInFlotta} gg su ${v.elapsedDays}` : ''}
+              </span>
+            )}
             {editReport && (
               <span className="ml-3 inline-flex gap-1 align-middle" onClick={e => e.stopPropagation()}>
                 <button onClick={() => setEditRow(v)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
@@ -1311,6 +1402,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
         {isExpanded && business === 'rental' && (
           <tr key={`${v.vehicleId}-spese`}>
             <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">
+              <InFlottaEditor
+                vehicleId={v.vehicleId}
+                dal={inFlotta[v.vehicleId]?.dal || ''}
+                al={inFlotta[v.vehicleId]?.al || ''}
+                onSave={saveInFlotta}
+                saving={savingInFlotta === v.vehicleId}
+              />
               <FixedExpensesEditor
                 vehicleId={v.vehicleId}
                 revenue={v.totalRevenue}

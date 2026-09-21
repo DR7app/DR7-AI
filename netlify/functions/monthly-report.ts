@@ -914,8 +914,6 @@ async function generateVehicleReport(
     })
 
     const rentedCount = rentedDaysTotal
-    const maintenanceCount = finalMaintenanceDays.size
-    const uniqueRentedDays = finalRentedDays.size
 
     // 2026-05-23: utilizzo reale = rented / GIORNI TRASCORSI nel periodo
     // (non giorni TOTALI del periodo). Se siamo a meta' mese, denominatore
@@ -928,7 +926,32 @@ async function generateVehicleReport(
       ? Math.round((elapsedEndMs - monthStart.getTime()) / 86400000) + 1
       : 0
     const elapsedDays = Math.max(1, Math.min(daysInMonth, elapsedDaysRaw))
-    const idleCount = elapsedDays - uniqueRentedDays - maintenanceCount
+
+    // 21/09/2026 (direzione): il mezzo conta solo nei giorni in cui era in
+    // flotta. Una Huracan arrivata il 15/05 e noleggiata 17 giorni su 17 e'
+    // al 100%, non al 55% (17 su 31). Date in vehicles.metadata:
+    // in_flotta_dal / in_flotta_al (YYYY-MM-DD, entrambe facoltative). Senza
+    // date il mezzo conta su tutto il periodo, come prima.
+    const inFlottaDal: string | null = typeof meta.in_flotta_dal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(meta.in_flotta_dal) ? meta.in_flotta_dal : null
+    const inFlottaAl: string | null = typeof meta.in_flotta_al === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(meta.in_flotta_al) ? meta.in_flotta_al : null
+    const fineTrascorsa = elapsedDaysRaw > 0 ? dateToISOLocal(new Date(elapsedEndMs)) : monthEndISO
+    const presenzaDa = inFlottaDal && inFlottaDal > monthStartISO ? inFlottaDal : monthStartISO
+    const presenzaA = inFlottaAl && inFlottaAl < fineTrascorsa ? inFlottaAl : fineTrascorsa
+    const idxGiorno = (iso: string) => {
+      const [a, b] = [iso, monthStartISO].map(x => x.split('-').map(Number))
+      return Math.round((Date.UTC(a[0], a[1] - 1, a[2]) - Date.UTC(b[0], b[1] - 1, b[2])) / 86400000)
+    }
+    const idxDa = idxGiorno(presenzaDa)
+    const idxA = idxGiorno(presenzaA)
+    const conDate = !!(inFlottaDal || inFlottaAl)
+    const giorniInFlotta = !conDate
+      ? elapsedDays
+      : (presenzaA >= presenzaDa ? idxA - idxDa + 1 : 0)
+    const dentro = (d: number) => !conDate || (d >= idxDa && d <= idxA)
+    const maintenanceCount = Array.from(finalMaintenanceDays).filter(dentro).length
+    const uniqueRentedDays = Array.from(finalRentedDays).filter(dentro).length
+    const denominatore = Math.max(1, giorniInFlotta)
+    const idleCount = giorniInFlotta - uniqueRentedDays - maintenanceCount
 
     const report: any = {
       vehicleId: vehicle.id,
@@ -940,10 +963,15 @@ async function generateVehicleReport(
       maintenanceDays: maintenanceCount,
       idleDays: Math.max(0, idleCount),
       // utilizationRate ora basato su giorni trascorsi reali del periodo
-      utilizationRate: Math.min(1, Math.round((uniqueRentedDays / elapsedDays) * 100) / 100),
-      downtimeRate: Math.min(1, Math.round((maintenanceCount / elapsedDays) * 100) / 100),
-      idleRate: Math.min(1, Math.round((Math.max(0, idleCount) / elapsedDays) * 100) / 100),
+      utilizationRate: giorniInFlotta > 0 ? Math.min(1, Math.round((uniqueRentedDays / denominatore) * 100) / 100) : 0,
+      downtimeRate: giorniInFlotta > 0 ? Math.min(1, Math.round((maintenanceCount / denominatore) * 100) / 100) : 0,
+      idleRate: giorniInFlotta > 0 ? Math.min(1, Math.round((Math.max(0, idleCount) / denominatore) * 100) / 100) : 0,
       elapsedDays,
+      // 21/09/2026: presenza in flotta nel periodo (denominatore dell'utilizzo).
+      inFlottaDal,
+      inFlottaAl,
+      giorniInFlotta,
+      nonInFlotta: conDate && giorniInFlotta === 0,
       periodTotalDays: daysInMonth,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
@@ -977,7 +1005,10 @@ async function generateVehicleReport(
     return report
   }
 
-  const vehicleReports = (vehicles || []).map(v => buildVehicleRow(v))
+  // 21/09/2026: un mezzo che nel periodo non era in flotta (arrivato dopo o
+  // gia' uscito) non compare, a meno che abbia comunque movimenti da mostrare.
+  const vehicleReports = (vehicles || []).map(v => buildVehicleRow(v)).filter((r: any) =>
+    !r.nonInFlotta || r.bookingsCount > 0 || r.totalRevenue > 0 || (r.anticipatedRevenue || 0) > 0 || (r.daSaldareRevenue || 0) > 0)
 
   // Sort by utilization rate descending
   vehicleReports.sort((a, b) => b.utilizationRate - a.utilizationRate)
@@ -1039,7 +1070,7 @@ async function generateVehicleReport(
       totalAnticipatedRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + (v.anticipatedRevenue || 0), 0) * 100) / 100,
       anticipatedBookingsCount: cleanReports.reduce((sum: number, v: any) => sum + (v.anticipatedBookings?.length || 0), 0),
       avgUtilizationRate: (() => {
-        const reali = cleanReports.filter((v: any) => !v.unmatched)
+        const reali = cleanReports.filter((v: any) => !v.unmatched && !v.nonInFlotta)
         return Math.round((reali.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, reali.length)) * 100) / 100
       })(),
       vehicles: cleanReports
