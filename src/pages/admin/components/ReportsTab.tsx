@@ -55,6 +55,7 @@ interface VehicleReport {
   inFlottaDal?: string | null
   inFlottaAl?: string | null
   giorniInFlotta?: number
+  inFlottaDalManuale?: boolean
   nonInFlotta?: boolean
   bookingsCount: number
   rentalRevenue: number
@@ -520,15 +521,18 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     }
   }
 
-  // Date contate per un veicolo: il periodo scelto, ristretto ai giorni in flotta.
+  // Date contate per un veicolo: il periodo scelto, ristretto ai giorni in
+  // flotta e fermo a oggi se il periodo non e' finito (come fa il server).
   function periodoRiga(v: VehicleReport): { from: string; to: string; giorni: number } | null {
     if (!customFrom || !customTo) return null
+    const oggiIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+    const fine = customTo > oggiIso && customFrom <= oggiIso ? oggiIso : customTo
     const from = v.inFlottaDal && v.inFlottaDal > customFrom ? v.inFlottaDal : customFrom
-    const to = v.inFlottaAl && v.inFlottaAl < customTo ? v.inFlottaAl : customTo
+    const to = v.inFlottaAl && v.inFlottaAl < fine ? v.inFlottaAl : fine
     if (to < from) return null
     const [a, b] = [from, to].map(x => x.split('-').map(Number))
-    const giorni = Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000) + 1
-    return { from, to, giorni }
+    const calcolati = Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000) + 1
+    return { from, to, giorni: typeof v.giorniInFlotta === 'number' ? v.giorniInFlotta : calcolati }
   }
 
   // 2026-05-23: range picker (oggi, 7gg, 30gg, mese corrente, anno, custom).
@@ -1054,9 +1058,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
               if (!pr) return null
               return (
                 <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
+                  {v.inFlottaDal && v.inFlottaDal > customFrom && v.inFlottaDal <= customTo && (
+                    <span className="font-semibold text-dr7-gold">Entrata in flotta il {isoToEU(v.inFlottaDal)} · </span>
+                  )}
+                  {v.inFlottaAl && v.inFlottaAl >= customFrom && v.inFlottaAl < customTo && (
+                    <span className="font-semibold text-red-500">Uscita dalla flotta il {isoToEU(v.inFlottaAl)} · </span>
+                  )}
                   dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg
-                  {v.inFlottaDal && v.inFlottaDal > customFrom ? ` (in flotta dal ${isoToEU(v.inFlottaDal)})` : ''}
-                  {v.inFlottaAl && v.inFlottaAl < customTo ? ` (uscito il ${isoToEU(v.inFlottaAl)})` : ''}
                 </span>
               )
             })()}
@@ -1362,9 +1370,13 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
               if (!pr) return null
               return (
                 <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
+                  {v.inFlottaDal && v.inFlottaDal > customFrom && v.inFlottaDal <= customTo && (
+                    <span className="font-semibold text-dr7-gold">Entrata in flotta il {isoToEU(v.inFlottaDal)} · </span>
+                  )}
+                  {v.inFlottaAl && v.inFlottaAl >= customFrom && v.inFlottaAl < customTo && (
+                    <span className="font-semibold text-red-500">Uscita dalla flotta il {isoToEU(v.inFlottaAl)} · </span>
+                  )}
                   dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg
-                  {v.inFlottaDal && v.inFlottaDal > customFrom ? ` (in flotta dal ${isoToEU(v.inFlottaDal)})` : ''}
-                  {v.inFlottaAl && v.inFlottaAl < customTo ? ` (uscito il ${isoToEU(v.inFlottaAl)})` : ''}
                 </span>
               )
             })()}

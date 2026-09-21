@@ -326,7 +326,7 @@ async function generateVehicleReport(
     // Fetch ALL vehicles (including retired — they may have historical bookings)
     const { data, error: vehiclesError } = await supabase
       .from('vehicles')
-      .select('id, display_name, plate, status, daily_rate, category, metadata')
+      .select('id, display_name, plate, status, daily_rate, category, metadata, created_at')
       .order('display_name')
     if (vehiclesError) throw vehiclesError
     vehicles = data
@@ -932,7 +932,11 @@ async function generateVehicleReport(
     // al 100%, non al 55% (17 su 31). Date in vehicles.metadata:
     // in_flotta_dal / in_flotta_al (YYYY-MM-DD, entrambe facoltative). Senza
     // date il mezzo conta su tutto il periodo, come prima.
-    const inFlottaDal: string | null = typeof meta.in_flotta_dal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(meta.in_flotta_dal) ? meta.in_flotta_dal : null
+    // Senza data scritta a mano vale il giorno in cui il mezzo e' stato
+    // inserito nel gestionale (vehicles.created_at): e' quando e' arrivato.
+    const dalManuale: string | null = typeof meta.in_flotta_dal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(meta.in_flotta_dal) ? meta.in_flotta_dal : null
+    const dalCreazione: string | null = vehicle.created_at ? dateToISOLocal(new Date(vehicle.created_at)) : null
+    let inFlottaDal: string | null = dalManuale || dalCreazione
     const inFlottaAl: string | null = typeof meta.in_flotta_al === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(meta.in_flotta_al) ? meta.in_flotta_al : null
     const fineTrascorsa = elapsedDaysRaw > 0 ? dateToISOLocal(new Date(elapsedEndMs)) : monthEndISO
     const presenzaDa = inFlottaDal && inFlottaDal > monthStartISO ? inFlottaDal : monthStartISO
@@ -941,12 +945,22 @@ async function generateVehicleReport(
       const [a, b] = [iso, monthStartISO].map(x => x.split('-').map(Number))
       return Math.round((Date.UTC(a[0], a[1] - 1, a[2]) - Date.UTC(b[0], b[1] - 1, b[2])) / 86400000)
     }
-    const idxDa = idxGiorno(presenzaDa)
+    let idxDa = idxGiorno(presenzaDa)
+    // Una prenotazione prima della data di creazione (mezzo reinserito, dati
+    // importati): la presenza parte dal primo giorno noleggiato, mai dopo.
+    if (!dalManuale && inFlottaDal) {
+      const primoNoleggio = Math.min(...Array.from(finalRentedDays), ...Array.from(finalMaintenanceDays), Infinity)
+      if (Number.isFinite(primoNoleggio) && primoNoleggio < idxDa) {
+        idxDa = Math.max(0, primoNoleggio)
+        const [y0, m0, d0] = monthStartISO.split('-').map(Number)
+        inFlottaDal = new Date(Date.UTC(y0, m0 - 1, d0 + idxDa)).toISOString().slice(0, 10)
+      }
+    }
     const idxA = idxGiorno(presenzaA)
     const conDate = !!(inFlottaDal || inFlottaAl)
     const giorniInFlotta = !conDate
       ? elapsedDays
-      : (presenzaA >= presenzaDa ? idxA - idxDa + 1 : 0)
+      : (idxA >= idxDa ? idxA - idxDa + 1 : 0)
     const dentro = (d: number) => !conDate || (d >= idxDa && d <= idxA)
     const maintenanceCount = Array.from(finalMaintenanceDays).filter(dentro).length
     const uniqueRentedDays = Array.from(finalRentedDays).filter(dentro).length
@@ -971,6 +985,7 @@ async function generateVehicleReport(
       inFlottaDal,
       inFlottaAl,
       giorniInFlotta,
+      inFlottaDalManuale: !!dalManuale,
       nonInFlotta: conDate && giorniInFlotta === 0,
       periodTotalDays: daysInMonth,
       bookingsCount: vehicleBookings.length,
