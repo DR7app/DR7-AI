@@ -520,6 +520,17 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     }
   }
 
+  // Date contate per un veicolo: il periodo scelto, ristretto ai giorni in flotta.
+  function periodoRiga(v: VehicleReport): { from: string; to: string; giorni: number } | null {
+    if (!customFrom || !customTo) return null
+    const from = v.inFlottaDal && v.inFlottaDal > customFrom ? v.inFlottaDal : customFrom
+    const to = v.inFlottaAl && v.inFlottaAl < customTo ? v.inFlottaAl : customTo
+    if (to < from) return null
+    const [a, b] = [from, to].map(x => x.split('-').map(Number))
+    const giorni = Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000) + 1
+    return { from, to, giorni }
+  }
+
   // 2026-05-23: range picker (oggi, 7gg, 30gg, mese corrente, anno, custom).
   // Backend ora accetta from+to oltre al legacy month=YYYY-MM. Quando preset
   // === 'mese' uso il legacy `month` per non rompere chi ha link bookmarkati.
@@ -1036,12 +1047,19 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
               {(v as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(v as any)._overrideNote}>✎</span>}
             </p>
             <p className="text-xs text-theme-text-muted">{v.plate}</p>
-            {(v.inFlottaDal || v.inFlottaAl) && (
-              <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
-                {v.inFlottaDal ? `in flotta dal ${isoToEU(v.inFlottaDal)}` : 'in flotta'}{v.inFlottaAl ? ` al ${isoToEU(v.inFlottaAl)}` : ''}
-                {typeof v.giorniInFlotta === 'number' && v.elapsedDays ? ` · ${v.giorniInFlotta} gg su ${v.elapsedDays}` : ''}
-              </span>
-            )}
+            {/* 21/09/2026 (direzione): su ogni veicolo le date contate, per non
+                confondere (un mezzo arrivato a meta' mese parte dal suo arrivo). */}
+            {(() => {
+              const pr = periodoRiga(v)
+              if (!pr) return null
+              return (
+                <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
+                  dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg
+                  {v.inFlottaDal && v.inFlottaDal > customFrom ? ` (in flotta dal ${isoToEU(v.inFlottaDal)})` : ''}
+                  {v.inFlottaAl && v.inFlottaAl < customTo ? ` (uscito il ${isoToEU(v.inFlottaAl)})` : ''}
+                </span>
+              )
+            })()}
             {editReport && (
               <span className="mt-2 inline-flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
                 <button onClick={() => setEditRow(v)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
@@ -1337,12 +1355,19 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             {(v as any)._isManual && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 align-middle">manuale</span>}
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {(v as any)._overrideNote && <span className="ml-2 text-[11px] text-amber-400 align-middle" title={(v as any)._overrideNote}>✎ modificato</span>}
-            {(v.inFlottaDal || v.inFlottaAl) && (
-              <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
-                {v.inFlottaDal ? `in flotta dal ${isoToEU(v.inFlottaDal)}` : 'in flotta'}{v.inFlottaAl ? ` al ${isoToEU(v.inFlottaAl)}` : ''}
-                {typeof v.giorniInFlotta === 'number' && v.elapsedDays ? ` · ${v.giorniInFlotta} gg su ${v.elapsedDays}` : ''}
-              </span>
-            )}
+            {/* 21/09/2026 (direzione): su ogni veicolo le date contate, per non
+                confondere (un mezzo arrivato a meta' mese parte dal suo arrivo). */}
+            {(() => {
+              const pr = periodoRiga(v)
+              if (!pr) return null
+              return (
+                <span className="block text-[11px] font-normal text-theme-text-muted mt-0.5">
+                  dal {isoToEU(pr.from)} al {isoToEU(pr.to)} · {pr.giorni} gg
+                  {v.inFlottaDal && v.inFlottaDal > customFrom ? ` (in flotta dal ${isoToEU(v.inFlottaDal)})` : ''}
+                  {v.inFlottaAl && v.inFlottaAl < customTo ? ` (uscito il ${isoToEU(v.inFlottaAl)})` : ''}
+                </span>
+              )
+            })()}
             {editReport && (
               <span className="ml-3 inline-flex gap-1 align-middle" onClick={e => e.stopPropagation()}>
                 <button onClick={() => setEditRow(v)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>

@@ -26,15 +26,16 @@ export function controlloPeriodoAttuale(): ControlloPeriodo | null {
 }
 
 /** Per chi disegna il pulsante: si ridisegna quando si apre/chiude un report col periodo. */
-export function useControlloPeriodoReport(): ControlloPeriodo | null {
-  const [c, setC] = useState<ControlloPeriodo | null>(attuale)
+export function useControlloPeriodoReport(): { ctrl: ControlloPeriodo | null; periodo: Periodo | null } {
+  const leggi = () => ({ ctrl: attuale, periodo: attuale ? attuale.periodo() : null })
+  const [stato, setStato] = useState(leggi)
   useEffect(() => {
-    const f = () => setC(attuale)
+    const f = () => setStato(leggi())
     ascoltatori.add(f)
     f()
     return () => { ascoltatori.delete(f) }
   }, [])
-  return c
+  return stato
 }
 
 /** Da chiamare in ogni report che ha un periodo. */
@@ -59,6 +60,10 @@ export function useRegistraPeriodoReport(dati: {
       if (attuale === ctrl) { attuale = null; avvisa() }
     }
   }, [])
+  // Il periodo cambia: chi lo mostra (intestazione della pagina) si aggiorna.
+  const da = dati.periodo?.from || ''
+  const a = dati.periodo?.to || ''
+  useEffect(() => { avvisa() }, [da, a])
 }
 
 export function isoLocale(d: Date): string {

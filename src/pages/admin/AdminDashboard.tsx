@@ -243,7 +243,7 @@ function mesiFraDue(da: string, a: string): string[] {
 const NOMI_MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
 
 function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivElement | null> }) {
-  const ctrl = useControlloPeriodoReport()
+  const { ctrl } = useControlloPeriodoReport()
   const [inCorso, setInCorso] = useState<string | null>(null)
   const [pannello, setPannello] = useState(false)
   const oggi = new Date()
@@ -306,8 +306,9 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
   const btn = 'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-full transition-opacity disabled:opacity-50'
   const sel = 'px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm'
   return (
-    <div className="flex flex-col items-end gap-2 mb-3">
+    <div className="flex flex-col gap-2 mb-3">
       <div className="flex flex-wrap justify-end items-center gap-2">
+        <div className="flex flex-wrap justify-end items-center gap-2 ml-auto">
         {inCorso && <span className="text-xs text-theme-text-muted">{inCorso}</span>}
         {ctrl && (
           <button type="button" onClick={() => setPannello(v => !v)} disabled={!!inCorso}
@@ -318,9 +319,10 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
         <button type="button" onClick={scarica} disabled={!!inCorso} className={`${btn} bg-dr7-gold text-white hover:opacity-90`}>
           Scarica PDF
         </button>
+        </div>
       </div>
       {ctrl && pannello && (
-        <div className="flex flex-wrap items-center justify-end gap-2 p-3 rounded-lg border border-theme-border bg-theme-bg-tertiary">
+        <div className="flex flex-wrap items-center justify-end gap-2 p-3 rounded-lg border border-theme-border bg-theme-bg-tertiary self-end">
           <span className="text-sm text-theme-text-secondary">Da</span>
           <select value={daMese} onChange={e => setDaMese(e.target.value)} className={sel} disabled={!!inCorso}>
             {opzioniMesi.map(m => <option key={m} value={m}>{etichettaMese(m)}</option>)}
