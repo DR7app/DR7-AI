@@ -513,6 +513,28 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         })
     }
 
+    // Penale a minuto (es. "Ritardo check-out (per min)"): i minuti si scelgono
+    // da un menu, non premendo "+" un minuto alla volta. Totale = minuti x tariffa.
+    const isPerMinutoRow = (it: { id?: string; label?: string }): boolean => {
+        const id = String(it.id || '').toLowerCase()
+        const label = String(it.label || '').toLowerCase()
+        return id.includes('minut') || /per\s*min/.test(label)
+    }
+    const MINUTI_OPZIONI = [
+        ...Array.from({ length: 60 }, (_, i) => i + 1),
+        ...Array.from({ length: 60 }, (_, i) => 65 + i * 5),
+    ]
+    function setMinuti(penalty: PenaltyPreset, minuti: number) {
+        setCart(prev => {
+            const existing = prev.find(c => c.id === penalty.id)
+            if (minuti <= 0) return prev.filter(c => c.id !== penalty.id)
+            if (existing) {
+                return prev.map(c => c.id === penalty.id ? { ...c, quantity: minuti } : c)
+            }
+            return [...prev, { id: penalty.id, type: 'penale' as const, label: penalty.label, unitPrice: penalty.amount, quantity: minuti }]
+        })
+    }
+
     // Same +/stepper behaviour as the penalty list, applied to danni presets
     // so the Danni tab matches Penali visually (iOS-Settings list).
     function addDannoPreset(d: PenaltyPreset) {
@@ -1102,6 +1124,21 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                                         />
                                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-theme-text-muted pointer-events-none">km</span>
                                                     </div>
+                                                </>
+                                            ) : isPerMinutoRow(penalty) ? (
+                                                <>
+                                                    <span className={`text-[11px] shrink-0 ${qty > 0 ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
+                                                        {`€${penalty.amount.toFixed(2)}/min`}
+                                                    </span>
+                                                    <select
+                                                        value={qty}
+                                                        onChange={e => setMinuti(penalty, parseInt(e.target.value, 10) || 0)}
+                                                        className="shrink-0 px-2 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[13px] tabular-nums focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                                    >
+                                                        <option value={0}>0 min</option>
+                                                        {qty > 0 && !MINUTI_OPZIONI.includes(qty) && <option value={qty}>{qty} min</option>}
+                                                        {MINUTI_OPZIONI.map(m => <option key={m} value={m}>{m} min</option>)}
+                                                    </select>
                                                 </>
                                             ) : (
                                                 <>
