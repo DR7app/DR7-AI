@@ -1007,8 +1007,15 @@ async function generateVehicleReport(
 
   // 21/09/2026: un mezzo che nel periodo non era in flotta (arrivato dopo o
   // gia' uscito) non compare, a meno che abbia comunque movimenti da mostrare.
-  const vehicleReports = (vehicles || []).map(v => buildVehicleRow(v)).filter((r: any) =>
-    !r.nonInFlotta || r.bookingsCount > 0 || r.totalRevenue > 0 || (r.anticipatedRevenue || 0) > 0 || (r.daSaldareRevenue || 0) > 0)
+  // Stesso per i mezzi dismessi (status 'retired') e quelli di prova (TEST*):
+  // erano ~40 righe a 0% che portavano l'Utilizzo Medio di maggio al 9%.
+  const vehicleReports = (vehicles || []).map(v => buildVehicleRow(v)).filter((r: any) => {
+    const conMovimenti = r.bookingsCount > 0 || r.totalRevenue > 0 || (r.anticipatedRevenue || 0) > 0 || (r.daSaldareRevenue || 0) > 0
+    const dismesso = r.status === 'retired'
+    const prova = /^TEST/i.test(String(r.plate || '')) || String(r.label || '').trim().toLowerCase() === 'test'
+    if (prova) return false
+    return conMovimenti || (!r.nonInFlotta && !dismesso)
+  })
 
   // Sort by utilization rate descending
   vehicleReports.sort((a, b) => b.utilizationRate - a.utilizationRate)
