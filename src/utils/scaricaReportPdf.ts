@@ -10,12 +10,17 @@ type Blocco =
   | { tipo: 'testo'; testo: string }
   | { tipo: 'tabella'; head: string[][]; body: string[][]; foot: string[][]; annidata?: boolean; conDettaglio?: boolean }
 
+// Colonne con i nomi dei clienti: tolte dal PDF quando si sceglie "senza nomi".
+const COLONNA_NOME = /^(cliente|clienti|nome|nome cliente|cliente \/ nome|intestatario|customer)$/i
+let senzaNomiInCorso = false
+
 const TAG_ESCLUSI = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SVG', 'svg', 'CANVAS', 'SCRIPT', 'STYLE', 'OPTION', 'IMG', 'VIDEO'])
 
 function escluso(el: Element): boolean {
   if (TAG_ESCLUSI.has(el.tagName)) return true
   if (el.getAttribute('role') === 'button') return true
   if (el.hasAttribute('data-pdf-skip')) return true
+  if (senzaNomiInCorso && el.hasAttribute('data-pdf-nome')) return true
   if (el instanceof HTMLElement) {
     const st = window.getComputedStyle(el)
     if (st.display === 'none' || st.visibility === 'hidden') return true
@@ -85,14 +90,56 @@ function testoCella(el: Element): string {
 }
 
 function riga(tr: Element): string[] {
-  return Array.from(tr.children).filter(c => !escluso(c)).map(testoCella)
+  return espandi([tr], false)[0] || []
 }
 
-function righe(sezione: Element | null): string[][] {
+/**
+ * Righe di una tabella come griglia vera: una cella su piu' colonne (colSpan)
+ * o piu' righe (rowSpan) occupa tutte le sue caselle, cosi' le colonne restano
+ * allineate. Nell'intestazione la cella larga si ripete sotto ogni colonna che
+ * copre (serve per unire i due livelli: "NOLEGGI - Numero").
+ */
+function espandi(trs: Element[], ripeti: boolean): string[][] {
+  const griglia: string[][] = []
+  const occupate: boolean[][] = []
+  trs.forEach((tr, r) => {
+    griglia[r] = griglia[r] || []
+    occupate[r] = occupate[r] || []
+    let c = 0
+    Array.from(tr.children).filter(x => !escluso(x)).forEach(cella => {
+      while (occupate[r][c]) c++
+      const testo = testoCella(cella)
+      const cs = Math.max(1, Number((cella as HTMLTableCellElement).colSpan) || 1)
+      const rs = Math.max(1, Number((cella as HTMLTableCellElement).rowSpan) || 1)
+      for (let dr = 0; dr < rs; dr++) {
+        const rr = r + dr
+        griglia[rr] = griglia[rr] || []
+        occupate[rr] = occupate[rr] || []
+        for (let dc = 0; dc < cs; dc++) {
+          griglia[rr][c + dc] = dr === 0 && (dc === 0 || ripeti) ? testo : ''
+          occupate[rr][c + dc] = true
+        }
+      }
+      c += cs
+    })
+  })
+  return griglia.slice(0, trs.length).map(r => Array.from({ length: r.length }, (_, i) => r[i] ?? ''))
+}
+
+function righe(sezione: Element | null, intestazione = false): string[][] {
   if (!sezione) return []
-  return Array.from(sezione.querySelectorAll(':scope > tr'))
-    .map(riga)
-    .filter(r => r.some(c => c !== ''))
+  const trs = Array.from(sezione.querySelectorAll(':scope > tr')).filter(tr => !escluso(tr))
+  const g = espandi(trs, intestazione)
+  if (intestazione && g.length > 1) {
+    // Piu' livelli di intestazione: una sola riga, i livelli uniti per colonna.
+    const n = Math.max(...g.map(r => r.length))
+    return [Array.from({ length: n }, (_, i) => {
+      const parti: string[] = []
+      g.forEach(r => { const t = (r[i] || '').trim(); if (t && !parti.includes(t)) parti.push(t) })
+      return parti.join(' - ')
+    })]
+  }
+  return g.filter(r => r.some(c => c !== ''))
 }
 
 /** Colonne vuote in tutta la tabella (di solito quella dei pulsanti): si tolgono, uguali per ogni pezzo. */
@@ -109,12 +156,16 @@ function maschera(tutte: string[][]): boolean[] {
  * dettaglio (clienti, date, pagamento, importi), poi si riprende col veicolo dopo.
  */
 function leggiTabella(t: HTMLTableElement, annidata: boolean): Blocco[] {
-  const head = righe(t.tHead)
+  const head = righe(t.tHead, true)
   const foot = righe(t.tFoot)
   const trs = Array.from(t.tBodies).flatMap(tb => Array.from(tb.querySelectorAll(':scope > tr'))).filter(tr => !escluso(tr))
   const conDettaglio = trs.some(tr => !!tr.querySelector('table'))
   const semplici = trs.filter(tr => !tr.querySelector('table')).map(riga)
   const piene = maschera([...head, ...semplici, ...foot])
+  // Senza nomi: via la colonna Cliente/Nome (riconosciuta dall'intestazione).
+  if (senzaNomiInCorso && head.length > 0) {
+    head[head.length - 1].forEach((h, i) => { if (COLONNA_NOME.test(h.replace(/[^A-Za-z\u00C0-\u00FF /]+/g, ' ').replace(/\s+/g, ' ').trim())) piene[i] = false })
+  }
   const taglia = (rs: string[][]) => rs.map(r => r.filter((_, i) => piene[i] !== false))
 
   const out: Blocco[] = []
@@ -214,6 +265,8 @@ function filtri(root: Element): string {
 export interface OpzioniPdf {
   /** Periodo del report: finisce in testa al PDF e nel nome del file. null = tutto. undefined = report senza periodo. */
   periodo?: { from: string; to: string } | null
+  /** true = nessun nome di cliente nel PDF. */
+  senzaNomi?: boolean
 }
 
 function dataIt10(iso: string): string {
@@ -228,7 +281,12 @@ export async function scaricaReportPdf(root: HTMLElement, opz: OpzioniPdf = {}) 
   ])
 
   const blocchi: Blocco[] = []
-  Array.from(root.children).forEach(c => raccogli(c, blocchi))
+  senzaNomiInCorso = !!opz.senzaNomi
+  try {
+    Array.from(root.children).forEach(c => raccogli(c, blocchi))
+  } finally {
+    senzaNomiInCorso = false
+  }
 
   const primoTitolo = blocchi.find(b => b.tipo === 'titolo') as { testo: string } | undefined
   const titolo = primoTitolo?.testo || 'Report'

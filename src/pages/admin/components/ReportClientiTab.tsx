@@ -493,7 +493,7 @@ export default function ReportClientiTab() {
               <p className="text-xs text-theme-text-muted uppercase tracking-wider">Miglior Cliente</p>
               {topSpenders[0] ? (
                 <>
-                  <p className="text-base font-bold text-theme-text-primary truncate">{topSpenders[0].name}</p>
+                  <p data-pdf-nome className="text-base font-bold text-theme-text-primary truncate">{topSpenders[0].name}</p>
                   <p className="text-lg font-bold text-dr7-gold leading-tight">{formatCurrency(topSpenders[0].totale_spesa)}</p>
                 </>
               ) : (

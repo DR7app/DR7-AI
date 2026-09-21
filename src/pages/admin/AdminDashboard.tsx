@@ -246,6 +246,15 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
   const { ctrl } = useControlloPeriodoReport()
   const [inCorso, setInCorso] = useState<string | null>(null)
   const [pannello, setPannello] = useState(false)
+  // 21/09/2026 (direzione): si puo' scaricare il PDF senza i nomi dei clienti.
+  // La scelta resta ricordata su questo browser.
+  const [conNomi, setConNomi] = useState<boolean>(() => {
+    try { return localStorage.getItem('report-pdf-nomi') !== 'no' } catch { return true }
+  })
+  const cambiaNomi = (v: boolean) => {
+    setConNomi(v)
+    try { localStorage.setItem('report-pdf-nomi', v ? 'si' : 'no') } catch { /* niente memoria: pazienza */ }
+  }
   const oggi = new Date()
   const meseOggi = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}`
   const [daMese, setDaMese] = useState(`${oggi.getFullYear()}-01`)
@@ -257,7 +266,7 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
   const stampa = async (periodo: { from: string; to: string } | null | undefined) => {
     const { scaricaReportPdf } = await import('../../utils/scaricaReportPdf')
     if (!contenuto.current) throw new Error('report non trovato')
-    await scaricaReportPdf(contenuto.current, { periodo })
+    await scaricaReportPdf(contenuto.current, { periodo, senzaNomi: !conNomi })
   }
 
   const scarica = async () => {
@@ -310,6 +319,10 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
       <div className="flex flex-wrap justify-end items-center gap-2">
         <div className="flex flex-wrap justify-end items-center gap-2 ml-auto">
         {inCorso && <span className="text-xs text-theme-text-muted">{inCorso}</span>}
+        <label className="inline-flex items-center gap-1.5 text-sm text-theme-text-secondary cursor-pointer select-none mr-1">
+          <input type="checkbox" checked={conNomi} onChange={e => cambiaNomi(e.target.checked)} disabled={!!inCorso} className="w-4 h-4" />
+          Nomi clienti nel PDF
+        </label>
         {ctrl && (
           <button type="button" onClick={() => setPannello(v => !v)} disabled={!!inCorso}
             className={`${btn} border border-dr7-gold text-dr7-gold hover:opacity-80`}>
