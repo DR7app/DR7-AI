@@ -4914,7 +4914,7 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Menu principale — voci (nuovo design)</h3>
                 <p className="text-[12px] text-theme-text-secondary">
-                    Le 10 voci del menu del sito. Nel menu a schermo intero l'immagine e' il visual che
+                    Le voci del menu del sito. Nel menu a schermo intero l'immagine e' il visual che
                     compare accanto alla voce sotto il puntatore: non e' decorazione, si cambia da qui.
                     <strong> Lascia vuoto per usare il valore predefinito</strong> indicato tra parentesi.
                     Le destinazioni delle voci restano fisse nel sito, perche' sono rotte reali.
@@ -4932,6 +4932,12 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                             </div>
                         </div>
                     ))}
+                    {/* Ultima voce: l'area cliente. Il titolo e' "Accedi" o il nome
+                        del cliente (testi della pagina), qui c'e' solo l'immagine. */}
+                    <div className="border border-theme-border rounded-xl p-4 bg-theme-bg-secondary space-y-3">
+                        <h4 className="text-[12px] font-semibold uppercase tracking-wide text-theme-text-primary">Area cliente / Accedi</h4>
+                        <FieldText label="Immagine (def: /menu-club.jpeg)" value={menuVal('menu_account_img')} onChange={v => setMenu('menu_account_img', v)} media />
+                    </div>
                 </div>
             </section>
         </div>
@@ -4950,6 +4956,7 @@ const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: s
     { key: 'prevendite', name: 'Prevendita e Promozioni', titleIt: 'Prevendita e Promozioni', titleEn: 'Presales & Promotions', subIt: 'Pacchetti pagati in anticipo e offerte esclusive', subEn: 'Prepaid packages and exclusive offers', img: '/menu-club.jpeg' },
     { key: 'wallet', name: 'Credit Wallet', titleIt: 'Credit Wallet', titleEn: 'Credit Wallet', subIt: 'Il tuo credito DR7 Wallet per prenotare e ricaricare', subEn: 'Your DR7 Wallet credit to book and top up', img: '/menu-club.jpeg' },
     { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits', img: '/menu-club.jpeg' },
+    { key: 'privilege', name: 'DR7 Club Privilege', titleIt: 'DR7 Club Privilege', titleEn: 'DR7 Club Privilege', subIt: 'Il saldo idoneo del tuo Wallet matura ogni giorno', subEn: 'Your eligible Wallet balance grows every day', img: '/menu-club.jpeg' },
     { key: 'business', name: 'Business', titleIt: 'Business', titleEn: 'Business', subIt: 'Soluzioni corporate e noleggi a lungo termine', subEn: 'Corporate solutions and long-term rentals', img: '/menu-business.jpeg' },
     { key: 'digital', name: 'Innovazione Digitale', titleIt: 'Innovazione Digitale', titleEn: 'Digital Innovation', subIt: 'Creazione di asset digitali e token', subEn: 'Digital Asset & Token Creation', img: '/menu-digital.jpeg' },
     { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service', img: '/menu-contatti.jpeg' },

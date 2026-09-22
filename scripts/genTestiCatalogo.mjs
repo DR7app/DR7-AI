@@ -163,6 +163,10 @@ for (const file of fileDelSito()) {
 
 const elenco = [...voci.values()].sort((a, b) => (a.schermata || 'zzz').localeCompare(b.schermata || 'zzz') || a.it.localeCompare(b.it))
 
+const BLOCCO = 300
+const blocchi = []
+for (let i = 0; i < elenco.length; i += BLOCCO) blocchi.push(elenco.slice(i, i + BLOCCO))
+
 const testo = `// GENERATO da scripts/genTestiCatalogo.mjs — non modificare a mano.
 // Rigenera con: npm run testi:gen
 //
@@ -183,7 +187,10 @@ export interface VoceTesto {
     schermata: string | null
 }
 
-export const TESTI_CATALOGO: VoceTesto[] = ${JSON.stringify(elenco, null, 4)}
+${blocchi.map((b, i) => `const BLOCCO_${i}: VoceTesto[] = ${JSON.stringify(b, null, 4)}\n`).join('\n')}
+// A blocchi: un unico array con migliaia di oggetti fa arrendere tsc
+// ("union type that is too complex to represent", 22/09/2026 a 1923 voci).
+export const TESTI_CATALOGO: VoceTesto[] = ([] as VoceTesto[]).concat(${blocchi.map((_, i) => `BLOCCO_${i}`).join(', ')})
 
 /** Le stringhe di una schermata, piu' quelle dei componenti condivisi che usa. */
 export function testiDiSchermata(id: string): VoceTesto[] {
