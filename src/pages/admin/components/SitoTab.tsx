@@ -41,6 +41,7 @@ import { parseMoney } from '../../../utils/money'
 // E' quello che rende modificabili anche le pagine senza editor dedicato.
 import { TESTI_CATALOGO, type VoceTesto } from './sito/testiCatalogo'
 import { CaricaMedia, sembraMedia, etichettaMedia } from './sito/CaricaMedia'
+import InvestitoriEditor from './sito/InvestitoriEditor'
 import {
     SITO_AREAS,
     SITO_SCREENS,
@@ -102,8 +103,6 @@ import type {
     HomeMetric,
     HomeSlide,
     InvestitoriCopy,
-    InvestitoriInfoItem,
-    InvestitoriStrength,
     JetSearchResultsCopy,
     LegalCopy,
     LegalPageCopy,
@@ -4221,157 +4220,6 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
                     <FieldText label='Bottone "Aggiungi" (IT)' value={copy.upsell_add_it} onChange={v => update('upsell_add_it', v)} />
                     <FieldText label='Button "Add" (EN)' value={copy.upsell_add_en} onChange={v => update('upsell_add_en', v)} />
                 </div>
-            </section>
-        </div>
-    )
-}
-
-// ─── Investitori editor (IT-only sales page) ───────────────────────────────
-function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: (next: InvestitoriCopy) => void }) {
-    const update = <K extends keyof InvestitoriCopy>(key: K, value: InvestitoriCopy[K]) => setCopy({ ...copy, [key]: value })
-    type ParagraphList = 'intro_paragraphs' | 'opportunity_paragraphs' | 'cta_paragraphs' | 'legal_paragraphs'
-    // Il sito legge queste liste con bilingualList(), che preferisce
-    // `_it`/`_en`: scrivere il vecchio array unilingue non cambiava nulla.
-    const paragraphs = (key: ParagraphList, lang: 'it' | 'en'): string[] =>
-        (copy[`${key}_${lang}`] as string[] | undefined) ?? []
-    const updateParagraphList = (key: ParagraphList, lang: 'it' | 'en', value: string) => {
-        setCopy({ ...copy, [`${key}_${lang}`]: value.split('\n\n').filter(s => s.trim().length > 0) })
-    }
-    // strength_points
-    const updateStrength = (idx: number, patch: Partial<InvestitoriStrength>) => {
-        const next = [...copy.strength_points]
-        next[idx] = { ...next[idx], ...patch }
-        setCopy({ ...copy, strength_points: next })
-    }
-    const moveStrength = (idx: number, dir: -1 | 1) => {
-        const j = idx + dir
-        if (j < 0 || j >= copy.strength_points.length) return
-        const next = [...copy.strength_points]
-        ;[next[idx], next[j]] = [next[j], next[idx]]
-        setCopy({ ...copy, strength_points: next })
-    }
-    const removeStrength = (idx: number) => {
-        if (!confirm('Rimuovere questo punto di forza?')) return
-        setCopy({ ...copy, strength_points: copy.strength_points.filter((_, i) => i !== idx) })
-    }
-    const addStrength = () => {
-        setCopy({ ...copy, strength_points: [...copy.strength_points, { id: `s-${Date.now().toString(36)}`, title: '', description: '' }] })
-    }
-    // info_items
-    const updateInfo = (idx: number, patch: Partial<InvestitoriInfoItem>) => {
-        const next = [...copy.info_items]
-        next[idx] = { ...next[idx], ...patch }
-        setCopy({ ...copy, info_items: next })
-    }
-    const moveInfo = (idx: number, dir: -1 | 1) => {
-        const j = idx + dir
-        if (j < 0 || j >= copy.info_items.length) return
-        const next = [...copy.info_items]
-        ;[next[idx], next[j]] = [next[j], next[idx]]
-        setCopy({ ...copy, info_items: next })
-    }
-    const removeInfo = (idx: number) => {
-        if (!confirm('Rimuovere questa riga informativa?')) return
-        setCopy({ ...copy, info_items: copy.info_items.filter((_, i) => i !== idx) })
-    }
-    const addInfo = () => {
-        setCopy({ ...copy, info_items: [...copy.info_items, { label: '', value: '' }] })
-    }
-
-    return (
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Investitori</h2>
-                <p className="text-[13px] text-theme-text-secondary mt-1">
-                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/investitori</code> — pagina IT-only (no traduzioni EN). I paragrafi multipli si separano con <b>riga vuota</b> (doppio invio).
-                </p>
-            </div>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
-                <FieldText label="Titolo (IT)" value={copy.hero_title_it ?? ''} onChange={v => update('hero_title_it', v)} />
-                <FieldText label="Titolo (EN)" value={copy.hero_title_en ?? ''} onChange={v => update('hero_title_en', v)} />
-                <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it ?? ''} onChange={v => update('hero_subtitle_it', v)} />
-                <FieldText label="Sottotitolo (EN)" value={copy.hero_subtitle_en ?? ''} onChange={v => update('hero_subtitle_en', v)} />
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Introduzione</h3>
-                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('intro_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', 'it', v)} />
-                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('intro_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', 'en', v)} />
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Opportunità di partecipazione</h3>
-                <FieldText label="Heading (IT)" value={copy.opportunity_heading_it ?? ''} onChange={v => update('opportunity_heading_it', v)} />
-                <FieldText label="Heading (EN)" value={copy.opportunity_heading_en ?? ''} onChange={v => update('opportunity_heading_en', v)} />
-                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('opportunity_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', 'it', v)} />
-                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('opportunity_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', 'en', v)} />
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Punti di forza ({copy.strength_points.length})</h3>
-                <FieldText label="Heading (IT)" value={copy.strength_heading_it ?? ''} onChange={v => update('strength_heading_it', v)} />
-                <FieldText label="Heading (EN)" value={copy.strength_heading_en ?? ''} onChange={v => update('strength_heading_en', v)} />
-                {copy.strength_points.map((s, i) => (
-                    <div key={s.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{s.title || '(senza titolo)'}</span>
-                            <button onClick={() => moveStrength(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveStrength(i, 1)} disabled={i === copy.strength_points.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-                            <button onClick={() => removeStrength(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-                        </div>
-                        <input type="text" value={s.title} onChange={e => updateStrength(i, { title: e.target.value })} placeholder="Titolo punto di forza" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-semibold" />
-                        <textarea value={s.description} onChange={e => updateStrength(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
-                    </div>
-                ))}
-                <button onClick={addStrength} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Aggiungi punto di forza
-                </button>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA — Modalità di adesione</h3>
-                <FieldText label="Heading (IT)" value={copy.cta_heading_it ?? ''} onChange={v => update('cta_heading_it', v)} />
-                <FieldText label="Heading (EN)" value={copy.cta_heading_en ?? ''} onChange={v => update('cta_heading_en', v)} />
-                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('cta_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', 'it', v)} />
-                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('cta_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', 'en', v)} />
-                <FieldText label="Etichetta bottone primario (IT)" value={copy.cta_button_label_it ?? ''} onChange={v => update('cta_button_label_it', v)} />
-                <FieldText label="Etichetta bottone primario (EN)" value={copy.cta_button_label_en ?? ''} onChange={v => update('cta_button_label_en', v)} />
-                <FieldText label="URL WhatsApp (con testo precompilato)" value={copy.cta_whatsapp_url} onChange={v => update('cta_whatsapp_url', v)} />
-                <FieldText label="Email investitori (bottone secondario)" value={copy.cta_email} onChange={v => update('cta_email', v)} />
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Informazioni sintetiche ({copy.info_items.length})</h3>
-                <FieldText label="Heading (IT)" value={copy.info_heading_it ?? ''} onChange={v => update('info_heading_it', v)} />
-                <FieldText label="Heading (EN)" value={copy.info_heading_en ?? ''} onChange={v => update('info_heading_en', v)} />
-                {copy.info_items.map((it, i) => (
-                    <div key={i} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-2 items-center">
-                        <input type="text" value={it.label} onChange={e => updateInfo(i, { label: e.target.value })} placeholder="Etichetta (es. Denominazione)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={it.value} onChange={e => updateInfo(i, { value: e.target.value })} placeholder="Valore" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
-                        <div className="flex items-center gap-1">
-                            <button onClick={() => moveInfo(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveInfo(i, 1)} disabled={i === copy.info_items.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-                            <button onClick={() => removeInfo(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-                        </div>
-                    </div>
-                ))}
-                <button onClick={addInfo} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Aggiungi riga
-                </button>
-                <FieldTextArea label="Footnote sotto la tabella (corsivo) (IT)" value={copy.info_footnote_it ?? ''} onChange={v => update('info_footnote_it', v)} />
-                <FieldTextArea label="Footnote sotto la tabella (corsivo) (EN)" value={copy.info_footnote_en ?? ''} onChange={v => update('info_footnote_en', v)} />
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Avvertenza legale (banda rossa)</h3>
-                <FieldText label="Heading (IT)" value={copy.legal_heading_it ?? ''} onChange={v => update('legal_heading_it', v)} />
-                <FieldText label="Heading (EN)" value={copy.legal_heading_en ?? ''} onChange={v => update('legal_heading_en', v)} />
-                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('legal_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', 'it', v)} />
-                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('legal_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', 'en', v)} />
             </section>
         </div>
     )

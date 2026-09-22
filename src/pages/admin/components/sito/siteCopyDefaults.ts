@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 76
+ * Sezioni generate: 36 — interfacce: 81
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -1446,6 +1446,54 @@ export interface FranchisingCopy {
 // The whole /investitori page is currently IT-only. Schema reflects that —
 // single-string fields. Add EN siblings later if/when the page gets a
 // language switcher.
+
+// ─── Investor Relations (nuova pagina /investitori, 22/09/2026) ────────────
+// Ogni blocco della pagina si compila da Admin > Sito > Investitori. I blocchi
+// con elenchi vuoti (numeri, grafico, azionisti, investitori privati, loghi)
+// non si mostrano: nessun numero sulla pagina finche' la direzione non lo
+// scrive. `icona` e' una delle chiavi di IR_ICONE nella pagina.
+export interface IrNumero {
+  id: string;
+  icona: string;
+  valore: string;
+  label_it: string; label_en: string;
+  nota_it?: string; nota_en?: string;
+}
+
+export interface IrBarra {
+  id: string;
+  anno: string;
+  /** Euro interi. */
+  ricavi: number;
+  utile: number;
+}
+
+export interface IrAzionista {
+  id: string;
+  nome: string;
+  ruolo_it: string; ruolo_en: string;
+  da_it: string; da_en: string;
+  foto: string;
+  /** true = scheda col lucchetto, senza nome ne' foto. */
+  riservato?: boolean;
+}
+
+export interface IrLogo {
+  id: string;
+  nome: string;
+  logo: string;
+  link?: string;
+}
+
+export interface IrDocumento {
+  id: string;
+  icona: string;
+  titolo_it: string; titolo_en: string;
+  azione_it: string; azione_en: string;
+  /** Vuoto = il documento si chiede via email. */
+  url: string;
+}
+
 export interface InvestitoriStrength {
   id: string;
   title: string;
@@ -1492,6 +1540,67 @@ export interface InvestitoriCopy {
   legal_heading_it?: string; legal_heading_en?: string;
   legal_paragraphs: string[];
   legal_paragraphs_it?: string[]; legal_paragraphs_en?: string[];
+  // Investor Relations: hero
+  ir_hero_eyebrow_it?: string; ir_hero_eyebrow_en?: string;
+  ir_hero_riga1_it?: string; ir_hero_riga1_en?: string;
+  ir_hero_riga2_it?: string; ir_hero_riga2_en?: string;
+  ir_hero_accento_it?: string; ir_hero_accento_en?: string;
+  ir_hero_testo_it?: string; ir_hero_testo_en?: string;
+  ir_hero_bottone_it?: string; ir_hero_bottone_en?: string;
+  ir_hero_badge_it?: string; ir_hero_badge_en?: string;
+  ir_hero_img?: string;
+  // I nostri numeri
+  ir_numeri_eyebrow_it?: string; ir_numeri_eyebrow_en?: string;
+  ir_numeri_titolo_it?: string; ir_numeri_titolo_en?: string;
+  ir_numeri_testo_it?: string; ir_numeri_testo_en?: string;
+  ir_numeri?: IrNumero[];
+  // La nostra crescita (grafico)
+  ir_crescita_titolo_it?: string; ir_crescita_titolo_en?: string;
+  ir_crescita_ricavi_it?: string; ir_crescita_ricavi_en?: string;
+  ir_crescita_utile_it?: string; ir_crescita_utile_en?: string;
+  ir_crescita_nota_it?: string; ir_crescita_nota_en?: string;
+  ir_crescita?: IrBarra[];
+  // Visione
+  ir_visione_eyebrow_it?: string; ir_visione_eyebrow_en?: string;
+  ir_visione_titolo_it?: string; ir_visione_titolo_en?: string;
+  ir_visione_testo_it?: string; ir_visione_testo_en?: string;
+  ir_visione_bottone_it?: string; ir_visione_bottone_en?: string;
+  ir_visione_link?: string;
+  ir_visione_img?: string;
+  // Azionisti
+  ir_azionisti_eyebrow_it?: string; ir_azionisti_eyebrow_en?: string;
+  ir_azionisti_titolo_it?: string; ir_azionisti_titolo_en?: string;
+  ir_azionisti_testo_it?: string; ir_azionisti_testo_en?: string;
+  ir_azionisti?: IrAzionista[];
+  // Investitori privati
+  ir_privati_eyebrow_it?: string; ir_privati_eyebrow_en?: string;
+  ir_privati_titolo_it?: string; ir_privati_titolo_en?: string;
+  ir_privati_testo_it?: string; ir_privati_testo_en?: string;
+  ir_privati_img?: string;
+  ir_privati_stat?: IrNumero[];
+  ir_riservati_eyebrow_it?: string; ir_riservati_eyebrow_en?: string;
+  ir_riservati_testo_it?: string; ir_riservati_testo_en?: string;
+  ir_riservati_label_it?: string; ir_riservati_label_en?: string;
+  ir_riservati_nota_it?: string; ir_riservati_nota_en?: string;
+  // Partner strategici
+  ir_partner_eyebrow_it?: string; ir_partner_eyebrow_en?: string;
+  ir_partner_titolo_it?: string; ir_partner_titolo_en?: string;
+  ir_partner_testo_it?: string; ir_partner_testo_en?: string;
+  ir_partner_bottone_it?: string; ir_partner_bottone_en?: string;
+  ir_partner_link?: string;
+  ir_partner_img?: string;
+  ir_partner_loghi?: IrLogo[];
+  // Documenti e governance
+  ir_gov_eyebrow_it?: string; ir_gov_eyebrow_en?: string;
+  ir_gov_titolo_it?: string; ir_gov_titolo_en?: string;
+  ir_gov_testo_it?: string; ir_gov_testo_en?: string;
+  ir_gov_documenti?: IrDocumento[];
+  // Chiusura
+  ir_cta_eyebrow_it?: string; ir_cta_eyebrow_en?: string;
+  ir_cta_titolo_it?: string; ir_cta_titolo_en?: string;
+  ir_cta_testo_it?: string; ir_cta_testo_en?: string;
+  ir_cta_bottone_it?: string; ir_cta_bottone_en?: string;
+  ir_cta_nota_it?: string; ir_cta_nota_en?: string;
 }
 
 // ─── Car Wash chrome (catalog stays in car_wash_services table) ────────────
@@ -2906,6 +3015,102 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
     'Le informazioni contenute in questa sezione hanno finalità esclusivamente informative e non costituiscono, in alcun modo, un\'offerta pubblica di sottoscrizione o una sollecitazione all\'investimento ai sensi dell\'art. 94 del D.Lgs. 58/1998 (TUF) e della normativa europea vigente.',
     'L\'adesione a operazioni di partecipazione al capitale è riservata a soggetti selezionati, previa valutazione da parte di DR7 S.p.A. e nel pieno rispetto delle procedure legali e regolamentari applicabili.',
   ],
+  ir_hero_eyebrow_it: 'Investor Relations', ir_hero_eyebrow_en: 'Investor Relations',
+  ir_hero_riga1_it: 'Una visione', ir_hero_riga1_en: 'A vision',
+  ir_hero_riga2_it: 'che crea valore.', ir_hero_riga2_en: 'that creates value.',
+  ir_hero_accento_it: 'Insieme.', ir_hero_accento_en: 'Together.',
+  ir_hero_testo_it: 'DR7 S.p.A. è una realtà in forte crescita nel settore del luxury mobility e delle esperienze esclusive, con l\'obiettivo di diventare un punto di riferimento internazionale per chi cerca molto più di un semplice noleggio.\n\nQuesta sezione è dedicata a investitori, partner e stakeholder che condividono la nostra visione di lungo periodo.',
+  ir_hero_testo_en: 'DR7 S.p.A. is a fast-growing company in luxury mobility and exclusive experiences, aiming to become an international reference for those looking for much more than a simple rental.\n\nThis section is dedicated to investors, partners and stakeholders who share our long-term vision.',
+  ir_hero_bottone_it: 'Manifesta il tuo interesse', ir_hero_bottone_en: 'Express your interest',
+  ir_hero_badge_it: 'More than cars', ir_hero_badge_en: 'More than cars',
+  ir_hero_img: '',
+  ir_numeri_eyebrow_it: 'I nostri numeri', ir_numeri_eyebrow_en: 'Our numbers',
+  ir_numeri_titolo_it: 'Crescita costante, basi solide.', ir_numeri_titolo_en: 'Steady growth, solid foundations.',
+  ir_numeri_testo_it: 'Risultati concreti, una gestione efficiente e una strategia di crescita sostenibile. Questi sono i numeri che raccontano il nostro percorso.',
+  ir_numeri_testo_en: 'Concrete results, efficient management and a sustainable growth strategy. These are the numbers that tell our story.',
+  ir_numeri: [
+    { id: 'ricavi', icona: 'ricavi', valore: '€ 1,5 M', label_it: 'Ricavi 2026', label_en: 'Revenue 2026', nota_it: '(da 30/06)', nota_en: '(to 30/06)' },
+    { id: 'utile', icona: 'utile', valore: '€ 500 K', label_it: 'Utile netto 2026', label_en: 'Net profit 2026', nota_it: '(da 30/06)', nota_en: '(to 30/06)' },
+    { id: 'clienti', icona: 'clienti', valore: '> 2.000', label_it: 'Clienti attivi', label_en: 'Active customers', nota_it: '(tutti i servizi)', nota_en: '(all services)' },
+    { id: 'parco', icona: 'auto', valore: '> € 3 M', label_it: 'Valore parco auto', label_en: 'Fleet value' },
+    { id: 'patrimonio', icona: 'patrimonio', valore: '> € 6 M', label_it: 'Patrimonio netto', label_en: 'Net equity' },
+    { id: 'sedi', icona: 'sedi', valore: '5', label_it: 'Sedi operative', label_en: 'Operating sites', nota_it: '(Cagliari, Iglesias, Olbia, Nuoro, Sassari)', nota_en: '(Cagliari, Iglesias, Olbia, Nuoro, Sassari)' },
+  ],
+  ir_crescita_titolo_it: 'La nostra crescita', ir_crescita_titolo_en: 'Our growth',
+  ir_crescita_ricavi_it: 'Ricavi', ir_crescita_ricavi_en: 'Revenue',
+  ir_crescita_utile_it: 'Utile netto', ir_crescita_utile_en: 'Net profit',
+  ir_crescita_nota_it: '* Dati al 30/06/2026', ir_crescita_nota_en: '* Figures at 30/06/2026',
+  ir_crescita: [
+    { id: '2024', anno: '2024', ricavi: 450000, utile: 0 },
+    { id: '2025', anno: '2025', ricavi: 1000000, utile: 0 },
+    { id: '2026', anno: '2026*', ricavi: 1500000, utile: 0 },
+  ],
+  ir_visione_eyebrow_it: 'Visione 2030', ir_visione_eyebrow_en: 'Vision 2030',
+  ir_visione_titolo_it: 'Dal Mediterraneo al mondo.', ir_visione_titolo_en: 'From the Mediterranean to the world.',
+  ir_visione_testo_it: 'Entro il 2030 vogliamo essere una società leader nel luxury mobility e nelle esperienze esclusive, con presenza internazionale e accesso ai mercati dei capitali.',
+  ir_visione_testo_en: 'By 2030 we aim to be a leading company in luxury mobility and exclusive experiences, with an international presence and access to capital markets.',
+  ir_visione_bottone_it: 'Scopri la nostra strategia', ir_visione_bottone_en: 'Discover our strategy',
+  ir_visione_link: '/about',
+  ir_visione_img: '',
+  ir_azionisti_eyebrow_it: 'Struttura azionaria', ir_azionisti_eyebrow_en: 'Shareholder structure',
+  ir_azionisti_titolo_it: 'I nostri azionisti.', ir_azionisti_titolo_en: 'Our shareholders.',
+  ir_azionisti_testo_it: 'Un mix di investitori privati, imprenditori e partner strategici che credono nel nostro progetto e condividono la stessa visione di lungo periodo.',
+  ir_azionisti_testo_en: 'A mix of private investors, entrepreneurs and strategic partners who believe in our project and share the same long-term vision.',
+  ir_azionisti: [
+    { id: 'onano', nome: 'Andrea Onano', ruolo_it: 'Private Investor', ruolo_en: 'Private Investor', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '' },
+    { id: 'campagnola', nome: 'Ilenia Campagnola', ruolo_it: 'Strategic Investor', ruolo_en: 'Strategic Investor', da_it: 'Azionista dal 2025', da_en: 'Shareholder since 2025', foto: '' },
+    { id: 'bianchi', nome: 'Marco Bianchi', ruolo_it: 'Private Investor', ruolo_en: 'Private Investor', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '' },
+    { id: 'privato-1', nome: 'Investitore privato', ruolo_it: 'Identità riservata', ruolo_en: 'Identity confidential', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
+    { id: 'privato-2', nome: 'Investitore privato', ruolo_it: 'Identità riservata', ruolo_en: 'Identity confidential', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
+  ],
+  ir_privati_eyebrow_it: 'Investitori privati', ir_privati_eyebrow_en: 'Private investors',
+  ir_privati_titolo_it: '10 investitori privati', ir_privati_titolo_en: '10 private investors',
+  ir_privati_testo_it: 'Al momento, 10 investitori privati hanno scelto di credere nel nostro progetto e di accompagnarci nel percorso di crescita.',
+  ir_privati_testo_en: 'At present, 10 private investors have chosen to believe in our project and to join us on our growth path.',
+  ir_privati_img: '',
+  ir_privati_stat: [
+    { id: 'capitale', icona: 'capitale', valore: '€ 1.000.000', label_it: 'Capitale raccolto', label_en: 'Capital raised', nota_it: 'complessivo', nota_en: 'total' },
+    { id: 'quota', icona: 'quota', valore: '8,2%', label_it: 'Quota complessiva', label_en: 'Overall stake', nota_it: 'detenuta', nota_en: 'held' },
+    { id: 'round', icona: 'round', valore: 'Primo round', label_it: 'Primo round di investimento', label_en: 'First investment round' },
+  ],
+  ir_riservati_eyebrow_it: 'Chi non ha autorizzato la pubblicazione', ir_riservati_eyebrow_en: 'Who has not authorised publication',
+  ir_riservati_testo_it: 'Alcuni dei nostri investitori preferiscono mantenere la propria riservatezza. Rispettare la loro scelta è per noi una priorità.',
+  ir_riservati_testo_en: 'Some of our investors prefer to keep their privacy. Respecting their choice is a priority for us.',
+  ir_riservati_label_it: 'Investitori riservati', ir_riservati_label_en: 'Confidential investors',
+  ir_riservati_nota_it: 'Partecipazione al capitale', ir_riservati_nota_en: 'Equity participation',
+  ir_partner_eyebrow_it: 'Partner strategici', ir_partner_eyebrow_en: 'Strategic partners',
+  ir_partner_titolo_it: 'Insieme verso il futuro.', ir_partner_titolo_en: 'Together towards the future.',
+  ir_partner_testo_it: 'Al fianco di DR7 ci sono anche partner industriali e strategici che contribuiscono con competenze, network e visione internazionale.',
+  ir_partner_testo_en: 'Alongside DR7 there are also industrial and strategic partners who contribute expertise, network and an international vision.',
+  ir_partner_bottone_it: 'Scopri i nostri partner', ir_partner_bottone_en: 'Discover our partners',
+  ir_partner_link: '',
+  ir_partner_img: '',
+  ir_partner_loghi: [
+    { id: 'forbes', nome: 'Forbes', logo: '' },
+    { id: 'bloomberg', nome: 'Bloomberg', logo: '' },
+    { id: 'repubblica', nome: 'la Repubblica', logo: '' },
+    { id: 'sole24ore', nome: 'Il Sole 24 Ore', logo: '' },
+    { id: 'cnbc', nome: 'CNBC', logo: '' },
+    { id: 'skytg24', nome: 'Sky TG24', logo: '' },
+    { id: 'economia', nome: "L'Economia", logo: '' },
+  ],
+  ir_gov_eyebrow_it: 'Documenti e trasparenza', ir_gov_eyebrow_en: 'Documents and transparency',
+  ir_gov_titolo_it: 'La nostra governance.', ir_gov_titolo_en: 'Our governance.',
+  ir_gov_testo_it: 'Crediamo nella trasparenza, nella solidità dei processi e in una governance chiara, per costruire fiducia oggi e valore domani.',
+  ir_gov_testo_en: 'We believe in transparency, solid processes and clear governance, to build trust today and value tomorrow.',
+  ir_gov_documenti: [
+    { id: 'bilanci', icona: 'documento', titolo_it: 'Bilanci societari', titolo_en: 'Financial statements', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '' },
+    { id: 'presentazione', icona: 'presentazione', titolo_it: 'Investor Presentation', titolo_en: 'Investor Presentation', azione_it: 'Richiedi la presentazione', azione_en: 'Request the presentation', url: '' },
+    { id: 'statuto', icona: 'governance', titolo_it: 'Statuto e Governance', titolo_en: 'Articles and Governance', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '' },
+    { id: 'comunicati', icona: 'comunicati', titolo_it: 'Comunicati stampa', titolo_en: 'Press releases', azione_it: 'Leggi le news', azione_en: 'Read the news', url: '/press' },
+  ],
+  ir_cta_eyebrow_it: 'Private capital', ir_cta_eyebrow_en: 'Private capital',
+  ir_cta_titolo_it: 'Vuoi entrare nel nostro progetto?', ir_cta_titolo_en: 'Want to join our project?',
+  ir_cta_testo_it: 'DR7 valuta manifestazioni di interesse da parte di investitori privati, family office e partner strategici.',
+  ir_cta_testo_en: 'DR7 considers expressions of interest from private investors, family offices and strategic partners.',
+  ir_cta_bottone_it: 'Manifesta il tuo interesse', ir_cta_bottone_en: 'Express your interest',
+  ir_cta_nota_it: 'Il nostro team di Investor Relations è a disposizione per fornire ulteriori informazioni e approfondimenti.',
+  ir_cta_nota_en: 'Our Investor Relations team is available to provide further information and insights.',
 };
 
 // ─── Default Car Wash chrome ───────────────────────────────────────────────
