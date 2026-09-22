@@ -2920,7 +2920,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
     { label: 'Forma giuridica',               label_it: 'Forma giuridica',               label_en: 'Legal form',                  value: 'Società per Azioni', value_it: 'Società per Azioni', value_en: 'Joint-stock company (S.p.A.)' },
     { label: 'Capitale sociale',              label_it: 'Capitale sociale',              label_en: 'Share capital',               value: '€1.000.000', value_it: '€1.000.000', value_en: '€1,000,000' },
     { label: 'Tipologia quote',               label_it: 'Tipologia quote',               label_en: 'Share type',                  value: 'Azioni ordinarie nominative', value_it: 'Azioni ordinarie nominative', value_en: 'Registered ordinary shares' },
-    { label: 'Investimento minimo indicativo', label_it: 'Investimento minimo indicativo', label_en: 'Indicative minimum investment', value: 'Da €25.000', value_it: 'Da €25.000', value_en: 'From €25,000' },
+    { label: 'Investimento minimo indicativo', label_it: 'Investimento minimo indicativo', label_en: 'Indicative minimum investment', value: 'Da €4.950', value_it: 'Da €4.950', value_en: 'From €4,950' },
     { label: 'Distribuzione utili',           label_it: 'Distribuzione utili',           label_en: 'Profit distribution',         value: 'Secondo deliberazioni dell\'Assemblea e risultati di bilancio', value_it: 'Secondo deliberazioni dell\'Assemblea e risultati di bilancio', value_en: 'As resolved by the Shareholders Meeting and based on financial results' },
   ],
   info_footnote: 'I dettagli economico-finanziari completi, nonché la documentazione ufficiale, sono forniti esclusivamente su richiesta riservata e previa verifica dei requisiti soggettivi dell\'investitore.',
