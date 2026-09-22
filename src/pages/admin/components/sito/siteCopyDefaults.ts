@@ -3019,7 +3019,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
     'Le informazioni contenute in questa sezione hanno finalità esclusivamente informative e non costituiscono, in alcun modo, un\'offerta pubblica di sottoscrizione o una sollecitazione all\'investimento ai sensi dell\'art. 94 del D.Lgs. 58/1998 (TUF) e della normativa europea vigente.',
     'L\'adesione a operazioni di partecipazione al capitale è riservata a soggetti selezionati, previa valutazione da parte di DR7 S.p.A. e nel pieno rispetto delle procedure legali e regolamentari applicabili.',
   ],
-  ir_hero_eyebrow_it: 'Investor Relations', ir_hero_eyebrow_en: 'Investor Relations',
+  ir_hero_eyebrow_it: 'Relazioni con gli Investitori', ir_hero_eyebrow_en: 'Investor Relations',
   ir_hero_riga1_it: 'Una visione', ir_hero_riga1_en: 'A vision',
   ir_hero_riga2_it: 'che crea valore.', ir_hero_riga2_en: 'that creates value.',
   ir_hero_accento_it: 'Insieme.', ir_hero_accento_en: 'Together.',

@@ -4806,7 +4806,7 @@ const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: s
     { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits', img: '/menu-club.jpeg' },
     { key: 'privilege', name: 'DR7 Club Privilege', titleIt: 'DR7 Club Privilege', titleEn: 'DR7 Club Privilege', subIt: 'Il saldo idoneo del tuo Wallet matura ogni giorno', subEn: 'Your eligible Wallet balance grows every day', img: '/menu-club.jpeg' },
     { key: 'business', name: 'Business', titleIt: 'Business', titleEn: 'Business', subIt: 'Soluzioni corporate e noleggi a lungo termine', subEn: 'Corporate solutions and long-term rentals', img: '/menu-business.jpeg' },
-    { key: 'investitori', name: 'Investitori', titleIt: 'Investitori', titleEn: 'Investor Relations', subIt: 'Numeri, azionisti e governance di DR7 S.p.A.', subEn: 'Figures, shareholders and governance of DR7 S.p.A.', img: '/menu-business.jpeg' },
+    { key: 'investitori', name: 'Relazioni con gli Investitori', titleIt: 'Relazioni con gli Investitori', titleEn: 'Investor Relations', subIt: 'Numeri, azionisti e governance di DR7 S.p.A.', subEn: 'Figures, shareholders and governance of DR7 S.p.A.', img: '/menu-business.jpeg' },
     { key: 'digital', name: 'Innovazione Digitale', titleIt: 'Innovazione Digitale', titleEn: 'Digital Innovation', subIt: 'Creazione di asset digitali e token', subEn: 'Digital Asset & Token Creation', img: '/menu-digital.jpeg' },
     { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service', img: '/menu-contatti.jpeg' },
 ]
