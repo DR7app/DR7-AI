@@ -5,6 +5,7 @@ import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import TrusteraExportPdf from './TrusteraExportPdf'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -430,6 +431,9 @@ function DocumentiSubTab() {
           {showUpload ? 'Annulla' : '+ Invia Documento'}
         </button>
       </div>
+
+      {/* 22/09/2026: PDF di tutte le righe, stesso formato dei Report. */}
+      <TrusteraExportPdf />
 
       {/* Upload & Send Form */}
       {showUpload && (

@@ -395,3 +395,86 @@ export async function scaricaReportPdf(root: HTMLElement, opz: OpzioniPdf = {}) 
     : oggi
   doc.save(`${slug || 'report'}-${suffisso}.pdf`)
 }
+
+/**
+ * Stesso PDF dei Report, ma da dati gia' pronti invece che dalla pagina:
+ * titolo, periodo, riepilogo e una tabella completa. Usato dove la pagina
+ * mostra solo una parte delle righe (es. DR7 Trust: le ultime 100).
+ */
+export async function scaricaTabellaPdf(opz: {
+  titolo: string
+  periodo: { from: string; to: string } | null
+  riepilogo: Array<[string, string]>
+  head: string[]
+  body: string[][]
+}) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const larg = doc.internal.pageSize.getWidth()
+  const alt = doc.internal.pageSize.getHeight()
+  const M = 12
+  let y = M
+  const titolo = pulisci(opz.titolo)
+  const quando = new Date().toLocaleString('it-IT', {
+    timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.text(titolo, M, y + 5)
+  y += 9
+  doc.setFontSize(12)
+  doc.text(opz.periodo ? `Periodo: dal ${dataIt10(opz.periodo.from)} al ${dataIt10(opz.periodo.to)}` : 'Periodo: tutte le date', M, y + 4)
+  y += 7
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(110)
+  doc.text(`Generato il ${quando}`, M, y + 3)
+  doc.setTextColor(0)
+  y += 8
+
+  if (opz.riepilogo.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M },
+      body: opz.riepilogo.map(([k, v]) => [pulisci(k), pulisci(v)]),
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 1.8, textColor: 20 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+      tableWidth: 140,
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    y = ((doc as any).lastAutoTable?.finalY ?? y) + 6
+  }
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: M, right: M },
+    head: [opz.head.map(pulisci)],
+    body: opz.body.length ? opz.body.map(r => r.map(c => pulisci(c))) : [[{ content: 'Nessuna riga nel periodo', colSpan: opz.head.length }]],
+    showHead: 'everyPage',
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', textColor: 20 },
+    headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 248, 248] },
+  })
+
+  const pagine = doc.getNumberOfPages()
+  for (let i = 1; i <= pagine; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(130)
+    const piede = opz.periodo ? `${titolo} - ${dataIt10(opz.periodo.from)} / ${dataIt10(opz.periodo.to)}` : titolo
+    doc.text(`${piede} - pagina ${i} di ${pagine}`, larg - M, alt - 5, { align: 'right' })
+  }
+  const slug = titolo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const suffisso = opz.periodo
+    ? (opz.periodo.from.slice(0, 7) === opz.periodo.to.slice(0, 7) && opz.periodo.from.endsWith('-01')
+        ? opz.periodo.from.slice(0, 7)
+        : `${dataIt10(opz.periodo.from).replace(/\//g, '-')}_${dataIt10(opz.periodo.to).replace(/\//g, '-')}`)
+    : 'tutto'
+  doc.save(`${slug || 'export'}-${suffisso}.pdf`)
+}
