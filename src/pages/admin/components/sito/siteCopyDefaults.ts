@@ -1067,6 +1067,9 @@ export interface HeaderCopy {
   // titolo restava quello di fabbrica. Ora e' modificabile come le altre.
   menu_wallet_title_it?: string; menu_wallet_title_en?: string;
   menu_wallet_sub_it?: string; menu_wallet_sub_en?: string;
+  // Prevendita e Promozioni: porta alla vetrina /prevendite.
+  menu_prevendite_title_it?: string; menu_prevendite_title_en?: string;
+  menu_prevendite_sub_it?: string; menu_prevendite_sub_en?: string;
   menu_club_title_it?: string; menu_club_title_en?: string;
   menu_club_sub_it?: string; menu_club_sub_en?: string;
   // DR7 Club Privilege: la voce non porta a una pagina sua, punta al blocco
@@ -1089,6 +1092,7 @@ export interface HeaderCopy {
   menu_property_img?: string;
   menu_servizi_img?: string;
   menu_wallet_img?: string;
+  menu_prevendite_img?: string;
   menu_club_img?: string;
   menu_privilege_img?: string;
   menu_business_img?: string;
