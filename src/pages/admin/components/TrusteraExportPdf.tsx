@@ -1,43 +1,38 @@
-// 22/09/2026 (direzione): PDF di tutte le righe di DR7 Trust (contratti e
-// documenti mandati in firma), stesso formato dei Report: periodo scritto in
-// testa, riepilogo, tabella completa. Con o senza i nomi dei clienti.
-// La lista a video mostra solo le ultime 100 richieste: qui si rilegge il
-// database per il periodo scelto, pagina per pagina (PostgREST si ferma a 1000).
+// 22/09/2026 (direzione): PDF di tutti i contratti del periodo, stesso
+// formato dei Report: periodo scritto in testa, riepilogo, tabella completa.
+// Con o senza i nomi dei clienti. Si rilegge il database per il periodo
+// scelto, pagina per pagina (PostgREST si ferma a 1000 righe).
 import { useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { isoLocale, periodoDelMese, type Periodo } from '../../../utils/reportPeriodo'
 
-interface RigaFirma {
+// 22/09/2026 (direzione): nel PDF vanno i CONTRATTI come li mostra la tab
+// Contratti (numero, cliente, veicolo, periodo, totale, stato, firme), non le
+// sole richieste di firma. Tutti i business: la colonna Servizio li distingue.
+interface RigaContratto {
   id: string
-  contract_id: string | null
-  signer_name: string | null
-  signer_email: string | null
-  signer_phone: string | null
-  status: string
-  document_name: string | null
-  signed_at: string | null
+  contract_number: string | null
   created_at: string
-  token_expires_at: string | null
+  customer_name: string | null
+  vehicle_name: string | null
+  rental_start_date: string | null
+  rental_end_date: string | null
+  total_days: number | null
+  total_amount: number | null
+  status: string | null
+  bookings: { service_type: string | null } | null
 }
 
-const STATI: Record<string, string> = {
-  signed: 'Firmato',
-  pending: 'In attesa',
-  otp_sent: 'OTP inviato',
-  otp_verified: 'OTP verificato',
-  expired: 'Scaduto',
-  cancelled: 'Annullato',
-}
+const STATI_CONTRATTO: Record<string, string> = { active: 'Attivo', completed: 'Completato', cancelled: 'Cancellato' }
+const SERVIZI: Record<string, string> = { boat_rental: 'Mare', heli_rental: 'Aria', stay_rental: 'Soggiorni' }
+// Stessa priorita' della tab Contratti: per ogni firmatario vale lo stato migliore.
+const RANGO: Record<string, number> = { signed: 0, otp_verified: 1, otp_sent: 2, pending: 3, superseded: 4, expired: 5, cancelled: 6 }
 
-const dataOra = (iso: string | null) => iso
-  ? new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+const soloData = (iso: string | null) => iso
+  ? new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
   : ''
-
-function statoDi(r: RigaFirma): string {
-  const scaduto = r.status !== 'signed' && r.token_expires_at && new Date(r.token_expires_at) < new Date()
-  return scaduto ? 'Scaduto' : (STATI[r.status] || r.status)
-}
+const euro = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 // Inizio/fine del periodo in ora di Roma, come istanti UTC per la query.
 function limiti(p: Periodo): { da: string; a: string } {
@@ -46,85 +41,89 @@ function limiti(p: Periodo): { da: string; a: string } {
   return { da: new Date(y1, m1 - 1, d1, 0, 0, 0).toISOString(), a: new Date(y2, m2 - 1, d2, 23, 59, 59, 999).toISOString() }
 }
 
-async function leggiRighe(p: Periodo): Promise<RigaFirma[]> {
+async function leggiContratti(p: Periodo): Promise<RigaContratto[]> {
   const { da, a } = limiti(p)
-  const tutte: RigaFirma[] = []
+  const tutte: RigaContratto[] = []
   const PAGINA = 1000
   for (let da0 = 0; ; da0 += PAGINA) {
     const { data, error } = await supabase
-      .from('signature_requests')
-      .select('id, contract_id, signer_name, signer_email, signer_phone, status, document_name, signed_at, created_at, token_expires_at')
+      .from('contracts')
+      .select('id, contract_number, created_at, customer_name, vehicle_name, rental_start_date, rental_end_date, total_days, total_amount, status, bookings(service_type)')
       .gte('created_at', da)
       .lte('created_at', a)
       .order('created_at', { ascending: true })
       .range(da0, da0 + PAGINA - 1)
     if (error) throw error
-    tutte.push(...((data || []) as RigaFirma[]))
+    tutte.push(...((data || []) as unknown as RigaContratto[]))
     if (!data || data.length < PAGINA) break
   }
   return tutte
 }
 
-async function numeriContratto(ids: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await supabase.from('contracts').select('id, contract_number').in('id', ids.slice(i, i + 200))
-    for (const c of (data || []) as Array<{ id: string; contract_number: string | null }>) {
-      if (c.contract_number) out.set(c.id, c.contract_number)
-    }
-  }
-  return out
-}
-
-async function mittenti(ids: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
+/** Per ogni contratto: firmatari che hanno firmato / firmatari totali. */
+async function firme(ids: string[]): Promise<Map<string, { firmati: number; totale: number }>> {
+  const perContratto = new Map<string, Map<string, string>>()
   for (let i = 0; i < ids.length; i += 200) {
     const { data } = await supabase
-      .from('admin_activity_log')
-      .select('entity_id, admin_name, admin_email')
-      .eq('action', 'send_trustera_document')
-      .in('entity_id', ids.slice(i, i + 200))
-    for (const l of (data || []) as Array<{ entity_id: string; admin_name: string | null; admin_email: string | null }>) {
-      out.set(l.entity_id, l.admin_name || l.admin_email || '')
+      .from('signature_requests')
+      .select('contract_id, signer_name, signer_phone, status')
+      .in('contract_id', ids.slice(i, i + 200))
+    for (const r of (data || []) as Array<{ contract_id: string; signer_name: string | null; signer_phone: string | null; status: string }>) {
+      const chi = String(r.signer_name || r.signer_phone || '').trim().toLowerCase()
+      if (!chi) continue
+      const m = perContratto.get(r.contract_id) || new Map<string, string>()
+      const prima = m.get(chi)
+      if (!prima || (RANGO[r.status] ?? 9) < (RANGO[prima] ?? 9)) m.set(chi, r.status)
+      perContratto.set(r.contract_id, m)
     }
+  }
+  const out = new Map<string, { firmati: number; totale: number }>()
+  for (const [id, m] of perContratto) {
+    const stati = [...m.values()].filter(s => s !== 'superseded' && s !== 'cancelled')
+    out.set(id, { firmati: stati.filter(s => s === 'signed').length, totale: stati.length })
   }
   return out
 }
 
 async function scaricaPeriodo(p: Periodo, conNomi: boolean) {
-  const righe = await leggiRighe(p)
-  const [contratti, inviatiDa] = await Promise.all([
-    numeriContratto([...new Set(righe.map(r => r.contract_id).filter((x): x is string => !!x))]),
-    mittenti(righe.map(r => r.id)),
+  const righe = await leggiContratti(p)
+  const f = await firme(righe.map(r => r.id))
+  const testoFirme = (id: string) => {
+    const x = f.get(id)
+    if (!x || x.totale === 0) return 'Non inviato'
+    return x.firmati === x.totale ? `${x.firmati}/${x.totale} firmato` : `${x.firmati}/${x.totale} firmato (incompleto)`
+  }
+  const totale = righe.reduce((t, r) => t + (Number(r.total_amount) || 0), 0)
+  const contaStato = (s: string) => righe.filter(r => r.status === s).length
+  const firmatiTutti = righe.filter(r => { const x = f.get(r.id); return !!x && x.totale > 0 && x.firmati === x.totale }).length
+  const firmatiParte = righe.filter(r => { const x = f.get(r.id); return !!x && x.firmati > 0 && x.firmati < x.totale }).length
+
+  const head = ['N. contratto', 'Data', ...(conNomi ? ['Cliente'] : []), 'Veicolo', 'Ritiro -> Riconsegna', 'Giorni', 'Totale', 'Stato', 'Firme', 'Servizio']
+  const body = righe.map(r => [
+    r.contract_number || '',
+    soloData(r.created_at),
+    ...(conNomi ? [r.customer_name || ''] : []),
+    r.vehicle_name || '',
+    `${soloData(r.rental_start_date)} -> ${soloData(r.rental_end_date)}`,
+    r.total_days != null ? String(r.total_days) : '',
+    euro(Number(r.total_amount) || 0),
+    STATI_CONTRATTO[String(r.status)] || String(r.status || ''),
+    testoFirme(r.id),
+    SERVIZI[String(r.bookings?.service_type || '')] || 'Terra',
   ])
-  const stati = righe.map(statoDi)
-  const conta = (s: string) => stati.filter(x => x === s).length
-  const head = ['Data invio', 'Documento', ...(conNomi ? ['Firmatario', 'Email', 'Telefono'] : []), 'Stato', 'Firmato il', 'Inviato da']
-  const body = righe.map((r, i) => {
-    const doc = r.contract_id
-      ? `Contratto${contratti.get(r.contract_id) ? ' ' + contratti.get(r.contract_id) : ''}`
-      : (r.document_name || 'Documento')
-    return [
-      dataOra(r.created_at),
-      doc,
-      ...(conNomi ? [r.signer_name || '', r.signer_email || '', r.signer_phone || ''] : []),
-      stati[i],
-      dataOra(r.signed_at),
-      inviatiDa.get(r.id) || '',
-    ]
-  })
   const { scaricaTabellaPdf } = await import('../../../utils/scaricaReportPdf')
   await scaricaTabellaPdf({
-    titolo: 'DR7 Trust - Documenti e contratti',
+    titolo: 'DR7 Trust - Contratti',
     periodo: p,
     riepilogo: [
-      ['Totale richieste', String(righe.length)],
-      ['Contratti', String(righe.filter(r => r.contract_id).length)],
-      ['Documenti', String(righe.filter(r => !r.contract_id).length)],
-      ['Firmati', String(conta('Firmato'))],
-      ['In attesa / OTP', String(conta('In attesa') + conta('OTP inviato') + conta('OTP verificato'))],
-      ['Scaduti', String(conta('Scaduto'))],
-      ['Annullati', String(conta('Annullato'))],
+      ['Contratti', String(righe.length)],
+      ['Totale contratti', euro(totale)],
+      ['Attivi', String(contaStato('active'))],
+      ['Completati', String(contaStato('completed'))],
+      ['Cancellati', String(contaStato('cancelled'))],
+      ['Firmati da tutti', String(firmatiTutti)],
+      ['Firmati in parte', String(firmatiParte)],
+      ['Firma non inviata / in attesa', String(righe.length - firmatiTutti - firmatiParte)],
     ],
     head,
     body,
