@@ -212,7 +212,6 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 {bi("Titolo, parola in oro corsivo", "ir_hero_accento")}
                 {bi("Testo", "ir_hero_testo", true)}
                 {bi("Bottone", "ir_hero_bottone")}
-                {bi("Scritta sotto DR7 a destra", "ir_hero_badge")}
                 {immagine("Foto di apertura (vuoto = quella di Aspetto)", "ir_hero_img")}
             </Riquadro>
 

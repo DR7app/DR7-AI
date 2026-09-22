@@ -1551,7 +1551,6 @@ export interface InvestitoriCopy {
   ir_hero_accento_it?: string; ir_hero_accento_en?: string;
   ir_hero_testo_it?: string; ir_hero_testo_en?: string;
   ir_hero_bottone_it?: string; ir_hero_bottone_en?: string;
-  ir_hero_badge_it?: string; ir_hero_badge_en?: string;
   ir_hero_img?: string;
   // I nostri numeri
   ir_numeri_eyebrow_it?: string; ir_numeri_eyebrow_en?: string;
@@ -3026,7 +3025,6 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_hero_testo_it: 'DR7 S.p.A. è una realtà in forte crescita nel settore del luxury mobility e delle esperienze esclusive, con l\'obiettivo di diventare un punto di riferimento internazionale per chi cerca molto più di un semplice noleggio.\n\nQuesta sezione è dedicata a investitori, partner e stakeholder che condividono la nostra visione di lungo periodo.',
   ir_hero_testo_en: 'DR7 S.p.A. is a fast-growing company in luxury mobility and exclusive experiences, aiming to become an international reference for those looking for much more than a simple rental.\n\nThis section is dedicated to investors, partners and stakeholders who share our long-term vision.',
   ir_hero_bottone_it: 'Manifesta il tuo interesse', ir_hero_bottone_en: 'Express your interest',
-  ir_hero_badge_it: 'More than cars', ir_hero_badge_en: 'More than cars',
   ir_hero_img: '',
   ir_numeri_eyebrow_it: 'I nostri numeri', ir_numeri_eyebrow_en: 'Our numbers',
   ir_numeri_titolo_it: 'Crescita costante, basi solide.', ir_numeri_titolo_en: 'Steady growth, solid foundations.',
