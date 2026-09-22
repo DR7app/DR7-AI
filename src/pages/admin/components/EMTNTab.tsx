@@ -7,17 +7,16 @@
  * Segnalazione/Documentazione/Stato. Sidebar con Trust Status, Attivita',
  * Alert e Automazioni. Footer con badge di conformita'.
  *
- * Hard rules invariate: nessuna lookup senza CF valido, Risk Report
- * sbloccato solo dopo OTP verified, le inline form delegano ai modali
- * esistenti (EMTNAuthorizationModal, EMTNEventReportModal) per
- * preservare il flusso server.
+ * 22/09/2026 (direzione): niente OTP al cliente (il report si vede subito,
+ * ogni consultazione resta nel log) e ricerca anche per cliente ESTERO senza
+ * codice fiscale: nome, cognome, data di nascita, nazionalita' e documento.
+ * La segnalazione delega ancora a EMTNEventReportModal.
  */
 import { useEffect, useState } from 'react'
 import { ScheletroLista } from '../../../components/Scheletro'
-import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
 import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
-import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface DamageEvent {
     kind: 'danno' | 'penale'
@@ -54,9 +53,31 @@ interface ClientWithDamages {
 
 const CF_REGEX = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/
 
+// Cliente estero: niente codice fiscale, si cerca con i dati del documento.
+interface DatiEstero {
+    nome: string
+    cognome: string
+    dataNascita: string // YYYY-MM-DD
+    nazionalita: string
+    documentoTipo: '' | 'carta_identita' | 'passaporto'
+    documentoNumero: string
+}
+const ESTERO_VUOTO: DatiEstero = { nome: '', cognome: '', dataNascita: '', nazionalita: '', documentoTipo: '', documentoNumero: '' }
+const esteroCompleto = (e: DatiEstero) => !!(e.nome.trim() && e.cognome.trim() && e.dataNascita && e.nazionalita.trim() && e.documentoTipo && e.documentoNumero.trim())
+const TIPI_DOCUMENTO: Record<string, string> = { carta_identita: "Carta d'identita'", passaporto: 'Passaporto' }
+// Come si mostra l'identita' del cliente: il CF, o il documento se estero.
+function identitaCliente(c: EMTNClient): string {
+    if (c.codice_fiscale) return c.codice_fiscale
+    const doc = [c.documento_tipo ? TIPI_DOCUMENTO[c.documento_tipo] || c.documento_tipo : '', c.documento_numero || ''].filter(Boolean).join(' ')
+    return doc || 'Estero'
+}
+
 interface EMTNClient {
     id: string
-    codice_fiscale: string
+    codice_fiscale: string | null
+    nazionalita?: string | null
+    documento_tipo?: string | null
+    documento_numero?: string | null
     nome: string | null
     cognome: string | null
     email?: string | null
@@ -134,7 +155,9 @@ export default function EMTNTab() {
     const [error, setError] = useState<string | null>(null)
     const [data, setData] = useState<SearchResponse | null>(null)
 
-    const [authOpen, setAuthOpen] = useState(false)
+    // Ricerca per cliente estero (senza codice fiscale).
+    const [modoEstero, setModoEstero] = useState(false)
+    const [datiEstero, setDatiEstero] = useState<DatiEstero>(ESTERO_VUOTO)
     const [reportOpen, setReportOpen] = useState(false)
     const [reportPrefill, setReportPrefill] = useState<ReportPrefill | null>(null)
 
@@ -143,7 +166,7 @@ export default function EMTNTab() {
     // costruisce un prefill ragionato per il modale e lo apre.
     async function reportDamageAsEMTN(cf: string | null, ev: DamageEvent) {
         if (!cf) {
-            alert('Questo cliente non ha un codice fiscale risolvibile: aggiungilo a customers_extended prima di segnalarlo su EMTN.')
+            alert('Questo cliente non ha un codice fiscale. Se e\' straniero, cercalo con "Estero" (nome, cognome, data di nascita e documento) e segnala da li\'.')
             return
         }
         if (!data || data.client.codice_fiscale !== cf) {
@@ -197,23 +220,31 @@ export default function EMTNTab() {
 
     async function refresh() {
         if (!data) return
-        await runSearch(data.client.codice_fiscale)
+        const c = data.client
+        if (c.codice_fiscale) await runSearch(c.codice_fiscale)
+        else await runSearch(null, {
+            nome: c.nome || '', cognome: c.cognome || '', dataNascita: String(c.date_of_birth || '').slice(0, 10),
+            nazionalita: c.nazionalita || '', documentoTipo: (c.documento_tipo as DatiEstero['documentoTipo']) || '',
+            documentoNumero: c.documento_numero || '',
+        })
         await loadDamagedClients()
     }
 
-    async function runSearch(cf: string) {
+    async function runSearch(cf: string | null, estero?: DatiEstero) {
         setSearching(true)
         setError(null)
         try {
             const res = await authFetch('/.netlify/functions/emtn-search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ codiceFiscale: cf.trim().toUpperCase() }),
+                body: JSON.stringify(estero
+                    ? { estero: true, ...estero, nome: estero.nome.trim(), cognome: estero.cognome.trim(), nazionalita: estero.nazionalita.trim(), documentoNumero: estero.documentoNumero.trim() }
+                    : { codiceFiscale: String(cf || '').trim().toUpperCase() }),
             })
             const body = await res.json()
             if (!res.ok) throw new Error(body.error || 'Lookup fallita')
             setData(body as SearchResponse)
-            setCfInput(cf.trim().toUpperCase())
+            if (!estero) setCfInput(String(cf || '').trim().toUpperCase())
         } catch (err) {
             setError((err as Error).message)
             setData(null)
@@ -224,7 +255,13 @@ export default function EMTNTab() {
 
     async function handleSearchSubmit(e: React.FormEvent) {
         e.preventDefault()
-        if (!cfValid || searching) return
+        if (searching) return
+        if (modoEstero) {
+            if (!esteroCompleto(datiEstero)) return
+            await runSearch(null, datiEstero)
+            return
+        }
+        if (!cfValid) return
         await runSearch(cfInput)
     }
 
@@ -234,7 +271,7 @@ export default function EMTNTab() {
             <TabStrip
                 activeView={activeView}
                 onChange={setActiveView}
-                canExport={!!data?.reportUnlocked}
+                canExport={!!data}
             />
 
             {activeView === 'ricerca' && (
@@ -243,6 +280,10 @@ export default function EMTNTab() {
                         <RicercaCard
                             cf={cfInput}
                             cfValid={cfValid}
+                            modoEstero={modoEstero}
+                            onModoEstero={setModoEstero}
+                            datiEstero={datiEstero}
+                            onDatiEstero={setDatiEstero}
                             onChange={setCfInput}
                             onSubmit={handleSearchSubmit}
                             searching={searching}
@@ -263,7 +304,7 @@ export default function EMTNTab() {
                                 <div className="flex items-center justify-between">
                                     <button
                                         type="button"
-                                        onClick={() => { setData(null); setError(null); setCfInput('') }}
+                                        onClick={() => { setData(null); setError(null); setCfInput(''); setDatiEstero(ESTERO_VUOTO) }}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-theme-border text-xs font-semibold text-theme-text-primary hover:bg-theme-bg-hover"
                                     >
                                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -271,25 +312,11 @@ export default function EMTNTab() {
                                         </svg>
                                         Torna alla lista
                                     </button>
-                                    <span className="text-[11px] text-theme-text-muted font-mono">{data.client.codice_fiscale}</span>
+                                    <span className="text-[11px] text-theme-text-muted font-mono">{identitaCliente(data.client)}</span>
                                 </div>
                                 <ClienteHeaderCard client={data.client} riskBand={data.riskBand} />
-                                <ActionCards
-                                    reportUnlocked={data.reportUnlocked}
-                                    onOpenAuth={() => setAuthOpen(true)}
-                                    onOpenReport={() => setReportOpen(true)}
-                                />
-                                <MobilityRiskReportLocked
-                                    unlocked={data.reportUnlocked}
-                                    onOpenAuth={() => setAuthOpen(true)}
-                                />
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                                    <AutorizzazioneClienteCard
-                                        defaultEmail={data.client.email || ''}
-                                        defaultPhone={data.client.phone || ''}
-                                        onOpenModal={() => setAuthOpen(true)}
-                                        authorized={data.reportUnlocked}
-                                    />
+                                <MobilityRiskReportDisponibile />
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                     <SegnalazioneEventoCard onOpenModal={() => setReportOpen(true)} />
                                     <StatoSegnalazioneCard events={data.recentEvents} />
                                 </div>
@@ -327,14 +354,6 @@ export default function EMTNTab() {
 
             {data && (
                 <>
-                    <EMTNAuthorizationModal
-                        open={authOpen}
-                        onClose={() => setAuthOpen(false)}
-                        onVerified={refresh}
-                        clientId={data.client.id}
-                        defaultEmail={data.client.email || undefined}
-                        defaultPhone={data.client.phone || undefined}
-                    />
                     <EMTNEventReportModal
                         open={reportOpen}
                         onClose={() => { setReportOpen(false); setReportPrefill(null) }}
@@ -400,7 +419,7 @@ function TabStrip({ activeView, onChange, canExport }: {
             <button
                 type="button"
                 disabled={!canExport}
-                title={canExport ? 'Esporta report' : 'Disponibile dopo autorizzazione cliente'}
+                title={canExport ? 'Esporta report' : 'Cerca prima un cliente'}
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-theme-border text-xs text-theme-text-primary disabled:opacity-50 disabled:cursor-not-allowed hover:bg-theme-bg-hover"
             >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -434,9 +453,13 @@ function SidebarPlaceholder() {
 
 /* ---------- Ricerca card (sempre visibile) ---------- */
 
-function RicercaCard({ cf, cfValid, onChange, onSubmit, searching, verified, error }: {
+function RicercaCard({ cf, cfValid, modoEstero, onModoEstero, datiEstero, onDatiEstero, onChange, onSubmit, searching, verified, error }: {
     cf: string
     cfValid: boolean
+    modoEstero: boolean
+    onModoEstero: (v: boolean) => void
+    datiEstero: DatiEstero
+    onDatiEstero: (v: DatiEstero) => void
     onChange: (v: string) => void
     onSubmit: (e: React.FormEvent) => void
     searching: boolean
@@ -455,9 +478,68 @@ function RicercaCard({ cf, cfValid, onChange, onSubmit, searching, verified, err
                     </span>
                     <h3 className="text-sm font-semibold">Ricerca Cliente</h3>
                 </div>
-                <p className="text-[11px] text-theme-text-muted mb-3">
-                    Inserisci il Codice Fiscale per consultare il Mobility Trust Network.
-                </p>
+                {/* 22/09/2026 (direzione): cliente straniero senza codice fiscale
+                    -> "Estero": nome, cognome, data di nascita, nazionalita' e documento. */}
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                    <p className="text-[11px] text-theme-text-muted">
+                        {modoEstero
+                            ? 'Cliente estero senza codice fiscale: inserisci i dati del documento.'
+                            : 'Inserisci il Codice Fiscale per consultare il Mobility Trust Network.'}
+                    </p>
+                    <div className="inline-flex rounded-lg border border-theme-border overflow-hidden text-xs font-semibold">
+                        {([['Italia', false], ['Estero', true]] as const).map(([etichetta, valore]) => (
+                            <button
+                                key={etichetta}
+                                type="button"
+                                onClick={() => onModoEstero(valore)}
+                                className={'px-3 py-1.5 transition-colors ' + (modoEstero === valore
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-theme-bg-primary text-theme-text-secondary hover:text-theme-text-primary')}
+                            >
+                                {etichetta}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                {modoEstero ? (
+                    <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-6 gap-2">
+                        <CampoEstero label="Nome *" className="sm:col-span-2">
+                            <input type="text" value={datiEstero.nome} onChange={e => onDatiEstero({ ...datiEstero, nome: e.target.value })}
+                                placeholder="John" className={INPUT_EMTN} />
+                        </CampoEstero>
+                        <CampoEstero label="Cognome *" className="sm:col-span-2">
+                            <input type="text" value={datiEstero.cognome} onChange={e => onDatiEstero({ ...datiEstero, cognome: e.target.value })}
+                                placeholder="Smith" className={INPUT_EMTN} />
+                        </CampoEstero>
+                        <CampoEstero label="Data di nascita *" className="sm:col-span-2">
+                            <EuropeanDateInput value={datiEstero.dataNascita} onChange={v => onDatiEstero({ ...datiEstero, dataNascita: v })} className={INPUT_EMTN} />
+                        </CampoEstero>
+                        <CampoEstero label="Nazionalità *" className="sm:col-span-2">
+                            <input type="text" value={datiEstero.nazionalita} onChange={e => onDatiEstero({ ...datiEstero, nazionalita: e.target.value })}
+                                placeholder="Es. Francia" className={INPUT_EMTN} />
+                        </CampoEstero>
+                        <CampoEstero label="Documento *" className="sm:col-span-2">
+                            <select value={datiEstero.documentoTipo} onChange={e => onDatiEstero({ ...datiEstero, documentoTipo: e.target.value as DatiEstero['documentoTipo'] })} className={INPUT_EMTN}>
+                                <option value="">Scegli…</option>
+                                <option value="carta_identita">Carta d&apos;identità</option>
+                                <option value="passaporto">Passaporto</option>
+                            </select>
+                        </CampoEstero>
+                        <CampoEstero label="Numero documento *" className="sm:col-span-2">
+                            <input type="text" value={datiEstero.documentoNumero} onChange={e => onDatiEstero({ ...datiEstero, documentoNumero: e.target.value.toUpperCase() })}
+                                placeholder="Es. 18AB12345" className={INPUT_EMTN + ' font-mono uppercase'} spellCheck={false} />
+                        </CampoEstero>
+                        <div className="sm:col-span-6 flex justify-end">
+                            <button
+                                type="submit"
+                                disabled={!esteroCompleto(datiEstero) || searching}
+                                className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-600"
+                            >
+                                {searching ? 'Ricerca…' : 'Ricerca Cliente'}
+                            </button>
+                        </div>
+                    </form>
+                ) : (
                 <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                     <div className="sm:col-span-9 relative">
                         <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Codice Fiscale *</label>
@@ -494,6 +576,7 @@ function RicercaCard({ cf, cfValid, onChange, onSubmit, searching, verified, err
                         </button>
                     </div>
                 </form>
+                )}
                 <p className="mt-2 text-[10px] text-theme-text-muted">
                     La ricerca è anonima e non permette l&apos;accesso a informazioni private del noleggio.
                 </p>
@@ -504,6 +587,17 @@ function RicercaCard({ cf, cfValid, onChange, onSubmit, searching, verified, err
                 )}
             </div>
         </section>
+    )
+}
+
+const INPUT_EMTN = 'w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+
+function CampoEstero({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+    return (
+        <div className={className}>
+            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">{label}</label>
+            {children}
+        </div>
     )
 }
 
@@ -537,7 +631,9 @@ function ClienteHeaderCard({ client, riskBand }: { client: EMTNClient; riskBand:
                         </span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-[11px]">
-                        <Field label="Codice Fiscale" value={client.codice_fiscale} mono />
+                        {client.codice_fiscale
+                            ? <Field label="Codice Fiscale" value={client.codice_fiscale} mono />
+                            : <Field label="Documento (estero)" value={identitaCliente(client)} mono />}
                         <Field label="Email" value={client.email || '—'} />
                         <Field label="Cliente nel network da" value={formatDate(client.customer_since) || '—'} />
                         <Field label="Data di nascita" value={formatDate(client.date_of_birth) || '—'} />
@@ -572,207 +668,23 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
     )
 }
 
-/* ---------- Action cards ---------- */
+/* ---------- Mobility Risk Report ---------- */
 
-function ActionCards({ reportUnlocked, onOpenAuth, onOpenReport }: {
-    reportUnlocked: boolean
-    onOpenAuth: () => void
-    onOpenReport: () => void
-}) {
-    return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-                type="button"
-                onClick={onOpenAuth}
-                className="group rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 text-left hover:border-blue-500/60 transition-colors"
-            >
-                <div className="flex items-start justify-between gap-3 mb-1">
-                    <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-500/15 text-blue-400 flex items-center justify-center text-xs font-bold">1</span>
-                        <h4 className="text-sm font-semibold text-theme-text-primary">Richiedi autorizzazione cliente</h4>
-                    </div>
-                    <svg className="w-4 h-4 text-theme-text-muted group-hover:text-blue-400 shrink-0 mt-1 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-                    </svg>
-                </div>
-                <p className="text-xs text-theme-text-muted">
-                    Invia una richiesta di autorizzazione per sbloccare il Mobility Risk Report completo.
-                </p>
-                <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                    <span className={'w-1.5 h-1.5 rounded-full ' + (reportUnlocked ? 'bg-emerald-500' : 'bg-amber-500')}/>
-                    <span className={reportUnlocked ? 'text-emerald-500' : 'text-amber-500'}>
-                        {reportUnlocked ? 'Autorizzato' : 'Da richiedere'}
-                    </span>
-                </div>
-            </button>
-            <button
-                type="button"
-                onClick={onOpenReport}
-                className="group rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 text-left hover:border-emerald-500/60 transition-colors"
-            >
-                <div className="flex items-start justify-between gap-3 mb-1">
-                    <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-xs font-bold">2</span>
-                        <h4 className="text-sm font-semibold text-theme-text-primary">Segnala evento</h4>
-                    </div>
-                    <svg className="w-4 h-4 text-theme-text-muted group-hover:text-emerald-400 shrink-0 mt-1 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-                    </svg>
-                </div>
-                <p className="text-xs text-theme-text-muted">
-                    Segnala un evento avvenuto durante il noleggio. Il caso entra in stato &quot;In revisione&quot;.
-                </p>
-                <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"/>
-                    <span className="text-amber-500">Stato iniziale: in revisione</span>
-                </div>
-            </button>
-        </div>
-    )
-}
-
-/* ---------- Autorizzazione Cliente (col 1 di 3) ---------- */
-
-function AutorizzazioneClienteCard({ defaultEmail, defaultPhone, onOpenModal, authorized }: {
-    defaultEmail: string
-    defaultPhone: string
-    onOpenModal: () => void
-    authorized: boolean
-}) {
-    // 2026-08-27: il campo WhatsApp era `defaultValue` (non controllato): ora
-    // usa la tendina col prefisso, quindi gli serve uno stato locale. Resta,
-    // come prima, l'anteprima del contatto — l'invio vero passa dal modale.
-    const [phone, setPhone] = useState(defaultPhone)
-    return (
-        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 flex flex-col">
-            <div className="flex items-center justify-between mb-1">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Autorizzazione cliente</h3>
-                <span className={'inline-flex items-center gap-1 text-[10px] font-semibold ' + (authorized ? 'text-emerald-500' : 'text-amber-500')}>
-                    <span className={'w-1.5 h-1.5 rounded-full ' + (authorized ? 'bg-emerald-500' : 'bg-amber-500')}/>
-                    {authorized ? 'Autorizzato' : 'Non autorizzato'}
-                </span>
-            </div>
-            <p className="text-[11px] text-theme-text-muted mb-3">
-                L&apos;autorizzazione del cliente è necessaria per sbloccare il Mobility Risk Report completo.
-            </p>
-            <div className="space-y-2">
-                <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Email del cliente</label>
-                    <input
-                        type="email"
-                        defaultValue={defaultEmail}
-                        placeholder="cliente@email.com"
-                        className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    />
-                </div>
-                <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">WhatsApp (opzionale)</label>
-                    <TelefonoConPrefisso
-                        value={phone}
-                        onChange={setPhone}
-                        className="flex-1 min-w-0 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                        selectClassName="w-[100px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-lg px-2 py-2 text-sm text-theme-text-primary"
-                        mostraAnteprima={false}
-                    />
-                </div>
-            </div>
-            <button
-                type="button"
-                onClick={onOpenModal}
-                className="mt-3 w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white text-sm font-semibold rounded-lg px-3 py-2 hover:bg-blue-700"
-            >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l9 6 9-6M3 8v10a2 2 0 002 2h14a2 2 0 002-2V8M3 8l9-6 9 6"/>
-                </svg>
-                Invia richiesta autorizzazione
-            </button>
-            <div className="mt-3 pt-3 border-t border-theme-border">
-                <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-1.5">Come funziona</p>
-                <ul className="space-y-1 text-[11px] text-theme-text-muted">
-                    <li className="flex gap-2"><Step n={1}/> Email + WhatsApp con OTP a 6 cifre</li>
-                    <li className="flex gap-2"><Step n={2}/> Il cliente comunica il codice all&apos;operatore</li>
-                    <li className="flex gap-2"><Step n={3}/> Validità limitata al noleggio in corso</li>
-                    <li className="flex gap-2"><Step n={4}/> Sblocca lo storico contratti e segnalazioni</li>
-                    <li className="flex gap-2"><Step n={5}/> Ogni accesso viene loggato per GDPR</li>
-                </ul>
-            </div>
-        </section>
-    )
-}
-
-function Step({ n }: { n: number }) {
-    return (
-        <span className="w-4 h-4 grid place-items-center rounded-full bg-blue-500/15 text-blue-400 text-[9px] font-bold shrink-0 mt-0.5">{n}</span>
-    )
-}
-
-/* ---------- Mobility Risk Report (full-width locked panel) ---------- */
-
-function MobilityRiskReportLocked({ unlocked, onOpenAuth }: { unlocked: boolean; onOpenAuth: () => void }) {
-    const items = [
-        { label: 'Storico contratti completi', icon: 'M3 7h18M3 12h18M3 17h18' },
-        { label: 'Eventi segnalati (sospesi)', icon: 'M12 9v3m0 4h.01' },
-        { label: 'Risk Score in dettaglio', icon: 'M3 18l6-6 4 4 8-8' },
-        { label: 'Segnalazioni in revisione', icon: 'M12 8v4l3 3' },
-        { label: 'Cronologia attività network', icon: 'M4 7h16M4 12h16M4 17h10' },
-    ]
+// 22/09/2026 (direzione): niente piu' autorizzazione OTP del cliente, il
+// report e' sempre consultabile. Ogni consultazione resta nel log di accesso.
+function MobilityRiskReportDisponibile() {
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-theme-text-primary">Mobility Risk Report</h3>
-                <span className={'text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ' +
-                    (unlocked
-                        ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/10'
-                        : 'border-amber-500/40 text-amber-500 bg-amber-500/10')
-                }>
-                    {unlocked ? 'Disponibile' : 'Bloccato'}
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-500 bg-emerald-500/10">
+                    Disponibile
                 </span>
             </div>
-            {unlocked ? (
-                <p className="text-xs text-theme-text-primary">Tutti i dati EMTN sono consultabili per la durata di questo OTP.</p>
-            ) : (
-                <>
-                    <div className="flex flex-col items-center justify-center py-6">
-                        <span className="w-12 h-12 grid place-items-center rounded-full bg-theme-bg-tertiary text-theme-text-muted mb-3">
-                            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                <rect x="5" y="11" width="14" height="10" rx="2"/>
-                                <path d="M8 11V7a4 4 0 118 0v4"/>
-                            </svg>
-                        </span>
-                        <p className="text-sm font-semibold text-theme-text-primary">Report non disponibile</p>
-                        <p className="text-[11px] text-theme-text-muted text-center max-w-md mt-1">
-                            Per visualizzare il Mobility Risk Report devi prima richiedere l&apos;autorizzazione del cliente.
-                        </p>
-                    </div>
-                    <div className="pt-3 border-t border-theme-border">
-                        <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Cosa vedrai dopo l&apos;autorizzazione</p>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                            {items.map(it => (
-                                <div key={it.label} className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-theme-border bg-theme-bg-primary">
-                                    <svg className="w-3.5 h-3.5 text-theme-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d={it.icon}/>
-                                    </svg>
-                                    <span className="text-[11px] text-theme-text-primary truncate" title={it.label}>{it.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onOpenAuth}
-                        className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-400 hover:underline"
-                    >
-                        Richiedi autorizzazione cliente
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-                        </svg>
-                    </button>
-                </>
-            )}
+            <p className="text-xs text-theme-text-primary">Tutti i dati EMTN del cliente sono consultabili. Ogni consultazione viene registrata nel log di accesso.</p>
         </section>
     )
 }
-
 
 function ScoreGauge({ score, stroke }: { score: number; stroke: string }) {
     const r = 42
