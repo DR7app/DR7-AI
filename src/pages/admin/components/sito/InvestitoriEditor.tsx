@@ -313,7 +313,7 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 {bi("Riservati: nota", "ir_riservati_nota")}
             </Riquadro>
 
-            <Riquadro titolo={`Partner strategici (${lista<IrLogo>('ir_partner_loghi').length} loghi)`} nota="Senza logo si vede il nome scritto. Senza loghi il blocco non compare.">
+            <Riquadro titolo={`Stampa e partner (${lista<IrLogo>('ir_partner_loghi').length} loghi)`} nota="Senza logo si vede il nome scritto. Senza loghi il blocco non compare.">
                 {bi("Scritta piccola", "ir_partner_eyebrow")}
                 {bi("Titolo", "ir_partner_titolo")}
                 {bi("Testo", "ir_partner_testo", true)}

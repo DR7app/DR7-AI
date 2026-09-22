@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 80
+ * Sezioni generate: 36 — interfacce: 81
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -1498,6 +1498,14 @@ export interface IrDocumento {
   url: string;
 }
 
+export interface InvestitoriStrength {
+  id: string;
+  title: string;
+  title_it?: string; title_en?: string;
+  description: string;
+  description_it?: string; description_en?: string;
+}
+
 export interface InvestitoriInfoItem {
   label: string;
   label_it?: string; label_en?: string;
@@ -1510,8 +1518,21 @@ export interface InvestitoriCopy {
   hero_title_it?: string; hero_title_en?: string;
   hero_subtitle: string;
   hero_subtitle_it?: string; hero_subtitle_en?: string;
+  intro_paragraphs: string[];
+  intro_paragraphs_it?: string[]; intro_paragraphs_en?: string[];
+  opportunity_heading: string;
+  opportunity_heading_it?: string; opportunity_heading_en?: string;
+  opportunity_paragraphs: string[];
+  opportunity_paragraphs_it?: string[]; opportunity_paragraphs_en?: string[];
+  strength_heading: string;
+  strength_heading_it?: string; strength_heading_en?: string;
+  strength_points: InvestitoriStrength[];
   cta_heading: string;
   cta_heading_it?: string; cta_heading_en?: string;
+  cta_paragraphs: string[];
+  cta_paragraphs_it?: string[]; cta_paragraphs_en?: string[];
+  cta_button_label: string;
+  cta_button_label_it?: string; cta_button_label_en?: string;
   cta_whatsapp_url: string;
   cta_email: string;
   info_heading: string;
@@ -2905,9 +2926,64 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   hero_subtitle: 'Partecipa alla crescita del gruppo DR7',
   hero_subtitle_it: 'Partecipa alla crescita del gruppo DR7',
   hero_subtitle_en: 'Take part in the growth of the DR7 group',
+  intro_paragraphs_it: [
+    'DR7 S.p.A. rappresenta il cuore del progetto DR7 Luxury Empire, una realtà italiana in espansione internazionale nel settore Luxury Mobility & Lifestyle.',
+    'Fondata da Valerio Saia, la società persegue l\'obiettivo di costruire entro il 2030 un gruppo di riferimento nel panorama del lusso globale, integrando noleggio supercar, yacht, elicotteri, ville di pregio e servizi di concierge in un\'unica piattaforma.',
+  ],
+  intro_paragraphs_en: [
+    'DR7 S.p.A. is the heart of the DR7 Luxury Empire project, an Italian company expanding internationally in the Luxury Mobility & Lifestyle sector.',
+    'Founded by Valerio Saia, the company aims to build by 2030 a benchmark group in the global luxury landscape, integrating supercar rental, yachts, helicopters, prestige villas and concierge services into a single platform.',
+  ],
+  intro_paragraphs: [
+    'DR7 S.p.A. rappresenta il cuore del progetto DR7 Luxury Empire, una realtà italiana in espansione internazionale nel settore Luxury Mobility & Lifestyle.',
+    'Fondata da Valerio Saia, la società persegue l\'obiettivo di costruire entro il 2030 un gruppo di riferimento nel panorama del lusso globale, integrando noleggio supercar, yacht, elicotteri, ville di pregio e servizi di concierge in un\'unica piattaforma.',
+  ],
+  opportunity_heading: 'Opportunità di partecipazione al capitale',
+  opportunity_heading_it: 'Opportunità di partecipazione al capitale',
+  opportunity_heading_en: 'Equity participation opportunity',
+  opportunity_paragraphs_it: [
+    'Il Consiglio di Amministrazione di DR7 S.p.A. ha deliberato l\'apertura selettiva del capitale sociale a investitori privati e partner strategici, con l\'intento di favorire la crescita e l\'espansione del brand a livello internazionale.',
+    'L\'ingresso nel capitale è riservato a soggetti qualificati, selezionati direttamente dalla Direzione Generale, nel rispetto delle normative vigenti e delle procedure interne di valutazione.',
+    'L\'obiettivo è consolidare la struttura patrimoniale della società e accelerare il piano Vision 2030, che prevede il rafforzamento delle attività operative, lo sviluppo di nuove divisioni e, in prospettiva, la quotazione in mercati regolamentati.',
+  ],
+  opportunity_paragraphs_en: [
+    'The Board of Directors of DR7 S.p.A. has resolved to selectively open the share capital to private investors and strategic partners, with the aim of supporting the growth and international expansion of the brand.',
+    'Entry into the share capital is reserved for qualified parties, selected directly by General Management, in compliance with applicable regulations and internal assessment procedures.',
+    'The objective is to strengthen the company\'s capital structure and accelerate the Vision 2030 plan, which foresees reinforcing operations, developing new divisions and, in due course, listing on regulated markets.',
+  ],
+  opportunity_paragraphs: [
+    'Il Consiglio di Amministrazione di DR7 S.p.A. ha deliberato l\'apertura selettiva del capitale sociale a investitori privati e partner strategici, con l\'intento di favorire la crescita e l\'espansione del brand a livello internazionale.',
+    'L\'ingresso nel capitale è riservato a soggetti qualificati, selezionati direttamente dalla Direzione Generale, nel rispetto delle normative vigenti e delle procedure interne di valutazione.',
+    'L\'obiettivo è consolidare la struttura patrimoniale della società e accelerare il piano Vision 2030, che prevede il rafforzamento delle attività operative, lo sviluppo di nuove divisioni e, in prospettiva, la quotazione in mercati regolamentati.',
+  ],
+  strength_heading: 'Punti di forza',
+  strength_heading_it: 'Punti di forza',
+  strength_heading_en: 'Key strengths',
+  strength_points: [
+    { id: 'crescita',         title: 'Crescita documentata',          title_it: 'Crescita documentata',        title_en: 'Documented growth',           description: 'Fatturato in costante incremento con proiezione di sviluppo superiore al +100% annuo.', description_it: 'Fatturato in costante incremento con proiezione di sviluppo superiore al +100% annuo.', description_en: 'Steadily increasing revenue with projected growth above +100% per year.' },
+    { id: 'posizionamento',   title: 'Posizionamento strategico',     title_it: 'Posizionamento strategico',   title_en: 'Strategic positioning',       description: 'Brand di riferimento nel comparto luxury mobility in Italia e in Europa.', description_it: 'Brand di riferimento nel comparto luxury mobility in Italia e in Europa.', description_en: 'A benchmark brand in the luxury mobility sector in Italy and Europe.' },
+    { id: 'espansione',       title: 'Espansione internazionale',     title_it: 'Espansione internazionale',   title_en: 'International expansion',     description: 'Apertura verso mercati ad alto potenziale, tra cui Emirati Arabi Uniti e Francia.', description_it: 'Apertura verso mercati ad alto potenziale, tra cui Emirati Arabi Uniti e Francia.', description_en: 'Opening towards high-potential markets, including the United Arab Emirates and France.' },
+    { id: 'integrazione',     title: 'Integrazione verticale',        title_it: 'Integrazione verticale',      title_en: 'Vertical integration',        description: 'Un unico ecosistema che combina mobilità di lusso, hospitality e servizi esperienziali.', description_it: 'Un unico ecosistema che combina mobilità di lusso, hospitality e servizi esperienziali.', description_en: 'A single ecosystem combining luxury mobility, hospitality and experiential services.' },
+    { id: 'visione',          title: 'Visione a lungo termine',       title_it: 'Visione a lungo termine',     title_en: 'Long-term vision',            description: 'Programma industriale orientato alla creazione di valore e alla sostenibilità economica del gruppo.', description_it: 'Programma industriale orientato alla creazione di valore e alla sostenibilità economica del gruppo.', description_en: 'An industrial programme focused on value creation and the economic sustainability of the group.' },
+  ],
   cta_heading: 'Modalità di adesione',
   cta_heading_it: 'Modalità di adesione',
   cta_heading_en: 'How to apply',
+  cta_paragraphs_it: [
+    'Gli interessati possono inoltrare richiesta di ammissione al Club Azionisti DR7, compilando il modulo dedicato e avviando la fase di verifica da parte dell\'Ufficio Investor Relations.',
+    'Ogni proposta di partecipazione viene valutata singolarmente in base ai requisiti dell\'investitore, alla compatibilità strategica e alle disponibilità di quote.',
+  ],
+  cta_paragraphs_en: [
+    'Interested parties may submit an application to join the DR7 Shareholders Club by completing the dedicated form and starting the verification process with the Investor Relations Office.',
+    'Each participation proposal is assessed individually based on the investor\'s profile, strategic fit and share availability.',
+  ],
+  cta_paragraphs: [
+    'Gli interessati possono inoltrare richiesta di ammissione al Club Azionisti DR7, compilando il modulo dedicato e avviando la fase di verifica da parte dell\'Ufficio Investor Relations.',
+    'Ogni proposta di partecipazione viene valutata singolarmente in base ai requisiti dell\'investitore, alla compatibilità strategica e alle disponibilità di quote.',
+  ],
+  cta_button_label: 'RICHIEDI ACCESSO INVESTITORI',
+  cta_button_label_it: 'RICHIEDI ACCESSO INVESTITORI',
+  cta_button_label_en: 'REQUEST INVESTOR ACCESS',
   cta_whatsapp_url: 'https://wa.me/393457905205?text=Buongiorno%2C%20sono%20interessato%20ad%20entrare%20nel%20Club%20Azionisti%20DR7.%20Vorrei%20ricevere%20maggiori%20informazioni%20sulle%20opportunit%C3%A0%20di%20investimento%20e%20partecipazione%20al%20capitale.',
   cta_email: 'investor@dr7.app',
   info_heading: 'Informazioni sintetiche',
@@ -2956,11 +3032,10 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_crescita_titolo_it: 'La nostra crescita', ir_crescita_titolo_en: 'Our growth',
   ir_crescita_ricavi_it: 'Ricavi', ir_crescita_ricavi_en: 'Revenue',
   ir_crescita_utile_it: 'Utile netto', ir_crescita_utile_en: 'Net profit',
-  ir_crescita_nota_it: '* Dati al 30/06/2026', ir_crescita_nota_en: '* Figures at 30/06/2026',
+  ir_crescita_nota_it: '', ir_crescita_nota_en: '',
   ir_crescita: [
-    { id: '2024', anno: '2024', ricavi: 450000, utile: 0 },
-    { id: '2025', anno: '2025', ricavi: 1000000, utile: 0 },
-    { id: '2026', anno: '2026*', ricavi: 1500000, utile: 0 },
+    { id: '2024', anno: '2024', ricavi: 473259, utile: 54635 },
+    { id: '2025', anno: '2025', ricavi: 982188, utile: 349966 },
   ],
   ir_visione_eyebrow_it: 'Visione 2030', ir_visione_eyebrow_en: 'Vision 2030',
   ir_visione_titolo_it: 'Dal Mediterraneo al mondo.', ir_visione_titolo_en: 'From the Mediterranean to the world.',
@@ -2974,7 +3049,6 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_azionisti_testo_it: 'Chi crede nel nostro progetto e ne condivide la visione di lungo periodo.',
   ir_azionisti_testo_en: 'Those who believe in our project and share its long-term vision.',
   ir_azionisti: [
-    { id: 'campagnola', nome: 'Ilenia Campagnola', ruolo_it: 'Strategic Investor', ruolo_en: 'Strategic Investor', da_it: 'Azionista dal 2025', da_en: 'Shareholder since 2025', foto: '' },
     { id: 'privato-1', nome: 'Investitore privato', ruolo_it: 'Identità riservata', ruolo_en: 'Identity confidential', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
   ],
   ir_privati_eyebrow_it: 'Investitore privato', ir_privati_eyebrow_en: 'Private investor',
@@ -2992,21 +3066,21 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_riservati_testo_en: 'Our investor has chosen to keep their privacy. Respecting that choice is a priority for us.',
   ir_riservati_label_it: 'Investitore riservato', ir_riservati_label_en: 'Confidential investor',
   ir_riservati_nota_it: 'Partecipazione al capitale', ir_riservati_nota_en: 'Equity participation',
-  ir_partner_eyebrow_it: 'Partner strategici', ir_partner_eyebrow_en: 'Strategic partners',
-  ir_partner_titolo_it: 'Insieme verso il futuro.', ir_partner_titolo_en: 'Together towards the future.',
-  ir_partner_testo_it: 'Al fianco di DR7 ci sono anche partner industriali e strategici che contribuiscono con competenze, network e visione internazionale.',
-  ir_partner_testo_en: 'Alongside DR7 there are also industrial and strategic partners who contribute expertise, network and an international vision.',
-  ir_partner_bottone_it: 'Scopri i nostri partner', ir_partner_bottone_en: 'Discover our partners',
-  ir_partner_link: '',
+  ir_partner_eyebrow_it: 'Parlano di noi', ir_partner_eyebrow_en: 'In the press',
+  ir_partner_titolo_it: 'Sulla stampa.', ir_partner_titolo_en: 'In the news.',
+  ir_partner_testo_it: 'Le testate che hanno raccontato la crescita di DR7 e dei suoi fondatori.',
+  ir_partner_testo_en: 'The publications that have covered the growth of DR7 and its founders.',
+  ir_partner_bottone_it: 'Leggi la rassegna stampa', ir_partner_bottone_en: 'Read the press coverage',
+  ir_partner_link: '/press',
   ir_partner_img: '',
   ir_partner_loghi: [
-    { id: 'forbes', nome: 'Forbes', logo: '' },
-    { id: 'bloomberg', nome: 'Bloomberg', logo: '' },
-    { id: 'repubblica', nome: 'la Repubblica', logo: '' },
-    { id: 'sole24ore', nome: 'Il Sole 24 Ore', logo: '' },
-    { id: 'cnbc', nome: 'CNBC', logo: '' },
-    { id: 'skytg24', nome: 'Sky TG24', logo: '' },
-    { id: 'economia', nome: "L'Economia", logo: '' },
+    { id: 'forbesmiami', nome: 'Forbes Miami', logo: '', link: '' },
+    { id: 'fortuneitalia', nome: 'Fortune Italia', logo: '', link: '' },
+    { id: 'iltempo', nome: 'Il Tempo', logo: '', link: '' },
+    { id: 'libero', nome: 'Libero Quotidiano', logo: '', link: '' },
+    { id: 'iltirreno', nome: 'Il Tirreno', logo: '', link: '' },
+    { id: 'affaritaliani', nome: 'Affaritaliani', logo: '', link: '' },
+    { id: 'ilroma', nome: 'Il Roma', logo: '', link: '' },
   ],
   ir_gov_eyebrow_it: 'Documenti e trasparenza', ir_gov_eyebrow_en: 'Documents and transparency',
   ir_gov_titolo_it: 'La nostra governance.', ir_gov_titolo_en: 'Our governance.',
