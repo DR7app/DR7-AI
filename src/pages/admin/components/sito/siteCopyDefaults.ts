@@ -1078,6 +1078,9 @@ export interface HeaderCopy {
   menu_privilege_sub_it?: string; menu_privilege_sub_en?: string;
   menu_business_title_it?: string; menu_business_title_en?: string;
   menu_business_sub_it?: string; menu_business_sub_en?: string;
+  // Investitori: pagina Investor Relations (/investitori).
+  menu_investitori_title_it?: string; menu_investitori_title_en?: string;
+  menu_investitori_sub_it?: string; menu_investitori_sub_en?: string;
   menu_digital_title_it?: string; menu_digital_title_en?: string;
   menu_digital_sub_it?: string; menu_digital_sub_en?: string;
   menu_contatti_title_it?: string; menu_contatti_title_en?: string;
@@ -1096,6 +1099,7 @@ export interface HeaderCopy {
   menu_club_img?: string;
   menu_privilege_img?: string;
   menu_business_img?: string;
+  menu_investitori_img?: string;
   menu_digital_img?: string;
   menu_contatti_img?: string;
   // Booking popup chrome (form itself = BookingSearchBox)

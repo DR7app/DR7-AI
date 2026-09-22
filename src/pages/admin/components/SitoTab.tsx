@@ -4796,16 +4796,17 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
 // I default mostrati qui combaciano con i fallback hardcoded nel sito
 // (components/layout/Header.tsx). key -> prefisso chiavi menu_<key>_*.
 const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: string; subIt: string; subEn: string; img: string }[] = [
+    { key: 'prevendite', name: 'Prevendita e Promozioni', titleIt: 'PREVENDITA E PROMOZIONI', titleEn: 'PRESALES & PROMOTIONS', subIt: 'Pacchetti pagati in anticipo e offerte esclusive', subEn: 'Prepaid packages and exclusive offers', img: '/menu-club.jpeg' },
     { key: 'mobilita', name: 'Mobilità', titleIt: 'Mobilità', titleEn: 'Mobility', subIt: 'Auto esclusive per ogni esperienza su strada', subEn: 'Exclusive cars for every experience on the road', img: '/menu-mobilita.jpeg' },
     { key: 'mare', name: 'Mare', titleIt: 'Mare', titleEn: 'Sea', subIt: 'Yacht, barche e esperienze esclusive in mare', subEn: 'Yachts, boats and exclusive experiences at sea', img: '/menu-mare.jpeg' },
     { key: 'aria', name: 'Aria', titleIt: 'Aria', titleEn: 'Air', subIt: 'Voli privati ed elicotteri per viaggiare senza confini', subEn: 'Private jets and helicopters to travel without limits', img: '/menu-aria.jpeg' },
     { key: 'property', name: 'Soggiorni & Ospitalità', titleIt: 'Soggiorni & Ospitalità', titleEn: 'Stays & Hospitality', subIt: 'Ville, appartamenti e residenze selezionate in tutto il mondo', subEn: 'Villas, apartments and residences selected worldwide', img: '/menu-property.jpeg' },
     { key: 'servizi', name: 'Lavaggio & Meccanica', titleIt: 'Lavaggio & Meccanica', titleEn: 'Car Wash & Mechanics', subIt: 'Lavaggio auto premium e officina meccanica', subEn: 'Premium car wash and mechanical workshop', img: '/servizi-lavaggio.jpeg' },
-    { key: 'prevendite', name: 'Prevendita e Promozioni', titleIt: 'Prevendita e Promozioni', titleEn: 'Presales & Promotions', subIt: 'Pacchetti pagati in anticipo e offerte esclusive', subEn: 'Prepaid packages and exclusive offers', img: '/menu-club.jpeg' },
     { key: 'wallet', name: 'Credit Wallet', titleIt: 'Credit Wallet', titleEn: 'Credit Wallet', subIt: 'Il tuo credito DR7 Wallet per prenotare e ricaricare', subEn: 'Your DR7 Wallet credit to book and top up', img: '/menu-club.jpeg' },
     { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits', img: '/menu-club.jpeg' },
     { key: 'privilege', name: 'DR7 Club Privilege', titleIt: 'DR7 Club Privilege', titleEn: 'DR7 Club Privilege', subIt: 'Il saldo idoneo del tuo Wallet matura ogni giorno', subEn: 'Your eligible Wallet balance grows every day', img: '/menu-club.jpeg' },
     { key: 'business', name: 'Business', titleIt: 'Business', titleEn: 'Business', subIt: 'Soluzioni corporate e noleggi a lungo termine', subEn: 'Corporate solutions and long-term rentals', img: '/menu-business.jpeg' },
+    { key: 'investitori', name: 'Investitori', titleIt: 'Investitori', titleEn: 'Investor Relations', subIt: 'Numeri, azionisti e governance di DR7 S.p.A.', subEn: 'Figures, shareholders and governance of DR7 S.p.A.', img: '/menu-business.jpeg' },
     { key: 'digital', name: 'Innovazione Digitale', titleIt: 'Innovazione Digitale', titleEn: 'Digital Innovation', subIt: 'Creazione di asset digitali e token', subEn: 'Digital Asset & Token Creation', img: '/menu-digital.jpeg' },
     { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service', img: '/menu-contatti.jpeg' },
 ]
