@@ -2,15 +2,15 @@
  * EMTN — POST /emtn-report
  *
  * Restituisce il Mobility Risk Report completo per (operatore, cliente).
- * Hard rule: "no report visibility without OTP verified". Verifica
- * isReportUnlocked prima di emettere qualunque dettaglio.
+ * 22/09/2026 (direzione): niente piu' OTP del cliente; ogni consultazione
+ * resta nel log di accesso.
  *
  * Body: { clientId, bookingId }
  */
 import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
 import {
-    audit, clientIp, getServiceSupabase, isReportUnlocked,
+    audit, clientIp, getServiceSupabase,
     jsonResponse,
 } from './utils/emtn'
 
@@ -33,12 +33,6 @@ export const handler: Handler = async (event) => {
     const ua = event.headers['user-agent'] || null
 
     if (!clientId) return jsonResponse(400, { error: 'clientId obbligatorio' }, origin)
-
-    const unlocked = await isReportUnlocked(sb, operatorId, clientId)
-    if (!unlocked) {
-        await audit(sb, { operatorId, operatorEmail, clientId, action: 'VIEW_REPORT', success: false, ip, userAgent: ua, metadata: { reason: 'no_otp' } })
-        return jsonResponse(403, { error: 'Autorizzazione cliente non verificata' }, origin)
-    }
 
     const { data: client } = await sb
         .from('emtn_clients')

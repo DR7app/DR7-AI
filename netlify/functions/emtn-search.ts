@@ -1,13 +1,16 @@
 /**
  * EMTN — POST /emtn-search
  *
- * Hard rule: "NO search without codice fiscale" + "NO EMTN access
- * without active booking_id". Validazione CF + booking gate prima di
- * qualunque DB read. Ogni chiamata genera una riga in emtn_access_logs.
+ * Ricerca per codice fiscale, oppure (22/09/2026, direzione) per cliente
+ * ESTERO senza codice fiscale: nome + cognome + data di nascita. Ogni
+ * chiamata genera una riga in emtn_access_logs.
  *
- * Body: { codiceFiscale: string, bookingId: string,
- *         nome?, cognome?, dataNascita? }
- * Returns: { client, stats, recentEvents (only if report unlocked) }
+ * 22/09/2026 (direzione): niente piu' OTP al cliente. Il report e gli eventi
+ * si vedono subito; resta il log di ogni consultazione.
+ *
+ * Body: { codiceFiscale } oppure { estero: true, nome, cognome, dataNascita,
+ *         nazionalita, documentoTipo: 'carta_identita'|'passaporto', documentoNumero }
+ * Returns: { client, stats, recentEvents, ... }
  */
 import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
@@ -15,7 +18,6 @@ import {
     audit,
     clientIp,
     getServiceSupabase,
-    isReportUnlocked,
     isValidCF,
     jsonResponse,
     normalizeCF,
@@ -35,28 +37,86 @@ export const handler: Handler = async (event) => {
     const body = (() => { try { return JSON.parse(event.body || '{}') } catch { return null } })()
     if (!body) return jsonResponse(400, { error: 'JSON body invalido' }, origin)
 
-    const cf = normalizeCF(String(body.codiceFiscale || ''))
     const ip = clientIp(event.headers as Record<string, string | undefined>)
     const ua = event.headers['user-agent'] || null
 
-    // Hard rule: CF obbligatorio e formalmente valido.
-    if (!isValidCF(cf)) {
+    // Cliente estero: nessun codice fiscale, si riconosce da nome + cognome +
+    // data di nascita.
+    const estero = body.estero === true
+    const nomeE = String(body.nome || '').trim().replace(/\s+/g, ' ')
+    const cognomeE = String(body.cognome || '').trim().replace(/\s+/g, ' ')
+    const nascitaE = /^\d{4}-\d{2}-\d{2}$/.test(String(body.dataNascita || '')) ? String(body.dataNascita) : ''
+    const nazionalitaE = String(body.nazionalita || '').trim().replace(/\s+/g, ' ')
+    const docTipoE = body.documentoTipo === 'passaporto' ? 'passaporto' : body.documentoTipo === 'carta_identita' ? 'carta_identita' : ''
+    const docNumE = String(body.documentoNumero || '').replace(/\s+/g, '').toUpperCase()
+    const cf = estero ? '' : normalizeCF(String(body.codiceFiscale || ''))
+
+    if (estero) {
+        if (!nomeE || !cognomeE || !nascitaE || !nazionalitaE || !docTipoE || !docNumE) {
+            await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'estero_incompleto' } })
+            return jsonResponse(400, { error: 'Cliente estero: servono nome, cognome, data di nascita, nazionalita\' e documento (tipo e numero)' }, origin)
+        }
+    } else if (!isValidCF(cf)) {
         await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'invalid_cf', cf } })
-        return jsonResponse(400, { error: 'Codice fiscale mancante o invalido' }, origin)
+        return jsonResponse(400, { error: 'Codice fiscale mancante o invalido (cliente straniero? usa "Estero")' }, origin)
     }
 
-    // Find or create client.
-    const { data: existing } = await sb
-        .from('emtn_clients')
-        .select('id, codice_fiscale, nome, cognome, data_nascita, created_at')
-        .eq('codice_fiscale', cf)
-        .maybeSingle()
+    // Find or create client. Estero: prima per documento, poi per nome +
+    // cognome + data di nascita (stessa persona, documento nuovo o mancante).
+    const COLONNE_ESTERO = 'id, codice_fiscale, nome, cognome, data_nascita, created_at, nazionalita, documento_tipo, documento_numero'
+    const segnalaMigrazione = (e: { code?: string; message?: string } | null) =>
+        !!e && (e.code === '42703' || e.code === 'PGRST204' || /documento_|nazionalita/.test(e.message || ''))
+    if (estero) {
+        const perDoc = await sb
+            .from('emtn_clients')
+            .select(COLONNE_ESTERO)
+            .eq('documento_tipo', docTipoE)
+            .ilike('documento_numero', docNumE)
+            .limit(1)
+            .maybeSingle()
+        if (segnalaMigrazione(perDoc.error)) {
+            return jsonResponse(500, { error: 'Clienti esteri non ancora attivi: eseguire in Supabase la migrazione 20260922_emtn_clienti_esteri.sql' }, origin)
+        }
+        if (perDoc.data) {
+            const d = perDoc.data as { nome?: string | null; cognome?: string | null; data_nascita?: string | null }
+            const stessaPersona = String(d.nome || '').toLowerCase() === nomeE.toLowerCase()
+                && String(d.cognome || '').toLowerCase() === cognomeE.toLowerCase()
+                && String(d.data_nascita || '') === nascitaE
+            if (!stessaPersona) {
+                await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'documento_di_altra_persona' } })
+                return jsonResponse(409, { error: `Questo documento e' gia' registrato su EMTN a nome di ${[d.nome, d.cognome].filter(Boolean).join(' ')} (nato il ${d.data_nascita || 'n/d'}). Controlla i dati.` }, origin)
+            }
+        }
+    }
+    const { data: existing } = estero
+        ? await sb
+            .from('emtn_clients')
+            .select(COLONNE_ESTERO)
+            .is('codice_fiscale', null)
+            .ilike('nome', nomeE)
+            .ilike('cognome', cognomeE)
+            .eq('data_nascita', nascitaE)
+            .limit(1)
+            .maybeSingle()
+        : await sb
+            .from('emtn_clients')
+            .select('id, codice_fiscale, nome, cognome, data_nascita, created_at')
+            .eq('codice_fiscale', cf)
+            .maybeSingle()
 
     let client = existing
     if (!client) {
         const { data: created, error: insErr } = await sb
             .from('emtn_clients')
-            .insert({
+            .insert(estero ? {
+                codice_fiscale: null,
+                nome: nomeE,
+                cognome: cognomeE,
+                data_nascita: nascitaE,
+                nazionalita: nazionalitaE,
+                documento_tipo: docTipoE,
+                documento_numero: docNumE,
+            } : {
                 codice_fiscale: cf,
                 nome: body.nome ? String(body.nome).trim() : null,
                 cognome: body.cognome ? String(body.cognome).trim() : null,
@@ -70,9 +130,25 @@ export const handler: Handler = async (event) => {
             // cosi\' chi riceve l'errore puo\' agire invece di vedere un
             // generico "Inserimento cliente fallito".
             const parts = [insErr.message, insErr.details, insErr.hint ? `hint: ${insErr.hint}` : '', insErr.code ? `(${insErr.code})` : ''].filter(Boolean)
+            // Clienti esteri: serve la migrazione che rende facoltativo il CF.
+            if (estero && (insErr.code === '23502' || segnalaMigrazione(insErr))) {
+                return jsonResponse(500, { error: 'Clienti esteri non ancora attivi: eseguire in Supabase la migrazione 20260922_emtn_clienti_esteri.sql' }, origin)
+            }
             return jsonResponse(500, { error: `Inserimento cliente fallito: ${parts.join(' — ')}` }, origin)
         }
         client = created
+    }
+
+    // Estero gia' noto: nazionalita' e documento si aggiornano con quelli
+    // dati adesso (documento rinnovato, prima ricerca senza documento).
+    if (estero && client) {
+        const c = client as { id: string; nazionalita?: string | null; documento_tipo?: string | null; documento_numero?: string | null }
+        if (c.nazionalita !== nazionalitaE || c.documento_tipo !== docTipoE || c.documento_numero !== docNumE) {
+            const { error: updErr } = await sb.from('emtn_clients')
+                .update({ nazionalita: nazionalitaE, documento_tipo: docTipoE, documento_numero: docNumE })
+                .eq('id', c.id)
+            if (!updErr) client = { ...client, nazionalita: nazionalitaE, documento_tipo: docTipoE, documento_numero: docNumE } as typeof client
+        }
     }
 
     // ── Enrich client da customers_extended ────────────────
@@ -91,10 +167,12 @@ export const handler: Handler = async (event) => {
     }
     let ext: ExtRow | null = null
     {
-        const { data } = await sb
+        const q = sb
             .from('customers_extended')
             .select('nome, cognome, email, telefono, indirizzo, citta_residenza, codice_postale, data_nascita, codice_fiscale, created_at, metadata, sede_legale')
-            .eq('codice_fiscale', cf)
+        const { data } = await (estero
+            ? q.ilike('nome', nomeE).ilike('cognome', cognomeE).eq('data_nascita', nascitaE)
+            : q.eq('codice_fiscale', cf))
             .order('updated_at', { ascending: false })
             .limit(1)
             .maybeSingle()
@@ -157,10 +235,17 @@ export const handler: Handler = async (event) => {
     // Risolviamo prima gli user_id corrispondenti al CF e poi tiriamo
     // le loro bookings. Fallback finale su booking_details (CF salvato
     // nel JSON quando il cliente non era ancora autenticato).
-    const { data: profileMatches } = await sb
-        .from('customers_extended')
-        .select('user_id')
-        .eq('codice_fiscale', cf)
+    const { data: profileMatches } = estero
+        ? await sb
+            .from('customers_extended')
+            .select('user_id')
+            .ilike('nome', nomeE)
+            .ilike('cognome', cognomeE)
+            .eq('data_nascita', nascitaE)
+        : await sb
+            .from('customers_extended')
+            .select('user_id')
+            .eq('codice_fiscale', cf)
     const matchedUserIds = Array.from(new Set(
         (profileMatches || []).map(p => p.user_id).filter(Boolean) as string[]
     ))
@@ -187,7 +272,7 @@ export const handler: Handler = async (event) => {
     // Fallback: bookings dove il CF e\' annidato in booking_details
     // (records senza user_id risolto). Filtro lato JS, limite a 500
     // righe per non leggere milioni di record.
-    if (collected.size === 0) {
+    if (collected.size === 0 && !estero) {
         const { data } = await sb
             .from('bookings')
             .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id')
@@ -276,24 +361,19 @@ export const handler: Handler = async (event) => {
         .eq('client_id', client!.id)
         .maybeSingle()
 
-    // Report unlocked? (verified OTP for THIS operator+client, not expired)
-    const unlocked = await isReportUnlocked(sb, operatorId, client!.id)
-
-    // Recent events ONLY when unlocked (hard rule: no report without OTP).
-    let recentEvents: unknown[] = []
-    if (unlocked) {
-        const { data: events } = await sb
-            .from('emtn_events')
-            .select('id, type, status, headline, occurred_at, created_at')
-            .eq('client_id', client!.id)
-            .order('created_at', { ascending: false })
-            .limit(20)
-        recentEvents = events || []
-    }
+    // 22/09/2026 (direzione): niente OTP, il report e' sempre sbloccato.
+    const unlocked = true
+    const { data: events } = await sb
+        .from('emtn_events')
+        .select('id, type, status, headline, occurred_at, created_at')
+        .eq('client_id', client!.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+    const recentEvents: unknown[] = events || []
 
     await audit(sb, {
         operatorId, operatorEmail, action: 'SEARCH', success: true, ip, userAgent: ua,
-        clientId: client!.id, metadata: { unlocked },
+        clientId: client!.id, metadata: { unlocked, estero },
     })
 
     // Risk band derivata da:
@@ -334,9 +414,9 @@ export const handler: Handler = async (event) => {
         customer_since: firstBookingDate || (ext?.created_at ?? null),
         last_seen_at: lastBookingDate,
         source: ext ? 'customers_extended' : 'emtn',
-        date_of_birth: (client as { data_nascita?: string | null }).data_nascita || ext?.data_nascita || dobFromCF(cf),
-        sex: sexFromCF(cf),
-        nationality: 'IT',
+        date_of_birth: (client as { data_nascita?: string | null }).data_nascita || ext?.data_nascita || (cf ? dobFromCF(cf) : null),
+        sex: cf ? sexFromCF(cf) : null,
+        nationality: estero ? nazionalitaE : 'IT',
         events: sc.negative_events + sc.events_under_review,
     }
 
