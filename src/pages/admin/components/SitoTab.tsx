@@ -40,6 +40,7 @@ import { parseMoney } from '../../../utils/money'
 // Catalogo dei testi del sito: GENERATO da scripts/genTestiCatalogo.mjs.
 // E' quello che rende modificabili anche le pagine senza editor dedicato.
 import { TESTI_CATALOGO, type VoceTesto } from './sito/testiCatalogo'
+import { CaricaMedia, sembraMedia, etichettaMedia } from './sito/CaricaMedia'
 import {
     SITO_AREAS,
     SITO_SCREENS,
@@ -1539,7 +1540,24 @@ function CancellazioneEditor({
     )
 }
 
-function FieldText({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function FieldText({ label, value, onChange, media }: { label: string; value: string; onChange: (v: string) => void; media?: boolean }) {
+    // Un campo che contiene (o annuncia) un'immagine o un filmato ha anche il
+    // pulsante per caricare il file: niente piu' percorsi da incollare.
+    if (media ?? (sembraMedia(value) || etichettaMedia(label))) {
+        return (
+            <div className="block">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">{label}</span>
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder="Carica un file o incolla un indirizzo"
+                    className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+                <CaricaMedia value={value} onChange={onChange} />
+            </div>
+        )
+    }
     return (
         <label className="block">
             <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">{label}</span>
@@ -2413,27 +2431,36 @@ function HomeEditor({
                         <li key={s.id} className="grid grid-cols-1 md:grid-cols-[24px_1fr_auto] gap-2 items-center bg-[#fafafa] border border-theme-border rounded-xl p-3">
                             <span className="text-[11px] font-mono text-theme-text-secondary text-center">{i + 1}</span>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                <input
-                                    type="text"
-                                    value={s.video_src}
-                                    onChange={(e) => updateSlide(i, { video_src: e.target.value })}
-                                    placeholder="/film/cars1.mp4"
-                                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
-                                />
-                                <input
-                                    type="text"
-                                    value={s.mobile_src || ''}
-                                    onChange={(e) => updateSlide(i, { mobile_src: e.target.value })}
-                                    placeholder="telefono (opzionale)"
-                                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
-                                />
-                                <input
-                                    type="text"
-                                    value={s.poster_src || ''}
-                                    onChange={(e) => updateSlide(i, { poster_src: e.target.value })}
-                                    placeholder="poster (opzionale)"
-                                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
-                                />
+                                <div className="space-y-1">
+                                    <input
+                                        type="text"
+                                        value={s.video_src}
+                                        onChange={(e) => updateSlide(i, { video_src: e.target.value })}
+                                        placeholder="/film/cars1.mp4"
+                                        className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                    />
+                                    <CaricaMedia compatto value={s.video_src} onChange={v => updateSlide(i, { video_src: v })} />
+                                </div>
+                                <div className="space-y-1">
+                                    <input
+                                        type="text"
+                                        value={s.mobile_src || ''}
+                                        onChange={(e) => updateSlide(i, { mobile_src: e.target.value })}
+                                        placeholder="telefono (opzionale)"
+                                        className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                    />
+                                    <CaricaMedia compatto value={s.mobile_src || ''} onChange={v => updateSlide(i, { mobile_src: v })} />
+                                </div>
+                                <div className="space-y-1">
+                                    <input
+                                        type="text"
+                                        value={s.poster_src || ''}
+                                        onChange={(e) => updateSlide(i, { poster_src: e.target.value })}
+                                        placeholder="poster (opzionale)"
+                                        className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                    />
+                                    <CaricaMedia compatto value={s.poster_src || ''} onChange={v => updateSlide(i, { poster_src: v })} />
+                                </div>
                             </div>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
@@ -2685,9 +2712,7 @@ function CategoryCard({
             </div>
             <div className="flex items-center gap-3">
                 <input type="text" value={cat.image_src} onChange={e => onChange({ image_src: e.target.value })} placeholder="/car.jpeg" className="flex-1 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
-                {cat.image_src && (
-                    <img src={cat.image_src} alt="" className="w-12 h-8 object-cover rounded border border-theme-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                )}
+<CaricaMedia compatto value={cat.image_src} onChange={v => onChange({ image_src: v })} />
             </div>
         </div>
     )
@@ -2860,9 +2885,7 @@ function FounderCard({
             </div>
             <div className="flex items-center gap-3">
                 <input type="text" value={founder.photo_src} onChange={e => onChange({ photo_src: e.target.value })} placeholder="/Valerio.jpg" className="flex-1 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
-                {founder.photo_src && (
-                    <img src={founder.photo_src} alt="" className="w-12 h-12 object-cover rounded border border-theme-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                )}
+<CaricaMedia compatto value={founder.photo_src} onChange={v => onChange({ photo_src: v })} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input type="text" value={founder.alt_it} onChange={e => onChange({ alt_it: e.target.value })} placeholder='Alt foto IT (es. "Valerio - Co-fondatore...")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
@@ -6656,13 +6679,15 @@ function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy
                 </div>
 
                 <FieldText
-                    label="Immagine del logo (percorso o URL)"
+                    label="Immagine del logo"
+                    media
                     value={copy.logo_url}
                     onChange={v => update('logo_url', v)}
                 />
                 <p className="text-[11px] text-theme-text-secondary -mt-2">
-                    Usata nella barra in alto, nel menu ESPLORA e nel footer. Un percorso come
-                    <b> /DR7logo1.png</b> punta a un file gia' caricato sul sito.
+                    Usata nella barra in alto, nel menu ESPLORA, nel footer, nella pagina di
+                    pagamento, nel DR7 Club e nella chat. Carica il file dal computer o dal telefono:
+                    meglio un PNG con fondo trasparente.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -6691,6 +6716,53 @@ function AspettoEditor({ copy, setCopy }: { copy: Required<AspettoCopy>; setCopy
                             )}
                         </div>
                     </div>
+                </div>
+            </section>
+
+            {/* Identita' e motori di ricerca — 22/09/2026. Stavano solo in
+                index.html: l'icona della scheda e l'anteprima dei link
+                condivisi si cambiavano col codice. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div>
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Icona, Google e condivisione</h3>
+                    <p className="text-[11px] text-theme-text-secondary mt-1">
+                        L'icona della scheda del browser, il titolo e la descrizione che Google mostra, e
+                        l'immagine che appare quando qualcuno condivide un link di dr7.app su WhatsApp o
+                        sui social. Le pagine con un titolo proprio (Contatti, Flotta...) lo tengono: il
+                        loro titolo si cambia nei testi della pagina.
+                    </p>
+                </div>
+                <FieldText label="Icona della scheda (favicon)" value={copy.favicon_url} onChange={v => update('favicon_url', v)} media />
+                <FieldText label="Titolo per Google" value={copy.seo_title} onChange={v => update('seo_title', v)} media={false} />
+                <FieldTextArea label="Descrizione per Google" value={copy.seo_description} onChange={v => update('seo_description', v)} />
+                <FieldText label="Immagine di anteprima dei link condivisi" value={copy.seo_og_image} onChange={v => update('seo_og_image', v)} media />
+            </section>
+
+            {/* Immagini delle pagine — 22/09/2026: le foto rimaste scritte nel
+                codice del sito. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div>
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Immagini delle pagine</h3>
+                    <p className="text-[11px] text-theme-text-secondary mt-1">
+                        Le fotografie di sfondo e di decoro che non appartengono a un catalogo. Le foto dei
+                        veicoli, dei lavaggi e del noleggio restano nei loro cataloghi. Attenzione alle
+                        foto con testo o prezzi stampati dentro: sotto a del testo escono due scritte
+                        sovrapposte.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Marmo oro (menu, cornici, fondo pagina)" value={copy.img_marmo_oro} onChange={v => update('img_marmo_oro', v)} media />
+                    <FieldText label="Marmo nero (DR7 Club)" value={copy.img_marmo_nero} onChange={v => update('img_marmo_nero', v)} media />
+                    <FieldText label="Credit Wallet — sfondo carta 1" value={copy.img_wallet_card_1} onChange={v => update('img_wallet_card_1', v)} media />
+                    <FieldText label="Credit Wallet — sfondo carta 2" value={copy.img_wallet_card_2} onChange={v => update('img_wallet_card_2', v)} media />
+                    <FieldText label="Credit Wallet — sfondo carta 3" value={copy.img_wallet_card_3} onChange={v => update('img_wallet_card_3', v)} media />
+                    <FieldText label="Credit Wallet — sfondo carta 4" value={copy.img_wallet_card_4} onChange={v => update('img_wallet_card_4', v)} media />
+                    <FieldText label="Credit Wallet — foto della fascia sul mare" value={copy.img_wallet_foto} onChange={v => update('img_wallet_foto', v)} media />
+                    <FieldText label="Investitori — foto di apertura" value={copy.img_investitori_hero} onChange={v => update('img_investitori_hero', v)} media />
+                    <FieldText label="Franchising — foto dell'introduzione" value={copy.img_franchising_hero} onChange={v => update('img_franchising_hero', v)} media />
+                    <FieldText label="Prenotazione lavaggio — immagine in testa" value={copy.img_lavaggio_testata} onChange={v => update('img_lavaggio_testata', v)} media />
+                    <FieldText label="Lavaggio — foto di un servizio senza immagine" value={copy.img_lavaggio_ripiego} onChange={v => update('img_lavaggio_ripiego', v)} media />
+                    <FieldText label="Tour elicottero — pianta dei posti" value={copy.img_heli_mappa_posti} onChange={v => update('img_heli_mappa_posti', v)} media />
                 </div>
             </section>
 
@@ -7008,10 +7080,12 @@ function AviationMarineEditor({ copy, setCopy }: { copy: AviationMarineCopy; set
                             <div className="col-span-6">
                                 <label className="block text-[11px] font-medium text-theme-text-secondary mb-1">Immagine principale (URL o /percorso)</label>
                                 <input type="text" value={it.image} onChange={e => updateItem(bucket, i, { image: e.target.value })} placeholder="/yacht1.jpeg" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                                <CaricaMedia value={it.image} onChange={v => updateItem(bucket, i, { image: v })} />
                             </div>
                             <div className="col-span-6">
                                 <label className="block text-[11px] font-medium text-theme-text-secondary mb-1">Galleria (un percorso per riga, facoltativo)</label>
                                 <textarea value={(it.images || []).join('\n')} onChange={e => updateImagesText(bucket, i, e.target.value)} placeholder={'/img1.jpeg\n/img2.jpeg'} rows={2} className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                                <CaricaMedia value="" onChange={v => updateImagesText(bucket, i, [...(it.images || []), v].join('\n'))} />
                             </div>
                         </div>
                         {bucket === 'yachts' && (

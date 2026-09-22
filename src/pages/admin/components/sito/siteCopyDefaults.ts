@@ -1198,6 +1198,43 @@ export interface AspettoCopy {
   tema_font?: TemaFont;
   /** Durezza degli angoli. */
   tema_raggio?: TemaRaggio;
+
+  // ── Identita' e motori di ricerca ───────────────────────────────────────
+  // 22/09/2026 — stavano solo in index.html e in SEOHead: cambiare l'icona
+  // della scheda o l'anteprima di un link condiviso voleva il codice.
+  /** Icona della scheda del browser e della schermata Home del telefono. */
+  favicon_url?: string;
+  /** Titolo della scheda per le pagine che non ne dichiarano uno proprio. */
+  seo_title?: string;
+  /** Descrizione mostrata da Google sotto al titolo. */
+  seo_description?: string;
+  /** Immagine dell'anteprima quando un link di dr7.app viene condiviso. */
+  seo_og_image?: string;
+
+  // ── Immagini delle pagine ───────────────────────────────────────────────
+  // Le foto che restavano scritte nel codice. Come per i filmati: percorso di
+  // un file del sito (es. /yacht.jpeg) o indirizzo completo di un file caricato.
+  /** Marmo nero dietro alle schede del DR7 Club. */
+  img_marmo_nero?: string;
+  /** Marmo oro delle cornici e dei pulsanti dorati. */
+  img_marmo_oro?: string;
+  /** Credit Wallet: i quattro sfondi delle carte dei pacchetti. */
+  img_wallet_card_1?: string;
+  img_wallet_card_2?: string;
+  img_wallet_card_3?: string;
+  img_wallet_card_4?: string;
+  /** Credit Wallet: la foto accanto a "come funziona". */
+  img_wallet_foto?: string;
+  /** Investitori: foto di apertura. */
+  img_investitori_hero?: string;
+  /** Franchising: foto accanto all'introduzione. */
+  img_franchising_hero?: string;
+  /** Prenotazione lavaggio: testata del modulo. */
+  img_lavaggio_testata?: string;
+  /** Prenotazione lavaggio: foto di un servizio senza immagine propria. */
+  img_lavaggio_ripiego?: string;
+  /** Tour in elicottero: pianta dei posti. */
+  img_heli_mappa_posti?: string;
 }
 
 /**
@@ -1817,6 +1854,22 @@ export const INITIAL_ASPETTO: Required<AspettoCopy> = {
   tema_accent: '#C9BEA8',
   tema_font: 'bodoni-jost',
   tema_raggio: 'morbido',
+  favicon_url: '/DR7logo1.png',
+  seo_title: 'Noleggio Auto di Lusso & Supercar Cagliari | Lamborghini, Ferrari, Porsche — DR7',
+  seo_description: 'Noleggio auto di lusso e supercar a Cagliari, Sardegna. Lamborghini, Ferrari, Porsche, Audi RS3, BMW M4, Mercedes AMG. Consegna aeroporto Elmas. Prime Car Wash detailing premium. Prenota online — DR7.',
+  seo_og_image: 'https://dr7.app/DR7logo1.png',
+  img_marmo_nero: '/marmo-nero.jpeg',
+  img_marmo_oro: '/marmo-oro.jpg',
+  img_wallet_card_1: '/collezione.jpeg',
+  img_wallet_card_2: '/villa.jpeg',
+  img_wallet_card_3: '/yacht1.jpeg',
+  img_wallet_card_4: '/privatejet.jpeg',
+  img_wallet_foto: '/yacht.jpeg',
+  img_investitori_hero: '/investor-hero.jpeg',
+  img_franchising_hero: '/franchising-hero.jpeg',
+  img_lavaggio_testata: '/prime-wash-header.jpeg',
+  img_lavaggio_ripiego: '/luxurywash.jpeg',
+  img_heli_mappa_posti: '/heli-407-seatmap.png',
 };
 
 // ─── Default Locations seed (mirrors current constants.ts arrays) ──────

@@ -146,6 +146,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-club"
     },
     {
+        "chiave": "s:aa87becc",
+        "it": "Credito riservato",
+        "en": "Reserved credit",
+        "file": "pages/account/DR7Club.tsx",
+        "schermata": "account-club"
+    },
+    {
         "chiave": "s:b531773d",
         "it": "di capitale",
         "en": "of principal",
@@ -419,9 +426,23 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-club"
     },
     {
+        "chiave": "s:31562229",
+        "it": "senza scadenza",
+        "en": "no expiry",
+        "file": "pages/account/DR7Club.tsx",
+        "schermata": "account-club"
+    },
+    {
         "chiave": "s:29aaccad",
         "it": "Sessione scaduta. Esci e accedi di nuovo.",
         "en": "Session expired. Please log out and log in again.",
+        "file": "pages/account/DR7Club.tsx",
+        "schermata": "account-club"
+    },
+    {
+        "chiave": "s:93f11418",
+        "it": "Si usa da solo, prima del tuo saldo, quando prenoti un servizio per cui vale.",
+        "en": "It is used automatically, before your balance, when you book a service it covers.",
         "file": "pages/account/DR7Club.tsx",
         "schermata": "account-club"
     },
@@ -447,6 +468,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "account-club"
     },
     {
+        "chiave": "s:4d5babe0",
+        "it": "Tutti i servizi",
+        "en": "All services",
+        "file": "pages/account/DR7Club.tsx",
+        "schermata": "account-club"
+    },
+    {
         "chiave": "s:d18495cd",
         "it": "Ultimi movimenti",
         "en": "Recent transactions",
@@ -457,6 +485,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:5e3a41da",
         "it": "Utilizzabile fino al",
         "en": "Usable for up to",
+        "file": "pages/account/DR7Club.tsx",
+        "schermata": "account-club"
+    },
+    {
+        "chiave": "s:4bd83ed5",
+        "it": "valido fino al",
+        "en": "valid until",
         "file": "pages/account/DR7Club.tsx",
         "schermata": "account-club"
     },
@@ -4199,6 +4234,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": "supercar-luxury"
     },
     {
+        "chiave": "s:5cede6a9",
+        "it": "Ciao, vorrei richiedere un preventivo per un Elicottero.",
+        "en": "Hello, I would like a quote for a helicopter.",
+        "file": "pages/RentalPage.tsx",
+        "schermata": "supercar-luxury"
+    },
+    {
+        "chiave": "s:c03506e3",
+        "it": "Ciao, vorrei richiedere un preventivo per un Jet Privato.",
+        "en": "Hello, I would like a quote for a private jet.",
+        "file": "pages/RentalPage.tsx",
+        "schermata": "supercar-luxury"
+    },
+    {
         "chiave": "s:1f8c6339",
         "it": "Città *",
         "en": "City *",
@@ -4787,13 +4836,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:a14b3abe",
-        "it": "+1 giorno: l'orario di riconsegna supera il margine di 1h30 prima dell'orario di ritiro.",
-        "en": "+1 day: the drop-off time exceeds the 1h30 margin before the pick-up time.",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:b6c7e28c",
         "it": "✓ Saldo sufficiente",
         "en": "✓ Sufficient balance",
@@ -4829,13 +4871,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:71d57ac1",
-        "it": "1. PATENTE — FRONTE *",
-        "en": "1. LICENCE — FRONT *",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:77f40a76",
         "it": "1. Scegli giorno e orario",
         "en": "1. Choose day and time",
@@ -4861,13 +4896,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "2. Passeggeri",
         "en": "2. Passengers",
         "file": "components/ui/HelicopterBookingForm.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:9763b656",
-        "it": "2. PATENTE — RETRO *",
-        "en": "2. LICENCE — BACK *",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -4899,6 +4927,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:a9ffd9b2",
+        "it": "26 anni o più",
+        "en": "26 or over",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:739b3b8d",
         "it": "26-69 anni",
         "en": "26-69 years",
@@ -4913,24 +4948,10 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:9b108518",
-        "it": "3. CODICE FISCALE — FRONTE *",
-        "en": "3. TAX CODE CARD — FRONT *",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:d6d8b75b",
         "it": "3. Scegli i posti",
         "en": "3. Choose the seats",
         "file": "components/ui/TourBookingModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:ba71cc83",
-        "it": "4. CODICE FISCALE — RETRO *",
-        "en": "4. TAX CODE CARD — BACK *",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -4948,24 +4969,10 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:9e4a910c",
-        "it": "5. CARTA D'IDENTITÀ / PASSAPORTO — FRONTE *",
-        "en": "5. ID CARD / PASSPORT — FRONT *",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:07692551",
         "it": "5. Dettagli Tecnici e Logistici",
         "en": "5. Technical and Logistics Details",
         "file": "components/ui/HelicopterBookingForm.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:ab145e2d",
-        "it": "6. CARTA D'IDENTITÀ / PASSAPORTO — RETRO *",
-        "en": "6. ID CARD / PASSPORT — BACK *",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -5312,13 +5319,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:b3b0085d",
-        "it": "B. DATI CONDUCENTE",
-        "en": "B. DRIVER DETAILS",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:1a077bbd",
         "it": "Base selezionata",
         "en": "Selected base",
@@ -5357,13 +5357,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:c07667a7",
         "it": "C. SERVIZI AGGIUNTIVI",
         "en": "C. ADDITIONAL SERVICES",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:2c2e3114",
-        "it": "C. VERIFICA REQUISITI",
-        "en": "C. REQUIREMENTS CHECK",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -5413,6 +5406,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:45f3dadc",
         "it": "Cancella quando vuoi, senza vincoli",
         "en": "Cancel whenever you like, no commitment",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:ebebf244",
+        "it": "Cancellazione gratuita",
+        "en": "Free cancellation",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -5494,17 +5494,17 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:492d382f",
+        "it": "Carta di credito/debito",
+        "en": "Credit/debit card",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:8df280c9",
         "it": "Catering di bordo",
         "en": "On-board catering",
         "file": "components/ui/HelicopterBookingForm.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:815d501d",
-        "it": "Cauzione al ritiro",
-        "en": "Deposit at pick-up",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -5575,6 +5575,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Chatta con Valerio",
         "en": "Chat with Valerio",
         "file": "components/ui/DR7AIChat.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:3ffb3e91",
+        "it": "CHI GUIDA",
+        "en": "WHO IS DRIVING",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -5984,6 +5991,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:44918467",
+        "it": "Credito insufficiente per questa prenotazione: scegli la carta o ricarica il wallet.",
+        "en": "Not enough credit for this booking: pay by card or top up your wallet.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:0333a9fa",
         "it": "Credito non sufficiente per questo ordine.",
         "en": "Not enough credit for this order.",
@@ -5994,13 +6008,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:fccb8593",
         "it": "D. CAUZIONE",
         "en": "D. DEPOSIT",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:a77a301a",
-        "it": "D. SECONDO CONDUCENTE (OPZIONALE)",
-        "en": "D. SECOND DRIVER (OPTIONAL)",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -6023,6 +6030,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Dal documento:",
         "en": "From the document:",
         "file": "components/ui/CompilaButton.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:126fbdc5",
+        "it": "Dalla patente in archivio non si è letta la data di conseguimento: la trovi nel campo qui sotto, puoi scriverla a mano.",
+        "en": "The issue date could not be read from the licence on file: you can type it in the field below.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -6145,6 +6159,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:d40bd86c",
+        "it": "DATI DEL CONDUCENTE",
+        "en": "DRIVER DETAILS",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:fc99d114",
         "it": "Dati del Proprietario del Veicolo",
         "en": "Vehicle Owner's Details",
@@ -6236,6 +6257,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:5c5b0105",
+        "it": "DETTAGLI PAGAMENTO",
+        "en": "PAYMENT DETAILS",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Booking_Details",
         "it": "Dettagli Prenotazione",
         "en": "Booking Details",
@@ -6292,9 +6320,9 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:c7bed8c7",
-        "it": "Dichiaro che i dati inseriti sono veritieri e conformi ai requisiti richiesti.",
-        "en": "I declare that the information provided is true and meets the required conditions.",
+        "chiave": "s:5a129edf",
+        "it": "dichiarato",
+        "en": "declared",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -6449,13 +6477,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:00a89ecc",
         "it": "Durata",
         "en": "Duration",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:492aa0cc",
-        "it": "Durata noleggio:",
-        "en": "Rental duration:",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -6796,6 +6817,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:4b81220b",
+        "it": "Età del conducente",
+        "en": "Driver age",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:12955f01",
+        "it": "Età del conducente *",
+        "en": "Driver's age *",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:c354faa7",
         "it": "EUR",
         "en": "EUR",
@@ -6915,6 +6950,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:547897c5",
+        "it": "fuori dalla Sardegna",
+        "en": "outside Sardinia",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:1683928c",
         "it": "Gennaio",
         "en": "January",
@@ -7027,9 +7069,9 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:a799c734",
-        "it": "I dati sono letti dai documenti caricati al punto A e non si modificano. Restano da compilare email e telefono.",
-        "en": "These details are read from the documents uploaded in step A and cannot be edited. Only email and phone are left to fill in.",
+        "chiave": "s:35027430",
+        "it": "I documenti caricati non corrispondono a quanto dichiarato all'inizio: il prezzo è stato ricalcolato.",
+        "en": "The uploaded documents do not match what you declared at the start: the price has been recalculated.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -7038,6 +7080,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "I Miei Preventivi",
         "en": "My Quotes",
         "file": "pages/AccountPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:f4dfc619",
+        "it": "I tuoi dati sono protetti",
+        "en": "Your data is protected",
+        "file": "pages/CheckoutPage.tsx",
         "schermata": null
     },
     {
@@ -7059,6 +7108,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Il carrello è vuoto",
         "en": "Your cart is empty",
         "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:0b8728a9",
+        "it": "Il codice fiscale serve solo per la fattura: se non ce l'hai, non te lo chiediamo.",
+        "en": "The Italian tax code is only needed for the invoice: if you do not have one, we will not ask for it.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -7108,6 +7164,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Immagine carosello",
         "en": "Carousel image",
         "file": "components/Carousel.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:7bcae42a",
+        "it": "Importo da confermare",
+        "en": "Amount to be confirmed",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -7171,6 +7234,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "In Elaborazione...",
         "en": "Processing...",
         "file": "components/ui/AddCardModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:25690e09",
+        "it": "in Sardegna",
+        "en": "in Sardinia",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -7440,13 +7510,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:038376d0",
-        "it": "Km pacchetto:",
-        "en": "Package km:",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:3303008e",
         "it": "Km per utilizzo",
         "en": "Km per use",
@@ -7580,20 +7643,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:5f4ca7da",
-        "it": "Lavaggio + Servizi (-10%)",
-        "en": "Wash + Services (-10%)",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:f5d71604",
-        "it": "Lavaggio auto (-10%)",
-        "en": "Car wash (-10%)",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "k:My_Bookings",
         "it": "Le Mie Prenotazioni",
         "en": "My Bookings",
@@ -7632,6 +7681,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "chiave": "s:0d074246",
         "it": "Letta dal retro della patente (categoria B). Le patenti francesi non hanno scadenza: resta vuota.",
         "en": "Read from the back of the licence (category B). French licences have no expiry date: it stays empty.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:686ddb7f",
+        "it": "Letti dai documenti caricati qui sopra e dalla tua scheda cliente. Quelli gia",
+        "en": "Read from the documents above and from your customer profile. Filled fields are locked: only the empty ones are left to complete.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -7790,9 +7846,16 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:1cbc10e5",
-        "it": "Mastercard",
-        "en": "Mastercard",
+        "chiave": "s:cb55be25",
+        "it": "meno di 26 anni",
+        "en": "under 26",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a265a5a3",
+        "it": "meno di 26 anni o patente recente",
+        "en": "under 26 or recent licence",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -7920,6 +7983,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Ne restano",
         "en": "Only",
         "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:63f1fcc3",
+        "it": "Nessun articolo selezionato.",
+        "en": "No item selected.",
+        "file": "pages/CheckoutPage.tsx",
         "schermata": null
     },
     {
@@ -8126,6 +8196,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:7d7defc6",
+        "it": "Non sono italiano",
+        "en": "I am not Italian",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Notifications",
         "it": "Notifiche",
         "en": "Notifications",
@@ -8266,6 +8343,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:aea5928b",
+        "it": "Paga in modo sicuro con la tua carta",
+        "en": "Pay securely with your card",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:40e213a8",
         "it": "PAGA NORMALMENTE",
         "en": "PAY AS USUAL",
@@ -8284,6 +8368,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Pagamento effettuato con Credit Wallet. Riceverai la conferma su WhatsApp.",
         "en": "Payment made with Credit Wallet. You will receive the confirmation on WhatsApp.",
         "file": "components/ui/TourBookingModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:121b46fa",
+        "it": "Pagamento sicuro",
+        "en": "Secure payment",
+        "file": "pages/CheckoutPage.tsx",
         "schermata": null
     },
     {
@@ -8375,13 +8466,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Patente di guida",
         "en": "Driving licence",
         "file": "components/ui/DocumentUploadModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:13a9bfa6",
-        "it": "PayPal",
-        "en": "PayPal",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -8595,17 +8679,17 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:df7b43be",
+        "it": "Prezzi per conducente",
+        "en": "Priced for driver",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:51577ac4",
         "it": "Prezzo da definire",
         "en": "Price to be confirmed",
         "file": "components/ui/TourBookingModal.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:f611c185",
-        "it": "Prezzo dinamico attivo, blocca ORA, potrebbe aumentare",
-        "en": "Dynamic pricing active — lock it in NOW, it may rise",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -8791,6 +8875,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:1b5cbefc",
+        "it": "Residenza *",
+        "en": "Residence *",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:7fd99df9",
         "it": "Restituita dopo la riconsegna",
         "en": "Refunded after drop-off",
@@ -8924,16 +9015,16 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:a9486a0c",
-        "it": "Riepilogo Completo Prenotazione",
-        "en": "Full Booking Summary",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "chiave": "s:9555459e",
+        "it": "Riepilogo ordine",
+        "en": "Order summary",
+        "file": "pages/CheckoutPage.tsx",
         "schermata": null
     },
     {
-        "chiave": "s:e6c268f3",
-        "it": "RIEPILOGO COSTI",
-        "en": "COST SUMMARY",
+        "chiave": "s:44f66f25",
+        "it": "Riepilogo prenotazione",
+        "en": "Booking summary",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9050,6 +9141,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:3e1119ab",
+        "it": "Scegli come desideri effettuare il pagamento",
+        "en": "Choose how you want to pay",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:f8dc0d5e",
         "it": "Scegli come gestire la cauzione.",
         "en": "Choose how to handle the deposit.",
@@ -9155,9 +9253,23 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:99dd0b7a",
+        "it": "SECONDO CONDUCENTE (OPZIONALE)",
+        "en": "SECOND DRIVER (OPTIONAL)",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:690f286a",
         "it": "Secondo guidatore",
         "en": "Second driver",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:7403af4d",
+        "it": "secondo i termini e le condizioni",
+        "en": "according to the terms and conditions",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9365,6 +9477,13 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:ba22562d",
+        "it": "Servono a calcolare assicurazione, chilometri e cauzione. I documenti caricati alla fine confermano il dato.",
+        "en": "Used to work out insurance, mileage and deposit. The documents uploaded at the end confirm it.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:f6d6673f",
         "it": "Sesso obbligatorio",
         "en": "Gender is required",
@@ -9491,20 +9610,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:86b111ed",
-        "it": "Spese di riconsegna",
-        "en": "Drop-off fee",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:a9a9dce5",
-        "it": "Spese di ritiro",
-        "en": "Pick-up fee",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:74c3ac82",
         "it": "Stai usando una prevendita",
         "en": "You are using a pre-sale",
@@ -9512,30 +9617,16 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:60aaa55d",
-        "it": "STEP 1: Date e Località",
-        "en": "STEP 1: Dates and Location",
+        "chiave": "s:8922d17d",
+        "it": "STEP 1: Date, Località e Opzioni",
+        "en": "STEP 1: Dates, Location and Options",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
-        "chiave": "s:bcbb6cb4",
-        "it": "STEP 2: Informazioni Conducente",
-        "en": "STEP 2: Driver Information",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:4537ebed",
-        "it": "STEP 3: Opzioni e Assicurazioni",
-        "en": "STEP 3: Options and Insurance",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:757a72e3",
-        "it": "STEP 4: Pagamento e Conferma",
-        "en": "STEP 4: Payment and Confirmation",
+        "chiave": "s:63e3afc9",
+        "it": "STEP 2: Pagamento e Conferma",
+        "en": "STEP 2: Payment and Confirmation",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9575,30 +9666,9 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:13b4f083",
-        "it": "Supplemento cauzione",
-        "en": "Deposit surcharge",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:7ed6ba70",
         "it": "Supplemento No Cauzione",
         "en": "No-Deposit surcharge",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:bd5e4b54",
-        "it": "Supplemento patente recente",
-        "en": "New-licence surcharge",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:1093dd8a",
-        "it": "Supplemento sotto i 25 anni",
-        "en": "Under-25 surcharge",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9827,6 +9897,20 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:723f43d0",
+        "it": "Usa il tuo credito disponibile nel wallet DR7",
+        "en": "Use the credit available in your DR7 wallet",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:19dfc774",
+        "it": "Usa il tuo credito DR7",
+        "en": "Use your DR7 credit",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:8350da95",
         "it": "USA QUESTA PREVENDITA",
         "en": "USE THIS PRE-SALE",
@@ -9960,13 +10044,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:9050450b",
-        "it": "VEICOLO SELEZIONATO",
-        "en": "SELECTED VEHICLE",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:d8baed3e",
         "it": "Ven",
         "en": "Fri",
@@ -10069,13 +10146,6 @@ export const TESTI_CATALOGO: VoceTesto[] = [
         "it": "Via, Numero Civico, CAP, Città",
         "en": "Street, number, postcode, city",
         "file": "components/DynamicCustomerForm.tsx",
-        "schermata": null
-    },
-    {
-        "chiave": "s:486facb8",
-        "it": "Visa",
-        "en": "Visa",
-        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
