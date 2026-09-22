@@ -27,7 +27,7 @@ export default function FirmaPage() {
     const [otp, setOtp] = useState(['', '', '', '', '', ''])
     const [error, setError] = useState('')
     const [remainingAttempts, setRemainingAttempts] = useState(5)
-    const [acceptedTerms, setAcceptedTerms] = useState(false)
+    const [acceptedTerms, setAcceptedTerms] = useState(true)
     const [acceptedMarketing, setAcceptedMarketing] = useState<boolean | null>(null)
     const [existingMarketingConsent, setExistingMarketingConsent] = useState<boolean | null>(null)
     const [showMarketingInfo, setShowMarketingInfo] = useState(false)
