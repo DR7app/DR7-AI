@@ -3726,6 +3726,13 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "flotta"
     },
     {
+        "chiave": "s:0b53a292",
+        "it": "PREVENDITA E PROMOZIONI",
+        "en": "PRESALES & PROMOTIONS",
+        "file": "pages/FlottaIndexPage.tsx",
+        "schermata": "flotta"
+    },
+    {
         "chiave": "s:97d69387",
         "it": "DR7 Cagliari Logo",
         "en": "DR7 Cagliari Logo",
@@ -3773,6 +3780,13 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "Scene",
         "file": "pages/HomePage.tsx",
         "schermata": "hero"
+    },
+    {
+        "chiave": "s:affeae7e",
+        "it": "Investitore privato",
+        "en": "Private investor",
+        "file": "pages/InvestitoriPage.tsx",
+        "schermata": "investitori"
     },
     {
         "chiave": "s:5096718e",
@@ -4207,7 +4221,10 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "License Plate",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    },
+    }
+]
+
+const BLOCCO_2: VoceTesto[] = [
     {
         "chiave": "k:User_not_logged_in",
         "it": "Utente non autenticato",
@@ -4221,10 +4238,7 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "Main Street",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    }
-]
-
-const BLOCCO_2: VoceTesto[] = [
+    },
     {
         "chiave": "s:778552c7",
         "it": "Abbonamento con rinnovo automatico annuale. Puoi cancellare in qualsiasi momento dalla tua area personale.",
@@ -6310,7 +6324,10 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "To (arrival) *",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_3: VoceTesto[] = [
     {
         "chiave": "s:d288b9f4",
         "it": "a sedile",
@@ -6324,10 +6341,7 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "A. INSURANCE COVER",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_3: VoceTesto[] = [
+    },
     {
         "chiave": "s:c28da987",
         "it": "Abbonamenti e ricariche del Credit Wallet si pagano solo con carta: con uno di questi nel carrello, tutto l'ordine va a carta.",
@@ -8413,7 +8427,10 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "Any children or infants travelling?",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_4: VoceTesto[] = [
     {
         "chiave": "s:e85f8854",
         "it": "È richiesta una patente con almeno 3 anni di anzianità.",
@@ -8427,10 +8444,7 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "Processing...",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_4: VoceTesto[] = [
+    },
     {
         "chiave": "s:a58fba58",
         "it": "Elicotteri e voli privati su misura, con il nostro servizio dedicato.",
@@ -10516,7 +10530,10 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "Licence no.",
         "file": "components/ui/CompilaButton.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_5: VoceTesto[] = [
     {
         "chiave": "s:cd97730b",
         "it": "N. patente nautica",
@@ -10530,10 +10547,7 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "Hide coefficient details",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_5: VoceTesto[] = [
+    },
     {
         "chiave": "s:c5ad7d4c",
         "it": "Nascondi gli utilizzi",
@@ -12619,7 +12633,10 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "An error occurred during the booking.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_6: VoceTesto[] = [
     {
         "chiave": "s:d44fb74a",
         "it": "Si è verificato un problema nel modulo di prenotazione. Riprova o contattaci via WhatsApp.",
@@ -12633,10 +12650,7 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Yes, flexible",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_6: VoceTesto[] = [
+    },
     {
         "chiave": "s:49b7cb76",
         "it": "Sì, necessario",

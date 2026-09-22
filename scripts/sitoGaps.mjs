@@ -21,7 +21,12 @@ import os from 'os'
 
 const ADMIN = process.cwd()
 const SITO = process.env.SITO_REPO || path.join(os.homedir(), 'Sito')
-const tabGrezzo = fs.readFileSync(path.join(ADMIN, 'src/pages/admin/components/SitoTab.tsx'), 'utf8')
+// SitoTab e gli editor staccati in sito/*Editor.tsx (22/09/2026: Investitori
+// e' uscito dal file e i suoi 94 campi risultavano senza casella).
+const CARTELLA_EDITOR = path.join(ADMIN, 'src/pages/admin/components/sito')
+const tabGrezzo = [path.join(ADMIN, 'src/pages/admin/components/SitoTab.tsx'),
+    ...fs.readdirSync(CARTELLA_EDITOR).filter(f => /Editor\.tsx$/.test(f)).map(f => path.join(CARTELLA_EDITOR, f))]
+    .map(f => fs.readFileSync(f, 'utf8')).join('\n')
 // I commenti non sono caselle. Una nota che cita `s('section_patente_it', …)`
 // bastava a far contare quel campo come modificabile: il rapporto diceva 0
 // anche dopo aver tolto l'input. Si guarda solo il codice.
@@ -41,6 +46,11 @@ const gen = fs.readFileSync(path.join(ADMIN, 'src/pages/admin/components/sito/si
 const reachable = new Set([
     ...[...tab.matchAll(/copy\.([a-zA-Z0-9_]+)/g)].map(m => m[1]),
     ...[...tab.matchAll(/'([a-z0-9_]+)'/g)].map(m => m[1]),
+    // InvestitoriEditor: chiavi tra virgolette doppie, e `bi("…", "base")`
+    // scrive la coppia base_it / base_en.
+    ...[...tab.matchAll(/"([a-z][a-z0-9]*_[a-z0-9_]+)"/g)].map(m => m[1]),
+    ...[...tab.matchAll(/\bbi\(\s*(?:"[^"]*"|'[^']*')\s*,\s*["']([a-z0-9_]+)["']/g)].flatMap(m => [m[1] + '_it', m[1] + '_en']),
+    ...[...tab.matchAll(/\b(?:p|setP)aragrafi\(\s*["']([a-z0-9_]+)["']/g)].flatMap(m => [m[1] + '_it', m[1] + '_en']),
 ])
 
 // Alcuni editor scrivono la coppia con un gabarit: `[`${key}_${lang}`]`, dove
