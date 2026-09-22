@@ -242,7 +242,9 @@ function mesiFraDue(da: string, a: string): string[] {
 }
 const NOMI_MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
 
-function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivElement | null> }) {
+// 22/09/2026 (direzione): PDF ed Excel su TUTTE le tab, solo per gli
+// amministratori. Fuori dai Report il titolo e' il nome della tab.
+function ScaricaPdfReport({ contenuto, titolo }: { contenuto: React.RefObject<HTMLDivElement | null>; titolo?: string }) {
   const { ctrl } = useControlloPeriodoReport()
   const [inCorso, setInCorso] = useState<string | null>(null)
   const [pannello, setPannello] = useState(false)
@@ -266,7 +268,7 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
   const stampa = async (periodo: { from: string; to: string } | null | undefined) => {
     const { scaricaReportPdf } = await import('../../utils/scaricaReportPdf')
     if (!contenuto.current) throw new Error('report non trovato')
-    await scaricaReportPdf(contenuto.current, { periodo, senzaNomi: !conNomi })
+    await scaricaReportPdf(contenuto.current, { periodo, senzaNomi: !conNomi, titolo })
   }
 
   const scarica = async () => {
@@ -281,6 +283,17 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
     } finally {
       ctrl?.preparaPdf?.(false)
       setInCorso(null)
+    }
+  }
+
+  const scaricaExcel = async () => {
+    if (!contenuto.current || inCorso) return
+    try {
+      const { scaricaTabelleExcel } = await import('../../utils/scaricaReportPdf')
+      scaricaTabelleExcel(contenuto.current, { titolo: titolo || 'Report', senzaNomi: !conNomi })
+    } catch (e) {
+      console.error('[Export] Excel non generato:', e)
+      alert('Excel non generato: ' + (e instanceof Error ? e.message : String(e)))
     }
   }
 
@@ -321,7 +334,7 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
         {inCorso && <span className="text-xs text-theme-text-muted">{inCorso}</span>}
         <label className="inline-flex items-center gap-1.5 text-sm text-theme-text-secondary cursor-pointer select-none mr-1">
           <input type="checkbox" checked={conNomi} onChange={e => cambiaNomi(e.target.checked)} disabled={!!inCorso} className="w-4 h-4" />
-          Nomi clienti nel PDF
+          Nomi clienti
         </label>
         {ctrl && (
           <button type="button" onClick={() => setPannello(v => !v)} disabled={!!inCorso}
@@ -329,6 +342,10 @@ function ScaricaPdfReport({ contenuto }: { contenuto: React.RefObject<HTMLDivEle
             PDF per mese
           </button>
         )}
+        <button type="button" onClick={scaricaExcel} disabled={!!inCorso}
+          className={`${btn} border border-dr7-gold text-dr7-gold hover:opacity-80`}>
+          Scarica Excel
+        </button>
         <button type="button" onClick={scarica} disabled={!!inCorso} className={`${btn} bg-dr7-gold text-white hover:opacity-90`}>
           Scarica PDF
         </button>
@@ -446,6 +463,8 @@ export default function AdminDashboard() {
   // useAdminRole.hasPermission encapsulates that logic and stays optimistic
   // while loading so we don't flash "Accesso non autorizzato" on mount.
   const isTabRestricted = (tab: TabType) => !hasPermission(tab)
+  // Scarica PDF / Excel: solo amministratori (superadmin, direzione, developer).
+  const puoEsportare = adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
 
   // 2026-05-22: dopo il caricamento di useAdminRole, se l'activeTab
   // (default 'reservations' o quello salvato in sessionStorage) non e'
@@ -1617,8 +1636,14 @@ export default function AdminDashboard() {
         {/* Content */}
         <main className={`flex-1 bg-theme-bg-secondary ${(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'p-0' : 'p-3 sm:p-6 lg:p-8'}`}>
           <Suspense fallback={<TabLoader />}>
-          {(activeTab === 'reports' || activeTab.startsWith('report-')) && !isTabRestricted(activeTab) && (
-            <ScaricaPdfReport contenuto={contenutoTabRef} />
+          {puoEsportare && !isTabRestricted(activeTab) && (
+            <div className={(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'px-3 pt-3' : ''}>
+              <ScaricaPdfReport
+                key={activeTab}
+                contenuto={contenutoTabRef}
+                titolo={(activeTab === 'reports' || activeTab.startsWith('report-')) ? undefined : (tabLabels[activeTab] || activeTab)}
+              />
+            </div>
           )}
           <div ref={contenutoTabRef}>
           {activeTab === 'reservations' && (

@@ -267,6 +267,8 @@ export interface OpzioniPdf {
   periodo?: { from: string; to: string } | null
   /** true = nessun nome di cliente nel PDF. */
   senzaNomi?: boolean
+  /** Titolo del PDF (nome della tab). Senza, vale il primo titolo della pagina. */
+  titolo?: string
 }
 
 function dataIt10(iso: string): string {
@@ -289,7 +291,7 @@ export async function scaricaReportPdf(root: HTMLElement, opz: OpzioniPdf = {}) 
   }
 
   const primoTitolo = blocchi.find(b => b.tipo === 'titolo') as { testo: string } | undefined
-  const titolo = primoTitolo?.testo || 'Report'
+  const titolo = (opz.titolo && pulisci(opz.titolo)) || primoTitolo?.testo || 'Report'
   const quando = new Date().toLocaleString('it-IT', {
     timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
   })
@@ -477,4 +479,47 @@ export async function scaricaTabellaPdf(opz: {
         : `${dataIt10(opz.periodo.from).replace(/\//g, '-')}_${dataIt10(opz.periodo.to).replace(/\//g, '-')}`)
     : 'tutto'
   doc.save(`${slug || 'export'}-${suffisso}.pdf`)
+}
+
+/**
+ * Stesse tabelle del PDF, in un file per Excel (CSV con ";" e BOM, come lo
+ * apre Excel in italiano): una tabella sotto l'altra, col suo titolo sopra.
+ */
+export function scaricaTabelleExcel(root: HTMLElement, opz: { titolo: string; senzaNomi?: boolean }) {
+  const blocchi: Blocco[] = []
+  senzaNomiInCorso = !!opz.senzaNomi
+  try {
+    Array.from(root.children).forEach(c => raccogli(c, blocchi))
+  } finally {
+    senzaNomiInCorso = false
+  }
+  const cella = (v: string) => {
+    const t = v.replace(/\n/g, ' ').trim()
+    return /[";\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+  }
+  const out: string[] = [cella(opz.titolo), '']
+  let tabelle = 0
+  let ultimoTitolo = ''
+  for (const b of blocchi) {
+    if (b.tipo === 'titolo') { ultimoTitolo = b.testo; continue }
+    if (b.tipo !== 'tabella') continue
+    if (ultimoTitolo) { out.push(cella(ultimoTitolo)); ultimoTitolo = '' }
+    for (const r of [...b.head, ...b.body, ...b.foot]) out.push(r.map(cella).join(';'))
+    out.push('')
+    tabelle++
+  }
+  if (tabelle === 0) {
+    alert('In questa pagina non ci sono tabelle da esportare in Excel: usa Scarica PDF.')
+    return
+  }
+  const blob = new Blob(['\uFEFF' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' })
+  const slug = opz.titolo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const oggi = new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${slug || 'export'}-${oggi}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
