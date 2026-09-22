@@ -1556,7 +1556,6 @@ export interface InvestitoriCopy {
   ir_numeri_eyebrow_it?: string; ir_numeri_eyebrow_en?: string;
   ir_numeri_titolo_it?: string; ir_numeri_titolo_en?: string;
   ir_numeri_testo_it?: string; ir_numeri_testo_en?: string;
-  ir_numeri?: IrNumero[];
   // La nostra crescita (grafico)
   ir_crescita_titolo_it?: string; ir_crescita_titolo_en?: string;
   ir_crescita_ricavi_it?: string; ir_crescita_ricavi_en?: string;
@@ -3030,14 +3029,6 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_numeri_titolo_it: 'Crescita costante, basi solide.', ir_numeri_titolo_en: 'Steady growth, solid foundations.',
   ir_numeri_testo_it: 'Risultati concreti, una gestione efficiente e una strategia di crescita sostenibile. Questi sono i numeri che raccontano il nostro percorso.',
   ir_numeri_testo_en: 'Concrete results, efficient management and a sustainable growth strategy. These are the numbers that tell our story.',
-  ir_numeri: [
-    { id: 'ricavi', icona: 'ricavi', valore: '€ 1,5 M', label_it: 'Ricavi 2026', label_en: 'Revenue 2026', nota_it: '(da 30/06)', nota_en: '(to 30/06)' },
-    { id: 'utile', icona: 'utile', valore: '€ 500 K', label_it: 'Utile netto 2026', label_en: 'Net profit 2026', nota_it: '(da 30/06)', nota_en: '(to 30/06)' },
-    { id: 'clienti', icona: 'clienti', valore: '> 2.000', label_it: 'Clienti attivi', label_en: 'Active customers', nota_it: '(tutti i servizi)', nota_en: '(all services)' },
-    { id: 'parco', icona: 'auto', valore: '> € 3 M', label_it: 'Valore parco auto', label_en: 'Fleet value' },
-    { id: 'patrimonio', icona: 'patrimonio', valore: '> € 6 M', label_it: 'Patrimonio netto', label_en: 'Net equity' },
-    { id: 'sedi', icona: 'sedi', valore: '5', label_it: 'Sedi operative', label_en: 'Operating sites', nota_it: '(Cagliari, Iglesias, Olbia, Nuoro, Sassari)', nota_en: '(Cagliari, Iglesias, Olbia, Nuoro, Sassari)' },
-  ],
   ir_crescita_titolo_it: 'La nostra crescita', ir_crescita_titolo_en: 'Our growth',
   ir_crescita_ricavi_it: 'Ricavi', ir_crescita_ricavi_en: 'Revenue',
   ir_crescita_utile_it: 'Utile netto', ir_crescita_utile_en: 'Net profit',
@@ -3056,29 +3047,26 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_visione_img: '',
   ir_azionisti_eyebrow_it: 'Struttura azionaria', ir_azionisti_eyebrow_en: 'Shareholder structure',
   ir_azionisti_titolo_it: 'I nostri azionisti.', ir_azionisti_titolo_en: 'Our shareholders.',
-  ir_azionisti_testo_it: 'Un mix di investitori privati, imprenditori e partner strategici che credono nel nostro progetto e condividono la stessa visione di lungo periodo.',
-  ir_azionisti_testo_en: 'A mix of private investors, entrepreneurs and strategic partners who believe in our project and share the same long-term vision.',
+  ir_azionisti_testo_it: 'Chi crede nel nostro progetto e ne condivide la visione di lungo periodo.',
+  ir_azionisti_testo_en: 'Those who believe in our project and share its long-term vision.',
   ir_azionisti: [
-    { id: 'onano', nome: 'Andrea Onano', ruolo_it: 'Private Investor', ruolo_en: 'Private Investor', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '' },
     { id: 'campagnola', nome: 'Ilenia Campagnola', ruolo_it: 'Strategic Investor', ruolo_en: 'Strategic Investor', da_it: 'Azionista dal 2025', da_en: 'Shareholder since 2025', foto: '' },
-    { id: 'bianchi', nome: 'Marco Bianchi', ruolo_it: 'Private Investor', ruolo_en: 'Private Investor', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '' },
     { id: 'privato-1', nome: 'Investitore privato', ruolo_it: 'Identità riservata', ruolo_en: 'Identity confidential', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
-    { id: 'privato-2', nome: 'Investitore privato', ruolo_it: 'Identità riservata', ruolo_en: 'Identity confidential', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
   ],
-  ir_privati_eyebrow_it: 'Investitori privati', ir_privati_eyebrow_en: 'Private investors',
-  ir_privati_titolo_it: '10 investitori privati', ir_privati_titolo_en: '10 private investors',
-  ir_privati_testo_it: 'Al momento, 10 investitori privati hanno scelto di credere nel nostro progetto e di accompagnarci nel percorso di crescita.',
-  ir_privati_testo_en: 'At present, 10 private investors have chosen to believe in our project and to join us on our growth path.',
+  ir_privati_eyebrow_it: 'Investitore privato', ir_privati_eyebrow_en: 'Private investor',
+  ir_privati_titolo_it: '1 investitore privato', ir_privati_titolo_en: '1 private investor',
+  ir_privati_testo_it: 'Al momento, un investitore privato ha scelto di credere nel nostro progetto e di accompagnarci nel percorso di crescita.',
+  ir_privati_testo_en: 'At present, one private investor has chosen to believe in our project and to join us on our growth path.',
   ir_privati_img: '',
   ir_privati_stat: [
     { id: 'capitale', icona: 'capitale', valore: '€ 1.000.000', label_it: 'Capitale raccolto', label_en: 'Capital raised', nota_it: 'complessivo', nota_en: 'total' },
     { id: 'quota', icona: 'quota', valore: '8,2%', label_it: 'Quota complessiva', label_en: 'Overall stake', nota_it: 'detenuta', nota_en: 'held' },
     { id: 'round', icona: 'round', valore: 'Primo round', label_it: 'Primo round di investimento', label_en: 'First investment round' },
   ],
-  ir_riservati_eyebrow_it: 'Chi non ha autorizzato la pubblicazione', ir_riservati_eyebrow_en: 'Who has not authorised publication',
-  ir_riservati_testo_it: 'Alcuni dei nostri investitori preferiscono mantenere la propria riservatezza. Rispettare la loro scelta è per noi una priorità.',
-  ir_riservati_testo_en: 'Some of our investors prefer to keep their privacy. Respecting their choice is a priority for us.',
-  ir_riservati_label_it: 'Investitori riservati', ir_riservati_label_en: 'Confidential investors',
+  ir_riservati_eyebrow_it: 'Identità riservata', ir_riservati_eyebrow_en: 'Confidential identity',
+  ir_riservati_testo_it: 'Il nostro investitore ha scelto di mantenere la propria riservatezza. Rispettare la sua scelta è per noi una priorità.',
+  ir_riservati_testo_en: 'Our investor has chosen to keep their privacy. Respecting that choice is a priority for us.',
+  ir_riservati_label_it: 'Investitore riservato', ir_riservati_label_en: 'Confidential investor',
   ir_riservati_nota_it: 'Partecipazione al capitale', ir_riservati_nota_en: 'Equity participation',
   ir_partner_eyebrow_it: 'Partner strategici', ir_partner_eyebrow_en: 'Strategic partners',
   ir_partner_titolo_it: 'Insieme verso il futuro.', ir_partner_titolo_en: 'Together towards the future.',

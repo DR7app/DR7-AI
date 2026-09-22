@@ -215,19 +215,10 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 {immagine("Foto di apertura (vuoto = quella di Aspetto)", "ir_hero_img")}
             </Riquadro>
 
-            <Riquadro titolo={`I nostri numeri (${lista<IrNumero>('ir_numeri').length})`}>
-                {bi("Scritta piccola", "ir_numeri_eyebrow")}
-                {bi("Titolo", "ir_numeri_titolo")}
-                {bi("Testo a destra", "ir_numeri_testo", true)}
-                <Elenco<IrNumero>
-                    voci={lista<IrNumero>('ir_numeri')}
-                    onChange={v => set('ir_numeri', v)}
-                    nuova={() => ({ id: nuovoId('n'), icona: 'ricavi', valore: '', label_it: '', label_en: '' })}
-                    etichetta={v => `${v.valore} ${v.label_it}`}
-                    aggiungi="Aggiungi numero"
-                >
-                    {(v, s) => <CampiNumero v={v} set={s} />}
-                </Elenco>
+            <Riquadro titolo="I nostri numeri" nota="Le cifre sono quelle della Home (Sito > Home > Numeri): si cambiano li' e valgono per tutto il sito. Qui solo i testi.">
+                {bi('Scritta piccola', 'ir_numeri_eyebrow')}
+                {bi('Titolo', 'ir_numeri_titolo')}
+                {bi('Testo a destra', 'ir_numeri_testo', true)}
             </Riquadro>
 
             <Riquadro titolo={`La nostra crescita (${lista<IrBarra>('ir_crescita').length} anni)`} nota="Importi in euro interi. Utile a zero su tutti gli anni = nel grafico si vedono solo i ricavi.">
