@@ -138,6 +138,7 @@ function generateAuditHTML(data: any, signedRequest: any, extra?: { customerPhon
         otp_failed: 'OTP Non Valido',
         otp_expired: 'OTP Scaduto',
         otp_max_attempts: 'Max Tentativi OTP',
+        firma_confermata: 'Firma Confermata (senza OTP)',
         integrity_check_failed: 'Verifica Integrita Fallita',
         document_signed: 'Documento Firmato',
     }

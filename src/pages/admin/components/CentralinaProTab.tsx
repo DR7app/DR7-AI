@@ -1416,6 +1416,22 @@ export const LOCATORE_DEFAULT: Required<LocatoreConfig> = {
   logo_url: 'https://dr7.app/DR7logo1.png',
 }
 
+/**
+ * Firma del contratto su DR7 Trust (dr7trust.com/firma/...).
+ * - otp_attivo: true = il cliente riceve un codice e firma inserendolo;
+ *   false = firma premendo il pulsante "Firma il Contratto".
+ * - otp_canale: dove parte il codice. Se quel canale non puo' partire
+ *   (niente telefono / niente email) DR7 Trust prova l'altro.
+ * Letto da DR7 Trust (utils/firmaConfig.ts) sulla riga del business della
+ * prenotazione, con ricaduta su `main` voce per voce.
+ */
+export type FirmaConfig = {
+  otp_attivo: boolean
+  otp_canale: 'whatsapp' | 'email'
+}
+
+export const FIRMA_DEFAULT: FirmaConfig = { otp_attivo: true, otp_canale: 'whatsapp' }
+
 type PersistedSnapshot = {
   categories: Category[]
   fasce: Fascia[]
@@ -1439,6 +1455,8 @@ type PersistedSnapshot = {
   contratto_modifica?: Record<string, string>
   /** Dati di DR7 stampati sul contratto (sezione DATI LOCATORE + logo). */
   locatore?: LocatoreConfig
+  /** Firma su DR7 Trust: con OTP (WhatsApp o email) o con il pulsante. */
+  firma?: FirmaConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1687,11 +1705,13 @@ export type { ContrattoAzione } from '../../../utils/contrattoModifiche'
 // firma o COSA ha accettato in termini di responsabilita' (veicolo, guidatore,
 // garanti, copertura assicurativa); si RICONDUCE quando cambiano importi,
 // date o condizioni gia' coperte dalla clausola di riconduzione.
-function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore }: {
+function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore, firma, setFirma }: {
   regole: Record<string, ContrattoAzione>
   setRegole: (r: Record<string, ContrattoAzione>) => void
   locatore: Required<LocatoreConfig>
   setLocatore: (l: Required<LocatoreConfig>) => void
+  firma: FirmaConfig
+  setFirma: (f: FirmaConfig) => void
 }) {
   const [logoInCaricamento, setLogoInCaricamento] = useState(false)
 
@@ -1739,8 +1759,54 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore }:
       />
     </label>
   )
+  const scelta = (attivo: boolean, titolo: string, testo: string, onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${attivo ? 'border-[#007aff] bg-[#007aff]/10' : 'border-theme-border bg-theme-bg-secondary hover:bg-theme-bg-tertiary'}`}
+    >
+      <span className="block text-[13px] font-semibold text-theme-text-primary">{titolo}</span>
+      <span className="block text-[12px] text-theme-text-muted mt-0.5">{testo}</span>
+    </button>
+  )
   return (
     <div className="space-y-4">
+      {/* ── Firma del contratto ────────────────────────────────────────
+          Come firma il cliente sulla pagina DR7 Trust che riceve via link:
+          con il codice OTP o con il solo pulsante. DR7 Trust rilegge questa
+          scelta anche al momento della firma, quindi vale subito. */}
+      <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-4 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-theme-text-primary">Firma del contratto</h3>
+          <p className="text-sm text-theme-text-muted mt-1">
+            Come il cliente firma il contratto sulla pagina <strong>DR7 Trust</strong>. Vale anche per i link gia'
+            inviati e non ancora firmati.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {scelta(firma.otp_attivo, 'Con codice OTP', 'Il cliente riceve un codice a 6 cifre e firma inserendolo.',
+            () => setFirma({ ...firma, otp_attivo: true }))}
+          {scelta(!firma.otp_attivo, 'Senza OTP', 'Il cliente firma premendo il pulsante "Firma il Contratto".',
+            () => setFirma({ ...firma, otp_attivo: false }))}
+        </div>
+        {firma.otp_attivo && (
+          <div>
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Invio del codice OTP</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {scelta(firma.otp_canale === 'whatsapp', 'WhatsApp', 'Il codice parte sul numero del cliente.',
+                () => setFirma({ ...firma, otp_canale: 'whatsapp' }))}
+              {scelta(firma.otp_canale === 'email', 'Email', "Il codice parte all'email del cliente.",
+                () => setFirma({ ...firma, otp_canale: 'email' }))}
+            </div>
+            <p className="text-[12px] text-theme-text-muted mt-2">
+              Se il cliente non ha {firma.otp_canale === 'whatsapp' ? 'un numero di telefono' : "un'email"} o l'invio
+              non parte, il codice viene mandato {firma.otp_canale === 'whatsapp' ? 'via email' : 'via WhatsApp'} per non
+              bloccare la firma.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* ── Dati del locatore ──────────────────────────────────────────
           Quello che il contratto stampa di DR7: la sezione DATI LOCATORE in
           testa alla seconda pagina e il logo nel riquadro della prima. Prima
@@ -1926,6 +1992,8 @@ export default function CentralinaProTab() {
   const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione>>(VOCI_DEFAULT)
   const [locatore, setLocatore] = useState<Required<LocatoreConfig>>(LOCATORE_DEFAULT)
   const [savedLocatore, setSavedLocatore] = useState<Required<LocatoreConfig>>(LOCATORE_DEFAULT)
+  const [firma, setFirma] = useState<FirmaConfig>(FIRMA_DEFAULT)
+  const [savedFirma, setSavedFirma] = useState<FirmaConfig>(FIRMA_DEFAULT)
   // 26/08/2026: senza la copia "salvata", questa sezione restava fuori da
   // TUTTO il meccanismo delle modifiche: la barra diceva "0 modifiche da
   // salvare" anche dopo aver scelto Rifirma/Ricondotto, Annulla non la
@@ -2014,6 +2082,8 @@ export default function CentralinaProTab() {
       const v = { ...VOCI_DEFAULT, ...(cm || {}) }; setContrattoRegole(v); setSavedContrattoRegole(v) }
     { const l = (remote.locatore && typeof remote.locatore === 'object') ? remote.locatore : {}
       const v = { ...LOCATORE_DEFAULT, ...l }; setLocatore(v); setSavedLocatore(v) }
+    { const f = (remote.firma && typeof remote.firma === 'object') ? remote.firma : {}
+      const v = { ...FIRMA_DEFAULT, ...f }; setFirma(v); setSavedFirma(v) }
   }
 
   // (buildSnapshot e' stato rimosso il 2026-08-25: serviva SOLO a copiare Terra
@@ -2204,6 +2274,12 @@ export default function CentralinaProTab() {
           if ((locatore[k] || '') !== (savedLocatore[k] || '')) out.push(`Dati del locatore / ${nomi[k]} aggiornato`)
         }
       }
+      if (firma.otp_attivo !== savedFirma.otp_attivo) {
+        out.push(`Firma del contratto: ${firma.otp_attivo ? 'con codice OTP' : 'senza OTP (pulsante)'}`)
+      }
+      if (firma.otp_attivo && firma.otp_canale !== savedFirma.otp_canale) {
+        out.push(`Firma del contratto: codice OTP via ${firma.otp_canale === 'email' ? 'email' : 'WhatsApp'}`)
+      }
       return out
     },
     [
@@ -2212,6 +2288,7 @@ export default function CentralinaProTab() {
       sezioniOff, savedSezioniOff,
       contrattoRegole, savedContrattoRegole,
       locatore, savedLocatore,
+      firma, savedFirma,
     ]
   )
 
@@ -2249,7 +2326,8 @@ export default function CentralinaProTab() {
     setSavedSezioniOff(sezioniOff)
     setSavedContrattoRegole(contrattoRegole)
     setSavedLocatore(locatore)
-    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole, locatore }, businessRow(businessId))
+    setSavedFirma(firma)
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole, locatore, firma }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
@@ -2293,6 +2371,7 @@ export default function CentralinaProTab() {
     setSezioniOff(savedSezioniOff)
     setContrattoRegole(savedContrattoRegole)
     setLocatore(savedLocatore)
+    setFirma(savedFirma)
   }
 
   // Attiva/disattiva una sezione per il business corrente (roadmap 17: ON/OFF).
@@ -2420,6 +2499,8 @@ export default function CentralinaProTab() {
                 setRegole={setContrattoRegole}
                 locatore={locatore}
                 setLocatore={setLocatore}
+                firma={firma}
+                setFirma={setFirma}
               />
             )}
             {section === 'p4' && (
