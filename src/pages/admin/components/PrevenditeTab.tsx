@@ -44,6 +44,8 @@ interface Prevendita {
   nome: string
   descrizione: string | null
   foto_url: string | null
+  /** 23/09/2026: tutte le foto del carosello; la prima e' anche foto_url. */
+  foto_urls?: string[] | null
   prezzo: number
   prezzo_listino: number | null
   utilizzi_inclusi: number
@@ -169,10 +171,17 @@ function Passo({ n, titolo, nota }: { n: number; titolo: string; nota?: string }
   )
 }
 
+/** Foto della prevendita: la lista nuova, oppure la foto unica di prima. */
+function fotoDellaPrevendita(p: { foto_url: string | null; foto_urls?: string[] | null }): string[] {
+  const lista = (p.foto_urls || []).filter(Boolean)
+  if (lista.length) return lista
+  return p.foto_url ? [p.foto_url] : []
+}
+
 const PREVENDITA_VUOTA = {
   nome: '',
   descrizione: '',
-  foto_url: '',
+  foto_urls: [] as string[],
   prezzo: '' as string | number,
   prezzo_listino: '' as string | number,
   utilizzi_inclusi: 10,
@@ -429,7 +438,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     setBozza({
       nome: p.nome,
       descrizione: p.descrizione || '',
-      foto_url: p.foto_url || '',
+      foto_urls: fotoDellaPrevendita(p),
       prezzo: p.prezzo,
       prezzo_listino: p.prezzo_listino ?? '',
       utilizzi_inclusi: p.utilizzi_inclusi,
@@ -450,29 +459,47 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     setModale('modifica')
   }
 
-  async function caricaFoto(file: File) {
-    if (!file.type.startsWith('image/')) return toast.error('Serve un file immagine')
-    if (file.size > 10 * 1024 * 1024) return toast.error('Immagine troppo grande (max 10MB)')
+  async function caricaFoto(files: File[]) {
+    const immagini = files.filter(f => f.type.startsWith('image/'))
+    if (immagini.length < files.length) toast.error('Alcuni file non sono immagini: saltati')
+    const troppoGrandi = immagini.filter(f => f.size > 10 * 1024 * 1024)
+    if (troppoGrandi.length) toast.error(`${troppoGrandi.length} immagini oltre 10MB: saltate`)
+    const daCaricare = immagini.filter(f => f.size <= 10 * 1024 * 1024)
+    if (!daCaricare.length) return
     setCaricamentoFoto(true)
+    const caricate: string[] = []
     try {
-      const ext = file.name.split('.').pop() || 'jpg'
-      const path = `prevendite/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-      // 23/09/2026: bucket catalog-images, lo stesso dei caricamenti del Sito
-      // CMS e del catalogo (ha le regole di scrittura per lo staff).
-      // marketing-campaigns non le ha e il caricamento falliva sempre.
-      const { error } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type })
-      if (error) throw error
-      const { data } = supabase.storage.from('catalog-images').getPublicUrl(path)
-      setBozza(b => ({ ...b, foto_url: data.publicUrl }))
-      toast.success('Foto caricata. Ricorda di salvare.')
+      for (const file of daCaricare) {
+        const ext = file.name.split('.').pop() || 'jpg'
+        const path = `prevendite/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        // 23/09/2026: bucket catalog-images, lo stesso dei caricamenti del Sito
+        // CMS e del catalogo (ha le regole di scrittura per lo staff).
+        const { error } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type })
+        if (error) throw error
+        caricate.push(supabase.storage.from('catalog-images').getPublicUrl(path).data.publicUrl)
+      }
+      toast.success(`${caricate.length === 1 ? 'Foto caricata' : `${caricate.length} foto caricate`}. Ricorda di salvare.`)
     } catch (e) {
       console.error(e)
       toast.error('Caricamento foto non riuscito: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
+      // Anche se una foto fallisce, quelle gia' caricate restano nella bozza.
+      if (caricate.length) setBozza(b => ({ ...b, foto_urls: [...b.foto_urls, ...caricate] }))
       setCaricamentoFoto(false)
       if (inputFoto.current) inputFoto.current.value = ''
     }
   }
+
+  function spostaFoto(i: number, verso: -1 | 1) {
+    setBozza(b => {
+      const j = i + verso
+      if (j < 0 || j >= b.foto_urls.length) return b
+      const lista = [...b.foto_urls]
+      ;[lista[i], lista[j]] = [lista[j], lista[i]]
+      return { ...b, foto_urls: lista }
+    })
+  }
+
 
   const numeroOppureNull = (v: string | number) => {
     const s = String(v).trim()
@@ -494,7 +521,10 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
       const riga = {
         nome: bozza.nome.trim(),
         descrizione: bozza.descrizione.trim() || null,
-        foto_url: bozza.foto_url.trim() || null,
+        // La prima foto resta anche in foto_url: la leggono Mie Prevendite,
+        // la vendita allo sportello e le prevendite gia' vendute.
+        foto_url: bozza.foto_urls[0] || null,
+        foto_urls: bozza.foto_urls,
         prezzo,
         prezzo_listino: numeroOppureNull(bozza.prezzo_listino),
         utilizzi_inclusi: utilizzi,
@@ -510,15 +540,23 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
         visibile_sito: bozza.visibile_sito,
         ordine: Number(bozza.ordine) || 0,
       }
-      if (inModifica) {
-        const { error } = await supabase.from('prevendite').update(riga).eq('id', inModifica.id)
-        if (error) throw error
-        toast.success('Prevendita aggiornata')
-      } else {
-        const { error } = await supabase.from('prevendite').insert(riga)
-        if (error) throw error
-        toast.success('Prevendita creata')
+      // 23/09/2026: finche' la colonna foto_urls non e' stata creata
+      // (migrazione 20260923130000) si salva senza, con la sola copertina:
+      // il salvataggio della prevendita non deve mai fermarsi per le foto.
+      const scrivi = async (dati: Record<string, unknown>) => inModifica
+        ? supabase.from('prevendite').update(dati).eq('id', inModifica.id)
+        : supabase.from('prevendite').insert(dati)
+      let { error } = await scrivi(riga)
+      if (error && /foto_urls/.test(error.message || '')) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { foto_urls: _senza, ...rigaSenzaCarosello } = riga
+        ;({ error } = await scrivi(rigaSenzaCarosello))
+        if (!error && bozza.foto_urls.length > 1) {
+          toast.error('Salvata solo la prima foto: per il carosello va creata la colonna foto_urls (SQL prevendite_foto_multiple).', { duration: 10000 })
+        }
       }
+      if (error) throw error
+      toast.success(inModifica ? 'Prevendita aggiornata' : 'Prevendita creata')
       setModale(null)
       await caricaCatalogo()
     } catch (e) {
@@ -1022,40 +1060,40 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
               </div>
 
               <div>
-                <label className="text-sm text-theme-text-secondary mb-1 block">Foto</label>
-                <div className="flex items-center gap-4">
-                  {bozza.foto_url
-                    ? <img src={bozza.foto_url} alt="" className="w-32 h-20 object-cover rounded-lg border border-theme-border" />
-                    : <div className="w-32 h-20 bg-theme-bg-tertiary border border-theme-border rounded-lg flex items-center justify-center text-xs text-theme-text-muted">Nessuna</div>}
-                  <div className="flex-1 flex flex-wrap items-center gap-2">
-                    {/* 23/09/2026 (direzione): solo caricamento dal computer,
-                        niente campo per incollare un indirizzo. */}
-                    <input
-                      ref={inputFoto}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) caricaFoto(f) }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => inputFoto.current?.click()}
-                      disabled={caricamentoFoto}
-                      className="px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
-                    >
-                      {caricamentoFoto ? 'Caricamento in corso...' : bozza.foto_url ? 'Cambia foto' : 'Carica foto'}
-                    </button>
-                    {bozza.foto_url && !caricamentoFoto && (
-                      <button
-                        type="button"
-                        onClick={() => setBozza(b => ({ ...b, foto_url: '' }))}
-                        className="px-4 py-2 rounded-full border border-theme-border text-sm text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
-                      >
-                        Rimuovi
-                      </button>
-                    )}
-                  </div>
+                <label className="text-sm text-theme-text-secondary mb-1 block">Foto ({bozza.foto_urls.length})</label>
+                {/* 23/09/2026 (direzione): piu' foto, sul sito diventano un
+                    carosello. La prima e' la copertina. Solo caricamento dal
+                    computer, niente indirizzi da incollare. */}
+                <div className="flex flex-wrap gap-3">
+                  {bozza.foto_urls.map((url, i) => (
+                    <div key={url + i} className="relative w-32">
+                      <img src={url} alt="" className="w-32 h-20 object-cover rounded-lg border border-theme-border" />
+                      {i === 0 && <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-dr7-gold text-white text-[10px] font-semibold">Copertina</span>}
+                      <div className="mt-1 flex items-center justify-between text-xs">
+                        <button type="button" disabled={i === 0} onClick={() => spostaFoto(i, -1)} className="px-2 py-0.5 rounded border border-theme-border text-theme-text-secondary disabled:opacity-30" aria-label="Sposta a sinistra">&lt;</button>
+                        <button type="button" onClick={() => setBozza(b => ({ ...b, foto_urls: b.foto_urls.filter((_, k) => k !== i) }))} className="px-2 py-0.5 rounded text-red-500 hover:bg-red-500/10">Rimuovi</button>
+                        <button type="button" disabled={i === bozza.foto_urls.length - 1} onClick={() => spostaFoto(i, 1)} className="px-2 py-0.5 rounded border border-theme-border text-theme-text-secondary disabled:opacity-30" aria-label="Sposta a destra">&gt;</button>
+                      </div>
+                    </div>
+                  ))}
+                  <input
+                    ref={inputFoto}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={e => { const f = Array.from(e.target.files || []); if (f.length) caricaFoto(f) }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => inputFoto.current?.click()}
+                    disabled={caricamentoFoto}
+                    className="w-32 h-20 rounded-lg border-2 border-dashed border-theme-border text-sm text-theme-text-secondary hover:border-dr7-gold hover:text-dr7-gold transition-colors disabled:opacity-50"
+                  >
+                    {caricamentoFoto ? 'Caricamento...' : '+ Aggiungi foto'}
+                  </button>
                 </div>
+                <p className="mt-1 text-xs text-theme-text-muted">Puoi selezionare piu' foto insieme. La prima e' la copertina; usa &lt; &gt; per cambiare l'ordine.</p>
               </div>
 
               <Passo n={2} titolo="Veicoli" nota="Su quali auto il cliente potra' spendere questa prevendita. Il sito non gliela propone su nessun'altra." />
