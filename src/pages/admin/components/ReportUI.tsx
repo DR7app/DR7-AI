@@ -329,12 +329,15 @@ export function ReportGrafico({ titolo, punti, da, a, colore = 'gold', formato, 
   totale?: number
   totaleEtichetta?: string
 }) {
-  const [hover, setHover] = useState<number | null>(null)
+  const [hoverGrezzo, setHover] = useState<number | null>(null)
   const idGrad = `rg-${useId().replace(/:/g, '')}`
   const c = COLORI_GRAFICO[colore]
   const { passo, gruppi } = useMemo(() => serieDelPeriodo(punti, da, a, aggrega), [punti, da, a, aggrega])
   const values = gruppi.map(g => g.valore)
   const n = values.length
+  // Cambiando periodo i gruppi diminuiscono: il punto sotto il mouse puo'
+  // non esistere piu' e leggerlo faceva cadere l'intera pagina.
+  const hover = hoverGrezzo !== null && hoverGrezzo < n ? hoverGrezzo : null
   const asse = formatoAsse || ((v: number) => {
     const r = Math.round(v)
     return Math.abs(r) >= 1000 ? `${Math.round(r / 1000)}K` : String(r)
@@ -393,15 +396,14 @@ export function ReportGrafico({ titolo, punti, da, a, colore = 'gold', formato, 
               const yPos = padT + innerH * (1 - p)
               return (
                 <g key={i}>
-                  <line x1={padL} x2={padL + innerW} y1={yPos} y2={yPos} stroke="currentColor" strokeOpacity="0.08" strokeWidth="1" />
-                  <text x={padL - 6} y={yPos + 3} fontSize="9" textAnchor="end" fill="currentColor" opacity="0.4">{asse(max * p)}</text>
+                  <line x1={padL} x2={padL + innerW} y1={yPos} y2={yPos} stroke="currentColor" strokeOpacity="0.08" strokeWidth="1" vectorEffect="non-scaling-stroke" />
                 </g>
               )
             })}
             {n > 1 ? (
               <>
                 <path d={areaPath} fill={`url(#${idGrad})`} />
-                <polyline points={points} fill="none" stroke={c.stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={points} fill="none" stroke={c.stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               </>
             ) : (
               <circle cx={x(0)} cy={y(values[0])} r="3.5" fill={c.stroke} />
@@ -419,16 +421,32 @@ export function ReportGrafico({ titolo, punti, da, a, colore = 'gold', formato, 
             ))}
             {hover !== null && (
               <g>
-                <line x1={x(hover)} x2={x(hover)} y1={padT} y2={padT + innerH} stroke={c.stroke} strokeOpacity="0.4" strokeDasharray="2 3" />
+                <line x1={x(hover)} x2={x(hover)} y1={padT} y2={padT + innerH} stroke={c.stroke} strokeOpacity="0.4" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
                 <circle cx={x(hover)} cy={y(values[hover])} r="3.5" fill={c.stroke} stroke="var(--color-theme-bg-secondary, #111)" strokeWidth="2" />
               </g>
             )}
-            {ticks.map(t => (
-              <text key={t} x={x(t)} y={H - 8} fontSize="9" textAnchor="middle" fill="currentColor" opacity="0.4">
-                {etichettaGruppo(gruppi[t].inizio, passo, passo === 'mese' && piuAnni)}
-              </text>
-            ))}
           </svg>
+          {/* 23/09/2026: le scritte degli assi stanno FUORI dall'svg. L'svg si
+              allarga alla colonna (preserveAspectRatio="none") e il testo
+              dentro veniva stirato in larghezza. */}
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
+            <div
+              key={`y${i}`}
+              className="absolute pointer-events-none text-[9px] leading-none text-theme-text-muted opacity-70 text-right tabular-nums"
+              style={{ left: 0, width: `calc(${(padL / W) * 100}% - 6px)`, top: padT + innerH * (1 - p) - 4 }}
+            >
+              {asse(max * p)}
+            </div>
+          ))}
+          {ticks.map(t => (
+            <div
+              key={`x${t}`}
+              className="absolute pointer-events-none text-[9px] leading-none text-theme-text-muted opacity-70 whitespace-nowrap"
+              style={{ left: `${(x(t) / W) * 100}%`, top: H - 14, transform: 'translateX(-50%)' }}
+            >
+              {etichettaGruppo(gruppi[t].inizio, passo, passo === 'mese' && piuAnni)}
+            </div>
+          ))}
           {hover !== null && (
             <div
               className="absolute pointer-events-none px-2.5 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-[10px] shadow-lg whitespace-nowrap"
