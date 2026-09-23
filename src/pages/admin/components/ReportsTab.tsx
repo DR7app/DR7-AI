@@ -649,15 +649,21 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     const isoDi = (ms: number) => new Date(ms).toISOString().slice(0, 10)
     const daMs = msDi(da)
     const aMs = msDi(a)
+    const dentro = (ms: number) => Math.min(Math.max(ms, daMs), aMs)
     const fatturato: ReportPunto[] = []
     const nuove: ReportPunto[] = []
     const mezziPerGiorno = new Map<string, Set<string>>()
     const mezziDistinti = new Set<string>()
     const prenotazioniViste = new Set<string>()
     for (const v of vehicleData.vehicles) {
+      // 23/09/2026: la curva di ogni veicolo somma ESATTAMENTE il suo totale
+      // di riga (quello della tabella, override compresi). Prima la quota
+      // noleggio non era limitata ai giorni fatturabili e le correzioni a
+      // mano non avevano un giorno: la curva e il titolo non tornavano.
+      const puntiVeicolo: ReportPunto[] = []
       for (const b of v.bookings || []) {
-        // Penale/danno su prenotazione annullata: senza date, fuori dalla
-        // curva ma dentro il totale del grafico (vedi `totale` sotto).
+        // Penale/danno su prenotazione annullata: senza date, entra con la
+        // correzione di fine veicolo qui sotto.
         if (!b.start_at || !b.end_at) continue
         const inizio = b.start_at.substring(0, 10)
         const fine = b.end_at.substring(0, 10)
@@ -667,41 +673,61 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
         const ultima = Math.max(sMs, msDi(fine) - DAY)
         const lo = Math.max(sMs, daMs)
         const hi = Math.min(ultima, aMs)
-        const notti = Number(b.days_in_month) || 0
-        // Quota giornaliera del noleggio incassato: la stessa prorata del
-        // Ricavo Noleggi (incassato / giorni fatturabili x notti nel periodo).
-        const perGiorno = notti > 0 && b.billable_days > 0 ? (Number(b.total_price) || 0) / b.billable_days : 0
-        for (let ms = lo, n = 0; ms <= hi && n < notti; ms += DAY, n++) {
-          const g = isoDi(ms)
-          if (perGiorno > 0) fatturato.push({ data: g, valore: perGiorno })
+        const notti = Math.min(Number(b.days_in_month) || 0, Number(b.billable_days) || 0)
+        const giorni: string[] = []
+        for (let ms = lo, n = 0; ms <= hi && n < notti; ms += DAY, n++) giorni.push(isoDi(ms))
+        for (const g of giorni) {
           const set = mezziPerGiorno.get(g) || new Set<string>()
           set.add(v.vehicleId)
           mezziPerGiorno.set(g, set)
           mezziDistinti.add(v.vehicleId)
         }
+        // Quota del noleggio incassato: la stessa della colonna Ricavo della
+        // tabella (incassato / giorni fatturabili x notti nel periodo).
+        const quota = b.billable_days > 0 ? ((Number(b.total_price) || 0) / b.billable_days) * notti : 0
+        if (quota > 0) {
+          if (giorni.length > 0) for (const g of giorni) puntiVeicolo.push({ data: g, valore: quota / giorni.length })
+          else puntiVeicolo.push({ data: isoDi(dentro(sMs)), valore: quota })
+        }
         // Penali e danni incassati: nel giorno di riconsegna, tenuto nel periodo.
         const extra = (Number(b.penalty_amount) || 0) + (Number(b.danni_amount) || 0)
-        if (extra > 0) fatturato.push({ data: isoDi(Math.min(Math.max(msDi(fine), daMs), aMs)), valore: extra })
-        // Nuova prenotazione: il report non porta la data di creazione, si
-        // conta nel giorno di ritiro (solo ritiri dentro il periodo).
-        if (inizio >= da && inizio <= a && !prenotazioniViste.has(b.booking_id)) {
+        if (extra > 0) puntiVeicolo.push({ data: isoDi(dentro(msDi(fine))), valore: extra })
+        // Prenotazioni: le stesse contate in "Prenotazioni Trovate", una volta
+        // sola, nel giorno di ritiro; chi era gia' fuori prima del periodo
+        // conta il primo giorno.
+        if (b.booking_id && !prenotazioniViste.has(b.booking_id)) {
           prenotazioniViste.add(b.booking_id)
-          nuove.push({ data: inizio, valore: 1 })
+          nuove.push({ data: isoDi(dentro(sMs)), valore: 1 })
         }
       }
       // Incassi anticipati: nel giorno del pagamento, come nella loro tabella.
       for (const ab of v.anticipatedBookings || []) {
-        if (ab.paid_at && ab.total_price > 0) fatturato.push({ data: ab.paid_at, valore: ab.total_price })
+        if (ab.total_price > 0) {
+          const giorno = ab.paid_at ? ab.paid_at.substring(0, 10) : a
+          puntiVeicolo.push({ data: isoDi(dentro(msDi(giorno))), valore: ab.total_price })
+        }
+        if (ab.booking_id && !prenotazioniViste.has(ab.booking_id)) {
+          prenotazioniViste.add(ab.booking_id)
+          nuove.push({ data: isoDi(dentro(msDi(ab.paid_at ? ab.paid_at.substring(0, 10) : a))), valore: 1 })
+        }
       }
+      // Quello che resta fra la riga della tabella e la curva (correzioni a
+      // mano, righe aggiunte, penali senza date): si ripartisce sui giorni
+      // del veicolo in proporzione, o al primo giorno se non ne ha.
+      const obiettivo = (Number(v.totalRevenue) || 0) + (Number(v.anticipatedRevenue) || 0)
+      const somma = puntiVeicolo.reduce((t, p) => t + p.valore, 0)
+      if (Math.abs(obiettivo - somma) > 0.005) {
+        if (somma > 0) for (const p of puntiVeicolo) p.valore = p.valore * obiettivo / somma
+        else puntiVeicolo.push({ data: da, valore: obiettivo })
+      }
+      fatturato.push(...puntiVeicolo)
     }
     const mezzi: ReportPunto[] = [...mezziPerGiorno.entries()].map(([data, set]) => ({ data, valore: set.size }))
     return {
       da,
       a,
       fatturato,
-      // Il titolo deve dire lo stesso numero della scheda "Ricavo TOTALE": le
-      // correzioni a mano sul veicolo, le righe aggiunte e le penali senza
-      // date non hanno un giorno, quindi il totale e' quello del report.
+      // Stesso numero della scheda "Ricavo TOTALE": ora anche la curva lo somma.
       totaleFatturato: vehicleData.totalRevenue + (vehicleData.totalAnticipatedRevenue || 0),
       nuove,
       mezzi,
@@ -2036,7 +2062,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 totale={grafici.totaleFatturato}
               />
               <ReportGrafico
-                titolo="Nuove prenotazioni (per ritiro)"
+                titolo="Prenotazioni (per ritiro)"
                 punti={grafici.nuove}
                 da={grafici.da}
                 a={grafici.a}
