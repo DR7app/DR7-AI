@@ -3794,9 +3794,9 @@ export const INITIAL_HOME: HomeCopy = {
   metrics_eyebrow_it: '30 mesi di crescita. Le fondamenta sono costruite.',
   metrics_eyebrow_en: '30 months of growth. The foundations are built.',
   metrics: [
-    { id: 'contratti',  value: '4.000+',  label_it: 'Contratti di noleggio firmati',    label_en: 'Signed rental contracts' },
-    { id: 'clienti',    value: '3.000+',  label_it: 'Clienti serviti nell\'ecosistema', label_en: 'Clients served in the ecosystem' },
-    { id: 'fatturato',  value: '\u20ac2,5M+',  label_it: 'Fatturato generato',               label_en: 'Revenue generated' },
+    { id: 'contratti',  value: '{contrattiFirmati}',  label_it: 'Contratti di noleggio firmati',    label_en: 'Signed rental contracts' },
+    { id: 'clienti',    value: '{clientiServiti}',  label_it: 'Clienti serviti nell\'ecosistema', label_en: 'Clients served in the ecosystem' },
+    { id: 'fatturato',  value: '{fatturatoGenerato}',  label_it: 'Fatturato generato',               label_en: 'Revenue generated' },
     { id: 'parco',      value: '\u20ac3M+',    label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
     { id: 'patrimonio', value: '\u20ac6M+',    label_it: 'Patrimonio netto',                 label_en: 'Net equity' },
     { id: 'capitale',   value: '\u20ac1M',     label_it: 'Capitale sociale',                 label_en: 'Share capital' },
