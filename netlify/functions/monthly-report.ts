@@ -1149,6 +1149,31 @@ function giornoDopo(ymd: string): string {
 }
 
 /**
+ * Prove interne: il veicolo TEST della flotta e le persone di casa che
+ * provano il flusso (direzione e sviluppo). Questi contratti non vengono mai
+ * firmati, quindi senza questo filtro i "da firmare" salivano da soli.
+ * Stesso criterio veicolo di `src/utils/isTestBooking.ts` e delle fatture.
+ */
+const CLIENTI_DI_PROVA_NOMI = ['ophelia red', 'valerio saja', 'admin dr7']
+const CLIENTI_DI_PROVA_EMAIL = ['admin@dr7.app', 'valesaja91@icloud.com']
+
+function eVeicoloDiProva(nome: unknown, targa: unknown): boolean {
+  const n = String(nome || '').trim().toLowerCase()
+  const t = String(targa || '').replace(/\s/g, '').toUpperCase()
+  return n === 'test' || t.startsWith('TEST')
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function contrattoDiProva(c: any, b: any): boolean {
+  if (eVeicoloDiProva(c?.vehicle_name, null)) return true
+  if (b && eVeicoloDiProva(b.vehicle_name, b.vehicle_plate || b.bd_targa)) return true
+  const nomi = [c?.customer_name, b?.customer_name].map(v => String(v || '').trim().toLowerCase())
+  if (nomi.some(n => n && CLIENTI_DI_PROVA_NOMI.includes(n))) return true
+  const email = [c?.customer_email, b?.customer_email].map(v => String(v || '').trim().toLowerCase())
+  return email.some(e => e && CLIENTI_DI_PROVA_EMAIL.includes(e))
+}
+
+/**
  * Contratti creati nel periodo, per business. Una riga di `contracts` per
  * prenotazione (generate-contract aggiorna quella esistente), quindi il
  * conteggio e' quello dei contratti veri.
@@ -1165,7 +1190,9 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
   for (let pageStart = 0; ; pageStart += 1000) {
     const { data, error } = await supabase
       .from('contracts')
-      .select('id, status, signed_pdf_url, booking_id, bookings(service_type, bd_st:booking_details->>service_type)')
+      .select('id, status, signed_pdf_url, booking_id, customer_name, customer_email, vehicle_name,'
+        + ' bookings(service_type, bd_st:booking_details->>service_type, vehicle_name, vehicle_plate, customer_name, customer_email,'
+        + ' bd_targa:booking_details->>vehicle_plate)')
       .gte('created_at', da)
       .lt('created_at', a)
       .order('created_at', { ascending: true })
@@ -1186,6 +1213,9 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
     } else if (business !== 'rental') {
       continue
     }
+    // Le prove interne non sono contratti dell'azienda: restano fuori dal
+    // totale e non gonfiano i "da firmare" (nessuno firma una prova).
+    if (contrattoDiProva(c, b)) continue
     totale++
     if (String(c.status || '').toLowerCase() === 'cancelled') annullati++
     else if (c.signed_pdf_url) firmati++
