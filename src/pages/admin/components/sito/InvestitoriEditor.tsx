@@ -271,7 +271,6 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 {bi("Titolo, riga in oro", "ir_v2030_accento")}
                 {bi("Motto sotto il titolo", "ir_v2030_motto")}
                 {bi("Citazione", "ir_v2030_citazione")}
-                {bi("Scritta sopra le foto", "ir_v2030_mondi")}
                 {immagine("Foto grande", "ir_v2030_img_1")}
                 {immagine("Foto in alto a destra", "ir_v2030_img_2")}
                 {immagine("Foto in basso a destra", "ir_v2030_img_3")}

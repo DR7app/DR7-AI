@@ -1584,7 +1584,6 @@ export interface InvestitoriCopy {
   ir_v2030_accento_it?: string; ir_v2030_accento_en?: string;
   ir_v2030_motto_it?: string; ir_v2030_motto_en?: string;
   ir_v2030_citazione_it?: string; ir_v2030_citazione_en?: string;
-  ir_v2030_mondi_it?: string; ir_v2030_mondi_en?: string;
   ir_v2030_img_1?: string; ir_v2030_img_2?: string; ir_v2030_img_3?: string;
   ir_v2030_tappe?: IrTappa[];
   ir_v2030_nota_it?: string; ir_v2030_nota_en?: string;
@@ -3051,7 +3050,6 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_v2030_accento_it: 'Un ecosistema globale.', ir_v2030_accento_en: 'A global ecosystem.',
   ir_v2030_motto_it: 'Luxury. Technology. People. Planet.', ir_v2030_motto_en: 'Luxury. Technology. People. Planet.',
   ir_v2030_citazione_it: 'Da una visione locale a un impatto globale.', ir_v2030_citazione_en: 'From a local vision to a global impact.',
-  ir_v2030_mondi_it: 'Terra · Mare · Aria · Digitale', ir_v2030_mondi_en: 'Land · Sea · Air · Digital',
   ir_v2030_img_1: '/video-aria-poster.jpg', ir_v2030_img_2: '/menu-property.jpeg', ir_v2030_img_3: '/menu-business.jpeg',
   ir_v2030_tappe: [
     { id: '2024', anno: '2024', valore_it: '€ 0', valore_en: '€ 0', titolo_it: 'Fondazione', titolo_en: 'Foundation', testo_it: 'Un\'idea. Una visione. Da Cagliari al mondo.', testo_en: 'An idea. A vision. From Cagliari to the world.', img: '/video-terra-poster.jpg' },
