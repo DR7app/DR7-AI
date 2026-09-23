@@ -557,6 +557,23 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   // Backend ora accetta from+to oltre al legacy month=YYYY-MM. Quando preset
   // === 'mese' uso il legacy `month` per non rompere chi ha link bookmarkati.
   type RangePreset = 'oggi' | '7gg' | '30gg' | 'mese' | 'anno' | 'custom'
+  // Mesi da scegliere dal menu "Mese...": dal mese corrente indietro di 24.
+  const MESI_SCELTA = useMemo(() => {
+    const nomi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
+    const oggi = new Date()
+    const out: { value: string; label: string }[] = []
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(oggi.getFullYear(), oggi.getMonth() - i, 1)
+      out.push({ value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: `${nomi[d.getMonth()]} ${d.getFullYear()}` })
+    }
+    return out
+  }, [])
+  // "YYYY-MM" se il periodo e' esattamente un mese intero, altrimenti ''.
+  function meseIntero(from: string, to: string): string {
+    if (!/^\d{4}-\d{2}-01$/.test(from || '') || (to || '').slice(0, 7) !== from.slice(0, 7)) return ''
+    const [y, m] = from.split('-').map(Number)
+    return Number(to.slice(8, 10)) === new Date(Date.UTC(y, m, 0)).getUTCDate() ? from.slice(0, 7) : ''
+  }
   const [rangePreset, setRangePreset] = useState<RangePreset>('mese')
   void now // anchor variabile, todayISO non piu' usato dopo text input
   // 2026-05-24 (fix): formato LOCALE YYYY-MM-DD, NON via toISOString()
@@ -1852,6 +1869,29 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                   </button>
                 ))}
               </div>
+              {/* 23/09/2026: scelta del mese intero (gennaio, febbraio...) senza
+                  passare dal calendario. Si aggiunge ai preset, non li sostituisce;
+                  resta selezionato solo se il periodo e' esattamente quel mese. */}
+              <select
+                value={meseIntero(customFrom, customTo)}
+                onChange={(e) => {
+                  const ym = e.target.value
+                  if (!ym) return
+                  const [y, m] = ym.split('-').map(Number)
+                  const from = `${ym}-01`
+                  const to = `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
+                  setRangePreset('custom')
+                  setCustomFrom(from)
+                  setCustomTo(to)
+                  setFromDraft(isoToEU(from))
+                  setToDraft(isoToEU(to))
+                }}
+                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs"
+                title="Scegli un mese intero"
+              >
+                <option value="">Mese...</option>
+                {MESI_SCELTA.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
               {/* 2026-05-23: text input DD/MM/YYYY (formato europeo) invece
                   di <input type="date"> che segue il locale OS. Auto-formatta
                   con "/" mentre l'utente digita. Sincronizza customFrom/To
