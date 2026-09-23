@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import MoneyInput from '../../../components/MoneyInput'
@@ -207,6 +207,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   const [inModifica, setInModifica] = useState<Prevendita | null>(null)
   const [salvataggio, setSalvataggio] = useState(false)
   const [caricamentoFoto, setCaricamentoFoto] = useState(false)
+  const inputFoto = useRef<HTMLInputElement>(null)
 
   // Flotta (per scegliere i veicoli della prevendita)
   const [flotta, setFlotta] = useState<VeicoloFlotta[]>([])
@@ -456,16 +457,20 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     try {
       const ext = file.name.split('.').pop() || 'jpg'
       const path = `prevendite/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-      const { error } = await supabase.storage.from('marketing-campaigns').upload(path, file, { cacheControl: '3600', upsert: false })
+      // 23/09/2026: bucket catalog-images, lo stesso dei caricamenti del Sito
+      // CMS e del catalogo (ha le regole di scrittura per lo staff).
+      // marketing-campaigns non le ha e il caricamento falliva sempre.
+      const { error } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type })
       if (error) throw error
-      const { data } = supabase.storage.from('marketing-campaigns').getPublicUrl(path)
+      const { data } = supabase.storage.from('catalog-images').getPublicUrl(path)
       setBozza(b => ({ ...b, foto_url: data.publicUrl }))
-      toast.success('Foto caricata')
+      toast.success('Foto caricata. Ricorda di salvare.')
     } catch (e) {
       console.error(e)
-      toast.error('Caricamento foto non riuscito')
+      toast.error('Caricamento foto non riuscito: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
       setCaricamentoFoto(false)
+      if (inputFoto.current) inputFoto.current.value = ''
     }
   }
 
@@ -1022,21 +1027,33 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                   {bozza.foto_url
                     ? <img src={bozza.foto_url} alt="" className="w-32 h-20 object-cover rounded-lg border border-theme-border" />
                     : <div className="w-32 h-20 bg-theme-bg-tertiary border border-theme-border rounded-lg flex items-center justify-center text-xs text-theme-text-muted">Nessuna</div>}
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1 flex flex-wrap items-center gap-2">
+                    {/* 23/09/2026 (direzione): solo caricamento dal computer,
+                        niente campo per incollare un indirizzo. */}
                     <input
+                      ref={inputFoto}
                       type="file"
                       accept="image/*"
+                      className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) caricaFoto(f) }}
-                      className="text-sm text-theme-text-muted"
                     />
-                    {caricamentoFoto && <div className="text-xs text-dr7-gold">Caricamento in corso...</div>}
-                    <input
-                      type="text"
-                      value={bozza.foto_url}
-                      onChange={e => setBozza(b => ({ ...b, foto_url: e.target.value }))}
-                      placeholder="oppure incolla un indirizzo immagine"
-                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-xs text-theme-text-primary outline-none focus:border-dr7-gold"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => inputFoto.current?.click()}
+                      disabled={caricamentoFoto}
+                      className="px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
+                    >
+                      {caricamentoFoto ? 'Caricamento in corso...' : bozza.foto_url ? 'Cambia foto' : 'Carica foto'}
+                    </button>
+                    {bozza.foto_url && !caricamentoFoto && (
+                      <button
+                        type="button"
+                        onClick={() => setBozza(b => ({ ...b, foto_url: '' }))}
+                        className="px-4 py-2 rounded-full border border-theme-border text-sm text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
+                      >
+                        Rimuovi
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
