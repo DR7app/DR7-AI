@@ -17,6 +17,7 @@ import CardDeleteButton from './CardDeleteButton'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import GestisciMenu from './GestisciMenu'
+import ClientiWhatsappCard from './ClientiWhatsappCard'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
@@ -2886,11 +2887,15 @@ export default function CustomersTab() {
       }
       {/* Stats Card */}
       <div className="mb-4 lg:mb-6 bg-gradient-to-r from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/30 rounded-lg lg:rounded-full p-3 lg:p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm text-theme-text-muted mb-1">Totale Clienti</p>
             <p className="text-2xl lg:text-4xl font-bold text-dr7-gold">{totalCustomers}</p>
           </div>
+          {/* 23/09/2026: numero a mano + totale mostrato sul sito. Il totale
+              usa tutta l'anagrafica (senza autisti), non la ricerca in corso. */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <ClientiWhatsappCard totaleAnagrafica={allCustomers.filter((c: any) => c.metadata?.role !== 'autista').length} />
           <div className="text-dr7-gold">
             <svg className="w-10 h-10 lg:w-16 lg:h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
