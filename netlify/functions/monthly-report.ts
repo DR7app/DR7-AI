@@ -221,7 +221,10 @@ const handlerInterno: Handler = async (event) => {
     if (monthEnd < monthStart) {
       return { statusCode: 400, body: JSON.stringify({ error: 'to must be >= from' }) }
     }
-    daysInMonth = Math.round((monthEnd.getTime() - monthStart.getTime()) / 86400000) + 1
+    // 23/09/2026: giorni di calendario fra le due date, estremi compresi.
+    // Prima si arrotondava 00:00 -> 23:59:59 (quasi un giorno intero) e poi si
+    // aggiungeva 1: agosto usciva di 32 giorni e l'Utilizzo Medio si abbassava.
+    daysInMonth = Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000) + 1
     year = fy
     monthNum = fm
   } else {
