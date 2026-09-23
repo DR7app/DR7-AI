@@ -107,6 +107,8 @@ interface VehicleReportData {
   totalAnticipatedRevenue?: number
   anticipatedBookingsCount?: number
   avgUtilizationRate: number
+  // Contratti creati nel periodo, dello stesso business del report
+  contratti?: { totale: number; firmati: number; daFirmare: number; annullati: number }
   vehicles: VehicleReport[]
 }
 
@@ -1845,6 +1847,16 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
               <p className="text-xs text-theme-text-muted">Prenotazioni Trovate</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.totalBookingsFound}</p>
             </div>
+            {vehicleData.contratti && (
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                <p className="text-xs text-theme-text-muted">Contratti Totali</p>
+                <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.contratti.totale}</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">
+                  {vehicleData.contratti.firmati} firmati · {vehicleData.contratti.daFirmare} da firmare
+                  {vehicleData.contratti.annullati > 0 && <> · {vehicleData.contratti.annullati} annullati</>}
+                </p>
+              </div>
+            )}
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Giorni nel Mese</p>
               <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.daysInMonth}</p>

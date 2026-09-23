@@ -22,8 +22,12 @@ interface BusinessReport {
   /** Card "Totale Complessivo" del Report: incassato + anticipato + da saldare. */
   totaleComplessivo?: number
   prenotazioniCount: number
+  /** Contratti creati nel periodo (null se il report non ha risposto). */
+  contratti?: ContrattiPeriodo | null
   canonical: boolean
 }
+
+interface ContrattiPeriodo { totale: number; firmati: number; daFirmare: number; annullati: number }
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -1319,6 +1323,35 @@ export default function DashboardTab() {
               <p className="text-2xl font-bold text-dr7-gold">€ {fmtDec(d.monthlyReports.noleggio.ricavoTotale)}</p>
               <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.noleggio.prenotazioniCount} prenotazioni · {d.monthlyReports.noleggio.prenotazioniAnnullateCount} annullate (€ {fmtDec(d.monthlyReports.noleggio.prenotazioniAnnullateValue)})</p>
             </button>
+
+            {/* CONTRATTI — tutti i business, stessi conteggi dei Report */}
+            {(() => {
+              const mr = d.monthlyReports!
+              const voci: Array<[string, ContrattiPeriodo | null | undefined]> = [
+                ['Terra', mr.noleggio.contratti], ['Mare', mr.mare?.contratti], ['Aria', mr.aria?.contratti], ['Soggiorni', mr.soggiorni?.contratti],
+              ]
+              const presenti = voci.filter(([, c]) => c) as Array<[string, ContrattiPeriodo]>
+              if (presenti.length === 0) return null
+              const somma = (k: keyof ContrattiPeriodo) => presenti.reduce((t, [, c]) => t + c[k], 0)
+              return (
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'contratto' } }))}
+                  className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Contratti</p>
+                    <span className="text-theme-text-muted text-xs group-hover:text-dr7-gold">Apri →</span>
+                  </div>
+                  <p className="text-2xl font-bold text-theme-text-primary">{somma('totale')}</p>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    {somma('firmati')} firmati · {somma('daFirmare')} da firmare{somma('annullati') > 0 && ` · ${somma('annullati')} annullati`}
+                  </p>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    {presenti.filter(([, c]) => c.totale > 0).map(([nome, c]) => `${nome} ${c.totale}`).join(' · ') || 'nessun contratto nel periodo'}
+                  </p>
+                </button>
+              )
+            })()}
 
             {/* LAVAGGIO */}
             <button

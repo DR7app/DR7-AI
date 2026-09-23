@@ -406,6 +406,8 @@ async function generateVehicleReport(
     if (page.length < 1000) break
   }
 
+  const contratti = await contaContrattiPeriodo(monthStartISO, monthEndISO, business)
+
   // Fetch penalty/danni fatture for the month (to catch penalties not saved in booking_details)
   const { data: fatture } = await supabase
     .from('fatture')
@@ -1121,9 +1123,74 @@ async function generateVehicleReport(
         const reali = cleanReports.filter((v: any) => !v.unmatched && !v.nonInFlotta)
         return Math.round((reali.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, reali.length)) * 100) / 100
       })(),
+      contratti,
       vehicles: cleanReports
     })
   }
+}
+
+/**
+ * Inizio della giornata Europe/Rome (YYYY-MM-DD) in UTC, ora legale compresa.
+ * `contracts.created_at` e' salvato in UTC: senza questa conversione i
+ * contratti fatti fra mezzanotte e le 2 finivano nel giorno prima.
+ */
+function inizioGiornoRomaUtc(ymd: string): string {
+  // Ora di Roma alla mezzanotte UTC di quel giorno = scarto (1 o 2 ore), gia'
+  // giusto anche nei due giorni del cambio d'ora.
+  const mezzanotteUtc = Date.parse(`${ymd}T00:00:00Z`)
+  const offsetOre = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date(mezzanotteUtc)))
+  return new Date(mezzanotteUtc - offsetOre * 3600000).toISOString()
+}
+
+function giornoDopo(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Contratti creati nel periodo, per business. Una riga di `contracts` per
+ * prenotazione (generate-contract aggiorna quella esistente), quindi il
+ * conteggio e' quello dei contratti veri.
+ *
+ * Business: `bookings.service_type`, e solo se nullo quello dentro
+ * booking_details (stessa priorita' della tab Contratti). I contratti fatti a
+ * mano dalla tab non hanno prenotazione: appartengono a Terra.
+ */
+async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: ReportBusiness) {
+  const da = inizioGiornoRomaUtc(fromYmd)
+  const a = inizioGiornoRomaUtc(giornoDopo(toYmd))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const righe: any[] = []
+  for (let pageStart = 0; ; pageStart += 1000) {
+    const { data, error } = await supabase
+      .from('contracts')
+      .select('id, status, signed_pdf_url, booking_id, bookings(service_type, bd_st:booking_details->>service_type)')
+      .gte('created_at', da)
+      .lt('created_at', a)
+      .order('created_at', { ascending: true })
+      .range(pageStart, pageStart + 999)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    righe.push(...data)
+    if (data.length < 1000) break
+  }
+
+  let totale = 0
+  let firmati = 0
+  let annullati = 0
+  for (const c of righe) {
+    const b = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings
+    if (b) {
+      if (!appartieneAlBusiness(b.service_type || b.bd_st, business)) continue
+    } else if (business !== 'rental') {
+      continue
+    }
+    totale++
+    if (String(c.status || '').toLowerCase() === 'cancelled') annullati++
+    else if (c.signed_pdf_url) firmati++
+  }
+  return { totale, firmati, daFirmare: totale - firmati - annullati, annullati }
 }
 
 // Diagnostic function to understand data issues

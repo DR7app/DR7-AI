@@ -1398,6 +1398,11 @@ const handlerInterno: Handler = async (event) => {
     // Un business senza prenotazioni nel periodo torna 0: e' un dato, non un
     // errore. Se invece la chiamata fallisce restiamo su null e il Dashboard
     // lo segnala invece di far sparire il business dai totali.
+    // Contratti del periodo: li conta monthly-report, come nel Report Noleggio.
+    const contrattiDi = (r: Record<string, unknown> | null) => {
+      const c = r?.contratti as { totale?: number; firmati?: number; daFirmare?: number; annullati?: number } | undefined
+      return c ? { totale: Number(c.totale) || 0, firmati: Number(c.firmati) || 0, daFirmare: Number(c.daFirmare) || 0, annullati: Number(c.annullati) || 0 } : null
+    }
     const perBusiness = (r: Record<string, unknown> | null, ov: OverrideIndex) => {
       const t = totaliNoleggio(r, ov)
       return {
@@ -1410,6 +1415,7 @@ const handlerInterno: Handler = async (event) => {
         ricavoConAnticipato: r ? t.ricavoTotale : 0,
         totaleComplessivo: r ? t.totaleComplessivo : 0,
         prenotazioniCount: r?.totalBookingsFound !== undefined ? Number(r.totalBookingsFound) : 0,
+        contratti: contrattiDi(r),
         canonical: !!r,
       }
     }
@@ -1437,6 +1443,7 @@ const handlerInterno: Handler = async (event) => {
           prenotazioniCount: noleggioCanonical?.totalBookingsFound !== undefined
             ? Number(noleggioCanonical.totalBookingsFound)
             : confirmedBookings + pendingBookings,
+          contratti: contrattiDi(noleggioCanonical as Record<string, unknown> | null),
           prenotazioniAnnullateCount: response.revenue.cancelledRentalsCount,
           prenotazioniAnnullateValue: response.revenue.cancelledRentalsTotal,
           // Scomposizione come nel Report Noleggio: quanto e' noleggio puro e
