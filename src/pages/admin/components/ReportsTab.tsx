@@ -111,7 +111,122 @@ interface VehicleReportData {
   // Contratti creati nel periodo, dello stesso business del report
   contratti?: { totale: number; firmati: number; daFirmare: number }
   vehicles: VehicleReport[]
+  // 23/09/2026: periodo su piu' mesi = un report per mese, ognuno con le sue
+  // correzioni; qui restano i singoli mesi (per i grafici), sopra la somma.
+  mesi?: { da: string; a: string; dati: VehicleReportData }[]
 }
+
+/** Spezza il periodo nei mesi di calendario che tocca (estremi tagliati). */
+function mesiDelPeriodo(from: string, to: string): { da: string; a: string }[] {
+  const out: { da: string; a: string }[] = []
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '') || to < from) return out
+  let [y, m] = from.split('-').map(Number)
+  for (let i = 0; i < 240; i++) {
+    const primo = `${y}-${String(m).padStart(2, '0')}-01`
+    const ultimo = `${y}-${String(m).padStart(2, '0')}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
+    if (primo > to) break
+    out.push({ da: primo < from ? from : primo, a: ultimo > to ? to : ultimo })
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+  return out
+}
+
+/**
+ * Somma dei report mensili: ogni numero del periodo e' la somma dei mesi,
+ * cosi' agosto dentro l'anno e' identico al report di agosto (correzioni a
+ * mano comprese). Prima l'anno era un report unico che leggeva solo le
+ * correzioni del primo mese e agosto usciva diverso.
+ */
+function sommaMesi(mesi: { da: string; a: string; dati: VehicleReportData }[], from: string, to: string): VehicleReportData {
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const somma = (k: keyof VehicleReportData) => r2(mesi.reduce((t, m) => t + (Number(m.dati[k]) || 0), 0))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const perVeicolo = new Map<string, any>()
+  for (const { dati } of mesi) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const v of dati.vehicles as any[]) {
+      const chiave = String(v.vehicleId || v._manualId || v.label)
+      // Giorni noleggiati/fermi/liberi del mese: si sommano i giorni, non le %.
+      const inFlotta = Number(v.giorniInFlotta) || 0
+      const noleggiati = (Number(v.utilizationRate) || 0) * inFlotta
+      const fermi = (Number(v.downtimeRate) || 0) * inFlotta
+      const liberi = (Number(v.idleRate) || 0) * inFlotta
+      const g = perVeicolo.get(chiave)
+      if (!g) {
+        perVeicolo.set(chiave, {
+          ...v,
+          bookings: (v.bookings || []).map((b: BookingDetail) => ({ ...b })),
+          anticipatedBookings: [...(v.anticipatedBookings || [])],
+          pause: [...(v.pause || [])],
+          _noleggiati: noleggiati, _fermi: fermi, _liberi: liberi,
+        })
+        continue
+      }
+      for (const k of ['rentedDays', 'maintenanceDays', 'idleDays', 'elapsedDays', 'periodTotalDays', 'giorniInFlotta', 'giorniInPausa',
+        'rentalRevenue', 'penaltyRevenue', 'danniRevenue', 'daSaldareRevenue', 'totalRevenue', 'anticipatedRevenue']) {
+        g[k] = r2((Number(g[k]) || 0) + (Number(v[k]) || 0))
+      }
+      g._noleggiati += noleggiati; g._fermi += fermi; g._liberi += liberi
+      g.nonInFlotta = !!g.nonInFlotta && !!v.nonInFlotta
+      if (!g.inFlottaDal) g.inFlottaDal = v.inFlottaDal
+      if (v.inFlottaAl) g.inFlottaAl = v.inFlottaAl
+      g.pause.push(...(v.pause || []))
+      g.anticipatedBookings.push(...(v.anticipatedBookings || []))
+      // Prenotazione a cavallo di due mesi: una riga sola, giorni e importi sommati.
+      for (const b of (v.bookings || []) as BookingDetail[]) {
+        const gia = g.bookings.find((x: BookingDetail) => x.booking_id === b.booking_id)
+        if (!gia) { g.bookings.push({ ...b }); continue }
+        gia.days_in_month = (Number(gia.days_in_month) || 0) + (Number(b.days_in_month) || 0)
+        gia.penalty_amount = r2((Number(gia.penalty_amount) || 0) + (Number(b.penalty_amount) || 0))
+        gia.danni_amount = r2((Number(gia.danni_amount) || 0) + (Number(b.danni_amount) || 0))
+        gia.da_saldare = r2((Number(gia.da_saldare) || 0) + (Number(b.da_saldare) || 0))
+      }
+    }
+  }
+  const vehicles = [...perVeicolo.values()].map(g => {
+    const den = Number(g.giorniInFlotta) || 0
+    const ids = new Set<string>([...g.bookings, ...g.anticipatedBookings].map((b: { booking_id: string }) => b.booking_id))
+    const { _noleggiati, _fermi, _liberi, ...v } = g
+    return {
+      ...v,
+      bookingsCount: ids.size,
+      utilizationRate: den > 0 ? Math.min(1, r2(_noleggiati / den)) : 0,
+      downtimeRate: den > 0 ? Math.min(1, r2(_fermi / den)) : 0,
+      idleRate: den > 0 ? Math.min(1, r2(_liberi / den)) : 0,
+    } as VehicleReport
+  })
+  const nonAbbinata = (v: VehicleReport) => !!(v as { unmatched?: boolean }).unmatched
+  const prenotazioni = new Set<string>()
+  for (const v of vehicles) for (const b of [...(v.bookings || []), ...(v.anticipatedBookings || [])]) prenotazioni.add(b.booking_id)
+  const nonAbbinate = new Map<string, UnmatchedBooking>()
+  for (const { dati } of mesi) for (const u of dati.unmatchedBookings || []) nonAbbinate.set(u.id, u)
+  const reali = vehicles.filter(v => !nonAbbinata(v) && !v.nonInFlotta)
+  const conContratti = mesi.filter(m => m.dati.contratti)
+  return {
+    month: `${from}_${to}`,
+    daysInMonth: somma('daysInMonth'),
+    vehicleCount: vehicles.filter(v => !nonAbbinata(v)).length,
+    totalBookingsFound: prenotazioni.size,
+    unmatchedBookings: nonAbbinate.size > 0 ? [...nonAbbinate.values()] : undefined,
+    totalRentalRevenue: somma('totalRentalRevenue'),
+    totalPenaltyRevenue: somma('totalPenaltyRevenue'),
+    totalDanniRevenue: somma('totalDanniRevenue'),
+    totalDaSaldare: somma('totalDaSaldare'),
+    totalRevenue: somma('totalRevenue'),
+    totalAnticipatedRevenue: somma('totalAnticipatedRevenue'),
+    anticipatedBookingsCount: somma('anticipatedBookingsCount'),
+    avgUtilizationRate: r2(reali.reduce((t, v) => t + v.utilizationRate, 0) / Math.max(1, reali.length)),
+    contratti: conContratti.length > 0 ? {
+      totale: conContratti.reduce((t, m) => t + (m.dati.contratti?.totale || 0), 0),
+      firmati: conContratti.reduce((t, m) => t + (m.dati.contratti?.firmati || 0), 0),
+      daFirmare: conContratti.reduce((t, m) => t + (m.dati.contratti?.daFirmare || 0), 0),
+    } : undefined,
+    vehicles,
+    mesi,
+  }
+}
+
 
 interface WashTypeBreakdown {
   type: string
@@ -664,80 +779,88 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
     const DAY = 86400000
     const msDi = (iso: string) => { const [y, m, g] = iso.split('-').map(Number); return Date.UTC(y, m - 1, g) }
     const isoDi = (ms: number) => new Date(ms).toISOString().slice(0, 10)
-    const daMs = msDi(da)
-    const aMs = msDi(a)
-    const dentro = (ms: number) => Math.min(Math.max(ms, daMs), aMs)
     const fatturato: ReportPunto[] = []
     const nuove: ReportPunto[] = []
     const mezziPerGiorno = new Map<string, Set<string>>()
     const mezziDistinti = new Set<string>()
     const prenotazioniViste = new Set<string>()
-    for (const v of vehicleData.vehicles) {
-      // 23/09/2026: la curva di ogni veicolo somma ESATTAMENTE il suo totale
-      // di riga (quello della tabella, override compresi). Prima la quota
-      // noleggio non era limitata ai giorni fatturabili e le correzioni a
-      // mano non avevano un giorno: la curva e il titolo non tornavano.
-      const puntiVeicolo: ReportPunto[] = []
-      for (const b of v.bookings || []) {
-        // Penale/danno su prenotazione annullata: senza date, entra con la
-        // correzione di fine veicolo qui sotto.
-        if (!b.start_at || !b.end_at) continue
-        const inizio = b.start_at.substring(0, 10)
-        const fine = b.end_at.substring(0, 10)
-        // Notti nel periodo: stessa regola del server (occupiedDayIndices),
-        // riconsegna esclusa, mono-giorno = 1, tagliate al periodo.
-        const sMs = msDi(inizio)
-        const ultima = Math.max(sMs, msDi(fine) - DAY)
-        const lo = Math.max(sMs, daMs)
-        const hi = Math.min(ultima, aMs)
-        const notti = Math.min(Number(b.days_in_month) || 0, Number(b.billable_days) || 0)
-        const giorni: string[] = []
-        for (let ms = lo, n = 0; ms <= hi && n < notti; ms += DAY, n++) giorni.push(isoDi(ms))
-        for (const g of giorni) {
-          const set = mezziPerGiorno.get(g) || new Set<string>()
-          set.add(v.vehicleId)
-          mezziPerGiorno.set(g, set)
-          mezziDistinti.add(v.vehicleId)
+    // 23/09/2026: su piu' mesi ogni mese disegna i numeri del SUO report: il
+    // punto di agosto dentro l'anno e' il totale del report di agosto.
+    const pezzi = vehicleData.mesi && vehicleData.mesi.length > 0
+      ? vehicleData.mesi
+      : [{ da, a, dati: vehicleData }]
+    for (const pezzo of pezzi) {
+      const daMs = msDi(pezzo.da)
+      const aMs = msDi(pezzo.a)
+      const dentro = (ms: number) => Math.min(Math.max(ms, daMs), aMs)
+      for (const v of pezzo.dati.vehicles) {
+
+        // 23/09/2026: la curva di ogni veicolo somma ESATTAMENTE il suo totale
+        // di riga (quello della tabella, override compresi). Prima la quota
+        // noleggio non era limitata ai giorni fatturabili e le correzioni a
+        // mano non avevano un giorno: la curva e il titolo non tornavano.
+        const puntiVeicolo: ReportPunto[] = []
+        for (const b of v.bookings || []) {
+          // Penale/danno su prenotazione annullata: senza date, entra con la
+          // correzione di fine veicolo qui sotto.
+          if (!b.start_at || !b.end_at) continue
+          const inizio = b.start_at.substring(0, 10)
+          const fine = b.end_at.substring(0, 10)
+          // Notti nel periodo: stessa regola del server (occupiedDayIndices),
+          // riconsegna esclusa, mono-giorno = 1, tagliate al periodo.
+          const sMs = msDi(inizio)
+          const ultima = Math.max(sMs, msDi(fine) - DAY)
+          const lo = Math.max(sMs, daMs)
+          const hi = Math.min(ultima, aMs)
+          const notti = Math.min(Number(b.days_in_month) || 0, Number(b.billable_days) || 0)
+          const giorni: string[] = []
+          for (let ms = lo, n = 0; ms <= hi && n < notti; ms += DAY, n++) giorni.push(isoDi(ms))
+          for (const g of giorni) {
+            const set = mezziPerGiorno.get(g) || new Set<string>()
+            set.add(v.vehicleId)
+            mezziPerGiorno.set(g, set)
+            mezziDistinti.add(v.vehicleId)
+          }
+          // Quota del noleggio incassato: la stessa della colonna Ricavo della
+          // tabella (incassato / giorni fatturabili x notti nel periodo).
+          const quota = b.billable_days > 0 ? ((Number(b.total_price) || 0) / b.billable_days) * notti : 0
+          if (quota > 0) {
+            if (giorni.length > 0) for (const g of giorni) puntiVeicolo.push({ data: g, valore: quota / giorni.length })
+            else puntiVeicolo.push({ data: isoDi(dentro(sMs)), valore: quota })
+          }
+          // Penali e danni incassati: nel giorno di riconsegna, tenuto nel periodo.
+          const extra = (Number(b.penalty_amount) || 0) + (Number(b.danni_amount) || 0)
+          if (extra > 0) puntiVeicolo.push({ data: isoDi(dentro(msDi(fine))), valore: extra })
+          // Prenotazioni: le stesse contate in "Prenotazioni Trovate", una volta
+          // sola, nel giorno di ritiro; chi era gia' fuori prima del periodo
+          // conta il primo giorno.
+          if (b.booking_id && !prenotazioniViste.has(b.booking_id)) {
+            prenotazioniViste.add(b.booking_id)
+            nuove.push({ data: isoDi(dentro(sMs)), valore: 1 })
+          }
         }
-        // Quota del noleggio incassato: la stessa della colonna Ricavo della
-        // tabella (incassato / giorni fatturabili x notti nel periodo).
-        const quota = b.billable_days > 0 ? ((Number(b.total_price) || 0) / b.billable_days) * notti : 0
-        if (quota > 0) {
-          if (giorni.length > 0) for (const g of giorni) puntiVeicolo.push({ data: g, valore: quota / giorni.length })
-          else puntiVeicolo.push({ data: isoDi(dentro(sMs)), valore: quota })
+        // Incassi anticipati: nel giorno del pagamento, come nella loro tabella.
+        for (const ab of v.anticipatedBookings || []) {
+          if (ab.total_price > 0) {
+            const giorno = ab.paid_at ? ab.paid_at.substring(0, 10) : pezzo.a
+            puntiVeicolo.push({ data: isoDi(dentro(msDi(giorno))), valore: ab.total_price })
+          }
+          if (ab.booking_id && !prenotazioniViste.has(ab.booking_id)) {
+            prenotazioniViste.add(ab.booking_id)
+            nuove.push({ data: isoDi(dentro(msDi(ab.paid_at ? ab.paid_at.substring(0, 10) : pezzo.a))), valore: 1 })
+          }
         }
-        // Penali e danni incassati: nel giorno di riconsegna, tenuto nel periodo.
-        const extra = (Number(b.penalty_amount) || 0) + (Number(b.danni_amount) || 0)
-        if (extra > 0) puntiVeicolo.push({ data: isoDi(dentro(msDi(fine))), valore: extra })
-        // Prenotazioni: le stesse contate in "Prenotazioni Trovate", una volta
-        // sola, nel giorno di ritiro; chi era gia' fuori prima del periodo
-        // conta il primo giorno.
-        if (b.booking_id && !prenotazioniViste.has(b.booking_id)) {
-          prenotazioniViste.add(b.booking_id)
-          nuove.push({ data: isoDi(dentro(sMs)), valore: 1 })
+        // Quello che resta fra la riga della tabella e la curva (correzioni a
+        // mano, righe aggiunte, penali senza date): si ripartisce sui giorni
+        // del veicolo in proporzione, o al primo giorno se non ne ha.
+        const obiettivo = (Number(v.totalRevenue) || 0) + (Number(v.anticipatedRevenue) || 0)
+        const somma = puntiVeicolo.reduce((t, p) => t + p.valore, 0)
+        if (Math.abs(obiettivo - somma) > 0.005) {
+          if (somma > 0) for (const p of puntiVeicolo) p.valore = p.valore * obiettivo / somma
+          else puntiVeicolo.push({ data: pezzo.da, valore: obiettivo })
         }
+        fatturato.push(...puntiVeicolo)
       }
-      // Incassi anticipati: nel giorno del pagamento, come nella loro tabella.
-      for (const ab of v.anticipatedBookings || []) {
-        if (ab.total_price > 0) {
-          const giorno = ab.paid_at ? ab.paid_at.substring(0, 10) : a
-          puntiVeicolo.push({ data: isoDi(dentro(msDi(giorno))), valore: ab.total_price })
-        }
-        if (ab.booking_id && !prenotazioniViste.has(ab.booking_id)) {
-          prenotazioniViste.add(ab.booking_id)
-          nuove.push({ data: isoDi(dentro(msDi(ab.paid_at ? ab.paid_at.substring(0, 10) : a))), valore: 1 })
-        }
-      }
-      // Quello che resta fra la riga della tabella e la curva (correzioni a
-      // mano, righe aggiunte, penali senza date): si ripartisce sui giorni
-      // del veicolo in proporzione, o al primo giorno se non ne ha.
-      const obiettivo = (Number(v.totalRevenue) || 0) + (Number(v.anticipatedRevenue) || 0)
-      const somma = puntiVeicolo.reduce((t, p) => t + p.valore, 0)
-      if (Math.abs(obiettivo - somma) > 0.005) {
-        if (somma > 0) for (const p of puntiVeicolo) p.valore = p.valore * obiettivo / somma
-        else puntiVeicolo.push({ data: da, valore: obiettivo })
-      }
-      fatturato.push(...puntiVeicolo)
     }
     const mezzi: ReportPunto[] = [...mezziPerGiorno.entries()].map(([data, set]) => ({ data, valore: set.size }))
     return {
@@ -852,8 +975,40 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
       // Backend supporta sia month=YYYY-MM (legacy) che from+to=YYYY-MM-DD.
       // Custom range / preset 7gg / 30gg / anno / oggi → mandiamo from+to.
       const bizParam = business && business !== 'rental' ? `&business=${encodeURIComponent(business)}` : ''
+      // 23/09/2026: periodo su piu' mesi = un report per mese, ognuno con le
+      // SUE correzioni, e poi la somma. Agosto dentro l'anno = report di agosto.
+      const mesiPeriodo = activeReport === 'vehicles' ? mesiDelPeriodo(customFrom, customTo) : []
+      if (mesiPeriodo.length > 1) {
+        const [ov, risposte] = await Promise.all([
+          loadReportOverrides(overrideScope),
+          Promise.all(mesiPeriodo.map(async m => {
+            const r = await fetch(`/.netlify/functions/monthly-report?type=vehicles&from=${m.da}&to=${m.a}${bizParam}`)
+            const d = await r.json()
+            if (!r.ok) throw new Error(d.error || 'Errore nel caricamento')
+            return d
+          })),
+        ])
+        const mesi = risposte.map((d, i) => {
+          const { vehicles, totals } = adjustVehicleReport((d.vehicles || []), ov, periodKeyOf(mesiPeriodo[i].da))
+          const dati: VehicleReportData = {
+            ...d,
+            vehicles,
+            totalRentalRevenue: totals.totalRentalRevenue,
+            totalPenaltyRevenue: totals.totalPenaltyRevenue,
+            totalDanniRevenue: totals.totalDanniRevenue,
+            totalDaSaldare: totals.totalDaSaldare,
+            totalRevenue: totals.totalRevenue,
+            totalAnticipatedRevenue: totals.totalAnticipatedRevenue,
+          }
+          return { ...mesiPeriodo[i], dati }
+        })
+        setOverrides(ov)
+        setVehicleData(sommaMesi(mesi, customFrom, customTo))
+        return
+      }
       const url = `/.netlify/functions/monthly-report?type=${activeReport}&from=${customFrom}&to=${customTo}${bizParam}`
       const res = await fetch(url)
+
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
       if (activeReport === 'vehicles') {
@@ -2179,6 +2334,10 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 si riflettono anche nei totali/KPI (vedi fetchReport). */}
             <button
               onClick={() => setEditReport(v => !v)}
+              // Le correzioni si salvano per mese: su un periodo di piu' mesi
+              // finirebbero sul primo mese. Si fanno scegliendo il mese.
+              disabled={!!vehicleData?.mesi}
+              title={vehicleData?.mesi ? 'Le modifiche si fanno sul singolo mese (menu Mese...)' : undefined}
               className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${editReport ? 'bg-amber-500/15 border-amber-500/40 text-amber-400' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:text-theme-text-primary'}`}
             >
               {editReport ? '✓ Modifica report attiva' : '✎ Modifica report'}
