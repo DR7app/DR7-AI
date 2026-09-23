@@ -3015,9 +3015,9 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_privati_testo_en: 'At present, one private investor has chosen to believe in our project and to join us on our growth path.',
   ir_privati_img: '',
   ir_privati_stat: [
-    { id: 'capitale', icona: 'capitale', valore: '4950€', label_it: 'Capitale raccolto', label_en: 'Capital raised', nota_it: 'complessivo', nota_en: 'total' },
-    { id: 'quota', icona: 'quota', valore: '0.03%', label_it: 'Quota complessiva', label_en: 'Overall stake', nota_it: 'detenuta', nota_en: 'held' },
-    { id: 'round', icona: 'round', valore: 'Primo round', label_it: '100.000 milioni', label_en: '100,000 million' },
+    { id: 'capitale', icona: 'capitale', valore: '4950€', label_it: 'capitale raccolto', label_en: 'capital raised', nota_it: '', nota_en: '' },
+    { id: 'quota', icona: 'quota', valore: '0.03%', label_it: '', label_en: '', nota_it: '', nota_en: '' },
+    { id: 'round', icona: 'round', valore: 'Primo round', label_it: '100.000 milioni', label_en: '100.000 milioni', nota_it: '', nota_en: '' },
   ],
   ir_riservati_eyebrow_it: 'Identità riservata', ir_riservati_eyebrow_en: 'Confidential identity',
   ir_riservati_testo_it: 'Il nostro investitore ha scelto di mantenere la propria riservatezza. Rispettare la sua scelta è per noi una priorità.',
