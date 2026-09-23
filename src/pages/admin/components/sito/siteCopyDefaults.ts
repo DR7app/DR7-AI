@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 80
+ * Sezioni generate: 36 — interfacce: 81
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -1635,6 +1635,11 @@ export interface CarWashCopy {
   upsell_step2_text_it: string; upsell_step2_text_en: string;
   upsell_added_it: string; upsell_added_en: string;
   upsell_add_it: string; upsell_add_en: string;
+  /** 23/09/2026 (direzione) — le schede Urban+Maxi della vetrina, in ordine:
+   *  un suffisso per scheda. Ogni suffisso accoppia i servizi del Catalogo
+   *  Lavaggio `urban-<suffisso>` e `maxi-<suffisso>`; se uno dei due manca
+   *  la scheda non compare. Vuoto = l'elenco di fabbrica. */
+  carte_combinate?: string[];
 }
 
 // ─── Careers ────────────────────────────────────────────────────────────────
@@ -1773,6 +1778,24 @@ export interface FooterLink {
   external?: boolean;
 }
 
+/**
+ * Recensione scritta a mano nella fascia recensioni (23/09/2026, direzione).
+ * Stavano in sections/ReviewsSection.tsx come elenco di scorta: ora si
+ * aggiungono, tolgono e riordinano da Sito > Recensioni in home.
+ * `text_en` vuoto = si mostra il testo italiano anche in inglese.
+ */
+export interface ManualReview {
+  id: string;
+  name: string;
+  stars: number;
+  /** Data della recensione, AAAA-MM-GG. */
+  date: string;
+  text_it: string;
+  text_en: string;
+  /** Dove porta "Recensione verificata" (la scheda Google). */
+  link: string;
+}
+
 export interface FooterCopy {
   social_links: FooterSocialLink[];
   // Reviews band header
@@ -1785,6 +1808,14 @@ export interface FooterCopy {
    *  (es. /recensioni-scena.jpg) o indirizzo completo. Sta a destra e si
    *  spegne verso sinistra, dove corre il testo. Vuota = solo il fondo. */
   reviews_image?: string;
+  /** 23/09/2026 (direzione) — le recensioni scritte a mano. Si vedono
+   *  finche' Google non risponde, e se Google non risponde. */
+  manual_reviews?: ManualReview[];
+  /** Acceso: le recensioni scritte a mano restano in coda anche dopo
+   *  quelle di Google (com'era sul sito). Spento: solo Google. */
+  manual_reviews_after_google?: boolean;
+  /** Dove porta "Leggi tutte le recensioni". */
+  reviews_google_url?: string;
   contact_company_name: string;
   contact_legal_address_it: string;
   contact_legal_address_en: string;
@@ -3062,6 +3093,7 @@ export const INITIAL_CARWASH: CarWashCopy = {
   upsell_step2_text_en: 'Drive a courtesy car or supercar while your vehicle is being treated.',
   upsell_added_it: 'Aggiunto ✓', upsell_added_en: 'Added ✓',
   upsell_add_it: 'Aggiungi', upsell_add_en: 'Add',
+  carte_combinate: ['exterior', 'interior', 'full', 'full-n2', 'top-shine', 'vip', 'luxury'],
 };
 
 // ─── Default Mechanical Services chrome ────────────────────────────────────
@@ -3377,6 +3409,156 @@ export const INITIAL_FOOTER: FooterCopy = {
   reviews_text_it: 'Clienti da tutto il mondo. Storie reali, esperienze che parlano per noi.',
   reviews_text_en: 'Guests from all over the world. Real stories, experiences that speak for us.',
   reviews_image: '/recensioni-scena.jpg',
+  // 23/09/2026 (direzione) — spostate qui da sections/ReviewsSection.tsx,
+  // stesso testo e stesso ordine: sul sito non cambia niente.
+  manual_reviews: [
+    { id: 'rec-01', name: 'Christian Pistis', stars: 5, date: '2025-01-27',
+      text_it: 'Ho noleggiato il Bmw M4 Competition per festeggiare il mio matrimonio... non potevo scegliere di meglio!!! Alla Dubai Rent sono dei veri professionisti, super disponibili e attenti a ogni dettaglio. Esperienza fantastica!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-02', name: 'Massimo Pisanu', stars: 5, date: '2025-01-27',
+      text_it: 'Ho avuto il piacere di noleggiare per la prima volta un furgone con Dubai Rent 7.0 e l\'esperienza è stata davvero oltre le aspettative. Fin da subito mi sono trovato con persone professionali, disponibili e attente alle mie esigenze. Il servizio impeccabile e la qualità del mezzo hanno reso tutto perfetto. Consigliatissimo!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-03', name: 'Alessia Fois', stars: 5, date: '2025-01-27',
+      text_it: 'Ho contattato Dubai rent per un lavaggio dell\'auto e sono stati subito disponibili per il servizio. In circa un\'ora e mezza mi hanno restituito la mia auto completamente pulita e igienizzata. Servizio impeccabile, personale gentile e professionale. Super consigliato!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-04', name: 'Sabrina Gessa', stars: 5, date: '2025-01-27',
+      text_it: 'Esperienza super positiva. Lavaggio impeccabile, auto pulitissima nei minimi dettagli. Personale gentile e professionale. Consigliatissimo!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-05', name: 'Roberto Loi', stars: 5, date: '2025-01-13',
+      text_it: ' Un servizio impeccabile! Ho noleggiato un\'auto con Dubai Rent 7.0 luxury empire e sono rimasto estremamente soddisfatto. Professionalità, cortesia e auto di altissimo livello. Consigliatissimo a chiunque voglia vivere un\'esperienza di lusso su quattro ruote!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-06', name: 'Nicola Vacca', stars: 5, date: '2025-01-13',
+      text_it: 'Lavaggio ottimo super puntuali e cordiali, mi era stato detto che ci volevano 3 ore per la scelta del lavaggio che ho deciso di effettuare alla mia macchina. Sono arrivato all\'ora stabilita e la macchina era già pronta, pulitissima e profumatissima. Consiglio vivamente!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-07', name: 'Davide Vincis', stars: 5, date: '2025-01-09',
+      text_it: 'Ho noleggiato un Ducato da pochissimo e sono rimasto davvero soddisfatto! Il mezzo era in ottime condizioni, spazioso e comodissimo per le mie necessità. Il servizio è stato impeccabile: personale cortese, disponibile e molto professionale. Consiglio vivamente Dubai Rent 7.0!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-08', name: 'Martina Montis', stars: 5, date: '2025-01-01',
+      text_it: 'Ho avuto il piacere di noleggiare una Mercedes GLE 63s AMG, un vero capolavoro di lusso e potenza, e l\'esperienza è stata semplicemente entusiasmante. L\'auto ha superato ogni mia aspettativa, offrendo prestazioni straordinarie e un comfort superiore. Il servizio ricevuto è stato impeccabile; il team è stato cortese, professionale e attento a ogni dettaglio. Esperienza assolutamente da ripetere!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-09', name: 'Davide Congiu', stars: 5, date: '2025-01-01',
+      text_it: 'Esperienza come SEMPRE fantastica, ho noleggiato già diverse supercar da Dubai Rent e mi sono sempre trovato bene. Tutto il team è sempre disponibile a qualsiasi ora, le auto sono pulitissime e il trattamento al cliente è eccezionale, a un prezzo veramente alla portata di tutti. Straconsigliato!!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-10', name: 'Nicola Frongia', stars: 5, date: '2025-01-01',
+      text_it: 'Conosco Dubai Rent 7.0 dai tempi della storica sede di Via Santa Maria Chiara. Già allora era sinonimo di lusso, cura e precisione. Oggi, nella nuova e moderna sede di Viale Marconi, l\'eccellenza è ancora più evidente. Parco auto straordinario, veicoli curati nei minimi dettagli, personale professionale e attento. Il servizio di autolavaggio interno offre risultati impeccabili. Sono sempre pienamente soddisfatto!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-11', name: 'Daniele Mancosu', stars: 5, date: '2025-01-01',
+      text_it: 'Servizio eccellente dall\'inizio alla fine. L\'auto era in condizioni perfette e il personale molto cordiale. Ho apprezzato tantissimo anche il loro servizio di lavaggio auto, come se fosse appena uscita dalla concessionaria.',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-12', name: 'Anna Maria Zucca', stars: 5, date: '2025-01-01',
+      text_it: 'Esperienza unica!!!! Lavaggio impeccabile. La macchina super profumata, igienizzata e pulitissima. Profumo, caffè ed acqua in omaggio . I ragazzi professionali, gentili e super simpatici . Il noleggio? Un super wow. Macchine di lusso e impeccabili. Dubai Rent è il top ',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-13', name: 'Andrea Pisano', stars: 5, date: '2025-01-01',
+      text_it: 'Esperienza super positiva, sicuramente unica nel suo genere. Staff super gentile e premuroso, lavaggio dell\'auto super professionale. Possibilità di noleggiare una supercar anche solo per poche ore a un prezzo davvero basso con un tocco di esclusività. Super consigliato!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-14', name: 'Fabio De Agostini', stars: 5, date: '2025-01-01',
+      text_it: 'Esperienza super positiva, abbiamo fatto il lavaggio da 49 euro e che dire? La macchina era super pulita nei minimi dettagli... Grazie ragazzi alla prossima... ',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-15', name: 'Francesco Cocco', stars: 5, date: '2024-12-01',
+      text_it: 'Il servizio di lavaggio VIP offerto da Dubai Rent 7.0 è semplicemente il top! Ho lasciato la mia auto per un trattamento completo e sono rimasto senza parole al momento del ritiro. Ogni dettaglio era curato alla perfezione, dall\'interno all\'esterno. Professionalità e qualità al massimo livello!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-16', name: 'Luca Scuto', stars: 5, date: '2024-11-01',
+      text_it: 'Ho noleggiato diverse volte il Carrera 4s da vero appassionato Porsche, che dire macchina fantastica e loro ancora di più. Servizio clienti incredibile, super professionali e sempre disponibili. Lavaggio impeccabile. Consigliatissimo, continuerò a noleggiare da loro ',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-17', name: 'Giancarlo Lecca', stars: 5, date: '2024-12-01',
+      text_it: 'È la prima volta che noleggio da loro e mi sono trovato benissimo, non avevo mai guidato un RS3 e sono rimasto veramente senza parole dalla bellezza dell\'auto e dalla cura nella consegna. Provato anche il lavaggio completo: la macchina è uscita meglio di quando l\'avevo comprata. Consiglio sia il lavaggio che il noleggio. Alla prossima ',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-18', name: 'Alessandro Porcu', stars: 5, date: '2024-10-01',
+      text_it: 'Grazie mille dell\'esperienza. Da guidare safe e con rispetto. Ho avuto il piacere di guidarla sia su tratti lunghi e dritti sia su tratti tecnici e guidati e su strade panoramiche. Perfetta per photoshooting e video. Supercar super pulita, esperienza super. Dubai Rent 7.0 il top!!!!!!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-19', name: 'Stefano Piludu', stars: 5, date: '2025-01-01',
+      text_it: 'Personale altamente professionale, lavaggio molto accurato e con ottimi prodotti. Servizio eccellente!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-20', name: 'Alessio Cannas', stars: 5, date: '2024-08-01',
+      text_it: 'Recensione Dubai Rent 7.0 – Il Top del Noleggio Auto di Lusso. Esperienza eccezionale, auto impeccabili, servizio professionale e cortese. Consigliatissimo per chi cerca il massimo del lusso e della qualità!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-21', name: 'Benjamin', stars: 5, date: '2024-08-01',
+      text_it: 'Great cars & experience. Professional service and amazing vehicles. Highly recommended!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-22', name: 'Andrea Paschina', stars: 5, date: '2024-02-01',
+      text_it: 'Top! Servizio eccellente, auto fantastiche, personale professionale. Esperienza da ripetere assolutamente!',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-23', name: 'Mauro Lobina', stars: 5, date: '2025-05-18',
+      text_it: 'Sono un appassionato di auto di lusso, ho noleggiato più volte delle auto fantastiche, pulite e soprattutto affidabili. Lo staff cordiale e preciso nel loro lavoro, il titolare è una persona alla mano e difficilmente non si riesce a trovare un accordo sia per appuntamenti che per i loro prezzi competitivi e alla portata di tutti. Ci voleva proprio un autonoleggio che permette a chiunque di vivere esperienze da sogno. Spero di riuscire e continuare a provare la loro vasta scelta di parco auto che portano a divertimento e adrenalina pura. Grazie a tutto lo staff di Dubai Rent ',
+      text_en: '',
+      link: 'https://share.google/vSxG17ifqlzJNSrSz' },
+    { id: 'rec-24', name: 'Alessandro Urracci', stars: 5, date: '2025-05-18',
+      text_it: 'Se volete vivere un\'esperienza di guida straordinaria a prezzi davvero competitivi, Dubai Rent 7.0 S.p.A. è la scelta perfetta! Ho noleggiato diverse auto da loro, tra cui l\'Audi RS3, l\'Alfa Romeo Stelvio Quadrifoglio, l\'Audi R8 e il Porsche Macan GTS. Auto impeccabili e pulitissime. Servizio clienti eccezionale: team super professionale, prenotazione rapida, consegna puntuale e attenzione ai dettagli. Emozioni indimenticabili e prezzi vantaggiosi. Il miglior autonoleggio!',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-25', name: 'Fabio De Agostini', stars: 5, date: '2025-08-25',
+      text_it: 'Super positive experience, we had the €49 car wash and what can I say? The car was super clean down to the smallest detail... Thanks guys, see you next time... ',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-26', name: 'Anna Maria Zucca', stars: 5, date: '2025-08-28',
+      text_it: 'Unique experience!!!! Impeccable wash. The car smelled great, sanitized, and spotless. Complimentary perfume, coffee, and water . The guys were professional, kind, and super nice . The rental? A super wow. Luxurious and impeccable cars. Dubai Rent is the best ',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-27', name: 'Alessandro Porcu', stars: 5, date: '2025-06-20',
+      text_it: 'Grazie mille dell\'esperienza. Ho guidato su tratti lunghi e tecnici, anche su strade panoramiche. Perfetta per photoshooting/video. Supercar super pulita, esperienza super. Dubai Rent 7.0 il top!!!!!!',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-28', name: 'Nicola Frongia', stars: 5, date: '2025-08-18',
+      text_it: 'Conosco Dubai Rent 7.0 dai tempi della sede di Via Santa Maria Chiara. Nella nuova sede di Viale Marconi l’eccellenza è ancora più evidente. Parco auto straordinario, veicoli curati nei minimi dettagli. Personale professionale e attento. Autolavaggio interno con risultati impeccabili. Sempre pienamente soddisfatto.',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-29', name: 'Luca Scuto', stars: 5, date: '2025-06-20',
+      text_it: 'I have rented the Carrera 4S several times. The car is fantastic and the team even more so. Incredible customer service, super professional and always available. Car wash impeccable. Highly recommended, I will continue to rent from them ',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-30', name: 'Davide Congiu', stars: 5, date: '2025-08-18',
+      text_it: 'Esperienza SEMPRE fantastica. Ho noleggiato diverse supercar e mi sono sempre trovato benissimo. Team disponibile a qualsiasi ora, auto pulitissime e trattamento al cliente eccezionale, a un prezzo alla portata di tutti. Straconsigliato!!',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-31', name: 'Andrea Frau', stars: 5, date: '2025-07-20',
+      text_it: 'Ottima esperienza con Dubai Rent 7.0. Le macchine sono spettacolari, pulizia e affidabilità al top e prezzi imbattibili. Accoglienza e assistenza al cliente impeccabili.',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-32', name: 'Fabio Follese', stars: 5, date: '2024-11-10',
+      text_it: 'Auto pulitissima abbinato alla vostra super cortesia, per un giro di pura adrenalina con le vostre SUPER CAR nuovissime e splendide. Un ringraziamento a Valerio e a tutto lo staff.',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-33', name: 'Matti Ciambotti', stars: 5, date: '2025-06-20',
+      text_it: 'Non sono vostro cliente, ma vi seguo sui social: non esiste un noleggio simile a voi, numeri uno. Se non fosse per la paura di danneggiare le super car l’avrei già noleggiata da tempo. Continuate così bravi!!',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-34', name: 'Giuseppe Marongiu', stars: 5, date: '2025-05-18',
+      text_it: 'Ho preso tutte le macchine da loro, mi sono trovato benissimo. Personale gentile e accogliente, prezzi molto strepitosi. Consiglio a tutti quelli che vogliono noleggiare super car: loro sono il top del top.',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-35', name: 'Andrea Pisano', stars: 5, date: '2025-08-18',
+      text_it: 'Esperienza super positiva, unica nel suo genere. Staff super gentile e premuroso, lavaggio super professionale. Possibilità di noleggiare una super car anche solo per poche ore a un prezzo davvero basso con un tocco di esclusività. Super consigliato.',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+    { id: 'rec-36', name: 'Giancarlo Lecca', stars: 5, date: '2025-08-18',
+      text_it: 'It\'s the first time I rent from them and I had a great time. I’d never driven an RS3 and was speechless at the beauty of the car and the care at delivery. Tried the complete wash: car came out better than when I bought it. I recommend both the wash and the rental. See you next time ',
+      text_en: '',
+      link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
+  ],
+  manual_reviews_after_google: true,
+  reviews_google_url: 'https://share.google/o5c8DO8nmk3XMn0hF',
   contact_company_name: 'DR7 S.p.A.',
   contact_legal_address_it: 'Sede Legale: Via del Fangario 25, 09122 Cagliari (CA) – Italia',
   contact_legal_address_en: 'Registered Office: Via del Fangario 25, 09122 Cagliari (CA) – Italy',

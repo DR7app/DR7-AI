@@ -42,6 +42,7 @@ import { parseMoney } from '../../../utils/money'
 import { TESTI_CATALOGO, type VoceTesto } from './sito/testiCatalogo'
 import { CaricaMedia, sembraMedia, etichettaMedia } from './sito/CaricaMedia'
 import InvestitoriEditor from './sito/InvestitoriEditor'
+import RecensioniEditor from './sito/RecensioniEditor'
 import {
     SITO_AREAS,
     SITO_SCREENS,
@@ -1043,6 +1044,11 @@ export default function SitoTab({ incorporato = false }: { incorporato?: boolean
                         {hydrated && section === 'footer' && (
                             <FooterEditor copy={footer} setCopy={setFooter} />
                         )}
+                        {/* 23/09/2026 (direzione): le recensioni scritte a mano
+                            stanno nella stessa riga del footer (footer.manual_reviews). */}
+                        {hydrated && section === 'recensioni' && (
+                            <RecensioniEditor copy={footer} setCopy={setFooter} />
+                        )}
                         {hydrated && section === 'legali' && (
                             <LegalEditor copy={legal} setCopy={setLegal} />
                         )}
@@ -1126,6 +1132,16 @@ export default function SitoTab({ incorporato = false }: { incorporato?: boolean
                         )}
                         {hydrated && section === 'testi' && (
                             <TestiEditor screen={screen} copy={testi} setCopy={setTesti} />
+                        )}
+                        {/* 23/09/2026 (direzione): una schermata con un editor
+                            dedicato puo' avere anche frasi scritte con t() nella
+                            pagina (messaggi d'errore, avvisi). Stavano nel
+                            catalogo ma nessuna voce della nav le apriva: ora
+                            compaiono sotto l'editor della schermata. */}
+                        {hydrated && section && section !== 'testi' && TESTI_CATALOGO.some(v => v.schermata === screen.id) && (
+                            <div className="mt-10 pt-8 border-t border-theme-border">
+                                <TestiEditor screen={screen} copy={testi} setCopy={setTesti} />
+                            </div>
                         )}
                     </main>
                 </div>
@@ -4224,6 +4240,26 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
                     <FieldText label='Bottone "Aggiungi" (IT)' value={copy.upsell_add_it} onChange={v => update('upsell_add_it', v)} />
                     <FieldText label='Button "Add" (EN)' value={copy.upsell_add_en} onChange={v => update('upsell_add_en', v)} />
                 </div>
+            </section>
+
+            {/* 23/09/2026 (direzione): quali schede Urban+Maxi e in che ordine. */}
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Schede Urban + Maxi</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Una scheda per riga, nell'ordine in cui compaiono. Ogni riga e' il suffisso che accoppia i due servizi del
+                    Catalogo Lavaggio <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">urban-&lt;suffisso&gt;</code> e
+                    {' '}<code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">maxi-&lt;suffisso&gt;</code>: se uno dei due manca la scheda non compare.
+                    Nome, prezzi e voci della scheda arrivano dal catalogo. Vuoto = elenco di fabbrica.
+                </p>
+                <label className="block">
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Suffissi (uno per riga)</span>
+                    <textarea
+                        value={(copy.carte_combinate ?? []).join('\n')}
+                        onChange={e => update('carte_combinate', e.target.value.split('\n'))}
+                        rows={8}
+                        className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] font-mono text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                    />
+                </label>
             </section>
         </div>
     )
