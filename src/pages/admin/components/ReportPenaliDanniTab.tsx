@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
-import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
+import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
 import toast from 'react-hot-toast'
 // #38 Modifica manuale del report: correggi/rimuovi/aggiungi voci. Gli override
@@ -239,6 +239,38 @@ export default function ReportPenaliDanniTab() {
       .map(([, v]) => v)
   }, [filteredEntries])
 
+  // ── Grafici sopra le tabelle ─────────────────────────────────────────────
+  // 23/09/2026: stesso periodo del selettore gia' in alto, nessun selettore
+  // nuovo. Con "Tutto" si parte dalla prima voce datata del periodo. I punti
+  // vengono dalle stesse voci filtrate dei KPI; le voci senza data restano
+  // nei totali (passati con `totale`) ma non hanno un giorno nella linea.
+  const periodoGrafici = useMemo(() => {
+    const oggi = new Date()
+    let da: Date | null = range.from
+    if (!da) {
+      for (const e of filteredEntries) {
+        if (!e.date) continue
+        const d = new Date(e.date)
+        if (isNaN(d.getTime())) continue
+        if (!da || d < da) da = d
+      }
+    }
+    return { da: da ?? oggi, a: range.to ?? oggi }
+  }, [range, filteredEntries])
+
+  const puntiGrafici = useMemo(() => {
+    const penali: ReportPunto[] = []
+    const danni: ReportPunto[] = []
+    const pratiche: ReportPunto[] = []
+    for (const e of filteredEntries) {
+      if (!e.date) continue
+      if (e.type === 'penali') penali.push({ data: e.date, valore: e.amount })
+      else danni.push({ data: e.date, valore: e.amount })
+      pratiche.push({ data: e.date, valore: 1 })
+    }
+    return { penali, danni, pratiche }
+  }, [filteredEntries])
+
   // ── Donut: danni vs penali ───────────────────────────────────────────────
   const ripartizioneData = useMemo(() => [
     { name: 'Danni', value: kpi.danniTot, fill: COLORS.rose },
@@ -449,6 +481,37 @@ export default function ReportPenaliDanniTab() {
         <KpiCard label="Danni Lavaggio" value={fmtEur(kpi.danniLavaggio)} accent="rose" sub="Lavaggio & Meccanica" />
         <KpiCard label="Penali Lavaggio" value={fmtEur(kpi.penaliLavaggio)} accent="orange" sub="Lavaggio & Meccanica" />
       </div>
+
+      {/* ── Grafici (23/09/2026): stesso periodo e stesse voci dei KPI ── */}
+      <ReportGrafici>
+        <ReportGrafico
+          titolo="Penali (€)"
+          punti={puntiGrafici.penali}
+          da={periodoGrafici.da}
+          a={periodoGrafici.a}
+          colore="amber"
+          formato={fmtEur}
+          totale={kpi.penaliTot}
+        />
+        <ReportGrafico
+          titolo="Danni (€)"
+          punti={puntiGrafici.danni}
+          da={periodoGrafici.da}
+          a={periodoGrafici.a}
+          colore="rose"
+          formato={fmtEur}
+          totale={kpi.danniTot}
+        />
+        <ReportGrafico
+          titolo="Pratiche"
+          punti={puntiGrafici.pratiche}
+          da={periodoGrafici.da}
+          a={periodoGrafici.a}
+          colore="cyan"
+          formato={v => v.toLocaleString('it-IT')}
+          totale={filteredEntries.length}
+        />
+      </ReportGrafici>
 
       {/* ── Row 2: andamento + ripartizione + Azioni Rapide ──────────────
           2026-08-27 (richiesta direzione): stessa forma del Report Terra —

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
-import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import type { ClientTier } from '../../../contexts/ClientStatusContext'
@@ -424,6 +424,40 @@ export default function ReportClientiTab() {
     return mesi
   }, [adjustedClienti])
 
+  // 23/09/2026 — grafici sopra le tabelle, sul periodo gia' scelto nel
+  // DateRangePicker. Il report arriva aggregato per cliente (nessuna spesa per
+  // data): si disegnano solo le serie che hanno una data vera, prima e ultima
+  // prenotazione. Con "Tutto" il periodo parte dalla prima data presente.
+  const periodoGrafici = useMemo(() => {
+    const oggi = new Date()
+    let da: Date | null = range.from
+    let a: Date = range.to || oggi
+    if (!da || !range.to) {
+      let min = Infinity
+      let max = -Infinity
+      adjustedClienti.forEach(c => {
+        for (const d of [c.prima_prenotazione, c.ultima_prenotazione]) {
+          if (!d) continue
+          const t = new Date(d).getTime()
+          if (Number.isNaN(t)) continue
+          if (t < min) min = t
+          if (t > max) max = t
+        }
+      })
+      if (!da) da = Number.isFinite(min) ? new Date(min) : oggi
+      if (!range.to && Number.isFinite(max) && max > oggi.getTime()) a = new Date(max)
+    }
+    return { da, a }
+  }, [range, adjustedClienti])
+  const puntiNuoviClienti = useMemo<ReportPunto[]>(
+    () => adjustedClienti.filter(c => c.prima_prenotazione).map(c => ({ data: c.prima_prenotazione as string, valore: 1 })),
+    [adjustedClienti]
+  )
+  const puntiClientiAttivi = useMemo<ReportPunto[]>(
+    () => adjustedClienti.filter(c => c.ultima_prenotazione).map(c => ({ data: c.ultima_prenotazione as string, valore: 1 })),
+    [adjustedClienti]
+  )
+
   const rankByCustomer = useMemo(() => {
     const m = new Map<string, number>()
     ;[...adjustedClienti].sort((a, b) => b.totale_spesa - a.totale_spesa)
@@ -501,6 +535,28 @@ export default function ReportClientiTab() {
               )}
             </div>
           </div>
+
+          {/* 23/09/2026 — grafici sul periodo del report; il totale di "Clienti
+              attivi" e' lo stesso numero della card Clienti. */}
+          <ReportGrafici>
+            <ReportGrafico
+              titolo="Clienti attivi (ultima prenotazione)"
+              punti={puntiClientiAttivi}
+              da={periodoGrafici.da}
+              a={periodoGrafici.a}
+              colore="gold"
+              formato={v => String(Math.round(v))}
+              totale={adjustedClienti.length}
+            />
+            <ReportGrafico
+              titolo="Nuovi clienti (prima prenotazione)"
+              punti={puntiNuoviClienti}
+              da={periodoGrafici.da}
+              a={periodoGrafici.a}
+              colore="emerald"
+              formato={v => String(Math.round(v))}
+            />
+          </ReportGrafici>
 
           {/* Classifiche: Top spesa + Negativo
               2026-08-27 (richiesta direzione): stessa forma del Report Terra —

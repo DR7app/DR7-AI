@@ -3,7 +3,7 @@ import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Real data only. Backed by /.netlify/functions/ga-report which queries
@@ -199,6 +199,38 @@ export default function ReportTrafficTab() {
     () => (data?.distribution || []).reduce((s, c) => s + c.value, 0),
     [data]
   )
+
+  // 23/09/2026: grafici sopra le tabelle, sullo stesso periodo gia' scelto
+  // (7g/28g/...). ga-report chiede a GA4 da "Ndays ago" a oggi e restituisce
+  // i giorni come GG/MM senza anno: l'anno si ricava dal periodo. Prenotazioni
+  // e fatturato dal sito arrivano solo come totali (webAttributed), senza
+  // giorno: niente grafico per quelli, piuttosto che inventare una serie.
+  const grafici = useMemo(() => {
+    const giorni = { '7d': 7, '28d': 28, '90d': 90, '180d': 180, '365d': 365 }[data?.range ?? range] ?? 28
+    const a = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+    const inizio = new Date(a + 'T12:00:00Z')
+    inizio.setUTCDate(inizio.getUTCDate() - giorni)
+    const da = inizio.toISOString().slice(0, 10)
+    const giornoIso = (g: string): string | null => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(g)) return g
+      const m = /^(\d{2})\/(\d{2})$/.exec(g)
+      if (!m) return null
+      const anno = Number(a.slice(0, 4))
+      const iso = `${anno}-${m[2]}-${m[1]}`
+      return iso > a ? `${anno - 1}-${m[2]}-${m[1]}` : iso
+    }
+    const visite: ReportPunto[] = []
+    const organico: ReportPunto[] = []
+    const ads: ReportPunto[] = []
+    for (const d of data?.traffic || []) {
+      const iso = giornoIso(d.day)
+      if (!iso) continue
+      visite.push({ data: iso, valore: d.total || 0 })
+      organico.push({ data: iso, valore: d.organico || 0 })
+      ads.push({ data: iso, valore: d.ads || 0 })
+    }
+    return { da, a, visite, organico, ads }
+  }, [data, range])
 
   const showBanner = data && !data.configured
   const showWarnings = data && data.warnings.length > 0
@@ -510,6 +542,38 @@ export default function ReportTrafficTab() {
           </>
         )}
       </div>
+
+      {/* Grafici — 23/09/2026: solo con dati GA4 reali. Nel ripiego interno
+          le visite non esistono e le tabelle restano l'unica vista. */}
+      {data && data.dataSource !== 'internal' && data.traffic.length > 0 && (
+        <ReportGrafici>
+          <ReportGrafico
+            titolo="Visite"
+            punti={grafici.visite}
+            da={grafici.da}
+            a={grafici.a}
+            colore="cyan"
+            formato={fmtInt}
+            totale={data.kpis?.visits}
+          />
+          <ReportGrafico
+            titolo="Visite organiche"
+            punti={grafici.organico}
+            da={grafici.da}
+            a={grafici.a}
+            colore="emerald"
+            formato={fmtInt}
+          />
+          <ReportGrafico
+            titolo="Visite da annunci (Paid)"
+            punti={grafici.ads}
+            da={grafici.da}
+            a={grafici.a}
+            colore="violet"
+            formato={fmtInt}
+          />
+        </ReportGrafici>
+      )}
 
       {/* Row 2 — 2026-08-27 (richiesta direzione): stessa forma del Report
           Terra. Gli stessi numeri, in tabella invece che in grafico. */}

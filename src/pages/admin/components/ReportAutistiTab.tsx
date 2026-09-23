@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
 import NumeroTelefono from '../../../components/NumeroTelefono'
-import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 
 interface AutistaLite { id: string; full_name: string; phone: string }
 
@@ -277,6 +277,44 @@ export default function ReportAutistiTab() {
   const programmate = statoCount('Programmata')
   const tassoCompletamento = usciteCount > 0 ? Math.round((completate / rows.length) * 100) : 0
 
+  // 23/09/2026 — grafici sopra le tabelle, sullo stesso periodo del
+  // DateRangeFilter. Periodo vuoto = dalla prima uscita caricata a oggi (o
+  // all'ultima uscita programmata, se e' piu' avanti).
+  const periodoGrafici = useMemo(() => {
+    const oggi = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+    let min = Infinity
+    let max = -Infinity
+    for (const r of rows) {
+      if (!r.date) continue
+      const t = new Date(r.date).getTime()
+      if (Number.isNaN(t)) continue
+      if (t < min) min = t
+      if (t > max) max = t
+    }
+    const da: string | Date = range.from || (Number.isFinite(min) ? new Date(min) : oggi)
+    const a: string | Date = range.to || (Number.isFinite(max) && max > Date.now() ? new Date(max) : oggi)
+    return { da, a }
+  }, [range, rows])
+  const puntiMovimenti = useMemo<ReportPunto[]>(
+    () => rows.filter(r => r.date).map(r => ({ data: r.date as string, valore: 1 })),
+    [rows]
+  )
+  // Uscite = prenotazioni distinte (una uscita con due autisti conta una volta).
+  const puntiUscite = useMemo<ReportPunto[]>(() => {
+    const viste = new Set<string>()
+    const out: ReportPunto[] = []
+    for (const r of rows) {
+      if (!r.date || viste.has(r.bookingId)) continue
+      viste.add(r.bookingId)
+      out.push({ data: r.date, valore: 1 })
+    }
+    return out
+  }, [rows])
+  const puntiCompletate = useMemo<ReportPunto[]>(
+    () => rows.filter(r => r.date && r.stato === 'Completata').map(r => ({ data: r.date as string, valore: 1 })),
+    [rows]
+  )
+
   const statoBadge = (s: string) => {
     const map: Record<string, string> = {
       'Programmata': 'bg-blue-500/15 text-blue-600 dark:text-blue-300',
@@ -316,6 +354,37 @@ export default function ReportAutistiTab() {
             <KpiCard label="Programmate" value={programmate} accent="violet" />
             <KpiCard label="Completamento" value={`${tassoCompletamento}%`} accent={tassoCompletamento >= 80 ? 'emerald' : 'rose'} />
           </div>
+
+          {/* 23/09/2026 — grafici: i totali sono gli stessi delle card KPI. */}
+          <ReportGrafici>
+            <ReportGrafico
+              titolo="Movimenti autisti"
+              punti={puntiMovimenti}
+              da={periodoGrafici.da}
+              a={periodoGrafici.a}
+              colore="gold"
+              formato={v => String(Math.round(v))}
+              totale={rows.length}
+            />
+            <ReportGrafico
+              titolo="Uscite"
+              punti={puntiUscite}
+              da={periodoGrafici.da}
+              a={periodoGrafici.a}
+              colore="amber"
+              formato={v => String(Math.round(v))}
+              totale={usciteCount}
+            />
+            <ReportGrafico
+              titolo="Movimenti completati"
+              punti={puntiCompletate}
+              da={periodoGrafici.da}
+              a={periodoGrafici.a}
+              colore="emerald"
+              formato={v => String(Math.round(v))}
+              totale={completate}
+            />
+          </ReportGrafici>
 
           {/* Ripartizioni — 2026-08-27 (richiesta direzione): tabelle in stile
               Report Terra, niente sparkline, barre o ciambelle. */}

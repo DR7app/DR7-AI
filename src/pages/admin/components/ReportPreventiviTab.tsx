@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRegistraPeriodoReport, periodoDelMese } from '../../../utils/reportPeriodo'
 import { supabase } from '../../../supabaseClient'
+import { ReportGrafici, ReportGrafico } from './ReportUI'
 
 // Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
 // stesso colore, anche quando una fetta sparisce.
@@ -684,6 +685,20 @@ export default function ReportPreventiviTab() {
     return suggestions
   }, [domanda, overview, perdite, conversione, filtered])
 
+  // 23/09/2026 (direzione): grafici sopra le tabelle. Stesse righe filtrate
+  // delle schede (mese scelto + filtri veicolo/categoria/fascia/prezzo/durata),
+  // raggruppate per giorno di creazione del preventivo.
+  const periodoGrafici = periodoDelMese(selectedMonth)
+  const puntiCreati = useMemo(
+    () => filtered.filter(p => p.created_at).map(p => ({ data: p.created_at as string, valore: 1 })),
+    [filtered])
+  const puntiValore = useMemo(
+    () => filtered.filter(p => p.created_at).map(p => ({ data: p.created_at as string, valore: getAmount(p) })),
+    [filtered])
+  const puntiAccettati = useMemo(
+    () => filtered.filter(p => p.created_at && isConverted(p)).map(p => ({ data: p.created_at as string, valore: 1 })),
+    [filtered])
+
   const sections: { key: Section; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'domanda', label: 'Domanda' },
@@ -876,6 +891,38 @@ export default function ReportPreventiviTab() {
                   sub={`ancora aperti ${formatCurrency(overview.pendingValue)}`}
                 />
               </div>
+
+              {/* 23/09/2026 (direzione): grafici sopra le tabelle, sul mese
+                  scelto. In testa gli stessi numeri delle schede qui sopra. */}
+              <ReportGrafici>
+                <ReportGrafico
+                  titolo="Preventivi creati"
+                  punti={puntiCreati}
+                  da={periodoGrafici.from}
+                  a={periodoGrafici.to}
+                  colore="cyan"
+                  formato={(v) => String(Math.round(v))}
+                  totale={overview.total}
+                />
+                <ReportGrafico
+                  titolo="Valore preventivi"
+                  punti={puntiValore}
+                  da={periodoGrafici.from}
+                  a={periodoGrafici.to}
+                  colore="gold"
+                  formato={(v) => formatCurrency(v)}
+                  totale={overview.totalValue}
+                />
+                <ReportGrafico
+                  titolo="Accettati"
+                  punti={puntiAccettati}
+                  da={periodoGrafici.from}
+                  a={periodoGrafici.to}
+                  colore="emerald"
+                  formato={(v) => String(Math.round(v))}
+                  totale={overview.converted}
+                />
+              </ReportGrafici>
 
               {/* Esito e perdite — 2026-08-27 (richiesta direzione): stessa
                   forma del Report Terra, tabelle e non grafici. */}

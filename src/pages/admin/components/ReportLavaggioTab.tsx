@@ -10,7 +10,7 @@ import MoneyInput from '../../../components/MoneyInput'
 import {
   ReportShell, ReportToolbar, ReportField, ReportButton, ReportKpiGrid, ReportKpi,
   ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportError,
-  REPORT_INPUT_CLASS,
+  REPORT_INPUT_CLASS, ReportGrafici, ReportGrafico,
 } from './ReportUI'
 
 interface WashTypeBreakdown {
@@ -33,6 +33,16 @@ interface WashReportData {
   byType: WashTypeBreakdown[]
   internalWashesCount?: number
   internalByVehicle?: InternalWashBreakdown[]
+}
+
+// 23/09/2026: un lavaggio del mese, per i grafici sopra le tabelle. Il
+// report mensile (monthly-report?type=washes) restituisce solo i totali per
+// servizio, senza giorno: queste righe servono solo a disegnare la linea.
+interface LavaggioGiorno {
+  data: string
+  ricavo: number
+  quantita: number
+  interno: boolean
 }
 
 interface MonthlyTrendPoint {
@@ -96,6 +106,7 @@ export default function ReportLavaggioTab() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     () => applyOverrides((washData?.byType || []) as any, overrides, rowKeyOf) as any[],
     [washData, overrides]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [lavaggiDelMese, setLavaggiDelMese] = useState<LavaggioGiorno[]>([])
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
   // PDF dei Report: periodo sul PDF e PDF mese per mese.
@@ -178,6 +189,7 @@ export default function ReportLavaggioTab() {
   useEffect(() => {
     fetchReport()
     fetchTrend()
+    fetchLavaggiDelMese()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth])
 
@@ -296,6 +308,67 @@ export default function ReportLavaggioTab() {
     }
   }
 
+  // 23/09/2026 (direzione): grafici sopra le tabelle. Stessa query e stessi
+  // filtri di generateWashReport in monthly-report (stati validi IT+EN, targhe
+  // TEST escluse, interni riconosciuti allo stesso modo, fatturati solo con
+  // prezzo): cambia solo che qui si tiene il giorno. I totali in testa ai
+  // grafici restano quelli delle schede (override della direzione compresi).
+  async function fetchLavaggiDelMese() {
+    try {
+      const { from, to } = periodoDelMese(selectedMonth)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const righe: any[] = []
+      for (let da = 0; ; da += 1000) {
+        const { data, error: qErr } = await supabase
+          .from('bookings')
+          .select('id, service_name, price_total, booking_details, vehicle_name, appointment_date')
+          .eq('service_type', 'car_wash')
+          .gte('appointment_date', from + 'T00:00:00')
+          .lte('appointment_date', to + 'T23:59:59')
+          .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+          .or('vehicle_plate.is.null,vehicle_plate.not.in.(TEST000,TEST002)')
+          .order('appointment_date', { ascending: true })
+          .range(da, da + 999)
+        if (qErr) throw qErr
+        righe.push(...(data || []))
+        if (!data || data.length < 1000) break
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const eInterno = (b: any): boolean => {
+        const details = b.booking_details || {}
+        if (details.internal === true) return true
+        if (details.createdBy === 'automatic_system') return true
+        if (b.vehicle_name && String(b.vehicle_name).toUpperCase().startsWith('INTERNO')) return true
+        const combined = String(details.source || '').toLowerCase() + ' ' + String(details.notes || '').toLowerCase()
+        return ['reintegration', 'reint', 'internal', 'reconditioning', 'automatico', 'auto-wash', 'rientro'].some(kw => combined.includes(kw))
+      }
+      const out: LavaggioGiorno[] = []
+      for (const b of righe) {
+        const data = String(b.appointment_date || '').slice(0, 10)
+        if (!data) continue
+        if (eInterno(b)) { out.push({ data, ricavo: 0, quantita: 1, interno: true }); continue }
+        if (!b.price_total || b.price_total === 0) continue
+        const carrello = (b.booking_details || {}).cartItems ?? (b.booking_details || {}).cart_items
+        if (Array.isArray(carrello) && carrello.length > 0) {
+          let ricavo = 0
+          let quantita = 0
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const item of carrello as any[]) {
+            ricavo += (item.price || 0) * (item.quantity || 1)
+            quantita += (item.quantity || 1)
+          }
+          out.push({ data, ricavo, quantita, interno: false })
+        } else {
+          out.push({ data, ricavo: (b.price_total || 0) / 100, quantita: 1, interno: false })
+        }
+      }
+      setLavaggiDelMese(out)
+    } catch (e) {
+      console.warn('[ReportLavaggio] fetchLavaggiDelMese failed:', e)
+      setLavaggiDelMese([])
+    }
+  }
+
   async function fetchTrend() {
     setTrendLoading(true)
     try {
@@ -346,6 +419,18 @@ export default function ReportLavaggioTab() {
 
   const emptyState = !washData && !loading
 
+  // 23/09/2026: punti dei grafici, periodo = mese scelto nel report.
+  const periodoGrafici = periodoDelMese(selectedMonth)
+  const puntiRicavo = useMemo(
+    () => lavaggiDelMese.filter(l => !l.interno).map(l => ({ data: l.data, valore: l.ricavo })),
+    [lavaggiDelMese])
+  const puntiFatturati = useMemo(
+    () => lavaggiDelMese.filter(l => !l.interno).map(l => ({ data: l.data, valore: l.quantita })),
+    [lavaggiDelMese])
+  const puntiInterni = useMemo(
+    () => lavaggiDelMese.filter(l => l.interno).map(l => ({ data: l.data, valore: 1 })),
+    [lavaggiDelMese])
+
   return (
     <ReportShell
       title="Report Mensili — Lavaggio & Meccanica"
@@ -361,7 +446,7 @@ export default function ReportLavaggioTab() {
             className={`${REPORT_INPUT_CLASS} font-mono tabular-nums`}
           />
         </ReportField>
-        <ReportButton onClick={() => { fetchReport(); fetchTrend(); loadCosts() }} disabled={loading}>
+        <ReportButton onClick={() => { fetchReport(); fetchTrend(); fetchLavaggiDelMese(); loadCosts() }} disabled={loading}>
           Aggiorna
         </ReportButton>
         <button
@@ -412,6 +497,38 @@ export default function ReportLavaggioTab() {
           tone={margineReale >= 0 ? 'green' : 'red'}
         />
       </ReportKpiGrid>
+
+      {/* 23/09/2026 (direzione): grafici sopra le tabelle, sul mese scelto.
+          In testa gli stessi numeri delle schede qui sopra. */}
+      <ReportGrafici>
+        <ReportGrafico
+          titolo="Ricavo lavaggi"
+          punti={puntiRicavo}
+          da={periodoGrafici.from}
+          a={periodoGrafici.to}
+          colore="gold"
+          formato={(v) => formatCurrency(v)}
+          totale={ricavo}
+        />
+        <ReportGrafico
+          titolo="Lavaggi fatturati"
+          punti={puntiFatturati}
+          da={periodoGrafici.from}
+          a={periodoGrafici.to}
+          colore="cyan"
+          formato={(v) => String(Math.round(v))}
+          totale={lavaggiFatt}
+        />
+        <ReportGrafico
+          titolo="Lavaggi interni (rientro)"
+          punti={puntiInterni}
+          da={periodoGrafici.from}
+          a={periodoGrafici.to}
+          colore="violet"
+          formato={(v) => String(Math.round(v))}
+          totale={lavaggiInterni}
+        />
+      </ReportGrafici>
 
       {/* Dettaglio per Tipo di Servizio */}
       <ReportCard

@@ -13,6 +13,7 @@ import { adjustVehicleReport, adjustWashReport, periodKeyOf, CHIAVE_OVUNQUE } fr
 import { formattaDataEu, rimettiCursore } from '../../../utils/dataEuMentreScrivi'
 import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import InFlottaEditor, { leggiDatiFlotta, scriviDatiFlotta, type DatiFlotta } from './InFlottaEditor'
+import { ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 
 interface ProCategory { id: string; label: string }
 
@@ -631,6 +632,84 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   // Spese del BUSINESS sul periodo mostrato (affitto, stipendi, una tantum...).
   // Sono un livello sopra le spese fisse per veicolo: le due si sommano.
   const reportSpese = useReportSpese(business, customFrom, customTo)
+
+  // 23/09/2026 (direzione): i tre grafici sopra le tabelle, come quelli di
+  // Prenotazioni Noleggio Terra. Nessun dato nuovo: si leggono le stesse righe
+  // gia' caricate per le tabelle (override, esclusioni e business compresi).
+  // Il periodo e' quello dei DATI mostrati (month = "from_to" dal server), non
+  // quello appena digitato mentre il report si ricarica.
+  const grafici = useMemo(() => {
+    if (!vehicleData) return null
+    const [mDa, mA] = String(vehicleData.month || '').split('_')
+    const dalServer = /^\d{4}-\d{2}-\d{2}$/.test(mDa || '') && /^\d{4}-\d{2}-\d{2}$/.test(mA || '')
+    const da = dalServer ? mDa : customFrom
+    const a = dalServer ? mA : customTo
+    const DAY = 86400000
+    const msDi = (iso: string) => { const [y, m, g] = iso.split('-').map(Number); return Date.UTC(y, m - 1, g) }
+    const isoDi = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+    const daMs = msDi(da)
+    const aMs = msDi(a)
+    const fatturato: ReportPunto[] = []
+    const nuove: ReportPunto[] = []
+    const mezziPerGiorno = new Map<string, Set<string>>()
+    const mezziDistinti = new Set<string>()
+    const prenotazioniViste = new Set<string>()
+    for (const v of vehicleData.vehicles) {
+      for (const b of v.bookings || []) {
+        // Penale/danno su prenotazione annullata: senza date, fuori dalla
+        // curva ma dentro il totale del grafico (vedi `totale` sotto).
+        if (!b.start_at || !b.end_at) continue
+        const inizio = b.start_at.substring(0, 10)
+        const fine = b.end_at.substring(0, 10)
+        // Notti nel periodo: stessa regola del server (occupiedDayIndices),
+        // riconsegna esclusa, mono-giorno = 1, tagliate al periodo.
+        const sMs = msDi(inizio)
+        const ultima = Math.max(sMs, msDi(fine) - DAY)
+        const lo = Math.max(sMs, daMs)
+        const hi = Math.min(ultima, aMs)
+        const notti = Number(b.days_in_month) || 0
+        // Quota giornaliera del noleggio incassato: la stessa prorata del
+        // Ricavo Noleggi (incassato / giorni fatturabili x notti nel periodo).
+        const perGiorno = notti > 0 && b.billable_days > 0 ? (Number(b.total_price) || 0) / b.billable_days : 0
+        for (let ms = lo, n = 0; ms <= hi && n < notti; ms += DAY, n++) {
+          const g = isoDi(ms)
+          if (perGiorno > 0) fatturato.push({ data: g, valore: perGiorno })
+          const set = mezziPerGiorno.get(g) || new Set<string>()
+          set.add(v.vehicleId)
+          mezziPerGiorno.set(g, set)
+          mezziDistinti.add(v.vehicleId)
+        }
+        // Penali e danni incassati: nel giorno di riconsegna, tenuto nel periodo.
+        const extra = (Number(b.penalty_amount) || 0) + (Number(b.danni_amount) || 0)
+        if (extra > 0) fatturato.push({ data: isoDi(Math.min(Math.max(msDi(fine), daMs), aMs)), valore: extra })
+        // Nuova prenotazione: il report non porta la data di creazione, si
+        // conta nel giorno di ritiro (solo ritiri dentro il periodo).
+        if (inizio >= da && inizio <= a && !prenotazioniViste.has(b.booking_id)) {
+          prenotazioniViste.add(b.booking_id)
+          nuove.push({ data: inizio, valore: 1 })
+        }
+      }
+      // Incassi anticipati: nel giorno del pagamento, come nella loro tabella.
+      for (const ab of v.anticipatedBookings || []) {
+        if (ab.paid_at && ab.total_price > 0) fatturato.push({ data: ab.paid_at, valore: ab.total_price })
+      }
+    }
+    const mezzi: ReportPunto[] = [...mezziPerGiorno.entries()].map(([data, set]) => ({ data, valore: set.size }))
+    return {
+      da,
+      a,
+      fatturato,
+      // Il titolo deve dire lo stesso numero della scheda "Ricavo TOTALE": le
+      // correzioni a mano sul veicolo, le righe aggiunte e le penali senza
+      // date non hanno un giorno, quindi il totale e' quello del report.
+      totaleFatturato: vehicleData.totalRevenue + (vehicleData.totalAnticipatedRevenue || 0),
+      nuove,
+      mezzi,
+      mezziDistinti: mezziDistinti.size,
+    }
+  }, [vehicleData, customFrom, customTo])
+  // Nome del mezzo per business: auto su Terra, alloggi sui Soggiorni.
+  const nomeMezzi = business === 'rental' ? 'auto' : business === 'stay_rental' ? 'alloggi' : 'mezzi'
 
   // Modifiche manuali al report (nuova funzione): override applicati alle righe
   // veicolo prima dei totali. Chiave riga = periodo|vehicleId (scope per periodo).
@@ -1943,6 +2022,43 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
               <p className="text-[10px] text-theme-text-muted mt-0.5">{vehicleData.anticipatedBookingsCount || 0} prenotazioni — rental futuro</p>
             </div>
           </div>
+
+          {/* 23/09/2026: grafici del periodo scelto, sopra le tabelle */}
+          {grafici && (
+            <ReportGrafici>
+              <ReportGrafico
+                titolo="Fatturato"
+                punti={grafici.fatturato}
+                da={grafici.da}
+                a={grafici.a}
+                colore="emerald"
+                formato={formatCurrency}
+                formatoAsse={(v) => v >= 1000 ? `€${Math.round(v / 1000)}K` : `€${Math.round(v)}`}
+                totale={grafici.totaleFatturato}
+              />
+              <ReportGrafico
+                titolo="Nuove prenotazioni (per ritiro)"
+                punti={grafici.nuove}
+                da={grafici.da}
+                a={grafici.a}
+                colore="cyan"
+                formato={(v) => `${Math.round(v)} prenotazioni`}
+                formatoAsse={(v) => `${Math.round(v)}`}
+              />
+              <ReportGrafico
+                titolo={business === 'stay_rental' ? 'Alloggi occupati' : business === 'rental' ? 'Auto fuori' : 'Mezzi in uso'}
+                punti={grafici.mezzi}
+                da={grafici.da}
+                a={grafici.a}
+                colore="amber"
+                aggrega="massimo"
+                formato={(v) => `${Math.round(v)} ${nomeMezzi}`}
+                formatoAsse={(v) => `${Math.round(v)}`}
+                totale={grafici.mezziDistinti}
+                totaleEtichetta={`${grafici.mezziDistinti} ${nomeMezzi} ${business === 'rental' ? 'distinte' : 'distinti'}`}
+              />
+            </ReportGrafici>
+          )}
 
           {/* 2026-05-24: Tabella dettaglio incassi anticipati — solo se ce ne sono */}
           {(vehicleData.totalAnticipatedRevenue ?? 0) > 0 && (
