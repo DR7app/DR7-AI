@@ -257,6 +257,7 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 {bi("Bottone", "ir_visione_bottone")}
                 <Campo label="Link del bottone (es. /about)" value={g('ir_visione_link')} onChange={v => set('ir_visione_link', v)} />
                 {immagine("Foto di sfondo", "ir_visione_img")}
+                {immagine("Infografica sotto il blocco (immagine intera, vuoto = nascosta)", "ir_infografica_img")}
             </Riquadro>
 
             <Riquadro titolo={`I nostri azionisti (${lista<IrAzionista>('ir_azionisti').length})`} nota="Riservato = scheda col lucchetto, senza foto. Senza foto si vedono le iniziali.">

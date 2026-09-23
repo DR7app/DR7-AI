@@ -1560,6 +1560,8 @@ export interface InvestitoriCopy {
   ir_visione_bottone_it?: string; ir_visione_bottone_en?: string;
   ir_visione_link?: string;
   ir_visione_img?: string;
+  /** Infografica a tutta larghezza sotto Visione (immagine intera, niente velo). Vuoto = blocco nascosto. */
+  ir_infografica_img?: string;
   // Azionisti
   ir_azionisti_eyebrow_it?: string; ir_azionisti_eyebrow_en?: string;
   ir_azionisti_titolo_it?: string; ir_azionisti_titolo_en?: string;
@@ -3014,6 +3016,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_visione_bottone_it: 'Scopri la nostra strategia', ir_visione_bottone_en: 'Discover our strategy',
   ir_visione_link: '/about',
   ir_visione_img: '',
+  ir_infografica_img: '/investitori/dr7-visione-2030.jpg',
   ir_azionisti_eyebrow_it: 'Struttura azionaria', ir_azionisti_eyebrow_en: 'Shareholder structure',
   ir_azionisti_titolo_it: 'I nostri azionisti.', ir_azionisti_titolo_en: 'Our shareholders.',
   ir_azionisti_testo_it: 'Chi crede nel nostro progetto e ne condivide la visione di lungo periodo.',
