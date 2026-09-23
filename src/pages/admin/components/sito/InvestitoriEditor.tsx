@@ -14,6 +14,8 @@ import type {
     IrLogo,
     IrDocumento,
     IrFile,
+    IrTappa,
+    IrPilastro,
 } from './siteCopyDefaults'
 
 /**
@@ -38,6 +40,10 @@ const ICONE: Array<[string, string]> = [
     ['presentazione', 'Presentazione'],
     ['governance', 'Governance'],
     ['comunicati', 'Comunicati'],
+    ['aereo', 'Aereo'],
+    ['chip', 'Tecnologia (chip)'],
+    ['moneta', 'Moneta digitale'],
+    ['globo', 'Mondo'],
 ]
 
 const inputCls = 'w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40'
@@ -257,7 +263,66 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 {bi("Bottone", "ir_visione_bottone")}
                 <Campo label="Link del bottone (es. /about)" value={g('ir_visione_link')} onChange={v => set('ir_visione_link', v)} />
                 {immagine("Foto di sfondo", "ir_visione_img")}
-                {immagine("Infografica sotto il blocco (immagine intera, vuoto = nascosta)", "ir_infografica_img")}
+            </Riquadro>
+
+            <Riquadro titolo={`Visione 2030 (${lista<IrTappa>('ir_v2030_tappe').length} tappe)`} nota="Frise degli obiettivi sotto la Visione. Senza tappe il blocco non compare. Usare foto senza loghi.">
+                {bi("Scritta piccola", "ir_v2030_eyebrow")}
+                {bi("Titolo, prima riga", "ir_v2030_riga1")}
+                {bi("Titolo, riga in oro", "ir_v2030_accento")}
+                {bi("Motto sotto il titolo", "ir_v2030_motto")}
+                {bi("Citazione", "ir_v2030_citazione")}
+                {bi("Scritta sopra le foto", "ir_v2030_mondi")}
+                {immagine("Foto grande", "ir_v2030_img_1")}
+                {immagine("Foto in alto a destra", "ir_v2030_img_2")}
+                {immagine("Foto in basso a destra", "ir_v2030_img_3")}
+                <Elenco<IrTappa>
+                    voci={lista<IrTappa>('ir_v2030_tappe')}
+                    onChange={v => set('ir_v2030_tappe', v)}
+                    nuova={() => ({ id: nuovoId('t'), anno: '', valore_it: '', valore_en: '', titolo_it: '', titolo_en: '', testo_it: '', testo_en: '', img: '' })}
+                    etichetta={v => [v.anno, v.valore_it].filter(Boolean).join(' - ')}
+                    aggiungi="Aggiungi tappa"
+                >
+                    {(v, s) => (
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <Campo label="Anno" value={v.anno} onChange={anno => s({ anno })} />
+                                <div />
+                                <Campo label="Obiettivo (IT, es. € 3 milioni)" value={v.valore_it} onChange={valore_it => s({ valore_it })} />
+                                <Campo label="Obiettivo (EN)" value={v.valore_en} onChange={valore_en => s({ valore_en })} />
+                                <Campo label="Titolo (IT)" value={v.titolo_it} onChange={titolo_it => s({ titolo_it })} />
+                                <Campo label="Titolo (EN)" value={v.titolo_en} onChange={titolo_en => s({ titolo_en })} />
+                                <Campo label="Testo (IT)" value={v.testo_it} onChange={testo_it => s({ testo_it })} />
+                                <Campo label="Testo (EN)" value={v.testo_en} onChange={testo_en => s({ testo_en })} />
+                            </div>
+                            <div>
+                                <Campo label="Foto" value={v.img} onChange={img => s({ img })} />
+                                <CaricaMedia compatto value={v.img} onChange={img => s({ img })} />
+                            </div>
+                        </div>
+                    )}
+                </Elenco>
+                {bi("Nota sotto la frise", "ir_v2030_nota")}
+                {bi("Frase grande in oro", "ir_v2030_claim")}
+                {bi("Sottotitolo della frase", "ir_v2030_sottoclaim")}
+                <Elenco<IrPilastro>
+                    voci={lista<IrPilastro>('ir_v2030_pilastri')}
+                    onChange={v => set('ir_v2030_pilastri', v)}
+                    nuova={() => ({ id: nuovoId('p'), icona: 'globo', titolo_it: '', titolo_en: '', testo_it: '', testo_en: '' })}
+                    etichetta={v => v.titolo_it}
+                    aggiungi="Aggiungi settore"
+                >
+                    {(v, s) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <SceltaIcona value={v.icona} onChange={icona => s({ icona })} />
+                            <div />
+                            <Campo label="Settore (IT)" value={v.titolo_it} onChange={titolo_it => s({ titolo_it })} />
+                            <Campo label="Settore (EN)" value={v.titolo_en} onChange={titolo_en => s({ titolo_en })} />
+                            <Campo label="Sotto (IT)" value={v.testo_it} onChange={testo_it => s({ testo_it })} />
+                            <Campo label="Sotto (EN)" value={v.testo_en} onChange={testo_en => s({ testo_en })} />
+                        </div>
+                    )}
+                </Elenco>
+                {bi("Frase di chiusura", "ir_v2030_chiusura")}
             </Riquadro>
 
             <Riquadro titolo={`I nostri azionisti (${lista<IrAzionista>('ir_azionisti').length})`} nota="Riservato = scheda col lucchetto, senza foto. Senza foto si vedono le iniziali.">

@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 82
+ * Sezioni generate: 36 — interfacce: 84
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -1472,6 +1472,24 @@ export interface IrBarra {
   utile: number;
 }
 
+/** Una tappa della frise Visione 2030 (anno, obiettivo, foto). */
+export interface IrTappa {
+  id: string;
+  anno: string;
+  valore_it: string; valore_en: string;
+  titolo_it: string; titolo_en: string;
+  testo_it: string; testo_en: string;
+  img: string;
+}
+
+/** Un settore dell'ecosistema, sotto la frise. */
+export interface IrPilastro {
+  id: string;
+  icona: string;
+  titolo_it: string; titolo_en: string;
+  testo_it: string; testo_en: string;
+}
+
 export interface IrAzionista {
   id: string;
   nome: string;
@@ -1560,8 +1578,20 @@ export interface InvestitoriCopy {
   ir_visione_bottone_it?: string; ir_visione_bottone_en?: string;
   ir_visione_link?: string;
   ir_visione_img?: string;
-  /** Infografica a tutta larghezza sotto Visione (immagine intera, niente velo). Vuoto = blocco nascosto. */
-  ir_infografica_img?: string;
+  // Visione 2030: frise degli obiettivi + settori. Senza tappe il blocco non compare.
+  ir_v2030_eyebrow_it?: string; ir_v2030_eyebrow_en?: string;
+  ir_v2030_riga1_it?: string; ir_v2030_riga1_en?: string;
+  ir_v2030_accento_it?: string; ir_v2030_accento_en?: string;
+  ir_v2030_motto_it?: string; ir_v2030_motto_en?: string;
+  ir_v2030_citazione_it?: string; ir_v2030_citazione_en?: string;
+  ir_v2030_mondi_it?: string; ir_v2030_mondi_en?: string;
+  ir_v2030_img_1?: string; ir_v2030_img_2?: string; ir_v2030_img_3?: string;
+  ir_v2030_tappe?: IrTappa[];
+  ir_v2030_nota_it?: string; ir_v2030_nota_en?: string;
+  ir_v2030_claim_it?: string; ir_v2030_claim_en?: string;
+  ir_v2030_sottoclaim_it?: string; ir_v2030_sottoclaim_en?: string;
+  ir_v2030_pilastri?: IrPilastro[];
+  ir_v2030_chiusura_it?: string; ir_v2030_chiusura_en?: string;
   // Azionisti
   ir_azionisti_eyebrow_it?: string; ir_azionisti_eyebrow_en?: string;
   ir_azionisti_titolo_it?: string; ir_azionisti_titolo_en?: string;
@@ -3016,7 +3046,36 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_visione_bottone_it: 'Scopri la nostra strategia', ir_visione_bottone_en: 'Discover our strategy',
   ir_visione_link: '/about',
   ir_visione_img: '',
-  ir_infografica_img: '/investitori/dr7-visione-2030.jpg',
+  ir_v2030_eyebrow_it: 'Visione 2030', ir_v2030_eyebrow_en: 'Vision 2030',
+  ir_v2030_riga1_it: 'Più di un\'azienda.', ir_v2030_riga1_en: 'More than a company.',
+  ir_v2030_accento_it: 'Un ecosistema globale.', ir_v2030_accento_en: 'A global ecosystem.',
+  ir_v2030_motto_it: 'Luxury. Technology. People. Planet.', ir_v2030_motto_en: 'Luxury. Technology. People. Planet.',
+  ir_v2030_citazione_it: 'Da una visione locale a un impatto globale.', ir_v2030_citazione_en: 'From a local vision to a global impact.',
+  ir_v2030_mondi_it: 'Terra · Mare · Aria · Digitale', ir_v2030_mondi_en: 'Land · Sea · Air · Digital',
+  ir_v2030_img_1: '/video-aria-poster.jpg', ir_v2030_img_2: '/menu-property.jpeg', ir_v2030_img_3: '/menu-business.jpeg',
+  ir_v2030_tappe: [
+    { id: '2024', anno: '2024', valore_it: '€ 0', valore_en: '€ 0', titolo_it: 'Fondazione', titolo_en: 'Foundation', testo_it: 'Un\'idea. Una visione. Da Cagliari al mondo.', testo_en: 'An idea. A vision. From Cagliari to the world.', img: '/video-terra-poster.jpg' },
+    { id: '2025', anno: '2025', valore_it: '€ 3 milioni', valore_en: '€ 3 million', titolo_it: 'Primi risultati', titolo_en: 'First results', testo_it: 'Validazione del modello. Crescita reale.', testo_en: 'Model validated. Real growth.', img: '/collezione.jpeg' },
+    { id: '2026', anno: '2026', valore_it: '€ 15 milioni', valore_en: '€ 15 million', titolo_it: 'Consolidamento', titolo_en: 'Consolidation', testo_it: 'Brand, flotta, tecnologia. La base per il futuro.', testo_en: 'Brand, fleet, technology. The foundation for the future.', img: '/menu-servizi.jpeg' },
+    { id: '2027', anno: '2027', valore_it: '€ 120 milioni', valore_en: '€ 120 million', titolo_it: 'Scala', titolo_en: 'Scale', testo_it: 'Espansione nazionale e primi mercati esteri.', testo_en: 'National expansion and first foreign markets.', img: '/franchising-hero.jpeg' },
+    { id: '2028', anno: '2028', valore_it: '€ 2 miliardi', valore_en: '€ 2 billion', titolo_it: 'Internazionalizzazione', titolo_en: 'Internationalisation', testo_it: 'Nuovi settori, nuove città, nuovi mercati.', testo_en: 'New sectors, new cities, new markets.', img: '/menu-aria.jpeg' },
+    { id: '2029', anno: '2029', valore_it: '€ 30 miliardi', valore_en: '€ 30 billion', titolo_it: 'Ecosistema globale', titolo_en: 'Global ecosystem', testo_it: 'Mobilità, lusso, hospitality, tech, AI, blockchain.', testo_en: 'Mobility, luxury, hospitality, tech, AI, blockchain.', img: '/menu-mare.jpeg' },
+    { id: '2030', anno: '2030', valore_it: '€ 500 miliardi', valore_en: '€ 500 billion', titolo_it: 'IPO Wall Street', titolo_en: 'Wall Street IPO', testo_it: 'Un nuovo standard globale. DR7 tra i leader del futuro.', testo_en: 'A new global standard. DR7 among the leaders of the future.', img: '/investor-hero.jpeg' },
+  ],
+  ir_v2030_nota_it: 'Obiettivi strategici di valutazione: indicativi, non costituiscono previsione né garanzia di risultato.',
+  ir_v2030_nota_en: 'Strategic valuation targets: indicative only, not a forecast or a guarantee of results.',
+  ir_v2030_claim_it: 'The next generation luxury platform', ir_v2030_claim_en: 'The next generation luxury platform',
+  ir_v2030_sottoclaim_it: 'Real assets. Digital power. Global impact.', ir_v2030_sottoclaim_en: 'Real assets. Digital power. Global impact.',
+  ir_v2030_pilastri: [
+    { id: 'mobilita', icona: 'auto', titolo_it: 'Mobilità', titolo_en: 'Mobility', testo_it: 'Premium & Beyond', testo_en: 'Premium & Beyond' },
+    { id: 'aviazione', icona: 'aereo', titolo_it: 'Aviazione', titolo_en: 'Aviation', testo_it: 'Private Jets', testo_en: 'Private Jets' },
+    { id: 'real-estate', icona: 'patrimonio', titolo_it: 'Real Estate', titolo_en: 'Real Estate', testo_it: 'Ville, resort, locations', testo_en: 'Villas, resorts, locations' },
+    { id: 'hospitality', icona: 'clienti', titolo_it: 'Hospitality', titolo_en: 'Hospitality', testo_it: 'Esperienze esclusive', testo_en: 'Exclusive experiences' },
+    { id: 'tech', icona: 'chip', titolo_it: 'Tech & AI', titolo_en: 'Tech & AI', testo_it: 'Piattaforme proprie', testo_en: 'Proprietary platforms' },
+    { id: 'coin', icona: 'moneta', titolo_it: 'DR7 Coin', titolo_en: 'DR7 Coin', testo_it: 'Economia digitale', testo_en: 'Digital economy' },
+    { id: 'franchising', icona: 'globo', titolo_it: 'Franchising', titolo_en: 'Franchising', testo_it: 'Nel mondo', testo_en: 'Worldwide' },
+  ],
+  ir_v2030_chiusura_it: 'Invest today. Be part of a brighter tomorrow.', ir_v2030_chiusura_en: 'Invest today. Be part of a brighter tomorrow.',
   ir_azionisti_eyebrow_it: 'Struttura azionaria', ir_azionisti_eyebrow_en: 'Shareholder structure',
   ir_azionisti_titolo_it: 'I nostri azionisti.', ir_azionisti_titolo_en: 'Our shareholders.',
   ir_azionisti_testo_it: 'Chi crede nel nostro progetto e ne condivide la visione di lungo periodo.',
