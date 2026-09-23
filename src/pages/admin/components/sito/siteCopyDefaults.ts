@@ -3019,7 +3019,8 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_azionisti_testo_it: 'Chi crede nel nostro progetto e ne condivide la visione di lungo periodo.',
   ir_azionisti_testo_en: 'Those who believe in our project and share its long-term vision.',
   ir_azionisti: [
-    { id: 'privato-1', nome: 'Investitore privato', ruolo_it: 'Identità riservata', ruolo_en: 'Identity confidential', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
+    { id: 'privato-1', nome: 'Andrea Onano', ruolo_it: 'Investitore privato', ruolo_en: 'Private investor', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '' },
+    { id: 'societa-privata-1', nome: 'Società privata', ruolo_it: '200.000 €', ruolo_en: '€200,000', da_it: 'Azionista dal 2026', da_en: 'Shareholder since 2026', foto: '', riservato: true },
   ],
   ir_privati_eyebrow_it: 'Investitore privato', ir_privati_eyebrow_en: 'Private investor',
   ir_privati_titolo_it: '1 investitore privato', ir_privati_titolo_en: '1 private investor',
