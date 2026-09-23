@@ -253,7 +253,12 @@ function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: Ret
   }
 
   const category = vehicle.category || 'exotic'
-  const driverTier = (tier || 'TIER_2') as import('../../../types/rentalConfig').DriverTier
+  // 23/09/2026: conducente BLOCKED sbloccato con OTP (es. patente da 2 anni).
+  // La Centralina non ha una lista per BLOCKED: si usano le assicurazioni della
+  // Fascia B della categoria DEL VEICOLO. Prima tornava una lista vuota e la
+  // prenotazione teneva l'assicurazione di un altro veicolo (Audi RS3 con la
+  // Kasko delle Exotic Cars, franchigia 15.000 invece di 5.000).
+  const driverTier = (tier && tier !== 'BLOCKED' ? tier : tier === 'BLOCKED' ? 'TIER_1' : 'TIER_2') as import('../../../types/rentalConfig').DriverTier
 
   // Read from Centralina Pro config
   if (config) {
@@ -4795,8 +4800,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // The legacy reader (insuranceOption only) defaulted to KASKO_BASE
       // whenever the wizard hadn't written that nested field, so wallet
       // bookings showed the wrong tier in admin (Massimo Runchina case).
+      // 23/09/2026: anche booking_details.insurance_option (snake_case), la
+      // chiave scritta dalla conversione preventivo -> prenotazione. Senza,
+      // la modifica leggeva "nessuna assicurazione" e al Salva scriveva
+      // insuranceOption vuoto: contratto senza Kasko (caso Mattia Cane').
       insurance_option: (booking as { insurance_option?: string }).insurance_option
         || booking.booking_details?.insuranceOption
+        || (booking.booking_details as { insurance_option?: string } | undefined)?.insurance_option
         || '',
       kasko_una_volta: leggiKaskoUnaVolta((booking.booking_details as { kasko_una_volta?: unknown } | undefined)?.kasko_una_volta),
       // Cauzione amount + status — read in TWO shapes:
@@ -7229,9 +7239,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           autista_ritiro: autistiRitiro[0] || null,
           autista_riconsegna: autistiRiconsegna[0] || null,
           // Driver Tier
-          driver_tier: customerTier?.tier || null,
-          driver_age: customerTier?.driverAge || null,
-          driver_license_years: customerTier?.licenseYears || null,
+          // 23/09/2026: in modifica, se la fascia non si puo' ricalcolare
+          // (scheda senza data di nascita o patente) resta quella salvata:
+          // prima diventava null e il contratto perdeva la fascia.
+          driver_tier: customerTier?.tier || (editingId ? bookingOriginale?.booking_details?.driver_tier : null) || null,
+          driver_age: customerTier?.driverAge || (editingId ? bookingOriginale?.booking_details?.driver_age : null) || null,
+          driver_license_years: customerTier?.licenseYears || (editingId ? bookingOriginale?.booking_details?.driver_license_years : null) || null,
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
           // Accordo valido solo per questa prenotazione (prezzo/franchigie).

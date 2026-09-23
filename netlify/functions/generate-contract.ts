@@ -1511,7 +1511,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // Nome dell'assicurazione: UNICA fonte Centralina Pro. Qui non c'e'
         // nessuna tabella di nomi: si prende l'id salvato sulla prenotazione e
         // si cerca l'opzione in Centralina.
-        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || ''
+        // 23/09/2026: anche insurance_option (chiave della conversione da
+        // preventivo e colonna top-level): con il solo insuranceOption vuoto
+        // il contratto usciva senza Kasko.
+        const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance_option || booking.insurance_option || booking.booking_details?.insurance || booking.booking_details?.kasko || ''
 
         // 08/09/2026 — Franchigie sul contratto (Incendio, Furto, Eventi
         // naturali, Eventi sociopolitici, Atti vandalici) + testo Kasko.
