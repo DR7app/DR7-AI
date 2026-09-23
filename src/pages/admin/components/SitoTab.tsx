@@ -3642,6 +3642,10 @@ function PressEditor({ copy, setCopy }: { copy: PressCopy; setCopy: (next: Press
                             <input type="text" value={a.date} onChange={e => updateArt(i, { date: e.target.value })} placeholder="Data (es. 28 Maggio 2025)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                         </div>
                         <input type="text" value={a.link} onChange={e => updateArt(i, { link: e.target.value })} placeholder="https://..." className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                        {/* 23/09/2026 (direzione): il logo della testata si carica da qui.
+                            Vuoto = logo riconosciuto dal nome della testata sul sito
+                            (Sito/utils/loghiStampa.ts), altrimenti il nome scritto. */}
+                        <FieldText label="Logo testata (vuoto = automatico dal nome)" value={a.logo ?? ''} onChange={v => updateArt(i, { logo: v })} media />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             <textarea value={a.summary_it} onChange={e => updateArt(i, { summary_it: e.target.value })} placeholder="Sommario IT" rows={3} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
                             <textarea value={a.summary_en} onChange={e => updateArt(i, { summary_en: e.target.value })} placeholder="Summary EN" rows={3} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
