@@ -1413,13 +1413,6 @@ const BLOCCO_0: VoceTesto[] = [
         "schermata": "account-preventivi"
     },
     {
-        "chiave": "s:df421e15",
-        "it": "Illimitati",
-        "en": "Unlimited",
-        "file": "pages/account/MyPreventivi.tsx",
-        "schermata": "account-preventivi"
-    },
-    {
         "chiave": "s:307179c2",
         "it": "In lavorazione",
         "en": "Being prepared",
@@ -2118,17 +2111,17 @@ const BLOCCO_0: VoceTesto[] = [
         "en": "Deleting it means losing access to your account, your history and every service, advantage and benefit linked to the profile.",
         "file": "pages/account/SecuritySettings.tsx",
         "schermata": "account-sicurezza"
-    }
-]
-
-const BLOCCO_1: VoceTesto[] = [
+    },
     {
         "chiave": "s:7681ac6f",
         "it": "Elimina Account",
         "en": "Delete Account",
         "file": "pages/account/SecuritySettings.tsx",
         "schermata": "account-sicurezza"
-    },
+    }
+]
+
+const BLOCCO_1: VoceTesto[] = [
     {
         "chiave": "s:be372a24",
         "it": "ELIMINA DEFINITIVAMENTE",
@@ -4221,17 +4214,17 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "Online discount -5%:",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    }
-]
-
-const BLOCCO_2: VoceTesto[] = [
+    },
     {
         "chiave": "s:d07f5da2",
         "it": "Servizio meccanico",
         "en": "Mechanical service",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    },
+    }
+]
+
+const BLOCCO_2: VoceTesto[] = [
     {
         "chiave": "s:a36ec340",
         "it": "Targa",
@@ -6324,17 +6317,17 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "26 or over",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_3: VoceTesto[] = [
+    },
     {
         "chiave": "s:739b3b8d",
         "it": "26-69 anni",
         "en": "26-69 years",
         "file": "components/ui/VehicleSearchForm.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_3: VoceTesto[] = [
     {
         "chiave": "s:65c97071",
         "it": "3. Bagagli",
@@ -8427,17 +8420,17 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "ID document (back)",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_4: VoceTesto[] = [
+    },
     {
         "chiave": "s:6e3528ad",
         "it": "Documento Secondo Conducente (fronte)",
         "en": "Second Driver ID Document (front)",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_4: VoceTesto[] = [
     {
         "chiave": "s:2777b5db",
         "it": "Documento Secondo Conducente (retro)",
@@ -9500,6 +9493,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Il veicolo non è disponibile a quest'orario. Disponibile dalle",
         "en": "The vehicle is not available at this time. Available from",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:df421e15",
+        "it": "Illimitati",
+        "en": "Unlimited",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {

@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 36 — interfacce: 81
+ * Sezioni generate: 36 — interfacce: 82
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -1495,6 +1495,18 @@ export interface IrDocumento {
   titolo_it: string; titolo_en: string;
   azione_it: string; azione_en: string;
   /** Vuoto = il documento si chiede via email. */
+  url: string;
+  /**
+   * Piu' file sotto la stessa scheda (es. un bilancio per anno). Se ce n'e'
+   * almeno uno la scheda li elenca tutti, ognuno scaricabile, e `url` non
+   * serve piu'. Si aggiungono da Sito CMS > Investitori.
+   */
+  file?: IrFile[];
+}
+
+export interface IrFile {
+  id: string;
+  nome_it: string; nome_en: string;
   url: string;
 }
 
@@ -3045,7 +3057,11 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_gov_testo_it: 'Crediamo nella trasparenza, nella solidità dei processi e in una governance chiara, per costruire fiducia oggi e valore domani.',
   ir_gov_testo_en: 'We believe in transparency, solid processes and clear governance, to build trust today and value tomorrow.',
   ir_gov_documenti: [
-    { id: 'bilanci', icona: 'documento', titolo_it: 'Bilanci societari', titolo_en: 'Financial statements', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '' },
+    { id: 'bilanci', icona: 'documento', titolo_it: 'Bilanci societari', titolo_en: 'Financial statements', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '',
+      file: [
+        { id: 'bilancio-2025', nome_it: 'Bilancio 2025', nome_en: '2025 financial statements', url: '/documenti/bilancio-2025.pdf' },
+        { id: 'bilancio-2024', nome_it: 'Bilancio 2024', nome_en: '2024 financial statements', url: '/documenti/bilancio-2024.pdf' },
+      ] },
     { id: 'presentazione', icona: 'presentazione', titolo_it: 'Investor Presentation', titolo_en: 'Investor Presentation', azione_it: 'Richiedi la presentazione', azione_en: 'Request the presentation', url: '' },
     { id: 'statuto', icona: 'governance', titolo_it: 'Statuto e Governance', titolo_en: 'Articles and Governance', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '' },
     { id: 'comunicati', icona: 'comunicati', titolo_it: 'Comunicati stampa', titolo_en: 'Press releases', azione_it: 'Leggi le news', azione_en: 'Read the news', url: '/press' },

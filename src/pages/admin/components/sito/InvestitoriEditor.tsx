@@ -13,6 +13,7 @@ import type {
     IrAzionista,
     IrLogo,
     IrDocumento,
+    IrFile,
 } from './siteCopyDefaults'
 
 /**
@@ -362,6 +363,30 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                             <div className="md:col-span-2">
                                 <Campo label="File o pagina (PDF, indirizzo o /press)" value={v.url} onChange={url => s({ url })} />
                                 <CaricaDocumento onChange={url => s({ url })} />
+                            </div>
+                            {/* Piu' file sotto la stessa scheda (es. un bilancio
+                                per anno): se ce n'e' almeno uno, sul sito la
+                                scheda li elenca tutti e il campo sopra non serve. */}
+                            <div className="md:col-span-2 border-t border-theme-border pt-3">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">File della scheda ({(v.file || []).length}) - uno per anno, il piu' recente in alto</p>
+                                <Elenco<IrFile>
+                                    voci={v.file || []}
+                                    onChange={file => s({ file })}
+                                    nuova={() => ({ id: nuovoId('f'), nome_it: '', nome_en: '', url: '' })}
+                                    etichetta={f => f.nome_it || 'Nuovo file'}
+                                    aggiungi="Aggiungi file"
+                                >
+                                    {(f, sf) => (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <Campo label="Nome (IT) es. Bilancio 2026" value={f.nome_it} onChange={nome_it => sf({ nome_it })} />
+                                            <Campo label="Nome (EN)" value={f.nome_en} onChange={nome_en => sf({ nome_en })} />
+                                            <div className="md:col-span-2">
+                                                <Campo label="File (PDF)" value={f.url} onChange={url => sf({ url })} />
+                                                <CaricaDocumento onChange={url => sf({ url })} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </Elenco>
                             </div>
                         </div>
                     )}
