@@ -25,6 +25,19 @@ const SITE = process.env.DR7_SITE_PATH || path.join(process.env.HOME, 'Sito')
 const OUT = path.join(process.cwd(), 'src/pages/admin/components/sito/testiCatalogo.ts')
 const MAP = path.join(process.cwd(), 'src/pages/admin/components/sito/sitoSiteMap.ts')
 const CARTELLE = ['pages', 'components', 'sections', 'layouts']
+// 23/09/2026 (direzione) — i file di utils/ con messaggi per il cliente
+// (errori del carrello, codice fiscale, targa...). Fuori da React non c'e'
+// t(): usano `testoFisso({ it, en })` di Sito/utils/testiSito.ts, stessa
+// chiave e stesso override. Si elencano a mano: utils/ contiene anche
+// codice che non mostra niente, e scansionarla tutta non serve.
+const FILE_UTILS = [
+    'utils/bookingValidation.ts',
+    'utils/carrelloCheckout.ts',
+    'utils/codiceFiscale.ts',
+    'utils/dr7club.ts',
+    'utils/lookupTarga.ts',
+    'utils/prevendite.ts',
+]
 
 if (!fs.existsSync(SITE)) {
     console.error(`[testi] repo del sito non trovato in ${SITE} (DR7_SITE_PATH per cambiarlo)`)
@@ -88,6 +101,10 @@ function fileDelSito() {
     }
     const app = path.join(SITE, 'App.tsx')
     if (fs.existsSync(app)) out.push(app)
+    for (const f of FILE_UTILS) {
+        const p = path.join(SITE, f)
+        if (fs.existsSync(p)) out.push(p)
+    }
     return out
 }
 
@@ -152,8 +169,8 @@ for (const file of fileDelSito()) {
         if (!voci.has(chiave)) voci.set(chiave, { chiave, it: voce.it, en: voce.en, file: rel, schermata })
     }
 
-    // t({ it: '...', en: '...' })
-    for (const m of src.matchAll(/\bt\(\s*\{/g)) {
+    // t({ it: '...', en: '...' }) e, nei file di utils/, testoFisso({ ... })
+    for (const m of src.matchAll(/\b(?:t|testoFisso)\(\s*\{/g)) {
         const valori = leggiOggetto(src, m.index + m[0].length - 1)
         if (!valori || !valori.it) continue
         const chiave = chiaveTesto(valori.it)
