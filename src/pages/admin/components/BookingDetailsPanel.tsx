@@ -322,7 +322,8 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
               </p>
               <p className="text-xs text-theme-text-muted">
                 Gia' pagato col pacchetto: noleggio
-                {booking.booking_details.prevendita_km_inclusi ? ` · ${booking.booking_details.prevendita_km_inclusi} km` : ''}
+                {Number(booking.booking_details.prevendita_km_inclusi) >= 9999 ? ' · km illimitati'
+                  : booking.booking_details.prevendita_km_inclusi ? ` · ${booking.booking_details.prevendita_km_inclusi} km` : ''}
                 {booking.booking_details.prevendita_assicurazione ? ` · ${booking.booking_details.prevendita_assicurazione}` : ''}
                 {booking.booking_details.prevendita_copertura_eur
                   ? ` (valore ${formatEUR(Number(booking.booking_details.prevendita_copertura_eur))})`

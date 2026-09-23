@@ -29,6 +29,14 @@ import { getInsuranceOptions } from '../../../utils/configLookup'
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
+// Km illimitati = 9999, la stessa soglia che usano il wizard del sito e le
+// prenotazioni (kmPackage.includedKm >= 9999). Niente colonna nuova.
+const KM_ILLIMITATI = 9999
+function testoKm(km: number | null | undefined): string {
+  if (Number(km) >= KM_ILLIMITATI) return 'Illimitati'
+  return km ? String(km) : '—'
+}
+
 interface VeicoloPrevendita { id: string; nome: string; targa?: string | null }
 
 interface Prevendita {
@@ -755,7 +763,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
 
                       <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                         <dt className="text-theme-text-muted">Utilizzi</dt><dd className="text-theme-text-primary text-right">{p.utilizzi_inclusi}</dd>
-                        <dt className="text-theme-text-muted">Km per utilizzo</dt><dd className="text-theme-text-primary text-right">{p.km_inclusi || '—'}</dd>
+                        <dt className="text-theme-text-muted">Km per utilizzo</dt><dd className="text-theme-text-primary text-right">{testoKm(p.km_inclusi)}</dd>
                         <dt className="text-theme-text-muted">Validita'</dt><dd className="text-theme-text-primary text-right">{p.validita_mesi} mesi</dd>
                         <dt className="text-theme-text-muted">Max al mese</dt><dd className="text-theme-text-primary text-right">{p.max_utilizzi_mese ?? 'Nessun limite'}</dd>
                         <dt className="text-theme-text-muted">Giorni consecutivi</dt><dd className="text-theme-text-primary text-right">{p.max_giorni_consecutivi ?? 'Nessun limite'}</dd>
@@ -1109,11 +1117,24 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm text-theme-text-secondary mb-1 block">Km inclusi per utilizzo</label>
-                  <MoneyInput
-                    value={bozza.km_inclusi}
-                    onChange={v => setBozza(b => ({ ...b, km_inclusi: Number(v) || 0 }))}
-                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary outline-none focus:border-dr7-gold"
-                  />
+                  {Number(bozza.km_inclusi) >= KM_ILLIMITATI ? (
+                    <div className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary">Km illimitati</div>
+                  ) : (
+                    <MoneyInput
+                      value={bozza.km_inclusi}
+                      onChange={v => setBozza(b => ({ ...b, km_inclusi: Number(v) || 0 }))}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary outline-none focus:border-dr7-gold"
+                    />
+                  )}
+                  <label className="mt-2 flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Number(bozza.km_inclusi) >= KM_ILLIMITATI}
+                      onChange={e => setBozza(b => ({ ...b, km_inclusi: e.target.checked ? KM_ILLIMITATI : 100 }))}
+                      className="accent-dr7-gold"
+                    />
+                    Km illimitati
+                  </label>
                 </div>
                 <div>
                   <label className="text-sm text-theme-text-secondary mb-1 block">Validita' (mesi)</label>
@@ -1386,7 +1407,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4 space-y-2 text-sm">
                   <div className="text-xs text-theme-text-muted uppercase tracking-wider mb-2">Condizioni pagate</div>
-                  <div className="flex justify-between"><span className="text-theme-text-muted">Km per utilizzo</span><span className="text-theme-text-primary">{dettaglio.km_inclusi || '—'}</span></div>
+                  <div className="flex justify-between"><span className="text-theme-text-muted">Km per utilizzo</span><span className="text-theme-text-primary">{testoKm(dettaglio.km_inclusi)}</span></div>
                   <div className="flex justify-between"><span className="text-theme-text-muted">Assicurazione</span><span className="text-theme-text-primary">{dettaglio.assicurazione_inclusa || 'Non inclusa'}</span></div>
                   <div className="flex justify-between"><span className="text-theme-text-muted">Max utilizzi al mese</span><span className="text-theme-text-primary">{dettaglio.max_utilizzi_mese ?? 'Nessun limite'}</span></div>
                   <div className="flex justify-between"><span className="text-theme-text-muted">Max giorni consecutivi</span><span className="text-theme-text-primary">{dettaglio.max_giorni_consecutivi ?? 'Nessun limite'}</span></div>
