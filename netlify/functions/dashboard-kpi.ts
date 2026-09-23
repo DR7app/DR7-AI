@@ -1400,8 +1400,8 @@ const handlerInterno: Handler = async (event) => {
     // lo segnala invece di far sparire il business dai totali.
     // Contratti del periodo: li conta monthly-report, come nel Report Noleggio.
     const contrattiDi = (r: Record<string, unknown> | null) => {
-      const c = r?.contratti as { totale?: number; firmati?: number; daFirmare?: number; annullati?: number } | undefined
-      return c ? { totale: Number(c.totale) || 0, firmati: Number(c.firmati) || 0, daFirmare: Number(c.daFirmare) || 0, annullati: Number(c.annullati) || 0 } : null
+      const c = r?.contratti as { totale?: number; firmati?: number; daFirmare?: number } | undefined
+      return c ? { totale: Number(c.totale) || 0, firmati: Number(c.firmati) || 0, daFirmare: Number(c.daFirmare) || 0 } : null
     }
     const perBusiness = (r: Record<string, unknown> | null, ov: OverrideIndex) => {
       const t = totaliNoleggio(r, ov)

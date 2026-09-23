@@ -109,7 +109,7 @@ interface VehicleReportData {
   anticipatedBookingsCount?: number
   avgUtilizationRate: number
   // Contratti creati nel periodo, dello stesso business del report
-  contratti?: { totale: number; firmati: number; daFirmare: number; annullati: number }
+  contratti?: { totale: number; firmati: number; daFirmare: number }
   vehicles: VehicleReport[]
 }
 
@@ -1932,7 +1932,6 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 <p className="text-2xl font-bold text-theme-text-primary">{vehicleData.contratti.totale}</p>
                 <p className="text-[10px] text-theme-text-muted mt-0.5">
                   {vehicleData.contratti.firmati} firmati · {vehicleData.contratti.daFirmare} da firmare
-                  {vehicleData.contratti.annullati > 0 && <> · {vehicleData.contratti.annullati} annullati</>}
                 </p>
               </div>
             )}

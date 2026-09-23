@@ -1204,10 +1204,10 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
 
   // Una prenotazione = un contratto: se per la stessa prenotazione esistono
   // piu' righe (vecchie rigenerazioni) conta una volta sola, e vale la firmata.
-  // Contratto annullato o prenotazione annullata = annullato.
-  const ANNULLATE = ['cancelled', 'canceled', 'annullata']
-  const RANGO = { firmato: 3, da_firmare: 2, annullato: 1 } as const
-  const perPrenotazione = new Map<string, keyof typeof RANGO>()
+  // 23/09/2026: gli annullati (contratto o prenotazione annullata) restano
+  // FUORI dai numeri: non sono contratti dell'azienda, come le prove.
+  const ANNULLATE = ['cancelled', 'canceled', 'annullata', 'annullato']
+  const perPrenotazione = new Map<string, boolean>() // chiave -> firmato
   for (const c of righe) {
     const b = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings
     if (b) {
@@ -1218,18 +1218,14 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
     // Le prove interne non sono contratti dell'azienda: restano fuori dal
     // totale e non gonfiano i "da firmare" (nessuno firma una prova).
     if (contrattoDiProva(c, b)) continue
-    const annullato = ANNULLATE.includes(String(c.status || '').toLowerCase())
-      || (!!b && ANNULLATE.includes(String(b.status || '').toLowerCase()))
-    const stato: keyof typeof RANGO = annullato ? 'annullato' : c.signed_pdf_url ? 'firmato' : 'da_firmare'
+    if (ANNULLATE.includes(String(c.status || '').toLowerCase())) continue
+    if (b && ANNULLATE.includes(String(b.status || '').toLowerCase())) continue
     const chiave = c.booking_id ? `b:${c.booking_id}` : `c:${c.id}`
-    const prima = perPrenotazione.get(chiave)
-    if (!prima || RANGO[stato] > RANGO[prima]) perPrenotazione.set(chiave, stato)
+    perPrenotazione.set(chiave, !!perPrenotazione.get(chiave) || !!c.signed_pdf_url)
   }
-  const stati = [...perPrenotazione.values()]
-  const totale = stati.length
-  const firmati = stati.filter(st => st === 'firmato').length
-  const annullati = stati.filter(st => st === 'annullato').length
-  return { totale, firmati, daFirmare: totale - firmati - annullati, annullati }
+  const totale = perPrenotazione.size
+  const firmati = [...perPrenotazione.values()].filter(Boolean).length
+  return { totale, firmati, daFirmare: totale - firmati }
 }
 
 // Diagnostic function to understand data issues

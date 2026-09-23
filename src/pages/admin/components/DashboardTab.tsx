@@ -27,7 +27,7 @@ interface BusinessReport {
   canonical: boolean
 }
 
-interface ContrattiPeriodo { totale: number; firmati: number; daFirmare: number; annullati: number }
+interface ContrattiPeriodo { totale: number; firmati: number; daFirmare: number }
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -1344,7 +1344,7 @@ export default function DashboardTab() {
                   </div>
                   <p className="text-2xl font-bold text-theme-text-primary">{somma('totale')}</p>
                   <p className="text-xs text-theme-text-muted mt-1">
-                    {somma('firmati')} firmati · {somma('daFirmare')} da firmare{somma('annullati') > 0 && ` · ${somma('annullati')} annullati`}
+                    {somma('firmati')} firmati · {somma('daFirmare')} da firmare
                   </p>
                   <p className="text-xs text-theme-text-muted mt-1">
                     {presenti.filter(([, c]) => c.totale > 0).map(([nome, c]) => `${nome} ${c.totale}`).join(' · ') || 'nessun contratto nel periodo'}

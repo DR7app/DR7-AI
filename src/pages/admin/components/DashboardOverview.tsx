@@ -49,7 +49,7 @@ interface GaPayload {
   funnel: GaFunnelStage[]
 }
 
-interface ContrattiPeriodo { totale: number; firmati: number; daFirmare: number; annullati: number }
+interface ContrattiPeriodo { totale: number; firmati: number; daFirmare: number }
 
 interface KpiPayload {
   revenue: { currentMonth: number; previousMonth: number; changePercent: number; incassato: number }
@@ -201,8 +201,8 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
 
   // Contratti creati nel periodo, sommati sui quattro business: identici alla
   // card Contratti di "Sintesi del Periodo" (stessa risposta di dashboard-kpi,
-  // che a sua volta li fa contare a monthly-report). Gli annullati restano
-  // dentro il totale e fuori dai firmati, come nel Report.
+  // che a sua volta li fa contare a monthly-report). Gli annullati sono
+  // fuori dai numeri: una prenotazione valida = un contratto.
   const contratti = useMemo(() => {
     const voci = [
       kpi?.monthlyReports?.noleggio?.contratti,
