@@ -3089,7 +3089,6 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_privati_img: '',
   ir_privati_stat: [
     { id: 'capitale', icona: 'capitale', valore: '4950€', label_it: 'capitale raccolto', label_en: 'capital raised', nota_it: '', nota_en: '' },
-    { id: 'quota', icona: 'quota', valore: '0.03%', label_it: '', label_en: '', nota_it: '', nota_en: '' },
     { id: 'round', icona: 'round', valore: 'Primo round', label_it: '100.000 milioni', label_en: '100.000 milioni', nota_it: '', nota_en: '' },
   ],
   ir_riservati_eyebrow_it: 'Identità riservata', ir_riservati_eyebrow_en: 'Confidential identity',
@@ -3124,7 +3123,11 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
         { id: 'bilancio-2024', nome_it: 'Bilancio 2024', nome_en: '2024 financial statements', url: '/documenti/bilancio-2024.pdf' },
       ] },
     { id: 'presentazione', icona: 'presentazione', titolo_it: 'Investor Presentation', titolo_en: 'Investor Presentation', azione_it: 'Richiedi la presentazione', azione_en: 'Request the presentation', url: '' },
-    { id: 'statuto', icona: 'governance', titolo_it: 'Statuto e Governance', titolo_en: 'Articles and Governance', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '' },
+    { id: 'statuto', icona: 'governance', titolo_it: 'Statuto e Governance', titolo_en: 'Articles and Governance', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '',
+      file: [
+        { id: 'statuto-sociale', nome_it: 'Statuto sociale vigente', nome_en: 'Articles of association', url: '/documenti/statuto-sociale-vigente.pdf' },
+        { id: 'visura-2026-07-28', nome_it: 'Visura camerale 28/07/2026', nome_en: 'Company registry extract 28/07/2026', url: '/documenti/visura-camerale-2026-07-28.pdf' },
+      ] },
     { id: 'comunicati', icona: 'comunicati', titolo_it: 'Comunicati stampa', titolo_en: 'Press releases', azione_it: 'Leggi le news', azione_en: 'Read the news', url: '/press' },
   ],
   ir_cta_eyebrow_it: 'Private capital', ir_cta_eyebrow_en: 'Private capital',

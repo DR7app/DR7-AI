@@ -7638,6 +7638,13 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:deb805e9",
+        "it": "Conferma acquisto",
+        "en": "Confirm purchase",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Confirm_Password",
         "it": "Conferma Password",
         "en": "Confirm Password",
@@ -8420,17 +8427,17 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "ID document (back)",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_4: VoceTesto[] = [
     {
         "chiave": "s:6e3528ad",
         "it": "Documento Secondo Conducente (fronte)",
         "en": "Second Driver ID Document (front)",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_4: VoceTesto[] = [
+    },
     {
         "chiave": "s:2777b5db",
         "it": "Documento Secondo Conducente (retro)",
@@ -10523,17 +10530,17 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "Max per month",
         "file": "pages/PrevenditePage.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_5: VoceTesto[] = [
     {
         "chiave": "s:cb55be25",
         "it": "meno di 26 anni",
         "en": "under 26",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_5: VoceTesto[] = [
+    },
     {
         "chiave": "s:76f3f9c5",
         "it": "Meno di 26 anni",
@@ -12626,17 +12633,17 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Select the flight date",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_6: VoceTesto[] = [
     {
         "chiave": "k:Select_dates_and_verify",
         "it": "Seleziona le date e verifica la disponibilità",
         "en": "Select your dates and check availability",
         "file": "components/ui/VehicleSearchForm.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_6: VoceTesto[] = [
+    },
     {
         "chiave": "s:d4f83324",
         "it": "Seleziona manualmente la categoria del tuo veicolo:",
