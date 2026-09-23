@@ -3,6 +3,7 @@ import { ScheletroPagina } from '../../../components/Scheletro'
 import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
+import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 
 /**
  * DashboardOverview — premium KPI dashboard, screenshot-grade.
@@ -25,6 +26,17 @@ type GaRange = '7d' | '28d' | '90d' | '180d' | '365d'
 const GA_PRESET_DAYS: Array<{ k: GaRange; d: number }> = [
   { k: '7d', d: 7 }, { k: '28d', d: 28 }, { k: '90d', d: 90 }, { k: '180d', d: 180 }, { k: '365d', d: 365 },
 ]
+// Estremi UTC della giornata Europe/Rome: `contracts.created_at` e' salvato in
+// UTC, come nella tab Contratti (stesso filtro periodo, stessi numeri).
+function inizioGiornoRoma(giorno: string): string {
+  return romeIsoFromParts(giorno, '00:00')
+}
+function inizioGiornoDopoRoma(giorno: string): string {
+  const d = new Date(`${giorno}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return romeIsoFromParts(d.toISOString().slice(0, 10), '00:00')
+}
+
 function spanToGaPreset(from: string, to: string): GaRange {
   const ms = new Date(to + 'T00:00:00').getTime() - new Date(from + 'T00:00:00').getTime()
   const days = Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86400000) + 1) : 28
@@ -116,6 +128,7 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
   const [kpi, setKpi] = useState<KpiPayload | null>(null)
   const [walletUsers, setWalletUsers] = useState<number>(0)
   const [clubMembers, setClubMembers] = useState<number>(0)
+  const [contratti, setContratti] = useState<{ totale: number; firmati: number }>({ totale: 0, firmati: 0 })
   const [topVehicles, setTopVehicles] = useState<TopVehicle[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -146,6 +159,19 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
           .select('id', { count: 'exact', head: true })
           .eq('status', 'active')
         if (!cancelled) setClubMembers(clubCount || 0)
+
+        // Contratti emessi nel periodo + quanti sono gia' firmati. Solo il
+        // conteggio (head: true): la tab Contratti resta l'elenco.
+        const daISO = inizioGiornoRoma(dateFrom)
+        const aISO = inizioGiornoDopoRoma(dateTo)
+        const [contrattiTot, contrattiFirmati] = await Promise.all([
+          supabase.from('contracts').select('id', { count: 'exact', head: true })
+            .gte('created_at', daISO).lt('created_at', aISO),
+          supabase.from('contracts').select('id', { count: 'exact', head: true })
+            .gte('created_at', daISO).lt('created_at', aISO)
+            .not('signed_pdf_url', 'is', null),
+        ])
+        if (!cancelled) setContratti({ totale: contrattiTot.count || 0, firmati: contrattiFirmati.count || 0 })
 
         // Top vehicles by booking count last 30 days
         const sinceISO = new Date(now.getTime() - 30 * 86400000).toISOString()
@@ -214,7 +240,7 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
       </div>
 
       {/* TOP KPI STRIP */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         <KpiCard
           label="Visitatori"
           value={ga?.configured ? fmtInt(visits) : '—'}
@@ -236,6 +262,12 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
           label="Lead Generati"
           value={fmtInt(kpi?.bookings.total || 0)}
           delta={kpi?.bookings.changePercent}
+        />
+        <KpiCard
+          label="Contratti"
+          value={fmtInt(contratti.totale)}
+          sub={`${fmtInt(contratti.firmati)} firmati`}
+          delta={null}
         />
         <KpiCard label="Utenti Wallet" value={fmtInt(walletUsers)} delta={null} />
         <KpiCard label="Member DR7 Club" value={fmtInt(clubMembers)} delta={null} />
