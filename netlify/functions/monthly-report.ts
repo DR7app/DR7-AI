@@ -1174,9 +1174,8 @@ function contrattoDiProva(c: any, b: any): boolean {
 }
 
 /**
- * Contratti creati nel periodo, per business. Una riga di `contracts` per
- * prenotazione (generate-contract aggiorna quella esistente), quindi il
- * conteggio e' quello dei contratti veri.
+ * Contratti creati nel periodo, per business: uno per prenotazione
+ * (generate-contract aggiorna la riga esistente invece di crearne un'altra).
  *
  * Business: `bookings.service_type`, e solo se nullo quello dentro
  * booking_details (stessa priorita' della tab Contratti). I contratti fatti a
@@ -1191,7 +1190,7 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
     const { data, error } = await supabase
       .from('contracts')
       .select('id, status, signed_pdf_url, booking_id, customer_name, customer_email, vehicle_name,'
-        + ' bookings(service_type, bd_st:booking_details->>service_type, vehicle_name, vehicle_plate, customer_name, customer_email,'
+        + ' bookings(status, service_type, bd_st:booking_details->>service_type, vehicle_name, vehicle_plate, customer_name, customer_email,'
         + ' bd_targa:booking_details->>vehicle_plate)')
       .gte('created_at', da)
       .lt('created_at', a)
@@ -1203,9 +1202,12 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
     if (data.length < 1000) break
   }
 
-  let totale = 0
-  let firmati = 0
-  let annullati = 0
+  // Una prenotazione = un contratto: se per la stessa prenotazione esistono
+  // piu' righe (vecchie rigenerazioni) conta una volta sola, e vale la firmata.
+  // Contratto annullato o prenotazione annullata = annullato.
+  const ANNULLATE = ['cancelled', 'canceled', 'annullata']
+  const RANGO = { firmato: 3, da_firmare: 2, annullato: 1 } as const
+  const perPrenotazione = new Map<string, keyof typeof RANGO>()
   for (const c of righe) {
     const b = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings
     if (b) {
@@ -1216,10 +1218,17 @@ async function contaContrattiPeriodo(fromYmd: string, toYmd: string, business: R
     // Le prove interne non sono contratti dell'azienda: restano fuori dal
     // totale e non gonfiano i "da firmare" (nessuno firma una prova).
     if (contrattoDiProva(c, b)) continue
-    totale++
-    if (String(c.status || '').toLowerCase() === 'cancelled') annullati++
-    else if (c.signed_pdf_url) firmati++
+    const annullato = ANNULLATE.includes(String(c.status || '').toLowerCase())
+      || (!!b && ANNULLATE.includes(String(b.status || '').toLowerCase()))
+    const stato: keyof typeof RANGO = annullato ? 'annullato' : c.signed_pdf_url ? 'firmato' : 'da_firmare'
+    const chiave = c.booking_id ? `b:${c.booking_id}` : `c:${c.id}`
+    const prima = perPrenotazione.get(chiave)
+    if (!prima || RANGO[stato] > RANGO[prima]) perPrenotazione.set(chiave, stato)
   }
+  const stati = [...perPrenotazione.values()]
+  const totale = stati.length
+  const firmati = stati.filter(st => st === 'firmato').length
+  const annullati = stati.filter(st => st === 'annullato').length
   return { totale, firmati, daFirmare: totale - firmati - annullati, annullati }
 }
 
