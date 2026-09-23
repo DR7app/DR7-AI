@@ -750,16 +750,35 @@ async function generateVehicleReport(
       const psNorm = String(booking.payment_status || '').toLowerCase()
       const fullyPaid = ['paid', 'completed', 'succeeded'].includes(psNorm)
       const amountPaidCents = Number(booking.booking_details?.amountPaid ?? booking.booking_details?.amount_paid ?? 0) || 0
-      const collectedEur = fullyPaid
+      const incassatoPieno = fullyPaid
         ? bookingRevenue
         : (psNorm === 'partial' ? amountPaidCents / 100 : 0)
+      // 23/09/2026 (direzione): l'anticipo conta QUANDO E' PAGATO. Pagata in
+      // un mese precedente a quello del ritiro = gia' contata come incasso
+      // anticipato nel report del mese del pagamento: qui i giorni restano
+      // (utilizzo), il ricavo no. Prima si contava due volte (es. Piras 890:
+      // anticipato ad agosto e di nuovo noleggio a settembre).
+      const paidAtAntISO = fullyPaid
+        ? ((booking.booking_details?.nexi_paid_at as string | undefined)
+          || (booking.updated_at as string | undefined)
+          || (booking.created_at as string | undefined)
+          || '')
+        : ''
+      const paidAtAnt = paidAtAntISO ? new Date(paidAtAntISO) : null
+      const pickupAnt = new Date(pickupDateRaw)
+      const giaContataComeAnticipo = !!paidAtAnt && paidAtAnt < monthStart && (
+        pickupAnt.getFullYear() > paidAtAnt.getFullYear() ||
+        (pickupAnt.getFullYear() === paidAtAnt.getFullYear() && pickupAnt.getMonth() > paidAtAnt.getMonth())
+      )
+      const collectedEur = giaContataComeAnticipo ? 0 : incassatoPieno
       if (collectedEur > 0) {
         // Proporziona l'incassato ai giorni nel periodo (come il prezzo pieno).
         rentalRevenue += (collectedEur / totalBookingDays) * overlapDays
       }
       // 2026-06-04: quota di noleggio ancora DA SALDARE = prezzo pieno − incassato,
       // proporzionata ai giorni nel periodo (stessa logica del ricavo). 0 se pagato.
-      const uncollectedEur = Math.max(0, bookingRevenue - collectedEur)
+      // Su incassatoPieno: un anticipo gia' contato e' pagato, non da saldare.
+      const uncollectedEur = Math.max(0, bookingRevenue - incassatoPieno)
       const daSaldareMonth = totalBookingDays > 0
         ? (uncollectedEur / totalBookingDays) * overlapDays
         : uncollectedEur
