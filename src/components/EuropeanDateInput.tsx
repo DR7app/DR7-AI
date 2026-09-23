@@ -197,9 +197,11 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         onChange={handleInputChange}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        // 17/09/2026 (direzione): un clic su tutto il campo apre il calendario,
-        // non solo l'icona in fondo a destra. Si puo' ancora digitare GG/MM/AAAA.
-        onClick={() => { if (!disabled && !readOnly) openPickerFromNative(ancoraRef.current) }}
+        // 23/09/2026 (direzione): il clic sul testo NON apre piu' il calendario.
+        // Il calendario del browser prende la tastiera appena si apre, quindi
+        // le cifre digitate finivano li' e non si poteva piu' scrivere la data
+        // a mano (scheda cliente, documenti, ritiro/riconsegna). Il testo si
+        // scrive, il calendario si apre dall'icona a destra.
         placeholder={placeholder}
         required={required}
         disabled={disabled}
