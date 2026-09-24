@@ -3031,7 +3031,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
   ir_numeri_testo_it: 'Risultati concreti, una gestione efficiente e una strategia di crescita sostenibile. Questi sono i numeri che raccontano il nostro percorso.',
   ir_numeri_testo_en: 'Concrete results, efficient management and a sustainable growth strategy. These are the numbers that tell our story.',
   ir_crescita_titolo_it: 'La nostra crescita', ir_crescita_titolo_en: 'Our growth',
-  ir_crescita_ricavi_it: 'Ricavi', ir_crescita_ricavi_en: 'Revenue',
+  ir_crescita_ricavi_it: 'Ricavi al netto dell\'IVA', ir_crescita_ricavi_en: 'Revenue net of VAT',
   ir_crescita_utile_it: 'Utile netto', ir_crescita_utile_en: 'Net profit',
   ir_crescita_nota_it: '', ir_crescita_nota_en: '',
   ir_crescita: [
