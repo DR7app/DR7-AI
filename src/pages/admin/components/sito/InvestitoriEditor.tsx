@@ -406,7 +406,7 @@ export default function InvestitoriEditor({ copy, setCopy }: { copy: Investitori
                 </Elenco>
             </Riquadro>
 
-            <Riquadro titolo={`Governance e documenti (${lista<IrDocumento>('ir_gov_documenti').length})`} nota="Documento senza file = il cliente lo chiede via email all'indirizzo investitori.">
+            <Riquadro titolo={`Governance e documenti (${lista<IrDocumento>('ir_gov_documenti').length})`} nota="Documento senza file = il cliente lo chiede via email all'indirizzo investitori. File video (.mp4) = si apre una pagina con il video.">
                 {bi("Scritta piccola", "ir_gov_eyebrow")}
                 {bi("Titolo", "ir_gov_titolo")}
                 {bi("Testo a destra", "ir_gov_testo", true)}

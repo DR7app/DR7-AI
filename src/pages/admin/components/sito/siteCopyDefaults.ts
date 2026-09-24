@@ -3123,7 +3123,7 @@ export const INITIAL_INVESTITORI: InvestitoriCopy = {
         { id: 'bilancio-2025', nome_it: 'Bilancio 2025', nome_en: '2025 financial statements', url: '/documenti/bilancio-2025.pdf' },
         { id: 'bilancio-2024', nome_it: 'Bilancio 2024', nome_en: '2024 financial statements', url: '/documenti/bilancio-2024.pdf' },
       ] },
-    { id: 'presentazione', icona: 'presentazione', titolo_it: 'Investor Presentation', titolo_en: 'Investor Presentation', azione_it: 'Richiedi la presentazione', azione_en: 'Request the presentation', url: '' },
+    { id: 'presentazione', icona: 'presentazione', titolo_it: 'Investor Presentation', titolo_en: 'Investor Presentation', azione_it: 'Guarda la presentazione', azione_en: 'Watch the presentation', url: '/video-presentazione-investitori.mp4' },
     { id: 'statuto', icona: 'governance', titolo_it: 'Statuto e Governance', titolo_en: 'Articles and Governance', azione_it: 'Richiedi i documenti', azione_en: 'Request the documents', url: '',
       file: [
         { id: 'statuto-sociale', nome_it: 'Statuto sociale vigente', nome_en: 'Articles of association', url: '/documenti/statuto-sociale-vigente.pdf' },
