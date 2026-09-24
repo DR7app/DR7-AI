@@ -2889,7 +2889,7 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   stats_lines: [
     '4.000+ contratti di noleggio firmati',
     '3.000+ clienti serviti nell\'ecosistema DR7',
-    '€2,5M+ fatturato generato',
+    '€2,5M+ fatturato lordo complessivo',
     '€3M+ valore del parco auto',
     '€6M+ patrimonio netto',
     '€1M capitale sociale',
@@ -2900,7 +2900,7 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   stats_lines_it: [
     '4.000+ contratti di noleggio firmati',
     '3.000+ clienti serviti nell\'ecosistema DR7',
-    '€2,5M+ fatturato generato',
+    '€2,5M+ fatturato lordo complessivo',
     '€3M+ valore del parco auto',
     '€6M+ patrimonio netto',
     '€1M capitale sociale',
@@ -2911,7 +2911,7 @@ export const INITIAL_FRANCHISING: FranchisingCopy = {
   stats_lines_en: [
     '4,000+ signed rental contracts',
     '3,000+ clients served across the DR7 ecosystem',
-    '€2.5M+ revenue generated',
+    '€2.5M+ total gross revenue',
     '€3M+ fleet value',
     '€6M+ net equity',
     '€1M share capital',
@@ -3796,7 +3796,7 @@ export const INITIAL_HOME: HomeCopy = {
   metrics: [
     { id: 'contratti',  value: '{contrattiFirmati}',  label_it: 'Contratti di noleggio firmati',    label_en: 'Signed rental contracts' },
     { id: 'clienti',    value: '{clientiServiti}',  label_it: 'Clienti serviti nell\'ecosistema', label_en: 'Clients served in the ecosystem' },
-    { id: 'fatturato',  value: '{fatturatoGenerato}',  label_it: 'Fatturato generato',               label_en: 'Revenue generated' },
+    { id: 'fatturato',  value: '{fatturatoGenerato}',  label_it: 'Fatturato lordo complessivo',       label_en: 'Total gross revenue' },
     { id: 'parco',      value: '\u20ac3M+',    label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
     { id: 'patrimonio', value: '\u20ac6M+',    label_it: 'Patrimonio netto',                 label_en: 'Net equity' },
     { id: 'capitale',   value: '\u20ac1M',     label_it: 'Capitale sociale',                 label_en: 'Share capital' },
