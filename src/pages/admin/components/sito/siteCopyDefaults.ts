@@ -3803,7 +3803,7 @@ export const INITIAL_HOME: HomeCopy = {
     // 14/09/2026 — qui c'era "317+" scritto a mano: le recensioni salivano e
     // il sito continuava a dirne 317. `{reviewCount}` lo riempie la pagina col
     // numero vero di Google (hooks/useReviewCount.ts), come sulla Business.
-    { id: 'recensioni', value: '{reviewCount}+', label_it: 'Recensioni a 5 stelle',        label_en: '5-star reviews' },
+    { id: 'recensioni', value: '{reviewCount}+', label_it: 'Recensioni',                   label_en: 'Reviews' },
     { id: 'brand',      value: '\u20ac5M',     label_it: 'Valutazione del brand',            label_en: 'Brand valuation' },
     { id: 'azienda',    value: '\u20ac15M',    label_it: 'Valutazione aziendale',            label_en: 'Company valuation' },
   ],
