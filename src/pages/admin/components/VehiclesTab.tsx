@@ -50,6 +50,22 @@ interface Vehicle {
 
 interface ProCategory { id: string; label: string }
 
+// 24/09/2026: valore del veicolo in euro interi. Si scrive all'italiana
+// ("150.000" o "150.000,00"): il punto separa le migliaia, quindi niente
+// parseMoney, che leggerebbe "150.000" come 150. Vuoto o 0 = non indicato.
+function euroInteri(raw: unknown): number | null {
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null
+  if (typeof raw !== 'string') return null
+  const cifre = raw.split(',')[0].replace(/\D/g, '')
+  const n = cifre ? Number(cifre) : 0
+  return n > 0 ? n : null
+}
+const cifraEuro = (n: number) => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n)
+const inParcoAuto = (v: Vehicle) =>
+  v.status !== 'retired' &&
+  !/^TEST/i.test((v.plate || '').replace(/\s/g, '')) &&
+  (v.display_name || '').trim().toLowerCase() !== 'test'
+
 // La foto del veicolo viene scelta seguendo lo stesso ordine del sito
 // (hooks/useVehicles.ts su DR7-empire): prima `metadata.image` salvata
 // dall'admin, poi fallback su un name-map che punta agli asset statici
@@ -170,7 +186,8 @@ export default function VehiclesTab() {
     model_year: '',
     cv: '',
     acceleration_0_100: '',
-    image_url: ''
+    image_url: '',
+    valore_veicolo: ''
   })
 
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -392,7 +409,10 @@ export default function VehiclesTab() {
           model_year: formData.model_year ? parseInt(formData.model_year) : null,
           cv: formData.cv ? parseInt(formData.cv) : null,
           acceleration_0_100: formData.acceleration_0_100 ? parseFloat(formData.acceleration_0_100) : null,
-          image: formData.image_url || null
+          image: formData.image_url || null,
+          // 24/09/2026: valore del veicolo in euro interi. La somma della
+          // flotta attiva e' il "Valore del parco auto" su Home e Investitori.
+          valore_veicolo: euroInteri(formData.valore_veicolo)
         }
       }
 
@@ -588,7 +608,8 @@ export default function VehiclesTab() {
       model_year: '',
       cv: '',
       acceleration_0_100: '',
-      image_url: ''
+      image_url: '',
+      valore_veicolo: ''
     })
     setDatiFlotta({ dal: '', al: '', pause: [] })
   }
@@ -617,7 +638,9 @@ export default function VehiclesTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       acceleration_0_100: (vehicle.metadata as any)?.acceleration_0_100?.toString() || '',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      image_url: (vehicle.metadata as any)?.image || ''
+      image_url: (vehicle.metadata as any)?.image || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      valore_veicolo: euroInteri((vehicle.metadata as any)?.valore_veicolo) ? cifraEuro(euroInteri((vehicle.metadata as any)?.valore_veicolo) as number) : ''
     })
     setDatiFlotta(leggiDatiFlotta(vehicle.metadata))
     setEditingId(vehicle.id)
@@ -1016,6 +1039,26 @@ export default function VehiclesTab() {
               value={formData.daily_rate}
               onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value })}
             />
+            <div>
+              <Input
+                label="Valore del veicolo (€)"
+                type="text"
+                inputMode="numeric"
+                value={formData.valore_veicolo}
+                onChange={(e) => setFormData({ ...formData, valore_veicolo: e.target.value })}
+                onBlur={() => {
+                  const n = euroInteri(formData.valore_veicolo)
+                  setFormData(f => ({ ...f, valore_veicolo: n ? cifraEuro(n) : '' }))
+                }}
+                placeholder="150.000"
+              />
+              <p className="mt-1 text-xs text-theme-text-muted">
+                Valore del parco auto sul sito (Home e Investitori): €{cifraEuro(
+                  vehicles.filter(inParcoAuto).reduce((tot, v) =>
+                    tot + ((v.id === editingId ? euroInteri(formData.valore_veicolo) : euroInteri(v.metadata?.valore_veicolo)) || 0), 0)
+                  + (editingId ? 0 : (euroInteri(formData.valore_veicolo) || 0)))}
+              </p>
+            </div>
           </div>
 
           {/* Scheda Tecnica - Vehicle Specs */}

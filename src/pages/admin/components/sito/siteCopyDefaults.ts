@@ -3797,7 +3797,7 @@ export const INITIAL_HOME: HomeCopy = {
     { id: 'contratti',  value: '{contrattiFirmati}',  label_it: 'Contratti di noleggio firmati',    label_en: 'Signed rental contracts' },
     { id: 'clienti',    value: '{clientiServiti}',  label_it: 'Clienti serviti nell\'ecosistema', label_en: 'Clients served in the ecosystem' },
     { id: 'fatturato',  value: '{fatturatoGenerato}',  label_it: 'Fatturato lordo complessivo',       label_en: 'Total gross revenue' },
-    { id: 'parco',      value: '\u20ac3M+',    label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
+    { id: 'parco',      value: '{valoreFlotta}', label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
     { id: 'patrimonio', value: '\u20ac6M+',    label_it: 'Patrimonio netto',                 label_en: 'Net equity' },
     { id: 'capitale',   value: '\u20ac1M',     label_it: 'Capitale sociale',                 label_en: 'Share capital' },
     // 14/09/2026 — qui c'era "317+" scritto a mano: le recensioni salivano e
