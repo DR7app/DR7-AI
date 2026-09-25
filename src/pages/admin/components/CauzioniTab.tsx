@@ -501,48 +501,22 @@ export default function CauzioniTab() {
         }
     }
 
-    // 2026-07-17: quando la cauzione viene INCASSATA, chiedi al cliente l'IBAN per
-    // il rimborso alla riconsegna. Usa il template Pro "Richiesta IBAN"
-    // (pro_richiesta_iban, evento handled 'deposit_return_iban'), niente testo
-    // hardcoded. Non bloccante: un errore invio non blocca l'incasso.
+    // Quando la cauzione viene INCASSATA, chiedi al cliente l'IBAN per il
+    // rimborso. 25/09/2026: l'invio e' sul server (richiesta-iban-cauzione),
+    // lo stesso usato dal link Nexi e dal recupero nel cron: parte una volta
+    // sola per cauzione, qualunque strada la incassi. Non bloccante.
     const sendIbanRequest = async (cauzione: Cauzione) => {
-        const phone = cauzione.cliente_telefono
-        if (!phone) { console.warn('[CauzioniTab] Richiesta IBAN: nessun telefono cliente'); return }
         try {
-            const customerName = cauzione.cliente_nome || 'Cliente'
-            const amountStr = Number(cauzione.importo).toFixed(2)
-            const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'
-            const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+            const res = await fetch('/.netlify/functions/richiesta-iban-cauzione', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    customPhone: phone,
-                    templateKey: 'deposit_return_iban',
-                    booking: { service_type: 'rental' },
-                    templateVars: {
-                        // Il template "Richiesta IBAN" usa {nome cliente} (con spazio):
-                        // passiamo tutte le varianti così viene sempre sostituito col nome.
-                        '{nome cliente}': customerName,
-                        '{nome_cliente}': customerName,
-                        '{nome_completo}': customerName,
-                        '{cliente}': customerName,
-                        '{customer_name}': customerName,
-                        '{nome}': customerName.split(' ')[0] || 'Cliente',
-                        '{amount}': amountStr,
-                        '{importo}': amountStr,
-                        '{total}': amountStr,
-                        '{contract_ref}': contractRef,
-                        '{contratto}': contractRef,
-                    },
-                    skipHeader: false,
-                }),
+                body: JSON.stringify({ cauzioneId: cauzione.id }),
             })
             const j = await res.json().catch(() => ({}))
-            if (j?.skipped && j?.reason === 'pro_template_unavailable') {
-                toast.error('Template "Richiesta IBAN" mancante o disattivato in Messaggi di Sistema Pro')
-            } else {
-                toast.success('Richiesta IBAN inviata al cliente')
-            }
+            if (j?.esito === 'inviata') toast.success('Richiesta IBAN inviata al cliente')
+            else if (j?.esito === 'template_mancante') toast.error('Template "Richiesta IBAN" mancante o disattivato in Messaggi di Sistema Pro')
+            else if (j?.esito === 'senza_telefono') toast.error('Richiesta IBAN non inviata: il cliente non ha un telefono')
+            else if (j?.esito === 'errore') toast.error('Richiesta IBAN non partita: il sistema riprova da solo')
         } catch (e) {
             console.warn('[CauzioniTab] sendIbanRequest fallito (non-blocking):', e)
         }

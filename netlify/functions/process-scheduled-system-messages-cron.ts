@@ -39,6 +39,7 @@ import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateR
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 import { getEmailFromSmtp } from './utils/emailFrom'
 import { conSystemControl } from './utils/systemControl'
+import { recuperaRichiesteIbanMancanti } from './utils/richiestaIbanCauzione'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -1557,6 +1558,20 @@ const cronHandler = async () => {
     const quietHours = isRomeQuietHours(now);
     if (quietHours) {
         console.log(`[scheduled-msgs] quiet hours (Rome ${getRomeHour(now)}:00) — solo programmazioni ricorrenti`);
+    }
+
+    // 25/09/2026: Richiesta IBAN rimasta indietro. Qualunque strada incassi una
+    // cauzione (tasto, link Nexi, incasso della pre-autorizzazione), se entro
+    // 3 giorni la richiesta non risulta partita la manda questo giro. Prima di
+    // ogni uscita anticipata del cron (es. nessun template automatico); di
+    // notte aspetta le 07:00 come gli altri messaggi al cliente.
+    if (!quietHours) {
+        try {
+            const rI = await recuperaRichiesteIbanMancanti(supabase);
+            if (rI.sent || rI.errors) console.log(`[scheduled-msgs] richieste IBAN recuperate: sent=${rI.sent} errors=${rI.errors}`);
+        } catch (e) {
+            console.error('[scheduled-msgs] recuperaRichiesteIbanMancanti failed:', e);
+        }
     }
 
     // 1. Carica tutti i template automatici attivi

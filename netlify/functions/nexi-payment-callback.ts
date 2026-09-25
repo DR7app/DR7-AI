@@ -9,6 +9,7 @@ import { fetchNexiCardInfo } from './utils/nexiCardInfo';
 import { lookupBin as lookupBinShared } from './utils/binLookup';
 import { applyTokenizedCardUpdate } from './utils/nexiCards';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
+import { inviaRichiestaIbanCauzione } from './utils/richiestaIbanCauzione';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -25,7 +26,7 @@ const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
  * "Segna incassata" in CauzioniTab.
  *   1. evento `on_cauzione_collected` (i template con trigger "Cauzione incassata");
  *   2. se nessun template e' partito per evento, il messaggio `cauzione_incassata`;
- *   3. la Richiesta IBAN (`deposit_return_iban`) per il rimborso.
+ *   3. la Richiesta IBAN (utils/richiestaIbanCauzione.ts, una volta sola).
  */
 async function notificaCauzioneIncassataViaLink(cauzione: {
     id: string; cliente_id: string | null; importo: number | null;
@@ -53,7 +54,7 @@ async function notificaCauzioneIncassataViaLink(cauzione: {
         : { data: null };
     const phone = (cust?.telefono || '').trim();
     if (!phone) {
-        console.warn(`[nexi-payment-callback] Cauzione ${cauzione.id}: nessun telefono cliente, Richiesta IBAN non inviata`);
+        console.warn(`[nexi-payment-callback] Cauzione ${cauzione.id}: nessun telefono cliente`);
         return;
     }
     const customerName = cust?.ragione_sociale || `${cust?.nome || ''} ${cust?.cognome || ''}`.trim() || 'Cliente';
@@ -92,31 +93,8 @@ async function notificaCauzioneIncassataViaLink(cauzione: {
         }).catch(e => console.warn('[nexi-payment-callback] cauzione_incassata fallito (non bloccante):', e));
     }
 
-    const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A';
-    await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            customPhone: phone,
-            templateKey: 'deposit_return_iban',
-            booking: { service_type: 'rental' },
-            templateVars: {
-                '{nome cliente}': customerName,
-                '{nome_cliente}': customerName,
-                '{nome_completo}': customerName,
-                '{cliente}': customerName,
-                '{customer_name}': customerName,
-                '{nome}': firstName,
-                '{amount}': amountStr,
-                '{importo}': amountStr,
-                '{total}': amountStr,
-                '{contract_ref}': contractRef,
-                '{contratto}': contractRef,
-            },
-            skipHeader: false,
-        }),
-    });
-    console.log(`[nexi-payment-callback] Cauzione ${cauzione.id}: Richiesta IBAN inviata a ${phone}`);
+    const esito = await inviaRichiestaIbanCauzione(supabase, cauzione.id);
+    console.log(`[nexi-payment-callback] Cauzione ${cauzione.id}: Richiesta IBAN -> ${esito}`);
 }
 
 async function fetchNexiOperationDetails(operationId: string): Promise<any> {
