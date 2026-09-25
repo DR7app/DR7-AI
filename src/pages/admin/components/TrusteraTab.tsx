@@ -458,6 +458,31 @@ function DocumentiSubTab() {
     }
   }
 
+  // Scarica PDF: salva il file sul computer (non lo apre in una scheda).
+  // Se il documento e' firmato scarica la versione firmata.
+  async function handleScaricaPdf(req: SignatureRequest) {
+    const url = req.signed_pdf_url || req.document_url
+    if (!url) return
+    const base = (req.contract?.contract_number || req.document_name || 'documento').replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_')
+    const nome = `${base}${req.signed_pdf_url ? '_firmato' : ''}.pdf`
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(res.statusText)
+      const blob = await res.blob()
+      const href = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = href
+      a.download = nome
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(href), 1000)
+    } catch {
+      // Download bloccato (CORS o rete): si apre il PDF, da salvare a mano.
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
   function handleViewAuditTrail(req: SignatureRequest) {
     const url = req.contract_id
       ? `/.netlify/functions/signature-audit?contractId=${req.contract_id}&format=html`
@@ -836,6 +861,14 @@ function DocumentiSubTab() {
                           <span>✉️</span> Email
                         </a>
                       </div>
+                    )}
+                    {(req.signed_pdf_url || req.document_url) && (
+                      <button
+                        onClick={() => handleScaricaPdf(req)}
+                        className="w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        Scarica PDF
+                      </button>
                     )}
                     {req.signed_pdf_url ? (
                       <>
