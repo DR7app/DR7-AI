@@ -144,7 +144,38 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // 25/09/2026 — la tab restava a caricare: 4 iscritti del 2025 hanno le
+    // foto del documento in base64 nei metadati (`verification`, 24 MB in
+    // tutto) e listUsers le spediva ogni volta. La RPC legge auth.users in
+    // SQL senza quelle chiavi (0,36 MB). Se la RPC manca o fallisce si torna
+    // all'API Auth come prima.
+    const leggiUtentiSql = async (): Promise<boolean> => {
+      const lette: any[] = []
+      for (let da = 0; ; da += 1000) {
+        const { data, error } = await supabase.rpc('admin_elenco_iscritti_sito').range(da, da + 999)
+        if (error) {
+          console.warn('[list-site-users] RPC admin_elenco_iscritti_sito non disponibile:', error.message)
+          return false
+        }
+        lette.push(...(data || []))
+        if (!data || data.length < 1000) break
+      }
+      for (const u of lette) {
+        utenti.push({
+          id: u.id,
+          email: u.email || '',
+          created_at: u.created_at,
+          email_confirmed_at: u.email_confirmed_at ?? null,
+          last_sign_in_at: u.last_sign_in_at ?? null,
+          meta: (u.meta || {}) as Meta,
+        })
+      }
+      totaleAccount = lette.length
+      return true
+    }
+
     const leggiUtenti = async () => {
+      if (await leggiUtentiSql()) return
       // Prima pagina da sola: dice quante pagine ci sono in tutto.
       const { data: prima, error: erroreP1 } = await supabase.auth.admin.listUsers({ page: 1, perPage: UTENTI_PER_PAGINA })
       if (erroreP1) {

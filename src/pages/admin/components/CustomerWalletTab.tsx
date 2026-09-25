@@ -134,7 +134,11 @@ export default function CustomerWalletTab() {
       // Load ALL customers (admin-created + site-created) — used for phone /
       // nome / cognome lookup later when stitching site users to a customer
       // row.
-      const response = await authFetch('/.netlify/functions/list-customers')
+      // 25/09/2026: ?fields=anagrafica come la tab Clienti (0,6 MB invece
+      // della riga intera da 5 MB), e gli autisti fuori come li'. Prima il
+      // conteggio "N clienti" qui non coincideva con "Totale Clienti". Un
+      // autista con credito resta in lista: il denaro si deve vedere.
+      const response = await authFetch('/.netlify/functions/list-customers?fields=anagrafica')
       const result = await response.json()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allCustomers: any[] = result.customers || []
@@ -241,6 +245,7 @@ export default function CustomerWalletTab() {
       const accountInLista = new Set(mapped.map(m => m.user_id).filter(Boolean) as string[])
       for (const cust of allCustomers) {
         if (!cust?.id) continue
+        if (cust.metadata?.role === 'autista') continue
         if (cust.user_id) {
           if (accountInLista.has(cust.user_id)) continue
           accountInLista.add(cust.user_id)
