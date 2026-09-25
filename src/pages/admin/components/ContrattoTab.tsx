@@ -768,6 +768,30 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
     }
   }
 
+  // Scarica PDF: salva il file sul computer (non lo apre in una scheda).
+  // Se il contratto e' firmato scarica la versione firmata.
+  async function handleScaricaPdf(contract: Contract) {
+    const url = contract.signed_pdf_url || contract.pdf_url
+    if (!url) return
+    const nome = `${contract.contract_number}${contract.signed_pdf_url ? '_firmato' : ''}.pdf`
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(res.statusText)
+      const blob = await res.blob()
+      const href = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = href
+      a.download = nome
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(href), 1000)
+    } catch {
+      // Download bloccato (CORS o rete): si apre il PDF, da salvare a mano.
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
   function handleViewAuditTrail(contract: Contract) {
     const url = `/.netlify/functions/signature-audit?contractId=${contract.id}&format=html`
     window.open(url, '_blank')
@@ -1400,6 +1424,14 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
                         <span>✉️</span> Email
                       </a>
                     </div>
+                  )}
+                  {(contract.signed_pdf_url || contract.pdf_url) && (
+                    <button
+                      onClick={() => handleScaricaPdf(contract)}
+                      className="w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      Scarica PDF
+                    </button>
                   )}
                   {contract.signed_pdf_url ? (
                     <>
