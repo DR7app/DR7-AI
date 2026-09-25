@@ -884,18 +884,15 @@ export default function AdminDashboard() {
     { name: 'Centralina Pro', tabs: [
       { tab: 'centralina-pro', label: 'Centralina Pro' },
       { tab: 'interruttori', label: 'Interruttori ON/OFF' },
+      // 25/09/2026 (direzione): la voce "Sito" e' uscita dal menu, i testi del
+      // sito si aprono da Centralina Pro > Sito. Il Website Builder, che era
+      // l'unica scheda rimasta sotto "Sito", sta qui.
+      { tab: 'website-builder', label: 'Website Builder' },
     ] },
     // DR7 A.I System Control (31/08/2026): centro tecnico della piattaforma.
     // Non e' una tab operativa: la vedono solo direzione e developer.
     { name: 'System Control', tabs: [
       { tab: 'system-control', label: 'DR7 A.I System Control', soloTecnici: true },
-    ] },
-    { name: 'Sito', tabs: [
-      // 15/09/2026 (direzione): i testi del sito sono una CONFIGURAZIONE, non
-      // una tab operativa. La voce "Sito" e' passata dentro Centralina Pro
-      // (sezione "Sito"): si apre da li'. La rotta 'sito' resta valida per i
-      // link salvati, ma non compare piu' due volte nel menu.
-      { tab: 'website-builder', label: 'Website Builder' },
     ] },
     { name: 'DR7 Trust', tabs: [
       { tab: 'trustera', label: 'DR7 Trust' },
