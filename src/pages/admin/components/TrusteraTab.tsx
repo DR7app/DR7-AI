@@ -188,14 +188,17 @@ function DocumentiSubTab() {
     const { data } = await supabase
       .from('customers_extended')
       .select('id, nome, cognome, email, telefono, denominazione')
-      .or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,denominazione.ilike.%${query}%,email.ilike.%${query}%`)
+      .or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,denominazione.ilike.%${query}%,email.ilike.%${query}%,telefono.ilike.%${query}%`)
       .limit(10)
 
     // Risposta superata da una ricerca piu' recente: ignorala.
     if (ultimaRicercaClienteRef.current !== query) return
     setCustomerResults(data || [])
-    // Riapri solo se l'admin e' ancora nel campo di ricerca.
-    setShowCustomerDropdown(document.activeElement === customerSearchInputRef.current)
+    // 25/09/2026: la tendina si apre sempre quando arrivano i risultati
+    // (anche "Nessun cliente trovato"). Il controllo "solo se il campo ha
+    // ancora il focus" la teneva chiusa: la ricerca sembrava rotta. Si chiude
+    // col click fuori, con Esc o scegliendo un cliente.
+    setShowCustomerDropdown(true)
   }
 
   // ── Per-signer customer picker (2026-05-27) ───────────────────────────
@@ -680,12 +683,15 @@ function DocumentiSubTab() {
               type="text"
               value={customerSearch}
               onChange={(e) => searchCustomers(e.target.value)}
-              onFocus={() => customerResults.length > 0 && setShowCustomerDropdown(true)}
-              placeholder="Cerca per nome, cognome, email..."
+              onFocus={() => customerSearch.length >= 2 && setShowCustomerDropdown(true)}
+              placeholder="Cerca per nome, cognome, email, telefono..."
               className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
             />
-            {showCustomerDropdown && customerResults.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-theme-bg-tertiary border border-theme-border rounded shadow-lg max-h-48 overflow-y-auto">
+            {showCustomerDropdown && customerSearch.length >= 2 && (
+              <div className="absolute z-30 w-full mt-1 bg-theme-bg-tertiary border border-theme-border rounded shadow-lg max-h-48 overflow-y-auto">
+                {customerResults.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-theme-text-muted">Nessun cliente trovato.</div>
+                )}
                 {customerResults.map((c) => (
                   <button
                     key={c.id}
