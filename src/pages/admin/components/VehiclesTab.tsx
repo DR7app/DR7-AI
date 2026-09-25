@@ -11,6 +11,9 @@ import { logger } from '../../../utils/logger'
 import { ORPHAN_PALETTE, getPaletteForCategory } from '../../../utils/categoryPalettes'
 import Miniatura from '../../../components/Miniatura'
 import InFlottaEditor, { leggiDatiFlotta, scriviDatiFlotta, type DatiFlotta } from './InFlottaEditor'
+import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
+import { ReportToolbar, ReportButton } from './ReportUI'
+import { caricaReportVeicoli } from '../../../utils/reportVeicoliPeriodo'
 
 // Estrae un messaggio leggibile da qualunque shape di errore (Error,
 // PostgrestError di Supabase, oggetto generico). Senza questa logica
@@ -256,18 +259,24 @@ export default function VehiclesTab() {
   // Stats per veicolo. Fonte: stessa funzione /monthly-report che alimenta
   // Report Noleggio. Nessuna logica duplicata: i numeri sono identici by
   // construction (rental + penalty + danni gia\' inclusi nel totalRevenue).
+  // 25/09/2026 (direzione): stessa barra Periodo del Report Terra (parte da
+  // "Mese") e stessa strada di calcolo, correzioni a mano comprese.
+  const periodo = usePeriodoReport('mese')
   type VehStats = { fatturato: number; giorniNoleggio: number; giorniFermo: number; utilizzoPct: number }
   const [vehicleStats, setVehicleStats] = useState<Map<string, VehStats>>(new Map())
+  const [statsLoading, setStatsLoading] = useState(false)
+  // Risposte arrivate fuori ordine (date scritte a mano) non sovrascrivono
+  // quelle del periodo attuale.
+  const turnoStats = useRef(0)
   const loadBookingStats = async () => {
     if (vehicles.length === 0) return
-    const t = new Date()
-    const month = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`
+    const mio = ++turnoStats.current
+    setStatsLoading(true)
     try {
-      const res = await fetch(`/.netlify/functions/monthly-report?type=vehicles&month=${month}`)
-      if (!res.ok) return
-      const data = await res.json() as { vehicles?: { vehicleId: string; rentalRevenue: number; rentedDays: number; idleDays: number; utilizationRate: number }[] }
+      const { dati } = await caricaReportVeicoli(periodo.da, periodo.a)
+      if (mio !== turnoStats.current) return
       const stats = new Map<string, VehStats>()
-      for (const v of (data.vehicles || [])) {
+      for (const v of (dati.vehicles || [])) {
         stats.set(v.vehicleId, {
           // Solo Ricavo Noleggi (esclude penali e danni) — match colonna
           // Ricavo Noleggi del Report Noleggio.
@@ -280,9 +289,11 @@ export default function VehiclesTab() {
       setVehicleStats(stats)
     } catch (e) {
       console.error('VehiclesTab: monthly-report fetch failed', e)
+    } finally {
+      if (mio === turnoStats.current) setStatsLoading(false)
     }
   }
-  useEffect(() => { loadBookingStats() }, [vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadBookingStats() }, [vehicles.length, periodo.da, periodo.a]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for cross-tab open-vehicle events so the Fleet dashboard (and any
   // future entry point) can deep-link to the edit form for a specific vehicle.
@@ -310,17 +321,27 @@ export default function VehiclesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicles])
 
-  // Giorni trascorsi nel mese corrente (1..today). Usato per ROI/utilizzo.
-  const daysElapsedThisMonth = useMemo(() => {
-    const t = new Date(); t.setHours(0, 0, 0, 0)
-    return t.getDate()
-  }, [])
-
-  // Etichetta mese corrente per i sub-label delle KPI.
-  const currentMonthLabel = useMemo(() => {
+  // Giorni trascorsi del periodo scelto (da..a, fermo a oggi). Usato per il
+  // ROI: fatturato / (tariffa giornaliera x giorni).
+  const giorniPeriodo = useMemo(() => {
     const t = new Date()
-    return t.toLocaleDateString('it-IT', { month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
-  }, [])
+    const oggi = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+    const fine = periodo.a > oggi ? oggi : periodo.a
+    if (fine < periodo.da) return 0
+    const [x, y] = [periodo.da, fine].map(d => d.split('-').map(Number))
+    return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 86400000) + 1
+  }, [periodo.da, periodo.a])
+
+  // Etichetta del periodo per i sub-label delle KPI: il mese se e' un mese
+  // intero, altrimenti le due date.
+  const etichettaPeriodo = useMemo(() => {
+    const [y, m] = periodo.da.split('-').map(Number)
+    const fineMese = new Date(y, m, 0)
+    const meseIntero = periodo.da.endsWith('-01') && periodo.a === `${y}-${String(m).padStart(2, '0')}-${String(fineMese.getDate()).padStart(2, '0')}`
+    return meseIntero
+      ? new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+      : `${isoAEu(periodo.da)} – ${isoAEu(periodo.a)}`
+  }, [periodo.da, periodo.a])
 
   // Stats aggregate per la dashboard (KPI + alert + suggerimenti).
   const fleetKpi = useMemo(() => {
@@ -340,13 +361,13 @@ export default function VehiclesTab() {
       if (s.utilizzoPct < 40) sottoTarget++
       if (s.giorniFermo >= 3) fermiOltre3++
       const v = vehicles.find(x => x.id === vid)
-      const potential = (v?.daily_rate || 0) * daysElapsedThisMonth
+      const potential = (v?.daily_rate || 0) * giorniPeriodo
       if (potential > 0) { roiSum += (s.fatturato / potential) * 100; roiCount++ }
     })
     const utilizzoMedio = utilCount > 0 ? Math.round(utilSum / utilCount) : 0
     const roiMedio = roiCount > 0 ? Math.round((roiSum / roiCount) * 10) / 10 : 0
     return { total, attivi, fermi, totalFatturato, utilizzoMedio, roiMedio, sottoTarget, fermiOltre3 }
-  }, [vehicles, vehicleStats])
+  }, [vehicles, vehicleStats, giorniPeriodo])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -741,6 +762,15 @@ export default function VehiclesTab() {
 
   return (
     <div>
+      {/* 25/09/2026 (direzione): barra Periodo del Report Terra. Fatturato,
+          utilizzo, giorni fermo, ROI e Top per Fatturato seguono da..a. */}
+      <div className="mb-4">
+        <ReportToolbar>
+          <ReportPeriodo periodo={periodo} />
+          <ReportButton onClick={loadBookingStats} disabled={statsLoading}>Aggiorna</ReportButton>
+        </ReportToolbar>
+      </div>
+
       {/* KPI strip — 6 metriche flotta, dati reali da vehicles + bookings 30g.
           Stile mockup: icona a sinistra, valore grande, sub-label muted.       */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
@@ -751,7 +781,7 @@ export default function VehiclesTab() {
             { label: 'TOTALE VEICOLI', value: String(total), sub: '100% della flotta', tone: '#3B82F6', icon: 'car' },
             { label: 'VEICOLI ATTIVI', value: String(fleetKpi.attivi), sub: pct(fleetKpi.attivi), tone: '#10B981', icon: 'check' },
             { label: 'VEICOLI FERMI', value: String(fleetKpi.fermi), sub: pct(fleetKpi.fermi), tone: '#EF4444', icon: 'wrench' },
-            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: currentMonthLabel, tone: '#F59E0B', icon: 'euro' },
+            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: etichettaPeriodo, tone: '#F59E0B', icon: 'euro' },
             { label: 'UTILIZZO MEDIO', value: `${fleetKpi.utilizzoMedio}%`, sub: 'media veicolare', tone: '#06B6D4', icon: 'chart' },
             { label: 'ROI MEDIO FLOTTA', value: `${String(fleetKpi.roiMedio).replace('.', ',')}%`, sub: 'fatturato/potenziale', tone: '#A855F7', icon: 'trend' },
           ]
@@ -1293,7 +1323,7 @@ export default function VehiclesTab() {
         const groupCounts = allSections.map(s => ({ label: s.category.label, count: s.vehicles.length, palette: s.palette }))
         const groupTotal = groupCounts.reduce((acc, g) => acc + g.count, 0)
 
-        // Top 5 per fatturato (30g, dati reali).
+        // Top 5 per fatturato nel periodo scelto (dati reali).
         const topByFatturato = [...allFlat]
           .map(r => ({ ...r, fatturato: vehicleStats.get(r.vehicle.id)?.fatturato || 0 }))
           .sort((a, b) => b.fatturato - a.fatturato)
@@ -1311,7 +1341,7 @@ export default function VehiclesTab() {
         // ROI per riga — usa lo stesso calcolo del fleetKpi.
         const roiOf = (v: Vehicle) => {
           const s = vehicleStats.get(v.id)
-          const potential = ((v as Vehicle & { daily_rate?: number }).daily_rate || 0) * 30
+          const potential = ((v as Vehicle & { daily_rate?: number }).daily_rate || 0) * giorniPeriodo
           if (!s || potential <= 0) return 0
           return Math.round((s.fatturato / potential) * 1000) / 10
         }
@@ -1519,10 +1549,10 @@ export default function VehiclesTab() {
 
               {/* Top per fatturato */}
               <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-4">
-                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Top per Fatturato (mese)</div>
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Top per Fatturato (periodo)</div>
                 <div className="space-y-2">
                   {topByFatturato.filter(r => r.fatturato > 0).length === 0 ? (
-                    <div className="text-xs text-theme-text-muted text-center py-2">Nessun fatturato nel mese corrente</div>
+                    <div className="text-xs text-theme-text-muted text-center py-2">Nessun fatturato nel periodo</div>
                   ) : topByFatturato.filter(r => r.fatturato > 0).map((r, i) => (
                     <div key={r.vehicle.id} className="flex items-center gap-2">
                       <span className="text-[10px] text-theme-text-muted font-mono w-3 flex-shrink-0">{i + 1}</span>

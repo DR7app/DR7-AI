@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import EuropeanDateInput from './EuropeanDateInput'
 import CalendarRangePicker from './admin/CalendarRangePicker'
+import SceltaMese from './admin/SceltaMese'
 
 /**
  * DateRangeFilter — filtro periodo comune a tutte le tab con elenchi
@@ -8,7 +9,7 @@ import CalendarRangePicker from './admin/CalendarRangePicker'
  * Lavaggio, Meccanica, Da Saldare, Nexi, Danni & Penali).
  *
  * 23/09/2026 (direzione): stessa barra dei Report — Tutto, Oggi, Mese, 7gg,
- * 30gg, Anno, Custom, due date GG/MM/AAAA e calendario. Sulle liste parte da
+ * 30gg, Anno, Custom, menu dei mesi, due date GG/MM/AAAA e calendario. Sulle liste parte da
  * "Tutto" (nessun filtro), come prima. L'interfaccia non cambia: ogni tab
  * tiene il suo stato { from, to } e il suo campo data nella query.
  *
@@ -112,6 +113,8 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             ))}
           </div>
         )}
+        {/* 25/09/2026: menu dei mesi come nel Report Noleggio. */}
+        <SceltaMese da={value.from} a={value.to} onChange={(f, t) => { setCustomScelto(false); onChange({ from: f, to: t }) }} />
         <EuropeanDateInput
           value={value.from}
           onChange={(v) => { setCustomScelto(false); onChange({ ...value, from: v }) }}

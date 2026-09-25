@@ -2,12 +2,13 @@
  * Barra "Periodo" comune a tutti i Report.
  *
  * 23/09/2026 (direzione): la stessa barra del Report Noleggio (Oggi, Mese,
- * 7gg, 30gg, Anno, Custom, date europee scritte a mano, calendario) su ogni
- * pagina Report. Il report tiene il suo pulsante Aggiorna e legge `da`/`a`
+ * 7gg, 30gg, Anno, Custom, menu dei mesi, date europee scritte a mano,
+ * calendario) su ogni pagina Report e sulla tab Veicoli. Il report tiene il suo pulsante Aggiorna e legge `da`/`a`
  * (YYYY-MM-DD, ora italiana) da `usePeriodoReport`.
  */
 import { useState } from 'react'
 import CalendarRangePicker from '../../../components/admin/CalendarRangePicker'
+import SceltaMese from '../../../components/admin/SceltaMese'
 import { formattaDataEu, rimettiCursore } from '../../../utils/dataEuMentreScrivi'
 
 export type PresetPeriodo = 'oggi' | 'mese' | '7gg' | '30gg' | 'anno' | 'custom'
@@ -124,6 +125,7 @@ export function ReportPeriodo({ periodo, label = 'Periodo' }: { periodo: Periodo
             </button>
           ))}
         </div>
+        <SceltaMese da={periodo.da} a={periodo.a} onChange={(da, a) => { setBozzaDa(null); setBozzaA(null); periodo.impostaIntervallo(da, a) }} />
         {campo(periodo.da, bozzaDa, setBozzaDa, iso => periodo.impostaIntervallo(iso, periodo.a))}
         <span className="text-theme-text-muted text-xs">→</span>
         {campo(periodo.a, bozzaA, setBozzaA, iso => periodo.impostaIntervallo(periodo.da, iso))}
