@@ -9265,6 +9265,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:91142d65",
+        "it": "Guarda il video",
+        "en": "Watch the video",
+        "file": "pages/InvestitoriVideoPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:9420e1fb",
         "it": "Hai una prevendita valida per questa auto.",
         "en": "You have a pre-sale valid for this car.",
@@ -9909,6 +9916,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:61464aa7",
+        "it": "Investitori",
+        "en": "Investors",
+        "file": "pages/InvestitoriVideoPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:4f8d2284",
         "it": "Invia Richiesta",
         "en": "Send Request",
@@ -10516,7 +10530,10 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "max",
         "file": "pages/PrevenditePage.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_5: VoceTesto[] = [
     {
         "chiave": "s:ac0e88f0",
         "it": "Massimo",
@@ -10530,10 +10547,7 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "Max per month",
         "file": "pages/PrevenditePage.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_5: VoceTesto[] = [
+    },
     {
         "chiave": "s:cb55be25",
         "it": "meno di 26 anni",
@@ -12619,7 +12633,10 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Choose the level of protection you want.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_6: VoceTesto[] = [
     {
         "chiave": "s:3d40c87b",
         "it": "Seleziona l'indirizzo dall'elenco (anche estero) — necessario per la fattura.",
@@ -12633,10 +12650,7 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Select the flight date",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_6: VoceTesto[] = [
+    },
     {
         "chiave": "k:Select_dates_and_verify",
         "it": "Seleziona le date e verifica la disponibilità",
@@ -13226,6 +13240,13 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:31567152",
+        "it": "Torna agli investitori",
+        "en": "Back to investors",
+        "file": "pages/InvestitoriVideoPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:bae4f271",
         "it": "Torna al sito",
         "en": "Back to the site",
@@ -13671,6 +13692,13 @@ const BLOCCO_6: VoceTesto[] = [
         "it": "Via, Numero Civico, CAP, Città",
         "en": "Street, number, postcode, city",
         "file": "components/DynamicCustomerForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:bd1b804d",
+        "it": "Video non disponibile.",
+        "en": "Video not available.",
+        "file": "pages/InvestitoriVideoPage.tsx",
         "schermata": null
     },
     {
