@@ -160,6 +160,7 @@ export default function UnpaidBookingsTab() {
   const [nuovoIncassoOpen, setNuovoIncassoOpen] = useState(false)
   const [nuovoIncassoQuery, setNuovoIncassoQuery] = useState('')
   const [partialPayValue, setPartialPayValue] = useState('')
+  const [partialPayMode, setPartialPayMode] = useState<'dato' | 'residuo'>('dato')
   const [editAmountKey, setEditAmountKey] = useState<string | null>(null)
   const [editAmountValue, setEditAmountValue] = useState('')
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set())
@@ -2611,6 +2612,8 @@ export default function UnpaidBookingsTab() {
   function apriIncasso(v: { key: string; customerKey: string }) {
     setExpandedCustomers(prev => new Set(prev).add(v.customerKey))
     setPartialPayItemKey(v.key)
+    setPartialPayValue('')
+    setPartialPayMode('dato')
     setNuovoIncassoOpen(false)
     setNuovoIncassoQuery('')
     // Il gruppo si espande in questo render: lo scroll aspetta il paint.
@@ -2935,31 +2938,66 @@ export default function UnpaidBookingsTab() {
 
   // ── Inline partial pay helper ──────────────────────────────────────────────
 
-  function PartialPayInput({ itemKey, onSubmit, onCancel }: { itemKey: string; onSubmit: (v: number) => void; onCancel: () => void }) {
+  // Due campi: "Importo dato" (quanto il cliente ha appena pagato) e "Importo
+  // residuo" (quanto gli resta da pagare dopo). Se ne compila uno, l'altro si
+  // calcola da solo: cosi' non si confonde mai il residuo con l'incassato.
+  // Al server arriva sempre l'importo dato.
+  function PartialPayInput({ itemKey, remaining, onSubmit, onCancel }: { itemKey: string; remaining: number; onSubmit: (v: number) => void; onCancel: () => void }) {
     if (partialPayItemKey !== itemKey) return null
+    const remainingCents = Math.max(0, Math.round(remaining * 100))
+    const typed = parseFloat(partialPayValue)
+    const typedCents = isNaN(typed) ? null : Math.round(typed * 100)
+    const datoCents = typedCents === null ? null
+      : partialPayMode === 'dato' ? typedCents : remainingCents - typedCents
+    const residuoCents = datoCents === null ? null : remainingCents - datoCents
+    const valido = datoCents !== null && datoCents > 0 && residuoCents !== null && residuoCents >= 0
+    const submit = () => { if (valido && datoCents !== null) onSubmit(datoCents / 100) }
+    const campo = (mode: 'dato' | 'residuo', label: string, ring: string) => {
+      const attivo = partialPayMode === mode
+      const altroCents = mode === 'dato' ? datoCents : residuoCents
+      return (
+        <label className="flex-1 min-w-0">
+          <span className={`block text-[10px] font-semibold uppercase tracking-wide mb-0.5 ${attivo ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>{label}</span>
+          <span className="relative block">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
+            <MoneyInput
+              min="0"
+              value={attivo ? partialPayValue : (altroCents === null ? '' : (altroCents / 100).toFixed(2))}
+              onFocus={() => {
+                if (attivo) return
+                // Passando all'altro campo si riparte dal valore calcolato.
+                setPartialPayMode(mode)
+                setPartialPayValue(altroCents === null ? '' : (altroCents / 100).toFixed(2))
+              }}
+              onChange={(__v: string) => { setPartialPayMode(mode); setPartialPayValue(__v) }}
+              placeholder="0.00"
+              className={`w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-xs focus:outline-none focus:ring-1 ${ring} ${attivo ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
+              onKeyDown={e => {
+                if (e.key === 'Enter') submit()
+                if (e.key === 'Escape') onCancel()
+              }}
+              autoFocus={attivo}
+            />
+          </span>
+        </label>
+      )
+    }
     return (
-      <div className="flex items-center gap-1 mt-1">
-        <div className="relative flex-1">
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
-          <MoneyInput
-            min="0.01"
-            value={partialPayValue}
-            onChange={(__v: string) => setPartialPayValue(__v)}
-            placeholder="Importo"
-            className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-            onKeyDown={e => {
-              if (e.key === 'Enter') { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) onSubmit(v) }
-              if (e.key === 'Escape') onCancel()
-            }}
-            autoFocus
-          />
+      <div className="mt-1">
+        <div className="flex items-end gap-1">
+          {campo('dato', 'Importo dato', 'focus:ring-green-500/50')}
+          {campo('residuo', 'Importo residuo', 'focus:ring-orange-500/50')}
+          <button
+            onClick={submit}
+            disabled={!valido}
+            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-30"
+          >OK</button>
+          <button onClick={onCancel} className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">x</button>
         </div>
-        <button
-          onClick={() => { const v = parseFloat(partialPayValue); if (!isNaN(v) && v > 0) onSubmit(v) }}
-          disabled={!partialPayValue || parseFloat(partialPayValue) <= 0}
-          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-30"
-        >OK</button>
-        <button onClick={onCancel} className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">x</button>
+        <div className="text-[10px] text-theme-text-muted mt-0.5">
+          Da incassare €{(remainingCents / 100).toFixed(2)} — compila uno dei due campi
+          {residuoCents !== null && residuoCents < 0 && <span className="text-orange-400"> · il residuo non puo' essere negativo</span>}
+        </div>
       </div>
     )
   }
@@ -3145,7 +3183,7 @@ export default function UnpaidBookingsTab() {
                           )}
                           {partialPayItemKey !== extPartialKey && (
                             <button
-                              onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
+                              onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue(''); setPartialPayMode('dato') }}
                               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                             >Parziale</button>
                           )}
@@ -3169,6 +3207,7 @@ export default function UnpaidBookingsTab() {
                         </div>
                         <PartialPayInput
                           itemKey={extPartialKey}
+                          remaining={Math.max(0, extRemaining)}
                           onSubmit={(v) => handleExtensionPartialPayment(booking, extIdx, v)}
                           onCancel={() => setPartialPayItemKey(null)}
                         />
@@ -3231,7 +3270,7 @@ export default function UnpaidBookingsTab() {
                 )}
                 {isPending && partialPayItemKey !== bkKey && (
                   <button
-                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
+                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue(''); setPartialPayMode('dato') }}
                     className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                   >Parziale</button>
                 )}
@@ -3250,6 +3289,7 @@ export default function UnpaidBookingsTab() {
               </div>
               <PartialPayInput
                 itemKey={bkKey}
+                remaining={remainingCents / 100}
                 onSubmit={(v) => { handleBookingPartialPayment(booking.id, v) }}
                 onCancel={() => setPartialPayItemKey(null)}
               />
@@ -3341,7 +3381,7 @@ export default function UnpaidBookingsTab() {
                 )}
                 {partialPayItemKey !== bkKey && (
                   <button
-                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
+                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue(''); setPartialPayMode('dato') }}
                     className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                   >Parziale</button>
                 )}
@@ -3360,6 +3400,7 @@ export default function UnpaidBookingsTab() {
               </div>
               <PartialPayInput
                 itemKey={bkKey}
+                remaining={remainingCents / 100}
                 onSubmit={(v) => { handleBookingPartialPayment(booking.id, v) }}
                 onCancel={() => setPartialPayItemKey(null)}
               />
@@ -3480,7 +3521,7 @@ export default function UnpaidBookingsTab() {
                     )}
                     {partialPayItemKey !== partialKey && (
                       <button
-                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
+                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue(''); setPartialPayMode('dato') }}
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
                     )}
@@ -3512,7 +3553,7 @@ export default function UnpaidBookingsTab() {
                     >Pagato</button>
                     {partialPayItemKey !== partialKey && (
                       <button
-                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
+                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue(''); setPartialPayMode('dato') }}
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                       >Parziale</button>
                     )}
@@ -3541,6 +3582,7 @@ export default function UnpaidBookingsTab() {
 
               <PartialPayInput
                 itemKey={partialKey}
+                remaining={item.remaining}
                 onSubmit={(v) => {
                   if (item.source === 'booking_details') {
                     handleTypePartialPayment(item.booking, type, v)
