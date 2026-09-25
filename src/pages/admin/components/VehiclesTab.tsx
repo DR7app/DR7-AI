@@ -264,6 +264,9 @@ export default function VehiclesTab() {
   const periodo = usePeriodoReport('mese')
   type VehStats = { fatturato: number; giorniNoleggio: number; giorniFermo: number; utilizzoPct: number }
   const [vehicleStats, setVehicleStats] = useState<Map<string, VehStats>>(new Map())
+  // Totale della scheda "Ricavo TOTALE" del Report Terra (righe non abbinate
+  // comprese), cosi' la KPI Fatturato Flotta e' lo stesso numero.
+  const [fatturatoReport, setFatturatoReport] = useState<number | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   // Risposte arrivate fuori ordine (date scritte a mano) non sovrascrivono
   // quelle del periodo attuale.
@@ -278,15 +281,16 @@ export default function VehiclesTab() {
       const stats = new Map<string, VehStats>()
       for (const v of (dati.vehicles || [])) {
         stats.set(v.vehicleId, {
-          // Solo Ricavo Noleggi (esclude penali e danni) — match colonna
-          // Ricavo Noleggi del Report Noleggio.
-          fatturato: v.rentalRevenue || 0,
+          // 25/09/2026 (direzione): Ricavo TOTALE del Report Terra (noleggi +
+          // penali + danni + anticipato), non solo Ricavo Noleggi.
+          fatturato: (v.totalRevenue || 0) + (v.anticipatedRevenue || 0),
           giorniNoleggio: v.rentedDays || 0,
           giorniFermo: v.idleDays || 0,
           utilizzoPct: Math.round((v.utilizationRate || 0) * 100),
         })
       }
       setVehicleStats(stats)
+      setFatturatoReport((dati.totalRevenue || 0) + (dati.totalAnticipatedRevenue || 0))
     } catch (e) {
       console.error('VehiclesTab: monthly-report fetch failed', e)
     } finally {
@@ -366,8 +370,9 @@ export default function VehiclesTab() {
     })
     const utilizzoMedio = utilCount > 0 ? Math.round(utilSum / utilCount) : 0
     const roiMedio = roiCount > 0 ? Math.round((roiSum / roiCount) * 10) / 10 : 0
+    if (fatturatoReport !== null) totalFatturato = fatturatoReport
     return { total, attivi, fermi, totalFatturato, utilizzoMedio, roiMedio, sottoTarget, fermiOltre3 }
-  }, [vehicles, vehicleStats, giorniPeriodo])
+  }, [vehicles, vehicleStats, giorniPeriodo, fatturatoReport])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
