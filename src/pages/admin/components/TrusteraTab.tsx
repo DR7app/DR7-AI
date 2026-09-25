@@ -859,14 +859,6 @@ function DocumentiSubTab() {
                     {req.document_url && (
                       <div className="flex gap-2 w-full">
                         <a
-                          href={req.document_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
-                        >
-                          <span>📄</span> PDF
-                        </a>
-                        <a
                           href={`mailto:${req.signer_email}?subject=${encodeURIComponent(req.document_name || 'Contratto')}&body=Gentile Cliente,%0D%0A%0D%0AEcco il link al tuo documento:%0D%0A${encodeURIComponent(req.signed_pdf_url || req.document_url)}%0D%0A%0D%0AGrazie per aver scelto DR7.`}
                           className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
                         >

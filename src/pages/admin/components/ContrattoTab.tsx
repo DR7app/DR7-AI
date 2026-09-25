@@ -1421,14 +1421,6 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
                   {contract.pdf_url && (
                     <div className="flex gap-2 w-full">
                       <a
-                        href={contract.pdf_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
-                      >
-                        <span>📄</span> PDF
-                      </a>
-                      <a
                         href={`mailto:${contract.customer_email}?subject=Contratto Noleggio ${contract.contract_number}&body=Gentile Cliente,%0D%0A%0D%0AEcco il link al tuo contratto di noleggio:%0D%0A${encodeURIComponent(contract.pdf_url)}%0D%0A%0D%0AGrazie per aver scelto DR7.`}
                         className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
                       >
