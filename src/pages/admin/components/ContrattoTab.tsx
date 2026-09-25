@@ -15,6 +15,8 @@ import { useSelezioneMultipla } from '../../../utils/selezioneMultipla'
 import { BarraSelezioneMultipla, CasellaSelezione } from '../../../components/SelezioneMultipla'
 import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 import { scaricaAuditTrailPdf } from '../../../utils/scaricaAuditTrailPdf'
+import { apriAuditFirma } from '../../../utils/apriAuditFirma'
+import PulsanteSicurezzaFirma from './SicurezzaFirma'
 
 interface Contract {
   id: string
@@ -804,8 +806,8 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
   }
 
   function handleViewAuditTrail(contract: Contract) {
-    const url = `/.netlify/functions/signature-audit?contractId=${contract.id}&format=html`
-    window.open(url, '_blank')
+    apriAuditFirma({ contractId: contract.id })
+      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : String(err)))
   }
 
 
@@ -1443,6 +1445,13 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
                     >
                       Scarica Audit Trail
                     </button>
+                  )}
+                  {(contract.signed_pdf_url || (contract.signers && contract.signers.length > 0)) && (
+                    <PulsanteSicurezzaFirma
+                      contractId={contract.id}
+                      titolo={`Contratto ${contract.contract_number}`}
+                      onGeneraNuovoLink={() => handleSendSignatureEmail(contract)}
+                    />
                   )}
                   {contract.signed_pdf_url ? (
                     <>

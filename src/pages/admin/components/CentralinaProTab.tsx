@@ -1422,15 +1422,19 @@ export const LOCATORE_DEFAULT: Required<LocatoreConfig> = {
  *   false = firma premendo il pulsante "Firma il Contratto".
  * - otp_canale: dove parte il codice. Se quel canale non puo' partire
  *   (niente telefono / niente email) DR7 Trust prova l'altro.
+ * - gps_obbligatorio (25/09/2026): true = senza posizione del dispositivo
+ *   autorizzata non si firma. false (default) = chi rifiuta la posizione
+ *   firma lo stesso e l'audit trail scrive "GPS NON AUTORIZZATO DAL CLIENTE".
  * Letto da DR7 Trust (utils/firmaConfig.ts) sulla riga del business della
  * prenotazione, con ricaduta su `main` voce per voce.
  */
 export type FirmaConfig = {
   otp_attivo: boolean
   otp_canale: 'whatsapp' | 'email'
+  gps_obbligatorio: boolean
 }
 
-export const FIRMA_DEFAULT: FirmaConfig = { otp_attivo: true, otp_canale: 'whatsapp' }
+export const FIRMA_DEFAULT: FirmaConfig = { otp_attivo: true, otp_canale: 'whatsapp', gps_obbligatorio: false }
 
 type PersistedSnapshot = {
   categories: Category[]
@@ -1805,6 +1809,15 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore, f
             </p>
           </div>
         )}
+        <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Posizione del dispositivo (GPS)</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {scelta(!firma.gps_obbligatorio, 'Facoltativa', 'Viene chiesta al cliente; se la rifiuta firma lo stesso e l\'audit trail lo registra.',
+              () => setFirma({ ...firma, gps_obbligatorio: false }))}
+            {scelta(firma.gps_obbligatorio, 'Obbligatoria', 'Senza posizione autorizzata il cliente non puo\' firmare.',
+              () => setFirma({ ...firma, gps_obbligatorio: true }))}
+          </div>
+        </div>
       </div>
 
       {/* ── Dati del locatore ──────────────────────────────────────────
@@ -2279,6 +2292,9 @@ export default function CentralinaProTab() {
       }
       if (firma.otp_attivo && firma.otp_canale !== savedFirma.otp_canale) {
         out.push(`Firma del contratto: codice OTP via ${firma.otp_canale === 'email' ? 'email' : 'WhatsApp'}`)
+      }
+      if (!!firma.gps_obbligatorio !== !!savedFirma.gps_obbligatorio) {
+        out.push(`Firma del contratto: posizione GPS ${firma.gps_obbligatorio ? 'obbligatoria' : 'facoltativa'}`)
       }
       return out
     },

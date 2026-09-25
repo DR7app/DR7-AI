@@ -9,6 +9,8 @@ import TrusteraExportPdf from './TrusteraExportPdf'
 import { authFetch } from '../../../utils/authFetch'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import { scaricaAuditTrailPdf } from '../../../utils/scaricaAuditTrailPdf'
+import { apriAuditFirma } from '../../../utils/apriAuditFirma'
+import PulsanteSicurezzaFirma from './SicurezzaFirma'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -496,10 +498,8 @@ function DocumentiSubTab() {
   }
 
   function handleViewAuditTrail(req: SignatureRequest) {
-    const url = req.contract_id
-      ? `/.netlify/functions/signature-audit?contractId=${req.contract_id}&format=html`
-      : `/.netlify/functions/signature-audit?requestId=${req.id}&format=html`
-    window.open(url, '_blank')
+    apriAuditFirma(req.contract_id ? { contractId: req.contract_id } : { requestId: req.id })
+      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : String(err)))
   }
 
   // Scheda cliente incompleta: stesso popup della tab Contratti.
@@ -880,6 +880,12 @@ function DocumentiSubTab() {
                     >
                       Scarica Audit Trail
                     </button>
+                    <PulsanteSicurezzaFirma
+                      contractId={req.contract_id}
+                      requestId={req.contract_id ? null : req.id}
+                      titolo={req.document_name || req.signer_name}
+                      onGeneraNuovoLink={() => handleResend(req)}
+                    />
                     {req.signed_pdf_url ? (
                       <>
                         <button
