@@ -2268,7 +2268,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                         filledFields++
                         continue
                     }
-                    const sanitizedValue = sanitizeForPDF(value)
+                    // 25/09/2026: alcuni valori arrivano come NUMERO (la
+                    // cauzione del preventivo convertito e' 2000, non "2000"):
+                    // sanitizeForPDF faceva .replace su un numero, andava in
+                    // errore e il catch saltava la casella. Cauzione vuota.
+                    const sanitizedValue = sanitizeForPDF(value == null ? '' : String(value))
                     field.setFontSize(7)
                     // Alcuni campi tengono il proprio aspetto sul WIDGET e non
                     // sul campo: li' setFontSize non arriva e il testo resta a
