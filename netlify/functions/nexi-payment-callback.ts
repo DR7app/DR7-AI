@@ -20,6 +20,105 @@ const NEXI_API_KEY = process.env.NEXI_API_KEY!;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 // Fetch operation details from Nexi to get card info (maskedPan, card type)
+/**
+ * Cauzione pagata dal cliente col link INCASSO: stessi messaggi del tasto
+ * "Segna incassata" in CauzioniTab.
+ *   1. evento `on_cauzione_collected` (i template con trigger "Cauzione incassata");
+ *   2. se nessun template e' partito per evento, il messaggio `cauzione_incassata`;
+ *   3. la Richiesta IBAN (`deposit_return_iban`) per il rimborso.
+ */
+async function notificaCauzioneIncassataViaLink(cauzione: {
+    id: string; cliente_id: string | null; importo: number | null;
+    riferimento_contratto_id: string | null; veicolo_id: string | null;
+}): Promise<void> {
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+
+    let inviatiPerEvento = 0;
+    try {
+        const res = await fetch(`${baseUrl}/.netlify/functions/trigger-system-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'on_cauzione_collected', entityType: 'cauzione', entityId: cauzione.id }),
+        });
+        const j = await res.json().catch(() => ({}));
+        inviatiPerEvento = Number(j?.sent || 0);
+    } catch (e) {
+        console.warn('[nexi-payment-callback] on_cauzione_collected fallito (non bloccante):', e);
+    }
+
+    const { data: cust } = cauzione.cliente_id
+        ? await supabase.from('customers_extended')
+            .select('nome, cognome, email, telefono, ragione_sociale')
+            .eq('id', cauzione.cliente_id).maybeSingle()
+        : { data: null };
+    const phone = (cust?.telefono || '').trim();
+    if (!phone) {
+        console.warn(`[nexi-payment-callback] Cauzione ${cauzione.id}: nessun telefono cliente, Richiesta IBAN non inviata`);
+        return;
+    }
+    const customerName = cust?.ragione_sociale || `${cust?.nome || ''} ${cust?.cognome || ''}`.trim() || 'Cliente';
+    const firstName = customerName.split(' ')[0] || 'Cliente';
+    const amountStr = Number(cauzione.importo || 0).toFixed(2);
+
+    if (inviatiPerEvento === 0) {
+        let vehicleName = '';
+        let targa = '';
+        if (cauzione.veicolo_id) {
+            const { data: v } = await supabase.from('vehicles').select('display_name, plate').eq('id', cauzione.veicolo_id).maybeSingle();
+            vehicleName = v?.display_name || '';
+            targa = v?.plate || '';
+        }
+        await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customPhone: phone,
+                templateKey: 'cauzione_incassata',
+                booking: { service_type: 'rental' },
+                templateVars: {
+                    '{nome}': firstName,
+                    '{nome cliente}': customerName,
+                    '{nome_cliente}': customerName,
+                    '{cliente}': customerName,
+                    '{customer_name}': customerName,
+                    '{amount}': amountStr,
+                    '{importo}': amountStr,
+                    '{total}': amountStr,
+                    '{vehicle_name}': vehicleName,
+                    '{targa}': targa,
+                    '{data}': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+                },
+            }),
+        }).catch(e => console.warn('[nexi-payment-callback] cauzione_incassata fallito (non bloccante):', e));
+    }
+
+    const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A';
+    await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            customPhone: phone,
+            templateKey: 'deposit_return_iban',
+            booking: { service_type: 'rental' },
+            templateVars: {
+                '{nome cliente}': customerName,
+                '{nome_cliente}': customerName,
+                '{nome_completo}': customerName,
+                '{cliente}': customerName,
+                '{customer_name}': customerName,
+                '{nome}': firstName,
+                '{amount}': amountStr,
+                '{importo}': amountStr,
+                '{total}': amountStr,
+                '{contract_ref}': contractRef,
+                '{contratto}': contractRef,
+            },
+            skipHeader: false,
+        }),
+    });
+    console.log(`[nexi-payment-callback] Cauzione ${cauzione.id}: Richiesta IBAN inviata a ${phone}`);
+}
+
 async function fetchNexiOperationDetails(operationId: string): Promise<any> {
     try {
         const res = await fetch(`${NEXI_BASE_URL}/operations/${operationId}`, {
@@ -258,14 +357,24 @@ const handler: Handler = async (event) => {
         if (paymentPurpose === 'cauzione' && cauzioneIdCb) {
             if (isSuccess) {
                 const amountEur = (transaction.amount_cents / 100);
-                await supabase.from('cauzioni').update({
+                // Solo se non era gia' Incassata: un secondo callback Nexi non
+                // deve rimandare i messaggi al cliente.
+                const { data: incassate } = await supabase.from('cauzioni').update({
                     stato: 'Incassata',
                     data_incasso: new Date().toISOString(),
                     nexi_transaction_id: transactionId || operationId || null,
                     note: `Incassata via link pagamento — €${amountEur.toFixed(2)} — OpId: ${operationId || 'N/A'}`,
                     updated_at: new Date().toISOString(),
-                }).eq('id', cauzioneIdCb);
+                }).eq('id', cauzioneIdCb).or('stato.is.null,stato.neq.Incassata').select('id, cliente_id, importo, riferimento_contratto_id, veicolo_id');
                 console.log(`[nexi-payment-callback] Cauzione ${cauzioneIdCb} marcata Incassata via link`);
+                const cauzione = incassate?.[0];
+                if (cauzione) {
+                    try {
+                        await notificaCauzioneIncassataViaLink(cauzione);
+                    } catch (e) {
+                        console.error('[nexi-payment-callback] Messaggi cauzione incassata falliti (non bloccante):', e);
+                    }
+                }
             }
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: isSuccess ? 'cauzione_incassata' : 'cauzione_payment_failed' }) };
         }
