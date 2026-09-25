@@ -75,6 +75,8 @@ export const handler: Handler = async (event) => {
         // Build response
         const result = {
             contract: contract || {},
+            customerPhone,
+            customerEmail,
             signatureRequests: sigRequests.map(req => ({
                 id: req.id,
                 status: req.status,

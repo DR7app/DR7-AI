@@ -8,6 +8,7 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import TrusteraExportPdf from './TrusteraExportPdf'
 import { authFetch } from '../../../utils/authFetch'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
+import { scaricaAuditTrailPdf } from '../../../utils/scaricaAuditTrailPdf'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -458,7 +459,7 @@ function DocumentiSubTab() {
     }
   }
 
-  // Scarica PDF: salva il file sul computer (non lo apre in una scheda).
+  // Scarica Contratto: salva il file sul computer (non lo apre in una scheda).
   // Se il documento e' firmato scarica la versione firmata.
   async function handleScaricaPdf(req: SignatureRequest) {
     const url = req.signed_pdf_url || req.document_url
@@ -480,6 +481,17 @@ function DocumentiSubTab() {
     } catch {
       // Download bloccato (CORS o rete): si apre il PDF, da salvare a mano.
       window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  async function handleScaricaAuditTrail(req: SignatureRequest) {
+    const base = (req.contract?.contract_number || req.document_name || 'documento').replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_')
+    try {
+      toast.loading('Preparazione audit trail...', { id: 'audit-pdf' })
+      await scaricaAuditTrailPdf({ requestId: req.id }, `${base}_audit_trail.pdf`)
+      toast.dismiss('audit-pdf')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err), { id: 'audit-pdf' })
     }
   }
 
@@ -867,9 +879,15 @@ function DocumentiSubTab() {
                         onClick={() => handleScaricaPdf(req)}
                         className="w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                       >
-                        Scarica PDF
+                        {isDocument ? 'Scarica Documento' : 'Scarica Contratto'}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleScaricaAuditTrail(req)}
+                      className="w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      Scarica Audit Trail
+                    </button>
                     {req.signed_pdf_url ? (
                       <>
                         <button

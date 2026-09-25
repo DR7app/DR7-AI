@@ -14,6 +14,7 @@ import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import { useSelezioneMultipla } from '../../../utils/selezioneMultipla'
 import { BarraSelezioneMultipla, CasellaSelezione } from '../../../components/SelezioneMultipla'
 import { romeIsoFromParts } from '../../../utils/timezoneUtils'
+import { scaricaAuditTrailPdf } from '../../../utils/scaricaAuditTrailPdf'
 
 interface Contract {
   id: string
@@ -768,7 +769,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
     }
   }
 
-  // Scarica PDF: salva il file sul computer (non lo apre in una scheda).
+  // Scarica Contratto: salva il file sul computer (non lo apre in una scheda).
   // Se il contratto e' firmato scarica la versione firmata.
   async function handleScaricaPdf(contract: Contract) {
     const url = contract.signed_pdf_url || contract.pdf_url
@@ -789,6 +790,16 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
     } catch {
       // Download bloccato (CORS o rete): si apre il PDF, da salvare a mano.
       window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  async function handleScaricaAuditTrail(contract: Contract) {
+    try {
+      toast.loading('Preparazione audit trail...', { id: 'audit-pdf' })
+      await scaricaAuditTrailPdf({ contractId: contract.id }, `${contract.contract_number}_audit_trail.pdf`)
+      toast.dismiss('audit-pdf')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err), { id: 'audit-pdf' })
     }
   }
 
@@ -1430,7 +1441,15 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
                       onClick={() => handleScaricaPdf(contract)}
                       className="w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                     >
-                      Scarica PDF
+                      Scarica Contratto
+                    </button>
+                  )}
+                  {(contract.signed_pdf_url || (contract.signers && contract.signers.length > 0)) && (
+                    <button
+                      onClick={() => handleScaricaAuditTrail(contract)}
+                      className="w-full bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      Scarica Audit Trail
                     </button>
                   )}
                   {contract.signed_pdf_url ? (
