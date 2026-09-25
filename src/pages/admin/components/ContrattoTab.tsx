@@ -751,6 +751,30 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
     // firmatario lo è, restituendo un errore che mostriamo qui sotto.
     setSendingSignature(contract.id)
     try {
+      // 25/09/2026: "Reinvia Contratto" qui rimandava il PDF GIA' GENERATO,
+      // senza rifarlo. Prenotazioni invece lo rigenera prima. Caso DR72093:
+      // dopo la correzione della cauzione, da qui e' ripartito il PDF vecchio
+      // (cauzione vuota) e il garante, che quel PDF l'aveva gia' firmato, e'
+      // stato saltato; da Prenotazioni e' ripartito il PDF nuovo a tutti.
+      // Ora i due bottoni fanno la stessa cosa: si rigenera (riconducendo se
+      // e' gia' firmato da tutti) e poi si manda il link a chi deve firmare.
+      if (contract.booking_id) {
+        const rcRes = await authFetch('/.netlify/functions/generate-contract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: contract.booking_id, reconduct: true })
+        })
+        const rcData = await rcRes.json().catch(() => ({} as { reconducted?: boolean; error?: string }))
+        if (rcRes.ok && rcData?.reconducted) {
+          toast.success('Contratto ricondotto (gia\' firmato, nuove date) — nessuna nuova firma richiesta')
+          loadContracts()
+          return
+        }
+        if (!rcRes.ok) {
+          toast.error('Contratto non rigenerato: ' + (rcData?.error || `HTTP ${rcRes.status}`), { duration: 12000 })
+          return
+        }
+      }
       const res = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
