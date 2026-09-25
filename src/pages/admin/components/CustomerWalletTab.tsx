@@ -135,9 +135,7 @@ export default function CustomerWalletTab() {
       // nome / cognome lookup later when stitching site users to a customer
       // row.
       // 25/09/2026: ?fields=anagrafica come la tab Clienti (0,6 MB invece
-      // della riga intera da 5 MB), e gli autisti fuori come li'. Prima il
-      // conteggio "N clienti" qui non coincideva con "Totale Clienti". Un
-      // autista con credito resta in lista: il denaro si deve vedere.
+      // della riga intera da 5 MB).
       const response = await authFetch('/.netlify/functions/list-customers?fields=anagrafica')
       const result = await response.json()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -205,50 +203,22 @@ export default function CustomerWalletTab() {
         toast.error(`Errore di rete: ${e instanceof Error ? e.message : String(e)}`, { duration: 10000 })
       }
 
-      const mapped: CustomerResult[] = siteUsers.map(u => {
-        const cust = userIdToCust.get(u.id)
-        const balanceEur = u.balance || 0
-        const balanceCents = Math.round(balanceEur * 100)
-        // Nome: customer profile first (real entered names), else fallback
-        // a auth row (nome/cognome/email come placeholder).
-        let fullName = ''
-        if (cust) {
-          fullName = (`${cust.nome || ''} ${cust.cognome || ''}`.trim()
-            || cust.ragione_sociale
-            || cust.denominazione
-            || cust.email
-            || 'N/A')
-        } else {
-          fullName = (`${u.nome || ''} ${u.cognome || ''}`.trim() || u.email || 'Utente senza profilo')
-        }
-        return {
-          id: cust?.id || u.id, // use customer id if available, else auth user id
-          full_name: fullName,
-          email: cust?.email || u.email || null,
-          phone: cust?.telefono || u.telefono || null,
-          balance_cents: balanceCents,
-          user_id: u.id,
-        }
-      })
-
-      // Add customers WITHOUT a user_id but with phone-based wallet credits.
-      // Today this is empty because the `wallets` table doesn't exist; kept
-      // as an explicit "no-op" placeholder so future referral-wallet code
-      // has a clear hook.
-      // (No additional rows added.)
-
-      // 17/09/2026 (direzione): la lista mostra TUTTI i clienti della Lead,
-      // non solo chi ha gia' una riga di saldo. Chi non ce l'ha compare a
-      // € 0. Un cliente con piu' schede sullo stesso account compare una volta
-      // sola (la riga del saldo e' dell'account); le schede senza account
-      // compaiono tutte, una per scheda.
-      const accountInLista = new Set(mapped.map(m => m.user_id).filter(Boolean) as string[])
+      // 25/09/2026 (direzione: "deve essere rappresentativo della tab
+      // Clienti, c'e' tutto, niente in piu'"). La lista e' ESATTAMENTE quella
+      // della tab Clienti: una riga per scheda, autisti esclusi come li', col
+      // saldo dell'account collegato. Nessuna riga per account senza scheda.
+      // Se piu' schede condividono un account, il saldo va sulla prima sola,
+      // cosi' il totale non si conta due volte.
+      const saldoDi = new Map(siteUsers.map(u => [u.id, u.balance || 0]))
+      const saldoGiaAssegnato = new Set<string>()
+      const mapped: CustomerResult[] = []
       for (const cust of allCustomers) {
         if (!cust?.id) continue
         if (cust.metadata?.role === 'autista') continue
-        if (cust.user_id) {
-          if (accountInLista.has(cust.user_id)) continue
-          accountInLista.add(cust.user_id)
+        let balanceEur = 0
+        if (cust.user_id && !saldoGiaAssegnato.has(cust.user_id)) {
+          saldoGiaAssegnato.add(cust.user_id)
+          balanceEur = saldoDi.get(cust.user_id) || 0
         }
         mapped.push({
           id: cust.id,
@@ -259,7 +229,7 @@ export default function CustomerWalletTab() {
             || 'N/A'),
           email: cust.email || null,
           phone: cust.telefono || null,
-          balance_cents: 0,
+          balance_cents: Math.round(balanceEur * 100),
           user_id: cust.user_id || null,
         })
       }
