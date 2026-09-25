@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
+import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
-import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
+import { ReportCard, ReportToolbar, ReportButton, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import type { ClientTier } from '../../../contexts/ClientStatusContext'
-import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
+import { resolveDateRange, isInRange } from '../../../components/admin/DateRangePicker'
+import { ReportPeriodo, usePeriodoReport } from './ReportPeriodo'
 import toast from 'react-hot-toast'
 // #38 Modifica manuale report: correggi/rimuovi/aggiungi voci; gli override
 // (report_overrides) si applicano PRIMA dei totali.
@@ -207,7 +208,9 @@ export default function ReportClientiTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: 'all' })
+  // 23/09/2026 (direzione): stessa barra Periodo del Report Noleggio, parte da
+  // "Mese". Il vecchio "Tutto" non c'e' piu': per vedere tutto si usa Custom.
+  const periodo = usePeriodoReport('mese')
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
   const [openCustomerId, setOpenCustomerId] = useState<string | null>(null)
@@ -222,13 +225,8 @@ export default function ReportClientiTab() {
   // PDF: tutti i clienti del periodo, non solo la pagina a video.
   const [pdfTuttiClienti, setPdfTuttiClienti] = useState(false)
   useRegistraPeriodoReport({
-    imposta: (f, t) => setDateRange({ preset: 'custom', from: f, to: t }),
-    periodo: (() => {
-      if (dateRange.preset === 'all') return null
-      if (dateRange.preset === 'custom') return dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : null
-      const da = new Date(); da.setDate(da.getDate() - parseInt(dateRange.preset, 10))
-      return { from: isoLocale(da), to: isoLocale(new Date()) }
-    })(),
+    imposta: (f, t) => periodo.impostaIntervallo(f, t),
+    periodo: { from: periodo.da, to: periodo.a },
     inCaricamento: loading,
     preparaPdf: setPdfTuttiClienti,
   })
@@ -306,7 +304,8 @@ export default function ReportClientiTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const range = useMemo(() => resolveDateRange(dateRange), [dateRange])
+  // Da 00:00 del primo giorno a 23:59 dell'ultimo, come faceva il DateRangePicker.
+  const range = useMemo(() => resolveDateRange({ preset: 'custom', from: periodo.da, to: periodo.a }), [periodo.da, periodo.a])
 
   const filteredClienti = useMemo(() => {
     if (!clientiData?.customers) return []
@@ -343,7 +342,7 @@ export default function ReportClientiTab() {
     [sortedClienti, pageCorrente, pageSize, pdfTuttiClienti]
   )
   // Cambiare ricerca, periodo, ordinamento o dimensione pagina riporta in testa.
-  useEffect(() => { setPage(1) }, [search, dateRange, sortField, sortAsc, pageSize])
+  useEffect(() => { setPage(1) }, [search, periodo.da, periodo.a, sortField, sortAsc, pageSize])
   // Numeri di pagina a finestra: con 2.100 clienti le pagine sono decine, non
   // si stampano tutte.
   const pageNumbers = useMemo(() => {
@@ -401,14 +400,16 @@ export default function ReportClientiTab() {
     return rows.filter(r => r.value > 0)
   }, [adjustedClienti])
 
+  // 23/09/2026: mesi del periodo scelto (non piu' gli ultimi 12 fissi).
   const nuoviClienti = useMemo(() => {
     const mesi: { key: string; label: string; clienti: number }[] = []
-    const now = new Date()
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const [y0, m0] = periodo.da.split('-').map(Number)
+    const [y1, m1] = periodo.a.split('-').map(Number)
+    const fine = new Date(y1, m1 - 1, 1)
+    for (let d = new Date(y0, m0 - 1, 1); d <= fine && mesi.length < 240; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
       mesi.push({
         key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-        label: d.toLocaleDateString('it-IT', { month: 'short' }),
+        label: d.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }),
         clienti: 0,
       })
     }
@@ -417,38 +418,18 @@ export default function ReportClientiTab() {
       if (!c.prima_prenotazione) return
       const d = new Date(c.prima_prenotazione)
       if (Number.isNaN(d.getTime())) return
+      if ((range.from && d < range.from) || (range.to && d > range.to)) return
       const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const i = idx.get(k)
       if (i !== undefined) mesi[i].clienti += 1
     })
     return mesi
-  }, [adjustedClienti])
+  }, [adjustedClienti, periodo.da, periodo.a, range])
 
-  // 23/09/2026 — grafici sopra le tabelle, sul periodo gia' scelto nel
-  // DateRangePicker. Il report arriva aggregato per cliente (nessuna spesa per
-  // data): si disegnano solo le serie che hanno una data vera, prima e ultima
-  // prenotazione. Con "Tutto" il periodo parte dalla prima data presente.
-  const periodoGrafici = useMemo(() => {
-    const oggi = new Date()
-    let da: Date | null = range.from
-    let a: Date = range.to || oggi
-    if (!da || !range.to) {
-      let min = Infinity
-      let max = -Infinity
-      adjustedClienti.forEach(c => {
-        for (const d of [c.prima_prenotazione, c.ultima_prenotazione]) {
-          if (!d) continue
-          const t = new Date(d).getTime()
-          if (Number.isNaN(t)) continue
-          if (t < min) min = t
-          if (t > max) max = t
-        }
-      })
-      if (!da) da = Number.isFinite(min) ? new Date(min) : oggi
-      if (!range.to && Number.isFinite(max) && max > oggi.getTime()) a = new Date(max)
-    }
-    return { da, a }
-  }, [range, adjustedClienti])
+  // 23/09/2026 — grafici sopra le tabelle sul periodo della barra (da..a).
+  // Il report arriva aggregato per cliente (nessuna spesa per data): si
+  // disegnano solo le serie con una data vera, prima e ultima prenotazione.
+  const periodoGrafici = { da: periodo.da, a: periodo.a }
   const puntiNuoviClienti = useMemo<ReportPunto[]>(
     () => adjustedClienti.filter(c => c.prima_prenotazione).map(c => ({ data: c.prima_prenotazione as string, valore: 1 })),
     [adjustedClienti]
@@ -470,23 +451,14 @@ export default function ReportClientiTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-2xl font-bold text-theme-text-primary">Report Clienti</h2>
-          <button
-            onClick={fetchClienti}
-            disabled={loading}
-            title="Ricarica il report"
-            aria-label="Ricarica il report"
-            className="w-8 h-8 rounded-full border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors flex items-center justify-center disabled:opacity-40"
-          >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-        </div>
-        <DateRangePicker value={dateRange} onChange={setDateRange} />
-      </div>
+      <h2 className="text-2xl font-bold text-theme-text-primary">Report Clienti</h2>
+
+      {/* 23/09/2026: barra Periodo comune a tutti i Report. Il filtro e' sul
+          browser (data ultima prenotazione): cambia subito; Aggiorna ricarica. */}
+      <ReportToolbar>
+        <ReportPeriodo periodo={periodo} />
+        <ReportButton onClick={fetchClienti} disabled={loading}>Aggiorna</ReportButton>
+      </ReportToolbar>
 
       {loading && (
         <ScheletroTabella righe={6} colonne={5} />
@@ -668,7 +640,7 @@ export default function ReportClientiTab() {
               )}
             </ReportCard>
 
-            <ReportCard title="Nuovi Clienti" right="prima prenotazione — ultimi 12 mesi">
+            <ReportCard title="Nuovi Clienti" right="prima prenotazione nel periodo">
               {nuoviClienti.length === 0 ? (
                 <ReportEmpty message="Nessun nuovo cliente" />
               ) : (
@@ -687,7 +659,7 @@ export default function ReportClientiTab() {
                   }
                 >
                   {nuoviClienti.map(m => (
-                    <ReportRow key={m.label}>
+                    <ReportRow key={m.key}>
                       <td className="px-4 py-3 font-medium text-theme-text-primary">{m.label}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-theme-text-primary">{m.clienti}</td>
                     </ReportRow>

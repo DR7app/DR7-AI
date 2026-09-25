@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useRegistraPeriodoReport, periodoDelMese } from '../../../utils/reportPeriodo'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
+import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
@@ -8,7 +9,7 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import MoneyInput from '../../../components/MoneyInput'
 import {
-  ReportShell, ReportToolbar, ReportField, ReportButton, ReportKpiGrid, ReportKpi,
+  ReportShell, ReportToolbar, ReportButton, ReportKpiGrid, ReportKpi,
   ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportError,
   REPORT_INPUT_CLASS, ReportGrafici, ReportGrafico,
 } from './ReportUI'
@@ -63,11 +64,39 @@ function monthLabel(yyyyMm: string): string {
   return `${MONTH_LABELS_IT[(m - 1) % 12]} ${String(y).slice(2)}`
 }
 
-export default function ReportLavaggioTab() {
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+// 23/09/2026: il periodo e' un mese intero (dal primo all'ultimo giorno)?
+// Solo allora valgono le correzioni mensili della direzione.
+function meseInteroDi(da: string, a: string): string | null {
+  if (!/^\d{4}-\d{2}-01$/.test(da) || da.slice(0, 7) !== a.slice(0, 7)) return null
+  const [y, m] = da.split('-').map(Number)
+  return isoLocale(new Date(y, m, 0)) === a ? da.slice(0, 7) : null
+}
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+// 23/09/2026: mesi (YYYY-MM) interamente compresi tra da e a.
+function mesiInteriNelPeriodo(da: string, a: string): string[] {
+  const out: string[] = []
+  const [y, m] = da.split('-').map(Number)
+  for (let d = new Date(y, m - 1, 1); ; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    const inizio = isoLocale(d)
+    const fine = isoLocale(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+    if (inizio > a) break
+    if (inizio >= da && fine <= a) out.push(inizio.slice(0, 7))
+  }
+  return out
+}
+
+export default function ReportLavaggioTab() {
+  // 23/09/2026 (direzione): stessa barra Periodo del Report Noleggio. Tutto il
+  // report (schede, tabelle, grafici) segue da..a.
+  const periodo = usePeriodoReport('mese')
+  const { da, a } = periodo
+  // Mese intero scelto (YYYY-MM) oppure null: le correzioni mensili (ricavo,
+  // spesa merce, stipendio, voci extra) si leggono e si scrivono solo qui.
+  const meseSingolo = meseInteroDi(da, a)
+  const etichettaPeriodo = meseSingolo ? monthLabel(meseSingolo) : `${isoAEu(da)} – ${isoAEu(a)}`
+  // Risposte arrivate fuori ordine (date scritte a mano) non sovrascrivono
+  // quelle del periodo attuale.
+  const turno = useRef({ report: 0, lavaggi: 0, trend: 0, costi: 0 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [washData, setWashData] = useState<WashReportData | null>(null)
@@ -111,13 +140,15 @@ export default function ReportLavaggioTab() {
   const [trendLoading, setTrendLoading] = useState(false)
   // PDF dei Report: periodo sul PDF e PDF mese per mese.
   useRegistraPeriodoReport({
-    imposta: (f) => setSelectedMonth(f.slice(0, 7)),
-    periodo: periodoDelMese(selectedMonth),
+    imposta: (f, t) => periodo.impostaIntervallo(f, t),
+    periodo: { from: da, to: a },
     inCaricamento: loading || trendLoading,
   })
 
   const { hasRole } = useAdminRole()
   const canEditStipendio = hasRole('stipendio-editor')
+  // 23/09/2026: fuori dal mese intero le voci di costo non si modificano.
+  const canEditMese = canEditStipendio && meseSingolo != null
   const [spesaMerce, setSpesaMerce] = useState<number>(0)
   // 2026-08-20 (richiesta direzione): modificabili TUTTE le voci di Costi &
   // Margine, non solo lo stipendio. Ricavo e Spesa Merce restano calcolati dai
@@ -138,11 +169,11 @@ export default function ReportLavaggioTab() {
   const [stipendioSaving, setStipendioSaving] = useState(false)
 
   const loadCosts = useCallback(async () => {
+    const mio = ++turno.current.costi
     try {
-      const [year, month] = selectedMonth.split('-').map(Number)
-      const monthStart = `${selectedMonth}-01`
-      const lastDay = new Date(year, month, 0).getDate()
-      const monthEnd = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`
+      // 23/09/2026: spesa merce sulle fatture fornitori del periodo da..a.
+      const monthStart = da
+      const monthEnd = a
 
       const { data: fornitori } = await supabase
         .from('fornitori')
@@ -160,6 +191,7 @@ export default function ReportLavaggioTab() {
           .lte('data_documento', monthEnd)
         spesa = (fatture || []).reduce((s, d: { importo_totale: number | string | null }) => s + (Number(d.importo_totale) || 0), 0)
       }
+      if (mio !== turno.current.costi) return
       setSpesaMerce(spesa)
 
       const { data: cfgRow } = await supabase
@@ -167,36 +199,54 @@ export default function ReportLavaggioTab() {
         .select('config')
         .eq('id', 'main')
         .maybeSingle()
+      if (mio !== turno.current.costi) return
       const cfg = (cfgRow?.config || {}) as Record<string, unknown>
       const lav = (cfg.lavaggio || {}) as Record<string, unknown>
       const stip = (lav.stipendi_mensili || {}) as Record<string, number>
-      const value = Number(stip[selectedMonth] ?? 0) || 0
-      setStipendio(value)
       const ricOv = (lav.ricavi_mensili || {}) as Record<string, number>
       const speOv = (lav.spese_merce_mensili || {}) as Record<string, number>
-      setRicavoOverride(ricOv[selectedMonth] != null ? Number(ricOv[selectedMonth]) : null)
-      setSpesaOverride(speOv[selectedMonth] != null ? Number(speOv[selectedMonth]) : null)
       const extraMap = (lav.voci_extra_mensili || {}) as Record<string, VoceExtra[]>
-      setVociExtra(Array.isArray(extraMap[selectedMonth]) ? extraMap[selectedMonth] : [])
+      if (meseSingolo) {
+        const value = Number(stip[meseSingolo] ?? 0) || 0
+        setStipendio(value)
+        setRicavoOverride(ricOv[meseSingolo] != null ? Number(ricOv[meseSingolo]) : null)
+        setSpesaOverride(speOv[meseSingolo] != null ? Number(speOv[meseSingolo]) : null)
+        setVociExtra(Array.isArray(extraMap[meseSingolo]) ? extraMap[meseSingolo] : [])
+      } else {
+        // 23/09/2026: periodo che non e' un mese intero. Ricavo e spesa merce
+        // restano quelli calcolati (le correzioni valgono per il mese intero);
+        // stipendio e voci extra sono costi del mese: si sommano solo i mesi
+        // interamente compresi nel periodo, in sola lettura.
+        const mesi = mesiInteriNelPeriodo(da, a)
+        setStipendio(mesi.reduce((t, m) => t + (Number(stip[m] ?? 0) || 0), 0))
+        setRicavoOverride(null)
+        setSpesaOverride(null)
+        setVociExtra(mesi.flatMap(m => (Array.isArray(extraMap[m]) ? extraMap[m] : []).map(v => ({
+          ...v, id: `${m}:${v.id}`, label: `${v.label} (${monthLabel(m)})`,
+        }))))
+      }
     } catch (err) {
       console.error('[ReportLavaggio] loadCosts error:', err)
     } finally {
     }
-  }, [selectedMonth])
+  }, [da, a, meseSingolo])
 
   useEffect(() => { loadCosts() }, [loadCosts])
 
   useEffect(() => {
     fetchReport()
     fetchTrend()
-    fetchLavaggiDelMese()
+    fetchLavaggiDelPeriodo()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth])
+  }, [da, a])
 
   // Salvataggio/azzeramento di un override mensile. `null` rimuove la voce e
   // fa tornare in vigore il valore calcolato.
   const [overrideSaving, setOverrideSaving] = useState(false)
   async function saveOverride(campo: 'ricavi_mensili' | 'spese_merce_mensili', valore: number | null) {
+    // 23/09/2026: le correzioni si scrivono solo sul mese intero.
+    const selectedMonth = meseSingolo
+    if (!selectedMonth) { toast.error('Le correzioni si fanno sul mese intero'); return }
     setOverrideSaving(true)
     try {
       const { data: cfgRow } = await supabase
@@ -227,6 +277,8 @@ export default function ReportLavaggioTab() {
   // Scrive l'elenco completo delle voci del mese (aggiunta, modifica, rimozione
   // passano tutte di qui: una sola strada verso il database).
   async function salvaVociExtra(nuovo: VoceExtra[]) {
+    const selectedMonth = meseSingolo
+    if (!selectedMonth) { toast.error('Le correzioni si fanno sul mese intero'); return }
     setOverrideSaving(true)
     try {
       const { data: cfgRow } = await supabase
@@ -264,6 +316,8 @@ export default function ReportLavaggioTab() {
   }
 
   async function saveStipendioValue(parsed: number) {
+    const selectedMonth = meseSingolo
+    if (!selectedMonth) { toast.error('Le correzioni si fanno sul mese intero'); return }
     setStipendioSaving(true)
     try {
       const { data: cfgRow } = await supabase
@@ -292,19 +346,25 @@ export default function ReportLavaggioTab() {
   }
 
   async function fetchReport() {
+    const mio = ++turno.current.report
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/.netlify/functions/monthly-report?type=washes&month=${selectedMonth}`)
+      // 23/09/2026: mese intero = month= come prima; altrimenti from/to.
+      const q = meseSingolo ? `month=${meseSingolo}` : `from=${da}&to=${a}`
+      const res = await fetch(`/.netlify/functions/monthly-report?type=washes&${q}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
+      const ov = await loadReportOverrides('lavaggio')
+      if (mio !== turno.current.report) return
       setWashData(data)
-      setOverrides(await loadReportOverrides('lavaggio'))
+      setOverrides(ov)
     } catch (err: unknown) {
+      if (mio !== turno.current.report) return
       const _errMsg = err instanceof Error ? err.message : String(err)
       setError(_errMsg || 'Errore sconosciuto')
     } finally {
-      setLoading(false)
+      if (mio === turno.current.report) setLoading(false)
     }
   }
 
@@ -313,9 +373,12 @@ export default function ReportLavaggioTab() {
   // TEST escluse, interni riconosciuti allo stesso modo, fatturati solo con
   // prezzo): cambia solo che qui si tiene il giorno. I totali in testa ai
   // grafici restano quelli delle schede (override della direzione compresi).
-  async function fetchLavaggiDelMese() {
+  // 23/09/2026: sul periodo da..a della barra, sempre a pagine da 1000.
+  async function fetchLavaggiDelPeriodo() {
+    const mio = ++turno.current.lavaggi
     try {
-      const { from, to } = periodoDelMese(selectedMonth)
+      const from = da
+      const to = a
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const righe: any[] = []
       for (let da = 0; ; da += 1000) {
@@ -362,29 +425,50 @@ export default function ReportLavaggioTab() {
           out.push({ data, ricavo: (b.price_total || 0) / 100, quantita: 1, interno: false })
         }
       }
+      if (mio !== turno.current.lavaggi) return
       setLavaggiDelMese(out)
     } catch (e) {
-      console.warn('[ReportLavaggio] fetchLavaggiDelMese failed:', e)
-      setLavaggiDelMese([])
+      console.warn('[ReportLavaggio] fetchLavaggiDelPeriodo failed:', e)
+      if (mio === turno.current.lavaggi) setLavaggiDelMese([])
     }
   }
 
+  // 23/09/2026: periodo su piu' mesi = un punto per mese del periodo (i mesi
+  // agli estremi tagliati su da..a, al massimo gli ultimi 24); periodo dentro
+  // un solo mese = ultimi 6 mesi interi fino al mese di `a`, come prima.
   async function fetchTrend() {
+    const mio = ++turno.current.trend
     setTrendLoading(true)
     try {
-      const [year, month] = selectedMonth.split('-').map(Number)
+      const [year, month] = a.split('-').map(Number)
       const months: string[] = []
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(year, month - 1 - i, 1)
-        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      const query: string[] = []
+      if (da.slice(0, 7) !== a.slice(0, 7)) {
+        const [dy, dm] = da.split('-').map(Number)
+        for (let d = new Date(dy, dm - 1, 1); isoLocale(d) <= a; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+          const inizio = isoLocale(d)
+          const fine = isoLocale(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+          months.push(inizio.slice(0, 7))
+          query.push(`from=${inizio < da ? da : inizio}&to=${fine > a ? a : fine}`)
+        }
+        months.splice(0, Math.max(0, months.length - 24))
+        query.splice(0, Math.max(0, query.length - 24))
+      } else {
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(year, month - 1 - i, 1)
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          months.push(m)
+          query.push(`month=${m}`)
+        }
       }
       const results = await Promise.all(
-        months.map(m =>
-          fetch(`/.netlify/functions/monthly-report?type=washes&month=${m}`)
+        query.map(q =>
+          fetch(`/.netlify/functions/monthly-report?type=washes&${q}`)
             .then(r => r.ok ? r.json() : null)
             .catch(() => null)
         )
       )
+      if (mio !== turno.current.trend) return
       const points: MonthlyTrendPoint[] = months.map((m, i) => {
         const d = results[i] as WashReportData | null
         return {
@@ -398,7 +482,7 @@ export default function ReportLavaggioTab() {
     } catch (e) {
       console.warn('[ReportLavaggio] fetchTrend failed:', e)
     } finally {
-      setTrendLoading(false)
+      if (mio === turno.current.trend) setTrendLoading(false)
     }
   }
 
@@ -419,8 +503,8 @@ export default function ReportLavaggioTab() {
 
   const emptyState = !washData && !loading
 
-  // 23/09/2026: punti dei grafici, periodo = mese scelto nel report.
-  const periodoGrafici = periodoDelMese(selectedMonth)
+  // 23/09/2026: punti dei grafici, periodo = da..a della barra.
+  const periodoGrafici = { from: da, to: a }
   const puntiRicavo = useMemo(
     () => lavaggiDelMese.filter(l => !l.interno).map(l => ({ data: l.data, valore: l.ricavo })),
     [lavaggiDelMese])
@@ -434,19 +518,13 @@ export default function ReportLavaggioTab() {
   return (
     <ReportShell
       title="Report Mensili — Lavaggio & Meccanica"
-      subtitle={`${washData?.daysInMonth || '—'} giorni · ${monthLabel(selectedMonth)}`}
+      subtitle={`${washData?.daysInMonth || '—'} giorni · ${etichettaPeriodo}`}
     >
       {/* Controls */}
       <ReportToolbar>
-        <ReportField label="Mese">
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className={`${REPORT_INPUT_CLASS} font-mono tabular-nums`}
-          />
-        </ReportField>
-        <ReportButton onClick={() => { fetchReport(); fetchTrend(); fetchLavaggiDelMese(); loadCosts() }} disabled={loading}>
+        {/* 23/09/2026 (direzione): barra Periodo comune a tutti i Report. */}
+        <ReportPeriodo periodo={periodo} />
+        <ReportButton onClick={() => { fetchReport(); fetchTrend(); fetchLavaggiDelPeriodo(); loadCosts() }} disabled={loading}>
           Aggiorna
         </ReportButton>
         <button
@@ -487,18 +565,18 @@ export default function ReportLavaggioTab() {
         <ReportKpi
           label="Stipendio Lavaggista"
           value={formatCurrency(stipendio)}
-          sub="payroll mensile"
+          sub={meseSingolo ? 'payroll mensile' : 'mesi interi nel periodo'}
           tone="yellow"
         />
         <ReportKpi
           label="Margine Reale"
           value={formatCurrency(margineReale)}
-          sub={`${marginPct}% del ricavo · ${monthLabel(selectedMonth)}`}
+          sub={`${marginPct}% del ricavo · ${etichettaPeriodo}`}
           tone={margineReale >= 0 ? 'green' : 'red'}
         />
       </ReportKpiGrid>
 
-      {/* 23/09/2026 (direzione): grafici sopra le tabelle, sul mese scelto.
+      {/* 23/09/2026 (direzione): grafici sopra le tabelle, sul periodo scelto.
           In testa gli stessi numeri delle schede qui sopra. */}
       <ReportGrafici>
         <ReportGrafico
@@ -536,7 +614,7 @@ export default function ReportLavaggioTab() {
         right={`${byTypeRows.length} servizi`}
       >
         {byTypeRows.length === 0 ? (
-          loading ? <ScheletroTabella righe={5} colonne={4} /> : <ReportEmpty message="Nessun dato per il mese selezionato" />
+          loading ? <ScheletroTabella righe={5} colonne={4} /> : <ReportEmpty message="Nessun dato nel periodo selezionato" />
         ) : (
           <ReportTable
             head={
@@ -586,13 +664,13 @@ export default function ReportLavaggioTab() {
       </ReportCard>
 
       {/* Costi & Margine */}
-      <ReportCard title="Costi & Margine" right={monthLabel(selectedMonth)}>
+      <ReportCard title="Costi & Margine" right={etichettaPeriodo}>
         <ReportTable
           head={
             <>
               <th className="text-left px-4 py-3">Voce</th>
               <th className="text-right px-4 py-3">Importo</th>
-              <th className="text-right px-4 py-3">{canEditStipendio ? 'Azioni' : ''}</th>
+              <th className="text-right px-4 py-3">{canEditMese ? 'Azioni' : ''}</th>
             </>
           }
           foot={
@@ -608,19 +686,19 @@ export default function ReportLavaggioTab() {
           <CostoRiga
             label="Ricavo" value={ricavo} sign="+" tone="positive"
             calcolato={ricavoCalcolato} modificato={ricavoOverride != null}
-            canEdit={canEditStipendio} saving={overrideSaving}
+            canEdit={canEditMese} saving={overrideSaving}
             onSave={(v) => saveOverride('ricavi_mensili', v)}
           />
           <CostoRiga
             label="Spesa Merce" value={spesaEffettiva} sign="−" tone="negative"
             calcolato={spesaCalcolata} modificato={spesaOverride != null}
-            canEdit={canEditStipendio} saving={overrideSaving}
+            canEdit={canEditMese} saving={overrideSaving}
             onSave={(v) => saveOverride('spese_merce_mensili', v)}
           />
           <CostoRiga
             label="Stipendio Lavaggista" value={stipendio} sign="−" tone="negative"
             calcolato={stipendio} modificato={false}
-            canEdit={canEditStipendio} saving={stipendioSaving}
+            canEdit={canEditMese} saving={stipendioSaving}
             onSave={(v) => saveStipendioValue(v ?? 0)}
           />
           {vociExtra.map(v => (
@@ -628,16 +706,16 @@ export default function ReportLavaggioTab() {
               key={v.id}
               label={v.label} value={v.importo} sign="−" tone="negative"
               calcolato={v.importo} modificato={false}
-              canEdit={canEditStipendio} saving={overrideSaving}
+              canEdit={canEditMese} saving={overrideSaving}
               onSave={(nuovo) => salvaVociExtra(
                 nuovo == null
                   ? vociExtra.filter(x => x.id !== v.id)
                   : vociExtra.map(x => x.id === v.id ? { ...x, importo: nuovo } : x)
               )}
-              onDelete={() => salvaVociExtra(vociExtra.filter(x => x.id !== v.id))}
+              onDelete={meseSingolo ? () => salvaVociExtra(vociExtra.filter(x => x.id !== v.id)) : undefined}
             />
           ))}
-          {canEditStipendio && (
+          {canEditMese && (
             <tr className="border-t border-theme-border">
               <td colSpan={3} className="px-4 py-3">
                 {aggiungendoVoce ? (
@@ -679,12 +757,18 @@ export default function ReportLavaggioTab() {
             Le voci di costo si modificano solo con il ruolo stipendi.
           </p>
         )}
+        {/* 23/09/2026: periodo diverso dal mese intero = valori calcolati. */}
+        {!meseSingolo && (
+          <p className="px-4 py-3 text-xs text-theme-text-muted border-t border-theme-border">
+            Le correzioni si fanno sul mese intero: qui ricavo e spesa merce sono quelli calcolati sul periodo; stipendio e voci extra contano solo i mesi interi compresi nel periodo.
+          </p>
+        )}
       </ReportCard>
 
       {/* Andamento ultimi 6 mesi */}
-      <ReportCard title="Andamento Ultimi 6 Mesi" right={trendLoading ? '' : `${trend.length} mesi`}>
+      <ReportCard title={da.slice(0, 7) !== a.slice(0, 7) ? 'Andamento per Mese nel Periodo' : 'Andamento Ultimi 6 Mesi'} right={trendLoading ? '' : `${trend.length} mesi`}>
         {trend.length === 0 ? (
-          trendLoading ? <ScheletroTabella righe={6} colonne={4} /> : <ReportEmpty message="Nessun dato negli ultimi 6 mesi" />
+          trendLoading ? <ScheletroTabella righe={6} colonne={4} /> : <ReportEmpty message="Nessun dato nei mesi mostrati" />
         ) : (
           <ReportTable
             head={
@@ -718,7 +802,7 @@ export default function ReportLavaggioTab() {
       {/* Lavaggi interni */}
       <ReportCard title="Lavaggi Rientro · Interni" right={`${lavaggiInterni} lavaggi`}>
         {lavaggiInterni === 0 ? (
-          <ReportEmpty message="Nessun lavaggio interno nel mese" />
+          <ReportEmpty message="Nessun lavaggio interno nel periodo" />
         ) : (
           <ReportTable
             head={

@@ -1482,22 +1482,32 @@ async function generateWashReport(
   month: string,
   daysInMonth: number
 ) {
-  const { data: washBookings, error: washError } = await supabase
-    .from('bookings')
-    .select('id, service_name, price_total, status, payment_status, booking_details, vehicle_name, vehicle_plate, appointment_date')
-    .eq('service_type', 'car_wash')
-    .gte('appointment_date', monthStartISO + 'T00:00:00')
-    .lte('appointment_date', monthEndISO + 'T23:59:59')
-    // 'completata' (italiano) mancava: ogni lavaggio chiuso spariva dal
-    // fatturato del report lavaggio. Gli stati validi esistono in inglese E
-    // in italiano — vanno elencati entrambi.
-    .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
-    // Test plate filter — must allow NULL plates (website-booked carwashes
-    // don't set vehicle_plate). SQL NOT IN excludes NULL silently, so we
-    // wrap with an OR clause that explicitly accepts IS NULL.
-    .or('vehicle_plate.is.null,vehicle_plate.not.in.(TEST000,TEST002)')
-
-  if (washError) throw washError
+  // 23/09/2026: il Report Lavaggio ora chiede anche from/to (Anno, 30gg,
+  // Custom): si legge a pagine da 1000, il tetto di PostgREST, altrimenti un
+  // periodo lungo si fermava alle prime mille prenotazioni.
+  const washBookings: any[] = []
+  for (let off = 0; ; off += 1000) {
+    const { data: pagina, error: washError } = await supabase
+      .from('bookings')
+      .select('id, service_name, price_total, status, payment_status, booking_details, vehicle_name, vehicle_plate, appointment_date')
+      .eq('service_type', 'car_wash')
+      .gte('appointment_date', monthStartISO + 'T00:00:00')
+      .lte('appointment_date', monthEndISO + 'T23:59:59')
+      // 'completata' (italiano) mancava: ogni lavaggio chiuso spariva dal
+      // fatturato del report lavaggio. Gli stati validi esistono in inglese E
+      // in italiano — vanno elencati entrambi.
+      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+      // Test plate filter — must allow NULL plates (website-booked carwashes
+      // don't set vehicle_plate). SQL NOT IN excludes NULL silently, so we
+      // wrap with an OR clause that explicitly accepts IS NULL.
+      .or('vehicle_plate.is.null,vehicle_plate.not.in.(TEST000,TEST002)')
+      .order('appointment_date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(off, off + 999)
+    if (washError) throw washError
+    washBookings.push(...(pagina || []))
+    if (!pagina || pagina.length < 1000) break
+  }
 
   // Separate external (billable) washes from internal rientro washes
   const isInternalWash = (booking: any): boolean => {

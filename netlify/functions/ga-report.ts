@@ -6,7 +6,9 @@ import { createClient } from '@supabase/supabase-js'
 // Returns ONLY real numbers. If env vars are missing, returns a structured
 // `configured: false` response so the UI can list what to set up.
 
-interface SeriesPoint { day: string; total: number; organico: number; ads: number; maps: number }
+// 23/09/2026: `date` (YYYY-MM-DD) accanto a `day` (GG/MM): il grafico non
+// deve piu' indovinare l'anno. `day` resta per chi lo legge gia'.
+interface SeriesPoint { day: string; date?: string; total: number; organico: number; ads: number; maps: number }
 interface ChannelSlice { name: string; value: number }
 interface FunnelStage { stage: string; value: number }
 interface TopPage { page: string; sessions: number; pageviews: number }
@@ -46,6 +48,9 @@ interface ReportPayload {
   configured: boolean
   missing: string[]
   range: '7d' | '28d' | '90d' | '180d' | '365d'
+  // 23/09/2026: periodo esplicito chiesto dalla barra Periodo (YYYY-MM-DD)
+  from?: string | null
+  to?: string | null
   kpis: KpiBlock | null
   realtime: RealtimeBlock | null
   webAttributed: WebAttributedBlock | null
@@ -74,11 +79,104 @@ interface ReportPayload {
   conversionsSource?: 'ga4' | 'crm'
 }
 
+// 23/09/2026: il periodo della richiesta, in un posto solo. Con `from`/`to`
+// (YYYY-MM-DD, giorni di calendario italiani) vale l'intervallo esatto della
+// barra Periodo; senza, resta il vecchio `range` (7d/28d/...), cosi' chi
+// chiama ancora con ?range= (Dashboard) non cambia.
+interface Finestra {
+  gaStart: string
+  gaEnd: string
+  gaPrevStart: string
+  gaPrevEnd: string
+  // Istanti ISO per le query sul database; dbEnd null = fino ad adesso
+  dbStart: string
+  dbEnd: string | null
+  dbPrevStart: string
+  dbPrevEnd: string
+  from: string | null
+  to: string | null
+}
+
+const RE_GIORNO = /^\d{4}-\d{2}-\d{2}$/
+
+function giornoValido(s: string | undefined | null): s is string {
+  if (!s || !RE_GIORNO.test(s)) return false
+  const d = new Date(`${s}T00:00:00Z`)
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s
+}
+
+function spostaGiorno(ymd: string, giorni: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + giorni)
+  return d.toISOString().slice(0, 10)
+}
+
+function oggiRoma(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+}
+
+/** Istante UTC della mezzanotte italiana del giorno dato (ora legale compresa). */
+function mezzanotteRoma(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const guess = Date.UTC(y, m - 1, d)
+  const parti = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Rome', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(guess))
+  const v = (t: string) => Number(parti.find(p => p.type === t)?.value || 0)
+  const muro = Date.UTC(v('year'), v('month') - 1, v('day'), v('hour'), v('minute'), v('second'))
+  return new Date(guess - (muro - guess)).toISOString()
+}
+
+function giorniDelRange(range: string): number {
+  return range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
+}
+
+function risolviFinestra(range: string, from?: string | null, to?: string | null): Finestra {
+  if (giornoValido(from) && giornoValido(to) && from <= to) {
+    // GA4 non ha dati futuri: la fine si ferma a oggi (Mese e Anno arrivano
+    // a fine mese / 31/12). Il confronto e' con lo stesso numero di giorni
+    // subito prima.
+    const oggi = oggiRoma()
+    const fineGa = to > oggi && from <= oggi ? oggi : to
+    const giorni = Math.round((Date.parse(`${fineGa}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1
+    const prevEnd = spostaGiorno(from, -1)
+    const prevStart = spostaGiorno(from, -giorni)
+    return {
+      gaStart: from,
+      gaEnd: fineGa,
+      gaPrevStart: prevStart,
+      gaPrevEnd: prevEnd,
+      dbStart: mezzanotteRoma(from),
+      dbEnd: mezzanotteRoma(spostaGiorno(to, 1)),
+      dbPrevStart: mezzanotteRoma(prevStart),
+      dbPrevEnd: mezzanotteRoma(from),
+      from,
+      to,
+    }
+  }
+  const days = giorniDelRange(range)
+  const now = Date.now()
+  const start = new Date(now - days * 86400000).toISOString()
+  return {
+    gaStart: `${days}daysAgo`,
+    gaEnd: 'today',
+    gaPrevStart: `${days * 2}daysAgo`,
+    gaPrevEnd: `${days + 1}daysAgo`,
+    dbStart: start,
+    dbEnd: null,
+    dbPrevStart: new Date(now - days * 2 * 86400000).toISOString(),
+    dbPrevEnd: start,
+    from: null,
+    to: null,
+  }
+}
+
 // Fallback: quando GA4 non risponde (errore permessi, env mancanti, ecc.)
 // popoliamo i KPI con dati interni della nostra DB Supabase, cosi' la tab
 // non resta mai vuota. NON sono dati di traffico web — sono operatività
 // DR7 (prenotazioni, clienti, fatturato). Marcati come dataSource='internal'.
-async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; warnings: string[] }> {
+async function buildInternalFallback(f: Finestra): Promise<{ kpis: KpiBlock; warnings: string[] }> {
   const supabaseUrlEnv = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const supabaseKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY
   const empty: KpiBlock = {
@@ -90,29 +188,30 @@ async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; w
   }
   try {
     const sb = createClient(supabaseUrlEnv, supabaseKeyEnv)
-    const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
-    const now = new Date()
-    const start = new Date(now.getTime() - days * 86400000).toISOString()
-    const prevStart = new Date(now.getTime() - days * 2 * 86400000).toISOString()
-    const prevEnd = start
+    // 23/09/2026: finestra da risolviFinestra (range o from/to)
+    const start = f.dbStart
+    const prevStart = f.dbPrevStart
+    const prevEnd = f.dbPrevEnd
+    // Limite superiore solo col periodo esplicito; col range vale "fino ad ora"
+    const fine = <Q extends { lt: (c: string, v: string) => Q }>(q: Q): Q => (f.dbEnd ? q.lt('created_at', f.dbEnd) : q)
 
     // Bookings nel periodo + nel periodo precedente
     const [{ count: bookCur }, { count: bookPrev }, { data: paidBookings }, { count: customersCur }] = await Promise.all([
-      sb.from('bookings').select('id', { count: 'exact', head: true }).gte('created_at', start),
+      fine(sb.from('bookings').select('id', { count: 'exact', head: true }).gte('created_at', start)),
       sb.from('bookings').select('id', { count: 'exact', head: true }).gte('created_at', prevStart).lt('created_at', prevEnd),
-      sb.from('bookings').select('price_total, payment_status').gte('created_at', start).limit(2000),
-      sb.from('customers_extended').select('id', { count: 'exact', head: true }).gte('created_at', start),
+      fine(sb.from('bookings').select('price_total, payment_status').gte('created_at', start)).limit(2000),
+      fine(sb.from('customers_extended').select('id', { count: 'exact', head: true }).gte('created_at', start)),
     ])
     const isPaid = (s?: string | null) => s === 'paid' || s === 'completed' || s === 'succeeded'
     const revenue = (paidBookings || []).reduce((acc: number, b: { price_total?: number | null; payment_status?: string | null }) =>
       isPaid(b.payment_status) ? acc + (Number(b.price_total) || 0) / 100 : acc, 0)
 
     // I "click telefono" (calls) li proxy come clienti UNICI con telefono nel periodo
-    const { data: phones } = await sb
+    const { data: phones } = await fine(sb
       .from('customers_extended')
       .select('telefono')
       .not('telefono', 'is', null)
-      .gte('created_at', start)
+      .gte('created_at', start))
       .limit(5000)
     const calls = new Set((phones || []).map((p: { telefono?: string | null }) => (p.telefono || '').trim()).filter(Boolean)).size
 
@@ -144,18 +243,19 @@ async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; w
 // Bookings creati dal sito pubblico nel periodo + revenue pagato.
 // Filtra booking_source = 'website' per escludere quelli creati in admin.
 // Status escludiamo cancelled/annullata per non gonfiare il count.
-async function fetchWebsiteAttributedBookings(range: string): Promise<WebAttributedBlock> {
+async function fetchWebsiteAttributedBookings(f: Finestra): Promise<WebAttributedBlock> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !supabaseKey) return { bookings: 0, revenue: 0 }
   const sb = createClient(supabaseUrl, supabaseKey)
-  const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
-  const start = new Date(Date.now() - days * 86400000).toISOString()
-  const { data, error } = await sb
+  // 23/09/2026: stessa finestra del resto del report
+  let q = sb
     .from('bookings')
     .select('price_total, payment_status, status')
     .eq('booking_source', 'website')
-    .gte('created_at', start)
+    .gte('created_at', f.dbStart)
+  if (f.dbEnd) q = q.lt('created_at', f.dbEnd)
+  const { data, error } = await q
     .not('status', 'in', '(cancelled,annullata)')
     .limit(5000)
   if (error || !data) return { bookings: 0, revenue: 0 }
@@ -163,16 +263,6 @@ async function fetchWebsiteAttributedBookings(range: string): Promise<WebAttribu
   const revenue = data.reduce((acc: number, b: { price_total?: number | null; payment_status?: string | null }) =>
     isPaid(b.payment_status) ? acc + (Number(b.price_total) || 0) / 100 : acc, 0)
   return { bookings: data.length, revenue }
-}
-
-function rangeToDates(range: string): { startDate: string; endDate: string; prevStart: string; prevEnd: string } {
-  const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
-  return {
-    startDate: `${days}daysAgo`,
-    endDate: 'today',
-    prevStart: `${days * 2}daysAgo`,
-    prevEnd: `${days + 1}daysAgo`,
-  }
 }
 
 function pct(curr: number, prev: number): number {
@@ -186,6 +276,12 @@ function isoDateFromGa(s: string): string {
   return `${s.slice(6, 8)}/${s.slice(4, 6)}`
 }
 
+// 23/09/2026: la data intera YYYY-MM-DD dallo stesso YYYYMMDD di GA
+function fullDateFromGa(s: string): string | undefined {
+  if (!/^\d{8}$/.test(s)) return undefined
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+}
+
 const handler: Handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
@@ -195,6 +291,8 @@ const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' }
 
   const range = (event.queryStringParameters?.range || '28d') as '7d' | '28d' | '90d'
+  // 23/09/2026: ?from=YYYY-MM-DD&to=YYYY-MM-DD vince su ?range= quando validi
+  const finestra = risolviFinestra(range, event.queryStringParameters?.from, event.queryStringParameters?.to)
 
   const propertyId = process.env.GA4_PROPERTY_ID
   // Three credential sources, in priority order. The first two stay as
@@ -292,6 +390,8 @@ const handler: Handler = async (event) => {
     configured: false,
     missing,
     range,
+    from: finestra.from,
+    to: finestra.to,
     kpis: null,
     realtime: null,
     webAttributed: null,
@@ -304,7 +404,7 @@ const handler: Handler = async (event) => {
   }
 
   if (missing.length > 0) {
-    const fallback = await buildInternalFallback(range)
+    const fallback = await buildInternalFallback(finestra)
     return {
       statusCode: 200,
       headers,
@@ -330,7 +430,7 @@ const handler: Handler = async (event) => {
         headers,
         body: JSON.stringify({
           ...empty,
-          ...(await buildInternalFallback(range).then(f => ({ kpis: f.kpis, dataSource: 'internal' as const, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido', ...f.warnings] }))),
+          ...(await buildInternalFallback(finestra).then(f => ({ kpis: f.kpis, dataSource: 'internal' as const, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido', ...f.warnings] }))),
         }),
       }
     }
@@ -358,7 +458,7 @@ const handler: Handler = async (event) => {
       headers,
       body: JSON.stringify({
         ...empty,
-        ...(await buildInternalFallback(range).then(f => ({ kpis: f.kpis, dataSource: 'internal' as const, warnings: ['client_email o private_key mancanti dopo il parsing', ...f.warnings] }))),
+        ...(await buildInternalFallback(finestra).then(f => ({ kpis: f.kpis, dataSource: 'internal' as const, warnings: ['client_email o private_key mancanti dopo il parsing', ...f.warnings] }))),
       }),
     }
   }
@@ -389,7 +489,12 @@ const handler: Handler = async (event) => {
     }
     const analytics = google.analyticsdata({ version: 'v1beta', auth })
 
-    const dates = rangeToDates(range)
+    const dates = {
+      startDate: finestra.gaStart,
+      endDate: finestra.gaEnd,
+      prevStart: finestra.gaPrevStart,
+      prevEnd: finestra.gaPrevEnd,
+    }
     const property = `properties/${propertyId}`
 
     // Run all queries in parallel — includes runRealtimeReport so the UI
@@ -529,7 +634,9 @@ const handler: Handler = async (event) => {
     // digitano direttamente dr7empire.com.
     const dayMap = new Map<string, SeriesPoint>()
     for (const row of byDay.data.rows || []) {
-      const day = isoDateFromGa(row.dimensionValues?.[0]?.value || '')
+      const gaDay = row.dimensionValues?.[0]?.value || ''
+      const day = isoDateFromGa(gaDay)
+      const date = fullDateFromGa(gaDay)
       const channel = row.dimensionValues?.[1]?.value || ''
       const sess = Number(row.metricValues?.[0]?.value || 0)
       let key: 'organico' | 'ads' | 'maps' | null = null
@@ -537,12 +644,15 @@ const handler: Handler = async (event) => {
       if (c.includes('organic search')) key = 'organico'
       else if (c.includes('paid') || c.includes('display') || c.includes('cpc')) key = 'ads'
       else if (c.includes('map')) key = 'maps'
-      const existing = dayMap.get(day) || { day, total: 0, organico: 0, ads: 0, maps: 0 }
+      // 23/09/2026: chiave sulla data intera. Con GG/MM due anni diversi
+      // finivano nella stessa riga e l'ordine GG/MM mischiava i mesi.
+      const chiave = date || day
+      const existing = dayMap.get(chiave) || { day, date, total: 0, organico: 0, ads: 0, maps: 0 }
       existing.total += sess
       if (key) existing[key] += sess
-      dayMap.set(day, existing)
+      dayMap.set(chiave, existing)
     }
-    const traffic: SeriesPoint[] = Array.from(dayMap.values()).sort((a, b) => a.day.localeCompare(b.day))
+    const traffic: SeriesPoint[] = Array.from(dayMap.values()).sort((a, b) => (a.date || a.day).localeCompare(b.date || b.day))
 
     // Top pages
     const topPages: TopPage[] = (byPage.data.rows || []).map(r => ({
@@ -579,11 +689,11 @@ const handler: Handler = async (event) => {
     const realtime: RealtimeBlock = { activeUsers, pageviews30m, events30m, conversions30m, topActivePages }
 
     // Prenotazioni/fatturato attribuiti al sito (booking_source='website')
-    const webAttributed = await fetchWebsiteAttributedBookings(range)
+    const webAttributed = await fetchWebsiteAttributedBookings(finestra)
 
     const warnings: string[] = []
     if (sessions === 0 && activeUsers === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
-    if (sessions === 0 && activeUsers > 0) warnings.push(`Tracking attivo: ${activeUsers} utenti in tempo reale. I dati storici (28 giorni) appariranno entro 24-48h, il tempo standard di ingestione di GA4.`)
+    if (sessions === 0 && activeUsers > 0) warnings.push(`Tracking attivo: ${activeUsers} utenti in tempo reale. I dati storici del periodo appariranno entro 24-48h, il tempo standard di ingestione di GA4.`)
 
     // Se GA4 risponde ma con TUTTO a zero (sessions, pageviews, users e
     // conversioni) significa che il tracking non e' arrivato o non c'e'
@@ -600,6 +710,8 @@ const handler: Handler = async (event) => {
       configured: true,
       missing: [],
       range,
+      from: finestra.from,
+      to: finestra.to,
       kpis,
       realtime,
       webAttributed,
@@ -629,7 +741,7 @@ const handler: Handler = async (event) => {
     const isPermissionError = /sufficient permissions|PERMISSION_DENIED|permission_denied|403/i.test(errMsg)
 
     // Fallback su dati interni Supabase: la tab non resta mai vuota.
-    const fallback = await buildInternalFallback(range)
+    const fallback = await buildInternalFallback(finestra)
     return {
       statusCode: 200,
       headers,

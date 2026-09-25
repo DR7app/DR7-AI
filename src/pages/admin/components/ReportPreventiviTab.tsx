@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useRegistraPeriodoReport, periodoDelMese } from '../../../utils/reportPeriodo'
+import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
 import { supabase } from '../../../supabaseClient'
-import { ReportGrafici, ReportGrafico } from './ReportUI'
+import { ReportGrafici, ReportGrafico, ReportButton } from './ReportUI'
+import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
 
 // Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
 // stesso colore, anche quando una fetta sparisce.
@@ -163,11 +164,50 @@ function Trend({ current, previous, format = 'number' }: { current: number; prev
   )
 }
 
-export default function ReportPreventiviTab() {
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+// 23/09/2026: periodo da..a (YYYY-MM-DD). Se e' un mese intero il confronto
+// resta sul mese precedente intero, altrimenti sullo stesso numero di giorni
+// subito prima.
+function meseIntero(da: string, a: string): boolean {
+  if (!/^\d{4}-\d{2}-01$/.test(da) || da.slice(0, 7) !== a.slice(0, 7)) return false
+  const [y, m] = da.split('-').map(Number)
+  return isoLocale(new Date(y, m, 0)) === a
+}
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+function periodoPrecedente(da: string, a: string): { da: string; a: string } {
+  const [y, m, d] = da.split('-').map(Number)
+  if (meseIntero(da, a)) {
+    return { da: isoLocale(new Date(y, m - 2, 1)), a: isoLocale(new Date(y, m - 1, 0)) }
+  }
+  const [ty, tm, td] = a.split('-').map(Number)
+  const giorni = Math.round((new Date(ty, tm - 1, td).getTime() - new Date(y, m - 1, d).getTime()) / 86400000) + 1
+  return { da: isoLocale(new Date(y, m - 1, d - giorni)), a: isoLocale(new Date(y, m - 1, d - 1)) }
+}
+
+// 23/09/2026: preventivi con created_at nel periodo, a pagine da 1000 (tetto
+// di PostgREST: con "Anno" il report si fermava alle prime mille righe).
+async function preventiviNelPeriodo(colonne: string, da: string, a: string): Promise<Preventivo[]> {
+  const inizio = new Date(`${da}T00:00:00`).toISOString()
+  const fine = new Date(`${a}T23:59:59.999`).toISOString()
+  const out: Preventivo[] = []
+  for (let off = 0; ; off += 1000) {
+    const { data, error } = await supabase
+      .from('preventivi')
+      .select(colonne)
+      .gte('created_at', inizio)
+      .lte('created_at', fine)
+      .order('created_at', { ascending: false })
+      .range(off, off + 999)
+    if (error) throw new Error(error.message)
+    out.push(...((data || []) as unknown as Preventivo[]))
+    if (!data || data.length < 1000) break
+  }
+  return out
+}
+
+export default function ReportPreventiviTab() {
+  // 23/09/2026 (direzione): stessa barra Periodo del Report Noleggio.
+  const periodo = usePeriodoReport('mese')
+  const { da, a } = periodo
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
@@ -177,8 +217,8 @@ export default function ReportPreventiviTab() {
   // PDF: tutte le sezioni una sotto l'altra, non solo quella aperta.
   const [pdfTutteSezioni, setPdfTutteSezioni] = useState(false)
   useRegistraPeriodoReport({
-    imposta: (f) => setSelectedMonth(f.slice(0, 7)),
-    periodo: periodoDelMese(selectedMonth),
+    imposta: (f, t) => periodo.impostaIntervallo(f, t),
+    periodo: { from: da, to: a },
     inCaricamento: loading,
     preparaPdf: setPdfTutteSezioni,
   })
@@ -193,32 +233,12 @@ export default function ReportPreventiviTab() {
     setLoading(true)
     setError('')
     try {
-      const [year, month] = selectedMonth.split('-').map(Number)
-      const startDate = new Date(year, month - 1, 1).toISOString()
-      const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
-
-      // Previous month range
-      const prevYear = month === 1 ? year - 1 : year
-      const prevMonth = month === 1 ? 12 : month - 1
-      const prevStartDate = new Date(prevYear, prevMonth - 1, 1).toISOString()
-      const prevEndDate = new Date(prevYear, prevMonth, 0, 23, 59, 59).toISOString()
-
-      const [{ data, error: dbError }, { data: prevData, error: prevDbError }] = await Promise.all([
-        supabase
-          .from('preventivi')
-          .select('*')
-          .gte('created_at', startDate)
-          .lte('created_at', endDate)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('preventivi')
-          .select('id, status, motivo_rifiuto, motivo_rifiuto_note, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at, created_by')
-          .gte('created_at', prevStartDate)
-          .lte('created_at', prevEndDate),
+      // 23/09/2026: periodo della barra + periodo precedente per i confronti.
+      const prec = periodoPrecedente(da, a)
+      const [data, prevData] = await Promise.all([
+        preventiviNelPeriodo('*', da, a),
+        preventiviNelPeriodo('id, status, motivo_rifiuto, motivo_rifiuto_note, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at, created_by', prec.da, prec.a),
       ])
-
-      if (dbError) throw new Error(dbError.message)
-      if (prevDbError) throw new Error(prevDbError.message)
 
       // 2026-05-23: escludiamo preventivi creati dall'account TEST
       // (ophe@dr7.app) cosi' i numeri del report (conversion rate,
@@ -246,7 +266,7 @@ export default function ReportPreventiviTab() {
     setPrevMonthData([])
     fetchReport()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth])
+  }, [da, a])
 
   // Dati dei grafici. `perdite` e `overview` sono calcolati piu' sotto:
   // questi memo li leggono, quindi vanno dichiarati dopo di loro.
@@ -688,7 +708,7 @@ export default function ReportPreventiviTab() {
   // 23/09/2026 (direzione): grafici sopra le tabelle. Stesse righe filtrate
   // delle schede (mese scelto + filtri veicolo/categoria/fascia/prezzo/durata),
   // raggruppate per giorno di creazione del preventivo.
-  const periodoGrafici = periodoDelMese(selectedMonth)
+  const periodoGrafici = { from: da, to: a }
   const puntiCreati = useMemo(
     () => filtered.filter(p => p.created_at).map(p => ({ data: p.created_at as string, valore: 1 })),
     [filtered])
@@ -716,27 +736,12 @@ export default function ReportPreventiviTab() {
 
       {/* Controls */}
       <div className="bg-theme-bg-secondary/50 backdrop-blur-sm rounded-xl border border-theme-border p-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-          <div>
-            <label className="block text-xs text-theme-text-muted mb-1">Mese</label>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
-            />
-          </div>
-          <button
-            onClick={fetchReport}
-            disabled={loading}
-            title="Ricarica il report"
-            aria-label="Ricarica il report"
-            className="w-9 h-9 rounded-full border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors flex items-center justify-center disabled:opacity-40"
-          >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 flex-wrap">
+          {/* 23/09/2026 (direzione): barra Periodo comune a tutti i Report. */}
+          <ReportPeriodo periodo={periodo} />
+          <ReportButton onClick={fetchReport} disabled={loading}>
+            Aggiorna
+          </ReportButton>
         </div>
       </div>
 
@@ -1251,8 +1256,8 @@ export default function ReportPreventiviTab() {
       {/* Empty state */}
       {loaded && preventivi.length === 0 && (
         <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-12 text-center">
-          <p className="text-theme-text-muted text-lg mb-2">Nessun preventivo trovato per questo mese</p>
-          <p className="text-theme-text-muted text-sm">Prova a selezionare un mese diverso</p>
+          <p className="text-theme-text-muted text-lg mb-2">Nessun preventivo trovato dal {isoAEu(da)} al {isoAEu(a)}</p>
+          <p className="text-theme-text-muted text-sm">Prova a selezionare un periodo diverso</p>
         </div>
       )}
 
@@ -1261,7 +1266,7 @@ export default function ReportPreventiviTab() {
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className="text-theme-text-muted text-lg mb-2">Seleziona un mese e genera il report</p>
+          <p className="text-theme-text-muted text-lg mb-2">Seleziona un periodo e premi Aggiorna</p>
           <p className="text-theme-text-muted text-sm">Analisi completa: overview, domanda, conversione, perdite e azioni suggerite</p>
         </div>
       )}

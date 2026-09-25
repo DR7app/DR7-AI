@@ -3,14 +3,14 @@ import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import { ScheletroRigheTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
-import DateRangeFilter from '../../../components/DateRangeFilter'
+import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
 import { USCITA_SERVICE_TYPE, bookingStatusToUscitaStato } from '../../../utils/uscitaStraordinaria'
 import toast from 'react-hot-toast'
 // #38 Modifica manuale report: correggi/rimuovi/aggiungi voci autista.
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
 import NumeroTelefono from '../../../components/NumeroTelefono'
-import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
+import { ReportCard, ReportToolbar, ReportButton, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
 
 interface AutistaLite { id: string; full_name: string; phone: string }
 
@@ -68,12 +68,15 @@ function KpiCard({ label, value, sub, accent }: {
 }
 
 export default function ReportAutistiTab() {
-  const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+  // 23/09/2026 (direzione): stessa barra Periodo del Report Noleggio, parte da
+  // "Mese". Filtra sempre sulla data di ritiro (pickup_date) dell'uscita.
+  const periodo = usePeriodoReport('mese')
+  const range = useMemo(() => ({ from: periodo.da, to: periodo.a }), [periodo.da, periodo.a])
   const [loading, setLoading] = useState(true)
   // PDF dei Report: periodo sul PDF e PDF mese per mese.
   useRegistraPeriodoReport({
-    imposta: (f, t) => setRange({ from: f, to: t }),
-    periodo: range.from && range.to ? { from: range.from, to: range.to } : null,
+    imposta: (f, t) => periodo.impostaIntervallo(f, t),
+    periodo: range,
     inCaricamento: loading,
   })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -277,24 +280,8 @@ export default function ReportAutistiTab() {
   const programmate = statoCount('Programmata')
   const tassoCompletamento = usciteCount > 0 ? Math.round((completate / rows.length) * 100) : 0
 
-  // 23/09/2026 — grafici sopra le tabelle, sullo stesso periodo del
-  // DateRangeFilter. Periodo vuoto = dalla prima uscita caricata a oggi (o
-  // all'ultima uscita programmata, se e' piu' avanti).
-  const periodoGrafici = useMemo(() => {
-    const oggi = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-    let min = Infinity
-    let max = -Infinity
-    for (const r of rows) {
-      if (!r.date) continue
-      const t = new Date(r.date).getTime()
-      if (Number.isNaN(t)) continue
-      if (t < min) min = t
-      if (t > max) max = t
-    }
-    const da: string | Date = range.from || (Number.isFinite(min) ? new Date(min) : oggi)
-    const a: string | Date = range.to || (Number.isFinite(max) && max > Date.now() ? new Date(max) : oggi)
-    return { da, a }
-  }, [range, rows])
+  // 23/09/2026 — grafici sopra le tabelle sul periodo della barra (da..a).
+  const periodoGrafici = { da: periodo.da, a: periodo.a }
   const puntiMovimenti = useMemo<ReportPunto[]>(
     () => rows.filter(r => r.date).map(r => ({ data: r.date as string, valore: 1 })),
     [rows]
@@ -336,8 +323,14 @@ export default function ReportAutistiTab() {
           <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Report Autisti</h2>
           <p className="text-sm text-theme-text-muted mt-1">Attività delle Uscite Straordinarie: chi ha movimentato quale veicolo, quando e perché.</p>
         </div>
-        <DateRangeFilter value={range} onChange={setRange} compact />
       </div>
+
+      {/* 23/09/2026: barra Periodo comune a tutti i Report. Cambiare periodo
+          ricarica da solo; Aggiorna rilegge gli stessi dati. */}
+      <ReportToolbar>
+        <ReportPeriodo periodo={periodo} />
+        <ReportButton onClick={load} disabled={loading}>Aggiorna</ReportButton>
+      </ReportToolbar>
 
       {/* LAYOUT: main + sidebar (come Report Operatori) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
@@ -389,7 +382,7 @@ export default function ReportAutistiTab() {
           {/* Ripartizioni — 2026-08-27 (richiesta direzione): tabelle in stile
               Report Terra, niente sparkline, barre o ciambelle. */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <ReportCard title="Andamento Movimenti" right={`${range.from || '—'} → ${range.to || 'oggi'}`}>
+            <ReportCard title="Andamento Movimenti" right={`${isoAEu(range.from)} → ${isoAEu(range.to)}`}>
               {trendPerGiorno.length === 0 ? (
                 <ReportEmpty message="Nessun dato" />
               ) : (

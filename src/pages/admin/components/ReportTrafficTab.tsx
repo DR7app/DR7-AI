@@ -3,7 +3,8 @@ import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, ReportButton, type ReportPunto } from './ReportUI'
+import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Real data only. Backed by /.netlify/functions/ga-report which queries
@@ -23,7 +24,8 @@ interface KpiBlock {
   delta_pageviews: number
   delta_users: number
 }
-interface SeriesPoint { day: string; total: number; organico: number; ads: number; maps: number }
+// 23/09/2026: `date` (YYYY-MM-DD) arriva da ga-report accanto a `day` (GG/MM)
+interface SeriesPoint { day: string; date?: string; total: number; organico: number; ads: number; maps: number }
 interface ChannelSlice { name: string; value: number }
 interface FunnelStage { stage: string; value: number }
 interface TopPage { page: string; sessions: number; pageviews: number }
@@ -38,6 +40,8 @@ interface ReportPayload {
   configured: boolean
   missing: string[]
   range: '7d' | '28d' | '90d' | '180d' | '365d'
+  from?: string | null
+  to?: string | null
   kpis: KpiBlock | null
   realtime: RealtimeBlock | null
   traffic: SeriesPoint[]
@@ -54,15 +58,6 @@ interface ReportPayload {
   conversionsSource?: 'ga4' | 'crm'
   webAttributed?: { bookings: number; revenue: number } | null
 }
-
-const RANGES = [
-  { key: '7d',  label: '7 giorni' },
-  { key: '28d', label: '28 giorni' },
-  { key: '90d', label: '90 giorni' },
-  { key: '180d', label: '6 mesi' },
-  { key: '365d', label: '1 anno' },
-] as const
-type RangeKey = typeof RANGES[number]['key']
 
 const fmtInt = (v: number) => v.toLocaleString('it-IT')
 const fmtEur = (v: number) => `€${v.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
@@ -87,6 +82,10 @@ function KpiTile({ label, value, delta, sub, format = 'int' }: {
 }
 
 export default function ReportTrafficTab() {
+  // 23/09/2026: barra Periodo comune a tutti i Report (come Report Noleggio),
+  // al posto dei vecchi 7g/28g/90g/6m/1a. Tutto il report segue da..a.
+  const periodo = usePeriodoReport('mese')
+  const [ricarica, setRicarica] = useState(0)
 
   // 2026-08-22 (richiesta direzione): "Utenti attivi ora" viene da GA4, che
   // fornisce SOLO conteggi anonimi — nessuna identita', per vincolo GDPR. Chi
@@ -104,10 +103,13 @@ export default function ReportTrafficTab() {
   const [accessi, setAccessi] = useState<AccessoRecente[]>([])
   const [accessiLoading, setAccessiLoading] = useState(true)
   const [accessiErrore, setAccessiErrore] = useState<string | null>(null)
-  // Ricerca per data: "chi si e' collegato ieri". Default = oggi.
+  // Ricerca per data: "chi si e' collegato ieri".
+  // 23/09/2026: parte dal periodo della barra e lo segue quando cambia;
+  // Ieri/Oggi/Tutti restano per restringere solo questo riquadro.
   const oggiISO = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-  const [accDa, setAccDa] = useState<string>(oggiISO)
-  const [accA, setAccA] = useState<string>(oggiISO)
+  const [accDa, setAccDa] = useState<string>(periodo.da)
+  const [accA, setAccA] = useState<string>(periodo.a)
+  useEffect(() => { setAccDa(periodo.da); setAccA(periodo.a) }, [periodo.da, periodo.a])
 
   useEffect(() => {
     let annullato = false
@@ -145,7 +147,7 @@ export default function ReportTrafficTab() {
       }
     })()
     return () => { annullato = true }
-  }, [accDa, accA])
+  }, [accDa, accA, ricarica])
 
   // Filtro per periodo, calcolato sul client: l'elenco e' gia' in memoria, non
   // serve richiamare il server a ogni cambio di data.
@@ -161,7 +163,6 @@ export default function ReportTrafficTab() {
       })
       .sort((a, b) => new Date(b.last_sign_in_at as string).getTime() - new Date(a.last_sign_in_at as string).getTime())
   }, [accessi, accDa, accA])
-  const [range, setRange] = useState<RangeKey>('28d')
   const [data, setData] = useState<ReportPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -177,7 +178,8 @@ export default function ReportTrafficTab() {
     let abort = false
     setLoading(true)
     setErr(null)
-    fetch(`/.netlify/functions/ga-report?range=${range}`)
+    // 23/09/2026: periodo esplicito da..a (ga-report accetta from/to)
+    fetch(`/.netlify/functions/ga-report?from=${periodo.da}&to=${periodo.a}`)
       .then(r => r.json())
       .then((p: ReportPayload) => { if (!abort) setData(p) })
       .catch(e => { if (!abort) setErr(String(e?.message || e)) })
@@ -193,24 +195,21 @@ export default function ReportTrafficTab() {
         }
       })
     return () => { abort = true }
-  }, [range, oauthFlag])
+  }, [periodo.da, periodo.a, ricarica, oauthFlag])
 
   const totalSessions = useMemo(
     () => (data?.distribution || []).reduce((s, c) => s + c.value, 0),
     [data]
   )
 
-  // 23/09/2026: grafici sopra le tabelle, sullo stesso periodo gia' scelto
-  // (7g/28g/...). ga-report chiede a GA4 da "Ndays ago" a oggi e restituisce
-  // i giorni come GG/MM senza anno: l'anno si ricava dal periodo. Prenotazioni
-  // e fatturato dal sito arrivano solo come totali (webAttributed), senza
-  // giorno: niente grafico per quelli, piuttosto che inventare una serie.
+  // 23/09/2026: grafici sopra le tabelle, su da..a della barra Periodo.
+  // ga-report manda la data intera in `date`; il ripiego su GG/MM (anno
+  // ricavato dalla fine del periodo) resta solo per risposte vecchie.
+  // Prenotazioni e fatturato dal sito arrivano solo come totali
+  // (webAttributed), senza giorno: niente grafico per quelli.
   const grafici = useMemo(() => {
-    const giorni = { '7d': 7, '28d': 28, '90d': 90, '180d': 180, '365d': 365 }[data?.range ?? range] ?? 28
-    const a = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-    const inizio = new Date(a + 'T12:00:00Z')
-    inizio.setUTCDate(inizio.getUTCDate() - giorni)
-    const da = inizio.toISOString().slice(0, 10)
+    const da = periodo.da
+    const a = periodo.a
     const giornoIso = (g: string): string | null => {
       if (/^\d{4}-\d{2}-\d{2}$/.test(g)) return g
       const m = /^(\d{2})\/(\d{2})$/.exec(g)
@@ -223,14 +222,14 @@ export default function ReportTrafficTab() {
     const organico: ReportPunto[] = []
     const ads: ReportPunto[] = []
     for (const d of data?.traffic || []) {
-      const iso = giornoIso(d.day)
+      const iso = d.date || giornoIso(d.day)
       if (!iso) continue
       visite.push({ data: iso, valore: d.total || 0 })
       organico.push({ data: iso, valore: d.organico || 0 })
       ads.push({ data: iso, valore: d.ads || 0 })
     }
     return { da, a, visite, organico, ads }
-  }, [data, range])
+  }, [data, periodo.da, periodo.a])
 
   const showBanner = data && !data.configured
   const showWarnings = data && data.warnings.length > 0
@@ -248,17 +247,14 @@ export default function ReportTrafficTab() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-theme-bg-secondary border border-theme-border rounded-full overflow-hidden">
-            {RANGES.map(r => (
-              <button
-                key={r.key}
-                onClick={() => setRange(r.key)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${range === r.key ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:bg-theme-bg-hover'}`}
-              >{r.label}</button>
-            ))}
-          </div>
-        </div>
+      </div>
+
+      {/* 23/09/2026: barra Periodo comune a tutti i Report + Aggiorna */}
+      <div className="flex flex-wrap items-end gap-3">
+        <ReportPeriodo periodo={periodo} />
+        <ReportButton onClick={() => setRicarica(n => n + 1)} disabled={loading}>
+          Aggiorna
+        </ReportButton>
       </div>
 
       {/* Setup banner — shown only when env vars missing */}
@@ -602,8 +598,9 @@ export default function ReportTrafficTab() {
                 }
               >
                 {data.traffic.map(d => (
-                  <ReportRow key={d.day}>
-                    <td className="px-4 py-2 text-theme-text-primary tabular-nums">{d.day}</td>
+                  <ReportRow key={d.date || d.day}>
+                    {/* 23/09/2026: GG/MM/AAAA quando c'e' la data intera */}
+                    <td className="px-4 py-2 text-theme-text-primary tabular-nums">{(d.date && isoAEu(d.date)) || d.day}</td>
                     <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary">{fmtInt(d.total)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-theme-text-secondary">{fmtInt(d.organico)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-theme-text-secondary">{fmtInt(d.ads)}</td>

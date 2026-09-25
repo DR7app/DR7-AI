@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriodo'
+import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
-import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, type ReportPunto } from './ReportUI'
-import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
+import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty, ReportGrafici, ReportGrafico, ReportButton, type ReportPunto } from './ReportUI'
+import { isInRange } from '../../../components/admin/DateRangePicker'
+import { ReportPeriodo, usePeriodoReport } from './ReportPeriodo'
 import toast from 'react-hot-toast'
 // #38 Modifica manuale del report: correggi/rimuovi/aggiungi voci. Gli override
 // (report_overrides) si applicano PRIMA dei totali, cosi' correzioni e rimozioni
@@ -104,16 +105,13 @@ export default function ReportPenaliDanniTab() {
   const [error, setError] = useState('')
 
   // Filters
-  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: '30' })
+  // 23/09/2026: barra Periodo comune a tutti i Report (come Report Noleggio),
+  // parte da "Mese". Sostituisce DateRangePicker: l'opzione "Tutto" non c'e' piu'.
+  const periodo = usePeriodoReport('mese')
   // PDF dei Report: periodo sul PDF e PDF mese per mese.
   useRegistraPeriodoReport({
-    imposta: (f, t) => setDateRange({ preset: 'custom', from: f, to: t }),
-    periodo: (() => {
-      if (dateRange.preset === 'all') return null
-      if (dateRange.preset === 'custom') return dateRange.from && dateRange.to ? { from: dateRange.from, to: dateRange.to } : null
-      const da = new Date(); da.setDate(da.getDate() - parseInt(dateRange.preset, 10))
-      return { from: isoLocale(da), to: isoLocale(new Date()) }
-    })(),
+    imposta: (f, t) => periodo.impostaIntervallo(f, t),
+    periodo: { from: periodo.da, to: periodo.a },
     inCaricamento: loading,
   })
   const [tableFilter, setTableFilter] = useState<TableFilter>('all')
@@ -131,7 +129,7 @@ export default function ReportPenaliDanniTab() {
   const EDIT_FIELDS: FieldDef[] = [{ key: 'amount', label: 'Importo €' }]
 
   useEffect(() => { fetchReports() }, [])
-  useEffect(() => { setPage(1) }, [tableFilter, dateRange])
+  useEffect(() => { setPage(1) }, [tableFilter, periodo.da, periodo.a])
 
   async function fetchReports() {
     setLoading(true)
@@ -178,7 +176,11 @@ export default function ReportPenaliDanniTab() {
   }
 
   // ── Cutoff & filtered entries ─────────────────────────────────────────────
-  const range = useMemo(() => resolveDateRange(dateRange), [dateRange])
+  // 23/09/2026: da..a inclusi, giorni interi in ora locale (come il vecchio "custom")
+  const range = useMemo(() => ({
+    from: new Date(periodo.da + 'T00:00:00'),
+    to: new Date(periodo.a + 'T23:59:59.999'),
+  }), [periodo.da, periodo.a])
 
   const rawEntries: Entry[] = useMemo(() => {
     const e: Entry[] = []
@@ -240,23 +242,10 @@ export default function ReportPenaliDanniTab() {
   }, [filteredEntries])
 
   // ── Grafici sopra le tabelle ─────────────────────────────────────────────
-  // 23/09/2026: stesso periodo del selettore gia' in alto, nessun selettore
-  // nuovo. Con "Tutto" si parte dalla prima voce datata del periodo. I punti
-  // vengono dalle stesse voci filtrate dei KPI; le voci senza data restano
-  // nei totali (passati con `totale`) ma non hanno un giorno nella linea.
-  const periodoGrafici = useMemo(() => {
-    const oggi = new Date()
-    let da: Date | null = range.from
-    if (!da) {
-      for (const e of filteredEntries) {
-        if (!e.date) continue
-        const d = new Date(e.date)
-        if (isNaN(d.getTime())) continue
-        if (!da || d < da) da = d
-      }
-    }
-    return { da: da ?? oggi, a: range.to ?? oggi }
-  }, [range, filteredEntries])
+  // 23/09/2026: i grafici leggono da/a della barra Periodo, come KPI e
+  // tabelle. I punti vengono dalle stesse voci filtrate dei KPI; le voci senza
+  // data restano nei totali (passati con `totale`) ma non hanno un giorno.
+  const periodoGrafici = { da: periodo.da, a: periodo.a }
 
   const puntiGrafici = useMemo(() => {
     const penali: ReportPunto[] = []
@@ -360,9 +349,10 @@ export default function ReportPenaliDanniTab() {
 
   // ── Confronto periodo (current cutoff vs previous of same length) ────────
   const confronto = useMemo(() => {
+    // 23/09/2026: periodo = da..a della barra; il precedente ha la stessa durata
     const cutoff = range.from
-    if (!cutoff) return null
-    const periodMs = Date.now() - cutoff.getTime()
+    const fine = new Date(range.to.getTime() + 1)
+    const periodMs = fine.getTime() - cutoff.getTime()
     const prevCutoff = new Date(cutoff.getTime() - periodMs)
     const inRange = (e: Entry, start: Date, end: Date) => {
       if (!e.date) return false
@@ -371,8 +361,8 @@ export default function ReportPenaliDanniTab() {
     }
     const sum = (filter: (e: Entry) => boolean) =>
       allEntries.filter(filter).reduce((s, e) => s + e.amount, 0)
-    const curDanni = sum(e => e.type === 'danni' && inRange(e, cutoff, new Date()))
-    const curPenali = sum(e => e.type === 'penali' && inRange(e, cutoff, new Date()))
+    const curDanni = sum(e => e.type === 'danni' && inRange(e, cutoff, fine))
+    const curPenali = sum(e => e.type === 'penali' && inRange(e, cutoff, fine))
     const prevDanni = sum(e => e.type === 'danni' && inRange(e, prevCutoff, cutoff))
     const prevPenali = sum(e => e.type === 'penali' && inRange(e, prevCutoff, cutoff))
     const pct = (cur: number, prev: number) => prev === 0 ? null : ((cur - prev) / prev) * 100
@@ -381,7 +371,7 @@ export default function ReportPenaliDanniTab() {
       penali: { current: curPenali, previous: prevPenali, pct: pct(curPenali, prevPenali) },
       totale: { current: curDanni + curPenali, previous: prevDanni + prevPenali, pct: pct(curDanni + curPenali, prevDanni + prevPenali) },
     }
-  }, [range.from, allEntries])
+  }, [range, allEntries])
 
   // ── Previsioni (linear projection from last 30 days → next 30) ──────────
   const previsioni = useMemo(() => {
@@ -444,17 +434,6 @@ export default function ReportPenaliDanniTab() {
           <p className="text-sm text-theme-text-secondary mt-0.5">Analisi completa e performance di danni e penali</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <button
-            onClick={fetchReports}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {loading ? 'Aggiorno…' : 'Aggiorna'}
-          </button>
           <button
             onClick={exportCsv}
             className="inline-flex items-center gap-2 px-4 py-2 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:opacity-90 transition-opacity"
@@ -465,6 +444,14 @@ export default function ReportPenaliDanniTab() {
             Esporta CSV
           </button>
         </div>
+      </div>
+
+      {/* 23/09/2026: barra Periodo comune a tutti i Report + Aggiorna */}
+      <div className="flex flex-wrap items-end gap-3">
+        <ReportPeriodo periodo={periodo} />
+        <ReportButton onClick={fetchReports} disabled={loading}>
+          {loading ? 'Aggiorno…' : 'Aggiorna'}
+        </ReportButton>
       </div>
 
       {error && (
