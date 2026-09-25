@@ -109,26 +109,35 @@ export async function fetchWeather(
       hour: '2-digit', minute: '2-digit', hour12: false,
     }).format(new Date()).replace(' ', 'T')
 
-    let worst: WeatherSnapshot = { ...now, atLocal: undefined }
+    // 25/09/2026: prima la pioggia IN CORSO non contava. La prima ora di
+    // previsione sostituiva sempre la lettura attuale, e l'ora in corso era
+    // saltata ("10:00" < "10:39"): se pioveva adesso e l'ora dopo era asciutta
+    // il cron leggeva "Sereno" e non partiva niente. Ora si parte dalla lettura
+    // attuale, si include l'ora in corso, e pioggia e raffiche si prendono al
+    // massimo ciascuna per conto suo (un'ora piovosa senza vento non deve
+    // nascondere l'ora ventosa al criterio "entrambi").
+    const oraCorrente = nowLocal.slice(0, 13) + ':00'
+    const worst: WeatherSnapshot = { ...now, atLocal: now.rain ? nowLocal : undefined }
     let scanned = 0
     const ore = Math.min(24, Math.max(1, Math.round(oreAvanti) || FORECAST_HOURS_AHEAD))
-    for (let i = 0; i < times.length && scanned < ore; i++) {
-      if (times[i] < nowLocal) continue
+    for (let i = 0; i < times.length && scanned < ore + 1; i++) {
+      if (times[i] < oraCorrente) continue
       scanned++
       const precip = Number(h.precipitation?.[i] ?? 0)
       const prob = Number(h.precipitation_probability?.[i] ?? 0)
       const gust = Number(h.wind_gusts_10m?.[i] ?? 0)
       const code = Number(h.weather_code?.[i] ?? 0)
       const rain = precip >= FORECAST_RAIN_MM || isRainCode(code)
-      const candidate: WeatherSnapshot = {
-        rain, windGustKmh: gust, weatherCode: code,
-        precipitationMm: precip, precipitationProbability: prob, atLocal: times[i],
+      if (rain && (!worst.rain || precip > worst.precipitationMm)) {
+        if (!worst.atLocal) worst.atLocal = times[i]
+        worst.rain = true
+        worst.precipitationMm = Math.max(worst.precipitationMm, precip)
+        worst.weatherCode = code
       }
-      // "Peggiore" = pioggia batte sereno; a parita', raffiche piu' forti.
-      const better = (candidate.rain && !worst.rain)
-        || (candidate.rain === worst.rain && candidate.windGustKmh > worst.windGustKmh)
-      if (better || worst.atLocal === undefined) worst = candidate
+      if (gust > worst.windGustKmh) worst.windGustKmh = gust
+      if (prob > (worst.precipitationProbability ?? 0)) worst.precipitationProbability = prob
     }
+    if (!worst.atLocal) worst.atLocal = oraCorrente
 
     return { now, forecast: worst, label: describeWeather(worst), location: loc }
   } catch (e) {
