@@ -1,7 +1,9 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import nodemailer from 'nodemailer'
 import { renderTemplate } from './utils/messageTemplates'
+import { getEmailFromSmtp } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -9,6 +11,17 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+
+// Stesso SMTP di send-contract-email (info@dr7.app).
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+    },
+})
 
 const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://dr7trust.com'
 const TOKEN_EXPIRY_HOURS = 12
@@ -26,16 +39,22 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { documentUrl, documentName, signerName, signerEmail, signerPhone } = JSON.parse(event.body || '{}')
+        const body = JSON.parse(event.body || '{}')
+        const { documentUrl, documentName, signerName } = body
+        // 25/09/2026: DR7 Trust basta UN contatto, telefono (WhatsApp) oppure
+        // email. Prima l'email era obbligatoria anche se il link partiva solo
+        // su WhatsApp. signer_email e' NOT NULL: senza email si salva ''.
+        const signerEmail = String(body.signerEmail || '').trim()
+        const signerPhone = String(body.signerPhone || '').trim()
 
         if (!documentUrl) {
             return { statusCode: 400, body: JSON.stringify({ error: 'URL del documento richiesto' }) }
         }
-        if (!signerName || !signerEmail) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Nome e email del firmatario richiesti' }) }
+        if (!signerName) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Nome del firmatario richiesto' }) }
         }
-        if (!signerPhone) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Telefono del firmatario richiesto per invio WhatsApp' }) }
+        if (!signerEmail && !signerPhone) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Serve almeno un contatto: telefono (WhatsApp) o email' }) }
         }
 
         // Generate unique token
@@ -61,7 +80,7 @@ export const handler: Handler = async (event) => {
                 token,
                 signer_name: signerName,
                 signer_email: signerEmail,
-                signer_phone: signerPhone,
+                signer_phone: signerPhone || null,
                 status: 'pending',
                 token_expires_at: tokenExpiresAt.toISOString(),
                 original_pdf_hash: originalPdfHash,
@@ -80,7 +99,7 @@ export const handler: Handler = async (event) => {
         await supabase.from('signature_audit_trail').insert({
             signature_request_id: sigRequest.id,
             event_type: 'request_created',
-            event_description: `Richiesta di firma documento "${docName}" creata per ${signerName} (${signerEmail})`,
+            event_description: `Richiesta di firma documento "${docName}" creata per ${signerName} (${signerEmail || signerPhone})`,
             ip_address: event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown',
             user_agent: event.headers['user-agent'] || 'unknown',
             metadata: {
@@ -94,10 +113,12 @@ export const handler: Handler = async (event) => {
         // Build signing URL
         const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
 
-        // Send signing link via WhatsApp
+        // Link di firma: WhatsApp se c'e' il telefono; email se non c'e' il
+        // telefono o se WhatsApp non e' partito. Il testo e' lo stesso
+        // template Pro (document_signature_link) per entrambi i canali.
         let sentVia = ''
 
-        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+        if (signerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
             try {
                 // Body comes EXCLUSIVELY from Messaggi di Sistema Pro.
                 // No hardcoded fallback — if no Pro template, we skip the send.
@@ -140,27 +161,52 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        if (!sentVia) {
-            return {
-                statusCode: 500,
-                body: JSON.stringify({ error: 'Impossibile inviare il link via WhatsApp. Verifica il numero di telefono.' })
+        if (!sentVia && signerEmail) {
+            try {
+                const resolvedMessage = await renderTemplate('document_signature_link', { signerName, docName, contractNumber: docName, signingUrl })
+                if (!resolvedMessage) {
+                    console.warn('[document-sign-init] No Pro template for document_signature_link — skipping email')
+                } else {
+                    await transporter.sendMail({
+                        from: await getEmailFromSmtp('"DR7" <info@dr7.app>'),
+                        to: signerEmail,
+                        subject: `Documento da firmare: ${docName}`,
+                        text: resolvedMessage,
+                    })
+                    sentVia = 'email'
+                    console.log(`[document-sign-init] Signing link sent via email to ${signerEmail}`)
+                }
+            } catch (mailErr: any) {
+                console.warn('[document-sign-init] Email error:', mailErr.message)
             }
         }
+
+        if (!sentVia) {
+            const motivo = signerPhone && signerEmail
+                ? 'Impossibile inviare il link ne\' via WhatsApp ne\' via email. Verifica telefono ed email.'
+                : signerPhone
+                    ? 'Impossibile inviare il link via WhatsApp. Verifica il numero di telefono.'
+                    : 'Impossibile inviare il link via email. Verifica l\'indirizzo email.'
+            return { statusCode: 500, body: JSON.stringify({ error: motivo }) }
+        }
+
+        const canale = sentVia === 'whatsapp' ? 'WhatsApp' : 'email'
 
         // Log sent
         await supabase.from('signature_audit_trail').insert({
             signature_request_id: sigRequest.id,
             event_type: 'link_sent',
-            event_description: `Link di firma documento inviato via WhatsApp`,
-            metadata: { signing_url: signingUrl, channel: 'whatsapp', document_name: docName }
+            event_description: `Link di firma documento inviato via ${canale}`,
+            metadata: { signing_url: signingUrl, channel: sentVia, document_name: docName }
         })
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 success: true,
-                message: `Link di firma per "${docName}" inviato via WhatsApp`,
-                requestId: sigRequest.id
+                message: `Link di firma per "${docName}" inviato via ${canale}`,
+                requestId: sigRequest.id,
+                sentVia,
             })
         }
     } catch (error: any) {

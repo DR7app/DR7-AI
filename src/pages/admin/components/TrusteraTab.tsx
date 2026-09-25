@@ -101,6 +101,33 @@ function DocumentiSubTab() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customerResults, setCustomerResults] = useState<any[]>([])
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  // 25/09/2026: la tendina "Cerca Cliente" restava aperta anche quando
+  // l'admin passava a compilare i firmatari a mano. Ora si chiude da sola
+  // al click fuori, con Esc, e i risultati che arrivano dopo che si e'
+  // lasciato il campo non la riaprono.
+  const customerSearchBoxRef = useRef<HTMLDivElement>(null)
+  const customerSearchInputRef = useRef<HTMLInputElement>(null)
+  const ultimaRicercaClienteRef = useRef('')
+
+  useEffect(() => {
+    if (!showCustomerDropdown) return
+    function chiudiSeFuori(e: MouseEvent | TouchEvent) {
+      if (customerSearchBoxRef.current && !customerSearchBoxRef.current.contains(e.target as Node)) {
+        setShowCustomerDropdown(false)
+      }
+    }
+    function chiudiConEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowCustomerDropdown(false)
+    }
+    document.addEventListener('mousedown', chiudiSeFuori)
+    document.addEventListener('touchstart', chiudiSeFuori)
+    document.addEventListener('keydown', chiudiConEsc)
+    return () => {
+      document.removeEventListener('mousedown', chiudiSeFuori)
+      document.removeEventListener('touchstart', chiudiSeFuori)
+      document.removeEventListener('keydown', chiudiConEsc)
+    }
+  }, [showCustomerDropdown])
 
   useEffect(() => {
     loadRequests()
@@ -151,6 +178,7 @@ function DocumentiSubTab() {
 
   async function searchCustomers(query: string) {
     setCustomerSearch(query)
+    ultimaRicercaClienteRef.current = query
     if (query.length < 2) {
       setCustomerResults([])
       setShowCustomerDropdown(false)
@@ -163,8 +191,11 @@ function DocumentiSubTab() {
       .or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,denominazione.ilike.%${query}%,email.ilike.%${query}%`)
       .limit(10)
 
+    // Risposta superata da una ricerca piu' recente: ignorala.
+    if (ultimaRicercaClienteRef.current !== query) return
     setCustomerResults(data || [])
-    setShowCustomerDropdown(true)
+    // Riapri solo se l'admin e' ancora nel campo di ricerca.
+    setShowCustomerDropdown(document.activeElement === customerSearchInputRef.current)
   }
 
   // ── Per-signer customer picker (2026-05-27) ───────────────────────────
@@ -303,10 +334,11 @@ function DocumentiSubTab() {
       toast.error('Carica un documento PDF prima')
       return
     }
-    // Filtra firmatari completi (tutti e 3 i campi). Almeno uno richiesto.
-    const validSigners = formData.signers.filter(s => s.name.trim() && s.email.trim() && s.phone.trim())
+    // 25/09/2026: un firmatario e' valido con il nome e UN contatto,
+    // telefono (WhatsApp) oppure email. Non servono entrambi.
+    const validSigners = formData.signers.filter(s => s.name.trim() && (s.email.trim() || s.phone.trim()))
     if (validSigners.length === 0) {
-      toast.error('Compila almeno un firmatario completo (nome, email, telefono)')
+      toast.error('Compila almeno un firmatario: nome e telefono (WhatsApp) oppure email')
       return
     }
     if (validSigners.length < formData.signers.length) {
@@ -317,6 +349,7 @@ function DocumentiSubTab() {
 
     setSending(true)
     let successCount = 0
+    let viaEmail = 0
     let failCount = 0
     const errors: string[] = []
     try {
@@ -338,6 +371,7 @@ function DocumentiSubTab() {
           const data = await res.json()
           if (res.ok) {
             successCount++
+            if (data.sentVia === 'email') viaEmail++
             logAdminAction('send_trustera_document', 'signature', data.requestId, {
               document: formData.documentName,
               signer: s.name,
@@ -356,7 +390,10 @@ function DocumentiSubTab() {
       }
 
       if (successCount > 0 && failCount === 0) {
-        toast.success(`${successCount} link di firma inviati via WhatsApp`)
+        const canali = viaEmail === 0 ? 'via WhatsApp'
+          : viaEmail === successCount ? 'via email'
+          : `(${successCount - viaEmail} WhatsApp, ${viaEmail} email)`
+        toast.success(`${successCount} link di firma inviati ${canali}`)
         setShowUpload(false)
         resetForm()
         loadRequests()
@@ -636,9 +673,10 @@ function DocumentiSubTab() {
           </div>
 
           {/* Customer Search */}
-          <div className="relative">
+          <div className="relative" ref={customerSearchBoxRef}>
             <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cerca Cliente</label>
             <input
+              ref={customerSearchInputRef}
               type="text"
               value={customerSearch}
               onChange={(e) => searchCustomers(e.target.value)}
@@ -651,6 +689,7 @@ function DocumentiSubTab() {
                 {customerResults.map((c) => (
                   <button
                     key={c.id}
+                    type="button"
                     onClick={() => selectCustomer(c)}
                     className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover text-theme-text-primary text-sm border-b border-theme-border/30 last:border-0"
                   >
@@ -764,7 +803,7 @@ function DocumentiSubTab() {
                     type="email"
                     value={s.email}
                     onChange={(e) => updateSigner(idx, { email: e.target.value })}
-                    placeholder="Email *"
+                    placeholder="Email"
                     className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
                   />
                   <TelefonoConPrefisso
@@ -785,7 +824,7 @@ function DocumentiSubTab() {
             disabled={sending || !uploadedUrl}
             className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {sending ? 'Invio in corso...' : 'Invia per Firma via WhatsApp'}
+            {sending ? 'Invio in corso...' : 'Invia per Firma'}
           </button>
         </div>
       )}
@@ -825,7 +864,7 @@ function DocumentiSubTab() {
                       </div>
                       <div>
                         <span className="text-theme-text-muted">Email:</span>
-                        <p className="text-theme-text-primary">{req.signer_email}</p>
+                        <p className="text-theme-text-primary">{req.signer_email || '—'}</p>
                       </div>
                       {req.signer_phone && (
                         <div>
