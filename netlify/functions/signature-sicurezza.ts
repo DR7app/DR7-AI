@@ -8,14 +8,17 @@ import { leggiSicurezzaFirma } from './utils/firmaSicurezza'
  *
  * GET  ?contractId= | ?requestId=   → stato di sicurezza di ogni richiesta
  *      (stesso modello dell'audit trail: utils/firmaSicurezza.ts)
+ * POST { azione: 'autorizza_cambio', requestId, motivo? }
+ *      → per 30 minuti un nuovo dispositivo puo' legarsi al link, ma solo
+ *        dopo il codice inviato al recapito registrato del firmatario
+ *        (dr7trust.com utils/dispositivo.ts). Il vecchio decade quando il
+ *        nuovo supera la verifica.
  * POST { azione: 'revoca_link', requestId, motivo? }
  *      → il link non si apre piu' (ne' contratto, ne' OTP, ne' firma) e la
  *        sessione del dispositivo legata al link decade con lui.
  *
  * "Genera nuovo link" non passa di qui: e' il rinvio che il gestionale gia'
  * usa (signature-init / document-sign-init), che annulla i link precedenti.
- * Il cambio di dispositivo non si autorizza: per un altro dispositivo si
- * manda un link nuovo (scelta della direzione, 25/09/2026).
  */
 
 const supabase = createClient(
@@ -43,10 +46,42 @@ export const handler: Handler = async (event) => {
         }
 
         const { azione, requestId, motivo } = JSON.parse(event.body || '{}')
-        if (azione !== 'revoca_link' || !requestId) {
+        if ((azione !== 'revoca_link' && azione !== 'autorizza_cambio') || !requestId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Azione non valida' }) }
         }
         const motivoPulito = typeof motivo === 'string' ? motivo.trim().slice(0, 300) : ''
+
+        if (azione === 'autorizza_cambio') {
+            const ora = new Date().toISOString()
+            const { data: aggiornate, error } = await supabase
+                .from('signature_requests')
+                .update({ rebind_authorized_at: ora, rebind_authorized_by: staff.email, updated_at: ora })
+                .eq('id', requestId)
+                .is('revoked_at', null)
+                .not('status', 'in', '(signed,cancelled,superseded,expired)')
+                .select('id, device_label, device_id, device_session_hash')
+            if (error) throw error
+            if (!aggiornate || !aggiornate.length) {
+                return { statusCode: 409, body: JSON.stringify({ error: 'Link gia\' firmato, scaduto, annullato o revocato' }) }
+            }
+            const r = aggiornate[0]
+            if (!r.device_label && !r.device_id && !r.device_session_hash) {
+                // Nessun dispositivo legato: non c'e' niente da cambiare.
+                await supabase.from('signature_requests')
+                    .update({ rebind_authorized_at: null, rebind_authorized_by: null })
+                    .eq('id', requestId)
+                return { statusCode: 409, body: JSON.stringify({ error: 'Nessun dispositivo ancora associato: il cliente puo\' aprire il link e verificarsi con il codice.' }) }
+            }
+            await supabase.from('signature_audit_trail').insert({
+                signature_request_id: requestId,
+                event_type: 'device_rebind_authorized',
+                event_description: `Cambio dispositivo autorizzato dallo staff DR7 (${staff.email})${motivoPulito ? `: ${motivoPulito}` : ''}. ` +
+                    `Per 30 minuti un nuovo dispositivo puo' associarsi solo dopo il codice inviato al recapito registrato; la sessione ${r.device_label || 'precedente'} resta valida fino ad allora.`,
+                device_label: r.device_label || null,
+                metadata: { staff: staff.email, motivo: motivoPulito || null, intervento_manuale: true, previous_device_label: r.device_label || null, valido_minuti: 30 },
+            })
+            return { statusCode: 200, body: JSON.stringify({ success: true }) }
+        }
 
         const ora = new Date().toISOString()
         const { data: revocate, error } = await supabase

@@ -11,8 +11,8 @@ import { apriAuditFirma } from '../../../utils/apriAuditFirma'
  * - Revoca link: il link non si apre piu' e la sessione del dispositivo
  *   legata al link decade con lui.
  * - Genera nuovo link: il rinvio che la tab usa gia' (annulla i link vecchi).
- * Il cambio di dispositivo non si autorizza: per un altro dispositivo si
- * manda un link nuovo (scelta della direzione).
+ * - Autorizza cambio dispositivo: per 30 minuti un nuovo dispositivo puo'
+ *   associarsi, solo dopo il codice inviato al recapito registrato.
  */
 
 type Scheda = {
@@ -22,7 +22,7 @@ type Scheda = {
   scadenzaLink: string | null
   firmatario: { nome: string; dataFirma: string | null; metodo: string | null }
   riepilogo: { stato: 'REGOLARE' | 'ATTENZIONE'; cause: string[] }
-  sessione: { deviceId: string; primaApertura: string; ultimaAttivita: string; sessioniRilevate: string }
+  sessione: { deviceId: string; primaApertura: string; ultimaAttivita: string; sessioniRilevate: string; cambioDispositivo: string; cambioInAttesa: string | null }
   posizione: { stato: string; indirizzoStimato: string | null; accuratezza: string | null }
   rete: { clientIp: string }
   otp: { stato: string; tentativiErrati: number }
@@ -80,6 +80,30 @@ export default function PulsanteSicurezzaFirma({ contractId, requestId, titolo, 
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Revoca non riuscita')
       toast.success('Link revocato')
+      await carica()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setInCorso(null)
+    }
+  }
+
+  async function autorizzaCambio(s: Scheda) {
+    const motivo = window.prompt(
+      `Autorizzare un nuovo dispositivo per ${s.firmatario.nome}?\n` +
+      `Per 30 minuti il link potra' essere aperto da un altro telefono, ma solo dopo il codice inviato al numero registrato del cliente. ` +
+      `Il dispositivo attuale decade appena il nuovo si verifica.\nMotivo (facoltativo):`, '')
+    if (motivo === null) return
+    setInCorso(`cambio-${s.id}`)
+    try {
+      const res = await authFetch('/.netlify/functions/signature-sicurezza', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ azione: 'autorizza_cambio', requestId: s.id, motivo }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Autorizzazione non riuscita')
+      toast.success('Cambio dispositivo autorizzato per 30 minuti')
       await carica()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -154,7 +178,8 @@ export default function PulsanteSicurezzaFirma({ contractId, requestId, titolo, 
                       {voce('Prima apertura', s.sessione.primaApertura)}
                       {voce('Ultima attivita\'', s.sessione.ultimaAttivita)}
                       {voce('Nuovi dispositivi', nuoviDispositivi ? `${nuoviDispositivi} accessi respinti` : 'Nessuno')}
-                      {voce('Re-binding', 'Non consentito: per un altro dispositivo si invia un nuovo link')}
+                      {voce('Re-binding', s.sessione.cambioDispositivo)}
+                      {s.sessione.cambioInAttesa && voce('Cambio in attesa', s.sessione.cambioInAttesa)}
                     </div>
                     <div>
                       {voce('OTP', `${s.otp.stato}${s.otp.tentativiErrati ? ` (${s.otp.tentativiErrati} errati)` : ''}`)}
@@ -176,6 +201,15 @@ export default function PulsanteSicurezzaFirma({ contractId, requestId, titolo, 
                       >
                         {inCorso === s.id ? 'Revoca...' : 'Revoca link e sessione'}
                       </button>
+                      {s.sessione.deviceId.startsWith('DR7-DVC-') && s.statoFirma !== 'COMPLETATA' && (
+                        <button
+                          onClick={() => autorizzaCambio(s)}
+                          disabled={inCorso !== null}
+                          className="px-3 py-1.5 rounded-full text-xs font-bold bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary disabled:opacity-50"
+                        >
+                          {inCorso === `cambio-${s.id}` ? 'Autorizzazione...' : 'Autorizza cambio dispositivo'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

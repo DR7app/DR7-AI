@@ -153,7 +153,10 @@ const CATALOGO: Record<string, VoceCatalogo> = {
     email_sent: { codice: 'SIGN_LINK_SENT', titolo: 'LINK INVIATO (EMAIL)' },
     reminder_sent: { codice: 'SIGN_LINK_REMINDER', titolo: 'PROMEMORIA INVIATO' },
     document_viewed: { codice: 'DOCUMENT_OPENED', titolo: 'DOCUMENTO APERTO' },
+    identity_check_required: { codice: 'LINK_OPENED', titolo: 'LINK APERTO — VERIFICA RICHIESTA' },
     device_bound: { codice: 'DEVICE_BOUND', titolo: 'DISPOSITIVO ASSOCIATO' },
+    device_rebind_authorized: { codice: 'DEVICE_REBIND_REQUESTED', titolo: 'CAMBIO DISPOSITIVO AUTORIZZATO DALLO STAFF', attenzione: true },
+    device_rebound: { codice: 'DEVICE_REBOUND', titolo: 'CAMBIO DISPOSITIVO COMPLETATO', attenzione: true },
     dispositivo_associato: { codice: 'DEVICE_BOUND', titolo: 'DISPOSITIVO ASSOCIATO' },
     new_device_detected: { codice: 'NEW_DEVICE_DETECTED', titolo: 'NUOVO DISPOSITIVO RILEVATO', attenzione: true },
     accesso_altro_dispositivo: { codice: 'NEW_DEVICE_DETECTED', titolo: 'NUOVO DISPOSITIVO RILEVATO', attenzione: true },
@@ -248,6 +251,19 @@ const REGOLE_ATTENZIONE: { id: string; causa: (c: ContestoRegola) => string | nu
                     : 'La seconda sessione NON ha completato la firma: il documento e\' stato firmato dal dispositivo associato.')
                 : 'La seconda sessione NON ha potuto accedere al contratto, all\'OTP o alla firma.'
             return `Durante la procedura e' stata rilevata l'apertura del link da una seconda sessione${chi}, ${ev.length} ${ev.length === 1 ? 'volta' : 'volte'}. ${esito}`
+        },
+    },
+    {
+        id: 'cambio_dispositivo',
+        causa: ({ eventi }) => {
+            const autorizzati = eventi.filter(e => e.codice === 'DEVICE_REBIND_REQUESTED')
+            if (!autorizzati.length) return null
+            const fatti = eventi.filter(e => e.codice === 'DEVICE_REBOUND')
+            const chi = Array.from(new Set(autorizzati.map(e => e.metadata?.staff).filter(Boolean))).join(', ')
+            const esito = fatti.length
+                ? `Il nuovo dispositivo (${fatti.map(e => e.deviceLabel).filter(Boolean).join(', ')}) si e' associato dopo la verifica del codice inviato al recapito registrato; la sessione precedente non e' piu' valida.`
+                : 'Nessun nuovo dispositivo ha completato la verifica.'
+            return `Cambio dispositivo autorizzato manualmente dallo staff DR7${chi ? ` (${chi})` : ''}. ${esito}`
         },
     },
     {
@@ -365,8 +381,19 @@ async function costruisciScheda(
             : dataOra(req.device_bound_at) || (storicoDispositivo ? NON_DISPONIBILE_STORICO : '—'),
         primaApertura: dataOra(req.first_opened_at) || dataOra(eventi.find(e => e.tipo === 'document_viewed')?.quando) || '—',
         ultimaAttivita: dataOra(eventi.length ? eventi[eventi.length - 1].quando : null) || '—',
-        cambioDispositivo: storicoDispositivo && !deviceLabel ? NON_DISPONIBILE_STORICO : 'NO (il link resta legato al primo dispositivo; per un altro dispositivo DR7 invia un nuovo link)',
-        sessioniRilevate: storicoDispositivo && !deviceLabel ? NON_DISPONIBILE_STORICO : String((deviceLabel ? 1 : 0) + sessioniAltre.size),
+        cambioDispositivo: (() => {
+            const cambi = eventi.filter(e => e.codice === 'DEVICE_REBOUND')
+            if (cambi.length) {
+                return `SI' — ${cambi.map(e => `${e.metadata?.previous_device_label || '—'} → ${e.deviceLabel || '—'} il ${e.dataOra}${e.metadata?.authorized_by ? `, autorizzato da ${e.metadata.authorized_by}` : ''}`).join('; ')}`
+            }
+            return storicoDispositivo && !deviceLabel ? NON_DISPONIBILE_STORICO : 'NO'
+        })(),
+        cambioInAttesa: req.rebind_authorized_at && req.status !== 'signed'
+            && Date.now() - new Date(req.rebind_authorized_at).getTime() < 30 * 60 * 1000
+            ? `Autorizzato il ${dataOra(req.rebind_authorized_at)}${req.rebind_authorized_by ? ` da ${req.rebind_authorized_by}` : ''}: valido 30 minuti`
+            : null,
+        sessioniRilevate: storicoDispositivo && !deviceLabel ? NON_DISPONIBILE_STORICO
+            : String((deviceLabel ? 1 : 0) + sessioniAltre.size + eventi.filter(e => e.codice === 'DEVICE_REBOUND').length),
     }
 
     // Dispositivo: User-Agent della firma, se no dell'ultima verifica/apertura
