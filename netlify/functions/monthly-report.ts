@@ -949,7 +949,11 @@ async function generateVehicleReport(
     const elapsedDaysRaw = elapsedEndMs >= monthStart.getTime()
       ? Math.round((elapsedEndMs - monthStart.getTime()) / 86400000) + 1
       : 0
-    const elapsedDays = Math.max(1, Math.min(daysInMonth, elapsedDaysRaw))
+    // 25/09/2026: un mese interamente nel futuro non ha giorni trascorsi.
+    // Prima contava il mese intero in flotta (fineTrascorsa = fine mese) e il
+    // periodo "Anno" sommava ottobre-dicembre: 15/05-25/09 usciva 226 gg, non 134.
+    const meseFuturo = elapsedDaysRaw <= 0
+    const elapsedDays = meseFuturo ? 0 : Math.max(1, Math.min(daysInMonth, elapsedDaysRaw))
 
     // 21/09/2026 (direzione): il mezzo conta solo nei giorni in cui era in
     // flotta. Una Huracan arrivata il 15/05 e noleggiata 17 giorni su 17 e'
@@ -982,10 +986,10 @@ async function generateVehicleReport(
     }
     const idxA = idxGiorno(presenzaA)
     const conDate = !!(inFlottaDal || inFlottaAl)
-    const giorniPresenza = !conDate
+    const giorniPresenza = meseFuturo ? 0 : !conDate
       ? elapsedDays
       : (idxA >= idxDa ? idxA - idxDa + 1 : 0)
-    const dentroPresenza = (d: number) => !conDate || (d >= idxDa && d <= idxA)
+    const dentroPresenza = (d: number) => !meseFuturo && (!conDate || (d >= idxDa && d <= idxA))
     // 21/09/2026 (direzione): pause = giorni in cui il mezzo non era
     // noleggiabile (carrozzeria, prestato, fermo...). Escono dal conto come
     // se il mezzo non ci fosse. Se in pausa c'e' comunque un noleggio, quel
