@@ -11,6 +11,7 @@ import { useEffect, useState, useMemo, useCallback, type ReactElement } from 're
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar, PieChart, Pie, Cell,
@@ -62,18 +63,6 @@ function lastDayOfMonthISO(): string {
   const d = new Date()
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`
-}
-function isoAddDays(iso: string, days: number): string {
-  const [y, m, dd] = iso.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, dd))
-  dt.setUTCDate(dt.getUTCDate() + days)
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
-}
-// Display ISO (YYYY-MM-DD) come DD/MM/YYYY (formato europeo)
-function fmtItalianDate(iso: string): string {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
 }
 
 // ─── KpiCard (local copy, same visual language as FatturaTab) ───────────
@@ -467,41 +456,21 @@ export default function IncomingInvoicesView() {
       {/* ─── Filters ─────────────────────────────────────────── */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Periodo</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2">
-                <span className="tabular-nums text-sm text-theme-text-primary">{fmtItalianDate(dateFrom)}</span>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => { const v = e.target.value; if (!v) return; setDateFrom(v); if (v > dateTo) setDateTo(v) }}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  <span aria-hidden>📅</span>
-                </div>
-              </div>
-              <span className="text-theme-text-muted">&rarr;</span>
-              <div className="flex items-center gap-2 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2">
-                <span className="tabular-nums text-sm text-theme-text-primary">{fmtItalianDate(dateTo)}</span>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => { const v = e.target.value; if (!v) return; setDateTo(v); if (v < dateFrom) setDateFrom(v) }}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  <span aria-hidden>📅</span>
-                </div>
-              </div>
-              <button onClick={() => { setDateFrom(firstOfMonthISO()); setDateTo(lastDayOfMonthISO()) }} className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors">Mese</button>
-              <button onClick={() => { const t = todayISO(); setDateFrom(isoAddDays(t, -6)); setDateTo(t) }} title="Ultimi 7 giorni" className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors">7g</button>
-              <button onClick={() => { const t = todayISO(); setDateFrom(isoAddDays(t, -29)); setDateTo(t) }} title="Ultimi 30 giorni" className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors">30g</button>
-              <button onClick={() => { const t = todayISO(); setDateFrom(isoAddDays(t, -89)); setDateTo(t) }} title="Ultimi 90 giorni" className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors">90g</button>
-              <button onClick={() => { const t = todayISO(); setDateFrom(`${t.substring(0, 4)}-01-01`); setDateTo(t) }} title="Anno corrente (year-to-date)" className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors">YTD</button>
-            </div>
-          </div>
+          {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra). */}
+          <DateRangeFilter
+            value={{ from: dateFrom, to: dateTo }}
+            onChange={(r) => {
+              if (!r.from || !r.to) return
+              // Periodo sempre valido: se una data scavalca l'altra, l'altra la segue.
+              if (r.from > r.to) {
+                if (r.to !== dateTo) { setDateFrom(r.to); setDateTo(r.to) } else { setDateFrom(r.from); setDateTo(r.from) }
+                return
+              }
+              setDateFrom(r.from)
+              setDateTo(r.to)
+            }}
+            conTutto={false}
+          />
           <div>
             <label className="block text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Filtro fornitori</label>
             <div className="flex bg-theme-bg-tertiary border border-theme-border rounded overflow-hidden">
@@ -761,7 +730,7 @@ export default function IncomingInvoicesView() {
                   <div className="font-semibold">Ricarica Aruba</div>
                   <div className="text-[10px] text-theme-text-muted">Stessi filtri</div>
                 </button>
-                <button onClick={() => setMonth(currentMonth())} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left">
+                <button onClick={() => { setMonth(currentMonth()); setDateFrom(firstOfMonthISO()); setDateTo(lastDayOfMonthISO()) }} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left">
                   <div className="font-semibold">Mese corrente</div>
                   <div className="text-[10px] text-theme-text-muted">Reset mese</div>
                 </button>
@@ -773,7 +742,7 @@ export default function IncomingInvoicesView() {
                   <div className="font-semibold">Tutti</div>
                   <div className="text-[10px] text-theme-text-muted">Senza filtro</div>
                 </button>
-                <button onClick={() => { setSearch(''); setMode('all'); setMonth(currentMonth()) }} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left col-span-2">
+                <button onClick={() => { setSearch(''); setMode('all'); setMonth(currentMonth()); setDateFrom(firstOfMonthISO()); setDateTo(lastDayOfMonthISO()) }} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left col-span-2">
                   <div className="font-semibold">Reset filtri</div>
                   <div className="text-[10px] text-theme-text-muted">Tutto, mese corrente</div>
                 </button>

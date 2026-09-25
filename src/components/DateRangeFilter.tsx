@@ -36,6 +36,9 @@ interface DateRangeFilterProps {
   /** Senza etichetta sopra. */
   compact?: boolean
   className?: string
+  /** 25/09/2026: false = niente "Tutto", per le schermate che hanno sempre
+   *  bisogno di due date (buste paga, KPI, storico OTP...). */
+  conTutto?: boolean
 }
 
 type Preset = 'tutto' | 'oggi' | 'mese' | '7gg' | '30gg' | 'anno' | 'custom'
@@ -84,6 +87,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   showPresets = true,
   compact = false,
   className = '',
+  conTutto = true,
 }) => {
   // "Custom" cliccato senza ancora date proprie: resta evidenziato finche'
   // non si sceglie un altro preset.
@@ -97,7 +101,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
       <div className="flex flex-wrap items-center gap-2">
         {showPresets && (
           <div className="inline-flex rounded-md border border-theme-border bg-theme-bg-tertiary p-0.5 text-xs">
-            {PRESET.map(p => (
+            {PRESET.filter(p => conTutto || p.key !== 'tutto').map(p => (
               <button
                 key={p.key}
                 type="button"

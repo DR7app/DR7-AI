@@ -20,6 +20,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { vedeTuttiGliAcconti } from '../../../utils/accontiBustaPaga'
 
 interface AdminOption {
@@ -285,12 +286,13 @@ export default function AccontiTab() {
             </label>
           ) : (
             <>
-              <label className="text-xs text-theme-text-muted">Da
-                <EuropeanDateInput value={daData} onChange={(__v: string) => setDaData(__v)} className="mt-1 block px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
-              </label>
-              <label className="text-xs text-theme-text-muted">A
-                <EuropeanDateInput value={aData} onChange={(__v: string) => setAData(__v)} className="mt-1 block px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
-              </label>
+              {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra).
+                  Lo storico ha sempre due date: un campo vuoto non si applica. */}
+              <DateRangeFilter
+                value={{ from: daData, to: aData }}
+                onChange={(r) => { if (r.from) setDaData(r.from); if (r.to) setAData(r.to) }}
+                conTutto={false}
+              />
               {canSeeAll && operatori.length > 0 && (
                 <label className="text-xs text-theme-text-muted">Operatore
                   <select value={filtroOperatore} onChange={e => setFiltroOperatore(e.target.value)} className="mt-1 block px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">

@@ -6,7 +6,7 @@ import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
-import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 /**
  * PayrollPeriodoView — vista riassuntiva "buste paga del periodo".
@@ -373,32 +373,6 @@ export default function PayrollPeriodoView() {
         senzaContratto: rows.filter(r => !r.hasContract).length,
     }), [rows])
 
-    function applyPreset(p: 'oggi' | 'settimana' | 'mese' | '30gg' | 'mese_scorso') {
-        const today = new Date()
-        if (p === 'oggi') {
-            const t = toRomeDate(today)
-            setFrom(t); setTo(t); return
-        }
-        if (p === 'settimana') {
-            const d = new Date(today); const day = d.getDay() || 7
-            d.setDate(d.getDate() - day + 1)
-            setFrom(toRomeDate(d)); setTo(toRomeDate(today)); return
-        }
-        if (p === 'mese') {
-            const d = new Date(today.getFullYear(), today.getMonth(), 1)
-            setFrom(toRomeDate(d)); setTo(toRomeDate(today)); return
-        }
-        if (p === '30gg') {
-            const d = new Date(); d.setDate(d.getDate() - 29)
-            setFrom(toRomeDate(d)); setTo(toRomeDate(today)); return
-        }
-        if (p === 'mese_scorso') {
-            const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-            const end = new Date(today.getFullYear(), today.getMonth(), 0)
-            setFrom(toRomeDate(start)); setTo(toRomeDate(end)); return
-        }
-    }
-
     function exportCsv() {
         const headers = ['Operatore', 'Ruolo', 'Ore Lavorate', 'Ore Ord.', 'Ore Straord.', 'Paga Ord.', 'Paga Straord.', 'Correzione', 'Totale', 'Acconti', 'Netto da Pagare']
         const data = sortedRows.map(r => [
@@ -446,31 +420,13 @@ export default function PayrollPeriodoView() {
                     <p className="text-xs text-theme-text-muted">{isRestrictedToOwn ? 'Le tue ore lavorate, straordinari e paga del periodo, calcolate dal contratto + ore registrate.' : 'Calcola in un colpo solo quanto pagare a ogni operatore in base ai contratti + ore registrate.'}</p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2 ml-auto">
-                    <label className="flex flex-col text-[10px] uppercase text-theme-text-muted">
-                        Da
-                        <EuropeanDateInput
-                          value={from}
-                          max={to}
-                          onChange={(__v: string) => setFrom(__v || from)}
-                          className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
-                        />
-                    </label>
-                    <label className="flex flex-col text-[10px] uppercase text-theme-text-muted">
-                        A
-                        <EuropeanDateInput
-                          value={to}
-                          min={from}
-                          onChange={(__v: string) => setTo(__v || to)}
-                          className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
-                        />
-                    </label>
-                    <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-tertiary p-0.5 text-[11px]">
-                        <button onClick={() => applyPreset('oggi')} className="px-2 py-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Oggi</button>
-                        <button onClick={() => applyPreset('settimana')} className="px-2 py-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Settimana</button>
-                        <button onClick={() => applyPreset('mese')} className="px-2 py-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Mese</button>
-                        <button onClick={() => applyPreset('mese_scorso')} className="px-2 py-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Mese scorso</button>
-                        <button onClick={() => applyPreset('30gg')} className="px-2 py-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">30gg</button>
-                    </div>
+                    {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra). */}
+                    <DateRangeFilter
+                      value={{ from, to }}
+                      onChange={r => { if (r.from && r.to) { setFrom(r.from); setTo(r.to) } }}
+                      conTutto={false}
+                      compact
+                    />
                     <button onClick={exportCsv}
                         className="px-3 py-1.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs hover:bg-theme-bg-hover">
                         Export CSV

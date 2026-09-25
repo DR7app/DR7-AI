@@ -21,7 +21,7 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import { OTP_ACTION_CATALOG, type OtpAction } from '../../../utils/otpActionCatalog'
 import { authFetch } from '../../../utils/authFetch'
 import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator, type ContextFieldDef } from '../../../utils/otpConditionEngine'
-import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface OtpRow {
@@ -1509,11 +1509,14 @@ function StoricoOtpSection() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'expired' | 'cancelled' | 'pending'>('all')
+    // Ultimi 30 giorni in ora locale (toISOString spostava di un giorno di notte).
+    const isoLocale = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const [fromDate, setFromDate] = useState<string>(() => {
-        const d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        return d.toISOString().slice(0, 10)
+        const d = new Date()
+        d.setDate(d.getDate() - 30)
+        return isoLocale(d)
     })
-    const [toDate, setToDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
+    const [toDate, setToDate] = useState<string>(() => isoLocale(new Date()))
     const [search, setSearch] = useState('')
     const [page, setPage] = useState(0)
     const PAGE_SIZE = 25
@@ -1604,24 +1607,18 @@ function StoricoOtpSection() {
 
             {expanded && (
                 <div className="mt-4 space-y-3">
+                    {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra).
+                        Si carica sempre con Aggiorna, come prima. */}
+                    <DateRangeFilter
+                        value={{ from: fromDate, to: toDate }}
+                        onChange={(r) => {
+                            if (r.from) setFromDate(r.from)
+                            if (r.to) setToDate(r.to)
+                        }}
+                        conTutto={false}
+                    />
                     {/* Filters */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-                        <label className="text-[11px] text-theme-text-muted">
-                            <span className="block mb-1">Da</span>
-                            <EuropeanDateInput
-                              value={fromDate}
-                              onChange={(__v: string) => setFromDate(__v)}
-                              className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"
-                            />
-                        </label>
-                        <label className="text-[11px] text-theme-text-muted">
-                            <span className="block mb-1">A</span>
-                            <EuropeanDateInput
-                              value={toDate}
-                              onChange={(__v: string) => setToDate(__v)}
-                              className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"
-                            />
-                        </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                         <label className="text-[11px] text-theme-text-muted">
                             <span className="block mb-1">Stato</span>
                             <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as 'all' | 'verified' | 'expired' | 'cancelled' | 'pending'); setPage(0) }}

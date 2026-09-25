@@ -29,6 +29,7 @@ import {
 } from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import MoneyInput from '../../../components/MoneyInput'
 
@@ -91,7 +92,6 @@ function toRomeDate(d: Date): string {
     return d.toLocaleDateString('en-CA', { timeZone: ROME_TZ })
 }
 
-type Period = '7gg' | '30gg' | 'mese' | 'custom'
 
 const AVATAR_TONES = ['bg-emerald-600', 'bg-blue-600', 'bg-amber-600', 'bg-rose-600', 'bg-violet-600', 'bg-cyan-600', 'bg-fuchsia-600', 'bg-orange-600']
 function avatarTone(seed: string): string {
@@ -107,7 +107,6 @@ export default function OperatorProfileModal({
     operatore: Operatore
     onClose: () => void
 }) {
-    const [period, setPeriod] = useState<Period>('30gg')
     // 2026-06-06: il periodo di default di "Calcola Paga" deve rispecchiare la
     // frequenza di stipendio del contratto: operatore pagato a SETTIMANA
     // (stipendio_frequenza='settimanale', es. Ophelie) → default 7 giorni, non
@@ -158,7 +157,11 @@ export default function OperatorProfileModal({
             // al primo caricamento, cosi' non sovrascrive le scelte dell'utente.
             if (!autoPeriodApplied.current) {
                 autoPeriodApplied.current = true
-                if (c?.stipendio_frequenza === 'settimanale') setPeriod('7gg')
+                if (c?.stipendio_frequenza === 'settimanale') {
+                    const d = new Date(); d.setDate(d.getDate() - 6)
+                    setCustomFrom(toRomeDate(d))
+                    setCustomTo(toRomeDate(new Date()))
+                }
             }
             if (c?.ore_target_giornaliere && c.ore_target_giornaliere > 0) {
                 setTargetGran('giornaliera')
@@ -215,15 +218,11 @@ export default function OperatorProfileModal({
     const range = useMemo(() => {
         const end = new Date()
         const start = new Date()
-        if (period === '7gg') start.setDate(start.getDate() - 6)
-        else if (period === '30gg') start.setDate(start.getDate() - 29)
-        else if (period === 'mese') start.setDate(1)
-        else if (period === 'custom') {
-            const [fy, fm, fd] = customFrom.split('-').map(Number)
-            const [ty, tm, td] = customTo.split('-').map(Number)
-            if (fy && fm && fd) start.setFullYear(fy, fm - 1, fd)
-            if (ty && tm && td) end.setFullYear(ty, tm - 1, td)
-        }
+        // 25/09/2026: il periodo e' sempre customFrom..customTo (barra Periodo).
+        const [fy, fm, fd] = customFrom.split('-').map(Number)
+        const [ty, tm, td] = customTo.split('-').map(Number)
+        if (fy && fm && fd) start.setFullYear(fy, fm - 1, fd)
+        if (ty && tm && td) end.setFullYear(ty, tm - 1, td)
         const daysArr: string[] = []
         const cur = new Date(start)
         while (toRomeDate(cur) <= toRomeDate(end)) {
@@ -231,7 +230,7 @@ export default function OperatorProfileModal({
             cur.setDate(cur.getDate() + 1)
         }
         return { start: toRomeDate(start), end: toRomeDate(end), days: daysArr }
-    }, [period, customFrom, customTo])
+    }, [customFrom, customTo])
 
     // 2026-05-22: estratto in funzione richiamabile cosi' dopo l'edit
     // di una giornata (via MyDayEditorModal) possiamo ri-caricare i dati
@@ -389,30 +388,15 @@ export default function OperatorProfileModal({
                     >×</button>
                 </div>
 
-                {/* Period selector — horizontally scrollable on mobile so pills don't crush */}
+                {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra).
+                    Il periodo ha sempre due date: un campo vuoto non si applica. */}
                 <div className="px-4 sm:px-6 pt-3 sm:pt-4">
-                    <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {(['7gg', '30gg', 'mese', 'custom'] as Period[]).map(p => (
-                            <button
-                                key={p}
-                                onClick={() => setPeriod(p)}
-                                className={`whitespace-nowrap text-xs px-3 py-2 rounded-full font-medium transition-colors min-h-[36px] ${
-                                    period === p
-                                        ? 'bg-dr7-gold text-black'
-                                        : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
-                                }`}
-                            >
-                                {p === '7gg' ? '7 giorni' : p === '30gg' ? '30 giorni' : p === 'mese' ? 'Mese corrente' : 'Personalizzato'}
-                            </button>
-                        ))}
-                    </div>
-                    {period === 'custom' && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <EuropeanDateInput value={customFrom} onChange={(__v: string) => setCustomFrom(__v)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
-                            <span className="text-theme-text-muted text-xs">→</span>
-                            <EuropeanDateInput value={customTo} onChange={(__v: string) => setCustomTo(__v)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
-                        </div>
-                    )}
+                    <DateRangeFilter
+                        value={{ from: customFrom, to: customTo }}
+                        onChange={(r) => { if (r.from) setCustomFrom(r.from); if (r.to) setCustomTo(r.to) }}
+                        conTutto={false}
+                        compact
+                    />
                     <div className="mt-2 text-[11px] text-theme-text-muted">
                         {fmtDate(range.start)} → {fmtDate(range.end)} · {range.days.length} giorni
                     </div>
@@ -449,8 +433,8 @@ export default function OperatorProfileModal({
                         rangeLabel={`${fmtDate(range.start)} → ${fmtDate(range.end)}`}
                         customFrom={customFrom}
                         customTo={customTo}
-                        onChangeFrom={(iso) => { setPeriod('custom'); setCustomFrom(iso) }}
-                        onChangeTo={(iso) => { setPeriod('custom'); setCustomTo(iso) }}
+                        onChangeFrom={(iso) => { if (iso) setCustomFrom(iso) }}
+                        onChangeTo={(iso) => { if (iso) setCustomTo(iso) }}
                     />
                 </div>
 
@@ -1766,7 +1750,7 @@ function CalcolaPagaSection({
                 <h3 className="text-sm font-semibold text-theme-text-primary">Calcola Paga</h3>
                 {/* 2026-05-22: date inline editabili — niente piu' label
                     read-only "12 apr → 22 mag". Cambiando una delle due
-                    date il parent forza period='custom'. rangeLabel resta
+                    date cambia il periodo del parent (stessa barra). rangeLabel resta
                     come fallback per accessibility / debug. */}
                 <div className="flex items-center gap-1.5" aria-label={rangeLabel}>
                     <EuropeanDateInput

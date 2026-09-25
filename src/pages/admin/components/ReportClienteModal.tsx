@@ -22,6 +22,7 @@ import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface ReportClienteProps {
   customerId: string
@@ -135,9 +136,18 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [activeTab, setActiveTab] = useState<TabId>('stato')
   const [isDR7Club, setIsDR7Club] = useState(false)
   // Sezione Economica: periodo 3/6/12 mesi oppure intervallo personalizzato.
-  const [econPeriod, setEconPeriod] = useState<'3m' | '6m' | '12m' | 'custom'>('6m')
-  const [econDal, setEconDal] = useState('')
-  const [econAl, setEconAl] = useState('')
+  // 25/09/2026: periodo della sezione economica = barra Periodo comune.
+  // Parte dagli ultimi 6 mesi (dal primo del mese di 5 mesi fa a oggi);
+  // "Tutto" = date vuote = tutto lo storico.
+  const [econDal, setEconDal] = useState(() => {
+    const d = new Date()
+    const inizio = new Date(d.getFullYear(), d.getMonth() - 5, 1)
+    return `${inizio.getFullYear()}-${String(inizio.getMonth() + 1).padStart(2, '0')}-01`
+  })
+  const [econAl, setEconAl] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
 
   useEffect(() => {
     loadAll()
@@ -476,27 +486,16 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const econRange = useMemo(() => {
     const end = new Date()
     end.setHours(23, 59, 59, 999)
-    if (econPeriod === 'custom') {
-      const start = econDal ? new Date(`${econDal}T00:00:00`) : null
-      const customEnd = econAl ? new Date(`${econAl}T23:59:59.999`) : end
-      return { start, end: customEnd }
-    }
-    const mesi = econPeriod === '3m' ? 3 : econPeriod === '12m' ? 12 : 6
-    const start = new Date()
-    start.setDate(1)
-    start.setMonth(start.getMonth() - (mesi - 1))
-    start.setHours(0, 0, 0, 0)
-    return { start, end }
-  }, [econPeriod, econDal, econAl])
+    const start = econDal ? new Date(`${econDal}T00:00:00`) : null
+    const customEnd = econAl ? new Date(`${econAl}T23:59:59.999`) : end
+    return { start, end: customEnd }
+  }, [econDal, econAl])
 
   const econRangeLabel = useMemo(() => {
     const fmt = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    if (econPeriod === 'custom') {
-      if (!econRange.start && !econAl) return 'Tutto lo storico'
-      return `${econRange.start ? fmt(econRange.start) : 'Inizio'} — ${fmt(econRange.end)}`
-    }
-    return econPeriod === '3m' ? 'Ultimi 3 Mesi' : econPeriod === '12m' ? 'Ultimi 12 Mesi' : 'Ultimi 6 Mesi'
-  }, [econPeriod, econAl, econRange])
+    if (!econRange.start && !econAl) return 'Tutto lo storico'
+    return `${econRange.start ? fmt(econRange.start) : 'Inizio'} — ${fmt(econRange.end)}`
+  }, [econAl, econRange])
 
   const inEconRange = useMemo(() => {
     const startMs = econRange.start ? econRange.start.getTime() : -Infinity
@@ -1493,48 +1492,13 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           {/* SEZIONE ECONOMICA */}
           {activeTab === 'economica' && (
             <div className="space-y-4">
-              {/* Filtro periodo: 3 / 6 / 12 mesi oppure date personalizzate */}
-              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-3 flex flex-wrap items-center gap-3">
-                <span className="text-[10px] font-bold text-theme-text-muted uppercase tracking-wider">Periodo</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {([['3m', '3 Mesi'], ['6m', '6 Mesi'], ['12m', '12 Mesi'], ['custom', 'Personalizzato']] as ['3m' | '6m' | '12m' | 'custom', string][]).map(([id, label]) => (
-                    <button
-                      key={id}
-                      onClick={() => setEconPeriod(id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                        econPeriod === id
-                          ? 'bg-dr7-gold/15 border-dr7-gold/50 text-dr7-gold'
-                          : 'bg-theme-bg-primary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
-                      }`}
-                    >{label}</button>
-                  ))}
-                </div>
-                {econPeriod === 'custom' && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="text-xs text-theme-text-muted">Dal</label>
-                    <input
-                      type="date"
-                      value={econDal}
-                      max={econAl || undefined}
-                      onChange={e => setEconDal(e.target.value)}
-                      className="px-2 py-1.5 rounded-lg bg-theme-bg-primary border border-theme-border text-xs text-theme-text-primary"
-                    />
-                    <label className="text-xs text-theme-text-muted">Al</label>
-                    <input
-                      type="date"
-                      value={econAl}
-                      min={econDal || undefined}
-                      onChange={e => setEconAl(e.target.value)}
-                      className="px-2 py-1.5 rounded-lg bg-theme-bg-primary border border-theme-border text-xs text-theme-text-primary"
-                    />
-                    {(econDal || econAl) && (
-                      <button
-                        onClick={() => { setEconDal(''); setEconAl('') }}
-                        className="px-2 py-1.5 rounded-lg text-xs border border-theme-border text-theme-text-muted hover:bg-theme-bg-hover"
-                      >Azzera</button>
-                    )}
-                  </div>
-                )}
+              {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra).
+                  "Tutto" = tutto lo storico del cliente. */}
+              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-3 flex flex-wrap items-end gap-3">
+                <DateRangeFilter
+                  value={{ from: econDal, to: econAl }}
+                  onChange={(r) => { setEconDal(r.from); setEconAl(r.to) }}
+                />
                 <span className="text-xs text-theme-text-muted ml-auto">
                   {econRangeLabel} · {econKpis.count} {econKpis.count === 1 ? 'prenotazione' : 'prenotazioni'}
                 </span>

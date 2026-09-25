@@ -12,7 +12,7 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import IncomingInvoicesView from './IncomingInvoicesView'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
-import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { trovaDoppioni } from '../../../utils/fattureDoppie'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
@@ -1485,22 +1485,11 @@ export default function FatturaTab() {
               <option value="nota_credito">Solo Note Credito</option>
             </select>
           </div>
-          <div className="flex flex-col">
-            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Da</label>
-            <EuropeanDateInput
-              value={filterDateFrom}
-              onChange={(__v: string) => setFilterDateFrom(__v)}
-              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
-            />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">A</label>
-            <EuropeanDateInput
-              value={filterDateTo}
-              onChange={(__v: string) => setFilterDateTo(__v)}
-              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
-            />
-          </div>
+          {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra). */}
+          <DateRangeFilter
+            value={{ from: filterDateFrom, to: filterDateTo }}
+            onChange={(r) => { setFilterDateFrom(r.from); setFilterDateTo(r.to) }}
+          />
           <div className="flex flex-col">
             <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Mostra</label>
             <select

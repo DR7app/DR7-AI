@@ -4,6 +4,7 @@ import { ReportCard, ReportTable, ReportRow, ReportTotalRow } from './ReportUI'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import DashboardOverview from './DashboardOverview'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 /**
  * Le stesse cifre che il Report Noleggio mostra in cima.
@@ -221,20 +222,12 @@ function writeCache<T>(key: string, data: T) {
 }
 
 // Helpers for date range
-function todayIsoRome(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-}
 function firstDayOfMonthIso(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 function lastDayOfMonthIso(d = new Date()): string {
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-}
-function isoAddDays(iso: string, n: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d) + n * 86400000)
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
 }
 // All YYYY-MM calendar months touched by the [from,to] range, inclusive.
 // Aruba passive-invoice fetch is month-bucketed, so the supplier panel sums
@@ -484,86 +477,22 @@ export default function DashboardTab() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Italian-formatted date field — the native picker is overlaid
-                transparently so the OS calendar still opens, but only the
-                DD/MM/YYYY label is shown (never the browser's US format). */}
-            <div className="relative inline-flex items-center gap-2 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm cursor-pointer focus-within:ring-2 focus-within:ring-[#19C2D6]/40 focus-within:border-[#19C2D6]">
-              <span className="tabular-nums">{fmtItalianDate(dateFrom)}</span>
-              <svg className="w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
-              <input
-                type="date"
-                value={dateFrom}
-                aria-label="Data inizio periodo"
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onClick={(e) => (e.currentTarget as any).showPicker?.()}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (!v) return
-                  setDateFrom(v)
-                  // Keep range valid without locking the picker: if the new start
-                  // is after the current end, push the end to match so the user
-                  // can always re-select any date freely.
-                  if (v > dateTo) setDateTo(v)
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-            </div>
-            <span className="text-theme-text-muted text-sm">→</span>
-            <div className="relative inline-flex items-center gap-2 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm cursor-pointer focus-within:ring-2 focus-within:ring-[#19C2D6]/40 focus-within:border-[#19C2D6]">
-              <span className="tabular-nums">{fmtItalianDate(dateTo)}</span>
-              <svg className="w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
-              <input
-                type="date"
-                value={dateTo}
-                aria-label="Data fine periodo"
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onClick={(e) => (e.currentTarget as any).showPicker?.()}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (!v) return
-                  setDateTo(v)
-                  if (v < dateFrom) setDateFrom(v)
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => { setDateFrom(firstDayOfMonthIso()); setDateTo(lastDayOfMonthIso()) }}
-                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
-                title="Mese corrente"
-              >
-                Mese
-              </button>
-              <button
-                onClick={() => { const t = todayIsoRome(); setDateFrom(isoAddDays(t, -6)); setDateTo(t) }}
-                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
-                title="Ultimi 7 giorni"
-              >
-                7g
-              </button>
-              <button
-                onClick={() => { const t = todayIsoRome(); setDateFrom(isoAddDays(t, -29)); setDateTo(t) }}
-                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
-                title="Ultimi 30 giorni"
-              >
-                30g
-              </button>
-              <button
-                onClick={() => { const t = todayIsoRome(); setDateFrom(isoAddDays(t, -89)); setDateTo(t) }}
-                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
-                title="Ultimi 90 giorni"
-              >
-                90g
-              </button>
-              <button
-                onClick={() => { const t = todayIsoRome(); setDateFrom(`${t.substring(0, 4)}-01-01`); setDateTo(t) }}
-                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
-                title="Anno corrente"
-              >
-                YTD
-              </button>
-            </div>
+            {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra). */}
+            <DateRangeFilter
+              value={{ from: dateFrom, to: dateTo }}
+              onChange={(r) => {
+                if (!r.from || !r.to) return
+                // Periodo sempre valido: se una data scavalca l'altra, l'altra la segue.
+                if (r.from > r.to) {
+                  if (r.to !== dateTo) { setDateFrom(r.to); setDateTo(r.to) } else { setDateFrom(r.from); setDateTo(r.from) }
+                  return
+                }
+                setDateFrom(r.from)
+                setDateTo(r.to)
+              }}
+              conTutto={false}
+              compact
+            />
           </div>
           <span className={`text-xs px-2 py-1 rounded-full ${loading ? 'bg-blue-500/20 text-blue-300' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}>
             {loading ? 'Aggiorno…' : (cachedAt ? fmtRelative(cachedAt) : 'snapshot non disponibile')}

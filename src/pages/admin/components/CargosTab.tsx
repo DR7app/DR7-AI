@@ -5,6 +5,7 @@ import { supabase } from '../../../supabaseClient'
 import NewClientModal from '../../../components/NewClientModal'
 import Button from './Button'
 import Input from './Input'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { logger } from '../../../utils/logger'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -1474,21 +1475,15 @@ export default function CargosTab() {
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
                             </div>
                         </div>}
-                        {viewMode === 'range' && <div className="flex flex-col sm:flex-row items-end gap-3">
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Dal (data inizio noleggio)</label>
-                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                <Input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={(e: any) => setRangeFrom(e.target.value)} />
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Al</label>
-                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                <Input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e: any) => setRangeTo(e.target.value)} />
-                            </div>
-                            {(rangeFrom || rangeTo) && (
-                                <button onClick={() => { setRangeFrom(''); setRangeTo('') }} className="px-3 py-2 text-xs text-theme-text-muted hover:text-theme-text-primary whitespace-nowrap">Azzera</button>
-                            )}
-                        </div>}
+                        {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra).
+                            Filtra sulla data inizio noleggio; "Tutto" = nessun limite. */}
+                        {viewMode === 'range' && (
+                            <DateRangeFilter
+                                value={{ from: rangeFrom, to: rangeTo }}
+                                onChange={(r) => { setRangeFrom(r.from); setRangeTo(r.to) }}
+                                fromLabel="Periodo (data inizio noleggio)"
+                            />
+                        )}
                     </div>
 
                     {/* Bookings table */}

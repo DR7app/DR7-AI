@@ -10,7 +10,7 @@ import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModal'
 import ContrattiOperatoreView from './ContrattiOperatoreView'
 import { useAdminRole } from '../../../hooks/useAdminRole'
-import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 // 2026-05-18: Rilevazione Orari spostata DENTRO Operatori (sub-view).
 // Prima era una top-level tab "Rilevazione Orari" — ora vive insieme
@@ -964,17 +964,14 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
           <div className="text-xs text-theme-text-muted mt-1">Home / Operatori / Report Operatore</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-            {([
-              { k: 'oggi', l: 'Oggi' },
-              { k: '7gg', l: '7 giorni' },
-              { k: '30gg', l: '30 giorni' },
-              { k: 'mese', l: 'Mese corrente' },
-              { k: 'mese-prec', l: 'Mese prec.' },
-            ] as const).map(p => (
-              <button key={p.k} onClick={() => setPeriodPreset(p.k)} className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">{p.l}</button>
-            ))}
-          </div>
+          {/* 25/09/2026 (direzione): barra Periodo comune (come Report Terra).
+              Due date sempre piene: gli aggregati non reggono il periodo vuoto. */}
+          <DateRangeFilter
+            value={{ from: dateFrom, to: dateTo }}
+            onChange={r => { if (r.from && r.to) { setDateFrom(r.from); setDateTo(r.to) } }}
+            conTutto={false}
+            compact
+          />
           <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
             <button onClick={onSwitchView} className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Dashboard</button>
             <button className="px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold">Audit log</button>
@@ -1453,14 +1450,6 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
             {/* SECTION 10 — TIMELINE ATTIVITÀ (long, at end) */}
             <Section title="Timeline attività operative" subtitle="Log dettagliato con cliente, veicolo, pratica collegata">
               <div className="flex flex-wrap gap-2 mb-3">
-                <div>
-                  <label className="block text-[10px] font-medium text-theme-text-muted mb-1">Da</label>
-                  <EuropeanDateInput value={dateFrom} onChange={(__v: string) => setDateFrom(__v)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-medium text-theme-text-muted mb-1">A</label>
-                  <EuropeanDateInput value={dateTo} onChange={(__v: string) => setDateTo(__v)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
-                </div>
                 <div>
                   <label className="block text-[10px] font-medium text-theme-text-muted mb-1">Azione</label>
                   <select value={actionFilter} onChange={e => setActionFilter(e.target.value)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold">
