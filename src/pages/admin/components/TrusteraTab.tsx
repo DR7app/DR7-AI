@@ -6,12 +6,15 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import TrusteraExportPdf from './TrusteraExportPdf'
+import { authFetch } from '../../../utils/authFetch'
+import MissingFieldsModal from '../../../components/MissingFieldsModal'
 
 type SubTab = 'documenti' | 'marketing'
 
 interface SignatureRequest {
   id: string
   contract_id: string | null
+  booking_id: string | null
   signer_name: string
   signer_email: string
   signer_phone: string | null
@@ -105,7 +108,7 @@ function DocumentiSubTab() {
     try {
       const { data, error } = await supabase
         .from('signature_requests')
-        .select('id, contract_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at')
+        .select('id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at')
         .order('created_at', { ascending: false })
         .limit(100)
 
@@ -401,6 +404,133 @@ function DocumentiSubTab() {
     }
   }
 
+  // 25/09/2026: stessi pulsanti della tab Contratti (PDF, Email, Firmato,
+  // Reinvia, Audit Trail, Rigenera, Modifica, Elimina) su ogni riga.
+  const [sendingId, setSendingId] = useState<string | null>(null)
+
+  /**
+   * Reinvio del link di firma. Contratto: stessa chiamata del pulsante della
+   * tab Contratti (signature-init). Documento libero: nuova richiesta con lo
+   * stesso PDF e lo stesso firmatario (document-sign-init).
+   */
+  async function handleResend(req: SignatureRequest) {
+    setSendingId(req.id)
+    try {
+      if (req.contract_id || req.booking_id) {
+        const res = await fetch('/.netlify/functions/signature-init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contractId: req.contract_id, bookingId: req.booking_id }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Errore nell\'invio')
+        toast.success(data.message || `Link di firma inviato via WhatsApp a ${req.signer_phone || req.signer_name}`)
+      } else {
+        if (!req.document_url) throw new Error('Il documento non ha un PDF')
+        if (!req.signer_phone) throw new Error('Telefono del firmatario mancante: usa Modifica')
+        const res = await fetch('/.netlify/functions/document-sign-init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentUrl: req.document_url,
+            documentName: req.document_name || 'Documento',
+            signerName: req.signer_name,
+            signerEmail: req.signer_email,
+            signerPhone: req.signer_phone,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Errore nell\'invio')
+        logAdminAction('send_trustera_document', 'signature', data.requestId, {
+          document: req.document_name,
+          signer: req.signer_name,
+          email: req.signer_email,
+          phone: req.signer_phone,
+          resend_of: req.id,
+        }).catch(() => { /* non-blocking */ })
+        toast.success(`Link di firma inviato via WhatsApp a ${req.signer_phone}`)
+      }
+      loadRequests()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSendingId(null)
+    }
+  }
+
+  function handleViewAuditTrail(req: SignatureRequest) {
+    const url = req.contract_id
+      ? `/.netlify/functions/signature-audit?contractId=${req.contract_id}&format=html`
+      : `/.netlify/functions/signature-audit?requestId=${req.id}&format=html`
+    window.open(url, '_blank')
+  }
+
+  // Scheda cliente incompleta: stesso popup della tab Contratti.
+  const [datiMancanti, setDatiMancanti] = useState<{ bookingId: string; campi: string[]; cliente: Record<string, unknown> } | null>(null)
+
+  async function apriDatiMancanti(bookingId: string, campi: string[], customerId?: string | null) {
+    let cliente: Record<string, unknown> = customerId ? { id: customerId } : {}
+    if (customerId) {
+      try {
+        const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        if (resp.ok) cliente = (await resp.json()).customer || cliente
+      } catch { /* si apre lo stesso con il solo id */ }
+    }
+    setDatiMancanti({ bookingId, campi, cliente })
+  }
+
+  async function rigeneraContratto(bookingId: string, ignoraDatiMancanti = false) {
+    try {
+      toast.loading('Rigenerazione contratto...', { id: 'regen' })
+      const res = await authFetch('/.netlify/functions/generate-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId, ...(ignoraDatiMancanti ? {} : { verificaDati: true }) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 422 && Array.isArray(data.datiMancanti)) {
+        toast.dismiss('regen')
+        await apriDatiMancanti(bookingId, data.datiMancanti, data.customerId)
+        return
+      }
+      if (!res.ok) throw new Error(data.error || data.message || res.statusText)
+      toast.success('Contratto rigenerato!', { id: 'regen' })
+      if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
+      loadRequests()
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: 'regen' })
+    }
+  }
+
+  // Modifica: nome documento e dati del firmatario della richiesta.
+  const [editing, setEditing] = useState<{ id: string; documentName: string; name: string; email: string; phone: string } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  async function handleSaveEdit() {
+    if (!editing) return
+    if (!editing.name.trim()) { toast.error('Il nome del firmatario e\' obbligatorio'); return }
+    setSavingEdit(true)
+    try {
+      const { error } = await supabase
+        .from('signature_requests')
+        .update({
+          document_name: editing.documentName.trim() || null,
+          signer_name: editing.name.trim(),
+          signer_email: editing.email.trim(),
+          signer_phone: editing.phone.trim() || null,
+        })
+        .eq('id', editing.id)
+      if (error) throw error
+      toast.success('Richiesta aggiornata')
+      setEditing(null)
+      loadRequests()
+    } catch (err: unknown) {
+      toast.error('Errore salvataggio: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   function getStatusBadge(status: string) {
     switch (status) {
       case 'signed': return { label: 'Firmato', color: 'bg-green-600 text-white' }
@@ -690,27 +820,82 @@ function DocumentiSubTab() {
                   </div>
                   <div className="flex flex-col gap-2 ml-4">
                     {req.document_url && (
+                      <div className="flex gap-2 w-full">
+                        <a
+                          href={req.document_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                        >
+                          <span>📄</span> PDF
+                        </a>
+                        <a
+                          href={`mailto:${req.signer_email}?subject=${encodeURIComponent(req.document_name || 'Contratto')}&body=Gentile Cliente,%0D%0A%0D%0AEcco il link al tuo documento:%0D%0A${encodeURIComponent(req.signed_pdf_url || req.document_url)}%0D%0A%0D%0AGrazie per aver scelto DR7.`}
+                          className="bg-blue-600 hover:bg-blue-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex-1 flex items-center justify-center gap-1"
+                        >
+                          <span>✉️</span> Email
+                        </a>
+                      </div>
+                    )}
+                    {req.signed_pdf_url ? (
+                      <>
+                        <button
+                          onClick={() => window.open(req.signed_pdf_url!, '_blank')}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                        >
+                          {isDocument ? 'Documento Firmato' : 'Contratto Firmato'}
+                        </button>
+                        <button
+                          onClick={() => handleResend(req)}
+                          disabled={sendingId === req.id}
+                          className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
+                        >
+                          {sendingId === req.id ? 'Invio...' : (isDocument ? 'Reinvia Documento' : 'Reinvia Contratto')}
+                        </button>
+                        <button
+                          onClick={() => handleViewAuditTrail(req)}
+                          className="w-full bg-gray-600 hover:bg-gray-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                        >
+                          Audit Trail
+                        </button>
+                      </>
+                    ) : req.document_url ? (
                       <button
-                        onClick={() => window.open(req.document_url!, '_blank')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-full text-sm transition-colors text-center"
+                        onClick={() => handleResend(req)}
+                        disabled={sendingId === req.id}
+                        className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
                       >
-                        Originale
+                        {sendingId === req.id ? 'Invio...' : 'Firma via WhatsApp'}
+                      </button>
+                    ) : null}
+                    {req.booking_id && (
+                      <button
+                        onClick={() => rigeneraContratto(req.booking_id!)}
+                        className="w-full bg-orange-600/30 hover:bg-orange-600/50 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        Rigenera Contratto
                       </button>
                     )}
-                    {req.signed_pdf_url && (
+                    <div className="flex gap-2 w-full">
                       <button
-                        onClick={() => window.open(req.signed_pdf_url!, '_blank')}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-full text-sm transition-colors text-center"
+                        onClick={() => setEditing({
+                          id: req.id,
+                          documentName: req.document_name || '',
+                          name: req.signer_name || '',
+                          email: req.signer_email || '',
+                          phone: req.signer_phone || '',
+                        })}
+                        className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
                       >
-                        Firmato
+                        Modifica
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(req.id)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-full text-sm transition-colors text-center"
-                    >
-                      Elimina
-                    </button>
+                      <button
+                        onClick={() => handleDelete(req.id)}
+                        className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex-1"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -718,6 +903,92 @@ function DocumentiSubTab() {
           })
         )}
       </div>
+
+      {/* Modifica richiesta di firma */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !savingEdit && setEditing(null)}>
+          <div className="w-full max-w-lg bg-theme-bg-secondary rounded-lg border border-theme-border p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-theme-text-primary">Modifica Richiesta di Firma</h3>
+              <button onClick={() => setEditing(null)} className="text-theme-text-muted hover:text-theme-text-primary">✕ Chiudi</button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Nome Documento</label>
+              <input
+                type="text"
+                value={editing.documentName}
+                onChange={(e) => setEditing({ ...editing, documentName: e.target.value })}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Firmatario *</label>
+              <input
+                type="text"
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Email</label>
+              <input
+                type="email"
+                value={editing.email}
+                onChange={(e) => setEditing({ ...editing, email: e.target.value })}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono</label>
+              <TelefonoConPrefisso
+                value={editing.phone}
+                onChange={(v) => setEditing({ ...editing, phone: v })}
+                className="flex-1 min-w-0 bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+                selectClassName="w-[104px] shrink-0 bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-theme-text-primary"
+                mostraAnteprima={false}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+                className="flex-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50"
+              >
+                {savingEdit ? 'Salvataggio...' : 'Salva'}
+              </button>
+              <button
+                onClick={() => setEditing(null)}
+                className="px-6 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-bold py-3 rounded-full transition-colors"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scheda cliente incompleta: si completa qui e il contratto riparte. */}
+      {datiMancanti && (datiMancanti.cliente.id as string | undefined) && (
+        <MissingFieldsModal
+          isOpen
+          customerId={datiMancanti.cliente.id as string}
+          customerData={datiMancanti.cliente}
+          missingFields={datiMancanti.campi}
+          contesto="contratto"
+          onClose={() => setDatiMancanti(null)}
+          onProsegui={() => {
+            const b = datiMancanti.bookingId
+            setDatiMancanti(null)
+            rigeneraContratto(b, true)
+          }}
+          onSave={() => {
+            const b = datiMancanti.bookingId
+            setDatiMancanti(null)
+            rigeneraContratto(b)
+          }}
+        />
+      )}
     </div>
   )
 }
