@@ -11,6 +11,7 @@ import { hasApprovedOverride } from './utils/verifyOverride'
 import { loadBusinessConfig } from './utils/businessConfig'
 import { isFatturaPrincipale, isUscitaSdi, TIPO_ESTENSIONE } from './utils/fatturaTipi'
 import { funzioneFerma } from './utils/systemControl'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -1351,7 +1352,9 @@ export const handler: Handler = async (event) => {
         let pdfUrl: string | null = null
         try {
             const pdfBytes = await generateInvoicePDF(invoice as any)
-            const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const pdfFileName = percorsoStorage(`fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`)
 
             const { error: uploadError } = await supabase.storage
                 .from('invoices')
@@ -2148,7 +2151,7 @@ async function sendWalletFatturaPdfAndWhatsApp(
     let prenotato = false
     try {
         const pdfBytes = await generateInvoicePDF(invoice)
-        const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+        const pdfFileName = percorsoStorage(`fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`)
 
         const { error: uploadError } = await supabase.storage
             .from('invoices')

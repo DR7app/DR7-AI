@@ -22,6 +22,7 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface Customer {
   id: string
@@ -1636,7 +1637,9 @@ export default function CustomersTab() {
     try {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}.${fileExt}`
-      const filePath = `${userId}/${fileName}`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const filePath = percorsoStorage(`${userId}/${fileName}`)
 
       const { error: uploadError } = await supabase.storage
         .from('driver-licenses')
@@ -1665,7 +1668,7 @@ export default function CustomersTab() {
     try {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}.${fileExt}`
-      const filePath = `${userId}/${fileName}`
+      const filePath = percorsoStorage(`${userId}/${fileName}`)
 
       const { error: uploadError } = await supabase.storage
         .from('driver-ids')
@@ -1728,7 +1731,7 @@ export default function CustomersTab() {
     try {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}.${fileExt}`
-      const filePath = `${userId}/${fileName}`
+      const filePath = percorsoStorage(`${userId}/${fileName}`)
 
       const { error: uploadError } = await supabase.storage
         .from('codice-fiscale')

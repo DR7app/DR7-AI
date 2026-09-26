@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import nodemailer from 'nodemailer'
 import { pecHostFor, pecProviderFor, PEC_PORT } from './utils/pecServer'
 import { funzioneFerma } from './utils/systemControl'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -1104,7 +1105,9 @@ const handler: Handler = async (event) => {
                     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'File richiesto' }) }
                 }
                 const estensione = (req.contrattoNome?.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '')
-                const percorso = `multe-manuale/${req.booking_id || 'senza-prenotazione'}-${Date.now()}.${estensione || 'pdf'}`
+                // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+                // faceva rifiutare il file allo storage (incidente firma "Huracán").
+                const percorso = percorsoStorage(`multe-manuale/${req.booking_id || 'senza-prenotazione'}-${Date.now()}.${estensione || 'pdf'}`)
                 const contenuto = Buffer.from(req.contrattoBase64, 'base64')
                 const { error: erroreUpload } = await supabase.storage
                     .from('contracts')

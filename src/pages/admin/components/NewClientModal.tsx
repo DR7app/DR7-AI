@@ -14,6 +14,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import { svuotaCacheClienti } from '../../../utils/authFetch'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -454,7 +455,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     setUploadingFoto(true)
     try {
       const ext = file.name.split('.').pop() || 'jpg'
-      const fileName = `customer-photos/${Date.now()}.${ext}`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const fileName = percorsoStorage(`customer-photos/${Date.now()}.${ext}`)
       const { error: upErr } = await supabase.storage
         .from('catalog-images')
         .upload(fileName, file, { cacheControl: '31536000', upsert: true })
@@ -733,7 +736,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             try {
               const fileExt = file.name.split('.').pop()
               const fileName = `${docType}${suffix}_${Date.now()}.${fileExt}`
-              const filePath = `${createdClientId}/${fileName}`
+              const filePath = percorsoStorage(`${createdClientId}/${fileName}`)
 
               const { error: uploadError } = await supabase.storage
                 .from(bucketParams)

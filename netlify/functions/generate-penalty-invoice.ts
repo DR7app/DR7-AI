@@ -6,6 +6,7 @@ import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
 import { loadBusinessConfig } from './utils/businessConfig'
 import { funzioneFerma } from './utils/systemControl'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 /**
  * 2026-08-12 (roadmap #33): aliquota per tipologia di voce, da Centralina Pro
@@ -398,7 +399,9 @@ export const handler: Handler = async (event) => {
         let pdfUrl: string | null = null
         try {
             const pdfBytes = await generateInvoicePDF(invoice as any)
-            const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const pdfFileName = percorsoStorage(`fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`)
 
             const { error: uploadError } = await supabase.storage
                 .from('invoices')

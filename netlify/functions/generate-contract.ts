@@ -10,6 +10,7 @@ import { datiContrattoMancanti, elencoLeggibile } from './utils/datiContrattoMan
 import { createHash } from 'crypto'
 import QRCode from 'qrcode'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -524,7 +525,9 @@ async function reconductSignedContract(params: {
 
     const signedPdfBytes = await pdfDoc.save()
     const signedPdfHash = createHash('sha256').update(Buffer.from(signedPdfBytes)).digest('hex')
-    const fileName = `signed/${contractNumber || booking.id}_ricondotto_${Date.now()}.pdf`
+    // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+    // faceva rifiutare il file allo storage (incidente firma "Huracán").
+    const fileName = percorsoStorage(`signed/${contractNumber || booking.id}_ricondotto_${Date.now()}.pdf`)
     const { error: upErr } = await supabase.storage.from('contracts').upload(fileName, signedPdfBytes, { contentType: 'application/pdf', upsert: false })
     if (upErr) { console.error('[reconduct] upload fallito:', upErr.message); return null }
     const { data: pub } = supabase.storage.from('contracts').getPublicUrl(fileName)
@@ -2529,7 +2532,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // 6. Save and Upload
         const pdfBytes = await pdfDoc.save()
         // Save to 'filled' folder to keep things organized
-        const fileName = `filled/contratto_${bookingId}_${Date.now()}.pdf`
+        const fileName = percorsoStorage(`filled/contratto_${bookingId}_${Date.now()}.pdf`)
 
         console.log(`[generate-contract] Uploading filled PDF to storage: ${fileName}`)
 

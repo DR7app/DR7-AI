@@ -20,6 +20,7 @@ import type {
 // La normalizzazione degli indirizzi e' una regola pura: vive nel file
 // condiviso perche' vada provata senza tirarsi dietro il client Supabase.
 import { wbNormalizeSlug } from './shared/wbSchema'
+import { percorsoStorage } from '../../../../utils/percorsoStorage'
 
 export const WB_SITE_KEY = 'dr7'
 export const WB_TENANT = 'dr7'
@@ -405,8 +406,10 @@ export async function wbUploadMedia(
   const cartella = folder.replace(/[^\w\-/]+/g, '').replace(/^\/+|\/+$/g, '')
   // Percorso per tenant e per sito: due clienti diversi non condividono
   // nemmeno il prefisso dei file.
-  const path = [site.tenant_id, site.key, cartella, `${Date.now()}_${safeName}`]
-    .filter(Boolean).join('/')
+  // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+  // faceva rifiutare il file allo storage (incidente firma "Huracán").
+  const path = percorsoStorage(...[site.tenant_id, site.key, cartella, `${Date.now()}_${safeName}`]
+    .filter(Boolean))
 
   const { error: upErr } = await supabase.storage.from(WB_BUCKET)
     .upload(path, prepared, { cacheControl: '31536000', upsert: false, contentType: prepared.type })

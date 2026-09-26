@@ -23,6 +23,7 @@ import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface ReportClienteProps {
   customerId: string
@@ -92,7 +93,9 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     setUploadingFoto(true)
     try {
       const ext = file.name.split('.').pop() || 'jpg'
-      const path = `customer-photos/${Date.now()}.${ext}`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const path = percorsoStorage(`customer-photos/${Date.now()}.${ext}`)
       const { error: upErr } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '31536000', upsert: true })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('catalog-images').getPublicUrl(path)

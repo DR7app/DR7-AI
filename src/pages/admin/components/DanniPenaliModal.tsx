@@ -9,6 +9,7 @@ import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 import { sanitizeMoney } from '../../../utils/money'
 import { useWalletPenale } from '../../../components/WalletPenale'
 import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface DanniPenaliModalProps {
     /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
@@ -465,7 +466,9 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         const urls: string[] = []
         for (const file of photos) {
             const ext = file.name.split('.').pop() || 'jpg'
-            const path = `danni/${booking.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const path = percorsoStorage(`danni/${booking.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
             const { error } = await supabase.storage.from('booking-photos').upload(path, file)
             if (!error) {
                 const { data: urlData } = supabase.storage.from('booking-photos').getPublicUrl(path)

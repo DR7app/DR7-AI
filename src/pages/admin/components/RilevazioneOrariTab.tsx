@@ -15,6 +15,7 @@ import {
     PAUSA_NON_CONFIGURATA,
     type PausaObbligatoria,
 } from '../../../utils/pauseObbligatorie'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface Operatore {
     id: string
@@ -93,7 +94,9 @@ async function uploadOperatoreAvatar(operatorId: string, file: File): Promise<st
         toast.error(err instanceof AvatarError ? err.message : 'Foto non caricabile: riprova con un JPG.', { duration: 10000 })
         return null
     }
-    const path = `${operatorId}/${Date.now()}.jpg`
+    // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+    // faceva rifiutare il file allo storage (incidente firma "Huracán").
+    const path = percorsoStorage(`${operatorId}/${Date.now()}.jpg`)
     const { error: upErr } = await supabase.storage
         .from('operator-avatars')
         .upload(path, jpeg, { upsert: true, contentType: 'image/jpeg' })
@@ -1418,7 +1421,7 @@ function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             if (avatarFile && inserted?.id) {
                 setUploading(true)
                 const ext = avatarFile.name.split('.').pop()?.toLowerCase() || 'jpg'
-                const path = `${inserted.id}/${Date.now()}.${ext}`
+                const path = percorsoStorage(`${inserted.id}/${Date.now()}.${ext}`)
                 const { error: upErr } = await supabase.storage
                     .from('operator-avatars')
                     .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type })

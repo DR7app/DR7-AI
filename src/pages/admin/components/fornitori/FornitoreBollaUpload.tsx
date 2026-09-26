@@ -4,6 +4,7 @@ import Button from '../Button'
 import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
 import { hashFile, DOCUMENT_TIPO_LABELS, fmtEUR } from './types'
 import type { Fornitore, DocumentTipo } from './types'
+import { percorsoStorage } from '../../../../utils/percorsoStorage'
 
 interface Props {
     fornitore: Fornitore
@@ -122,7 +123,9 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
             const safeName = `${tipo}-${numero.replace(/[^\w-]/g, '_')}-${Date.now()}.${ext}`
             const yy = today.slice(0, 4)
             const mm = today.slice(5, 7)
-            const path = `fornitori/${fornitore.id}/${yy}/${mm}/${safeName}`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const path = percorsoStorage(`fornitori/${fornitore.id}/${yy}/${mm}/${safeName}`)
 
             const { error: upErr } = await supabase.storage
                 .from('fornitori-documents')

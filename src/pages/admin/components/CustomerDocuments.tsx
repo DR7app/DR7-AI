@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface CustomerDocumentsProps {
   customerId: string
@@ -209,7 +210,9 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
       const fileExt = file.name.split('.').pop()
       const fileName = `${documentType}_${Date.now()}.${fileExt}`
-      const filePath = `${customerId}/${fileName}`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const filePath = percorsoStorage(`${customerId}/${fileName}`)
 
       // Select correct bucket based on document type
       const bucket = documentType.startsWith('drivers_license') || documentType.startsWith('patente_nautica') ? DRIVERS_LICENSE_BUCKET

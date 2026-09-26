@@ -8,6 +8,25 @@ const { PDFDocument } = require('pdf-lib');
 // For this MVP, we will try to detect the QR code from the first page if possible,
 // or just upload it and let the backend/frontend handle it if node-canvas is too heavy.
 
+// 26/09/2026 — Copia identica di nomeFileSicuro (src/utils/percorsoStorage.ts),
+// tenere allineate: questo programma gira da solo e non importa TypeScript.
+// Un nome con accenti o spazi faceva rifiutare il file allo storage
+// (incidente firma "Huracán"). Il test percorsoStorage.test.ts lo confronta.
+function nomeFileSicuro(nome, max = 80) {
+  const pulisci = (t) => t
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_.]+|[_.]+$/g, '');
+  const originale = String(nome ?? '').trim();
+  const m = originale.match(/\.([A-Za-z0-9]{1,10})$/);
+  const estensione = m ? `.${m[1]}` : '';
+  const base = pulisci(m ? originale.slice(0, -m[0].length) : originale) || 'file';
+  const spazio = Math.max(1, max - estensione.length);
+  const baseCorta = base.length > spazio ? (base.slice(0, spazio).replace(/[_.-]+$/g, '') || 'file') : base;
+  return `${baseCorta}${estensione}`;
+}
+
 // Configuration
 const WATCH_DIR = process.env.WATCH_DIR || './scans_incoming';
 const PROCESSED_DIR = process.env.PROCESSED_DIR || './scans_processed';
@@ -68,7 +87,7 @@ async function processFile(filePath) {
     let detectedJobId = null;
 
     // 2. Upload to Supabase Storage
-    const storagePath = `${Date.now()}_${fileName}`;
+    const storagePath = `${Date.now()}_${nomeFileSicuro(fileName)}`;
     const { data: uploadData, error: uploadError } = await supabase.storage
         .from('scans')
         .upload(storagePath, fileBuffer, {

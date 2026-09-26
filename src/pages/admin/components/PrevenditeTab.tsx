@@ -6,6 +6,7 @@ import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { getInsuranceOptions } from '../../../utils/configLookup'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 /**
  * PREVENDITE DR7 — 14/09/2026
@@ -471,7 +472,9 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     try {
       for (const file of daCaricare) {
         const ext = file.name.split('.').pop() || 'jpg'
-        const path = `prevendite/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+        // faceva rifiutare il file allo storage (incidente firma "Huracán").
+        const path = percorsoStorage(`prevendite/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
         // 23/09/2026: bucket catalog-images, lo stesso dei caricamenti del Sito
         // CMS e del catalogo (ha le regole di scrittura per lo staff).
         const { error } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type })

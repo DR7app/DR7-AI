@@ -34,6 +34,7 @@ import MeteoConfigSection from './MeteoConfigSection'
 // componente piu' grande del gestionale e aprire la Centralina non deve
 // scaricarlo finche' non si apre la sezione.
 import lazyWithRetry from '../../../utils/lazyWithRetry'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 const SitoSection = lazyWithRetry(() => import('./SitoTab'))
 
 type FleetVehicle = {
@@ -1736,7 +1737,9 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore, f
     }
     setLogoInCaricamento(true)
     try {
-      const nome = 'logo_contratto.png'
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const nome = percorsoStorage('logo_contratto.png')
       const { error } = await supabase.storage
         .from('templates')
         .upload(nome, file, { contentType: 'image/png', upsert: true, cacheControl: '0' })

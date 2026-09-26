@@ -17,6 +17,7 @@ import { requireAuth } from './require-auth'
 import {
     audit, clientIp, getServiceSupabase, jsonResponse,
 } from './utils/emtn'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const ALLOWED_EXTS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'doc', 'docx']
 const MAX_BYTES = 10 * 1024 * 1024
@@ -117,7 +118,9 @@ export const handler: Handler = async (event) => {
 
     // Path: emtn-documents/<eventId>/<timestamp>-<rand>.<ext>
     const safeName = file.fileName.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 60)
-    const storagePath = `${eventId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`
+    // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+    // faceva rifiutare il file allo storage (incidente firma "Huracán").
+    const storagePath = percorsoStorage(`${eventId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`)
 
     const { error: upErr } = await sb.storage
         .from('emtn-documents')

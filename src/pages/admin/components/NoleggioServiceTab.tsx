@@ -22,6 +22,7 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import { risorsa } from '../../../utils/basePath'
 import { Header, Badge, ErrorBox, EmptyBox } from './noleggioUiBits'
 import PreventiviLavaggioView from './PreventiviLavaggioView'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -297,7 +298,9 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
         if (file.size > maxMb * 1024 * 1024) { problemi.push(`${file.name}: troppo pesante (massimo ${maxMb} MB)`); continue }
 
         const ext = file.name.split('.').pop() || (isVideo ? 'mp4' : 'png')
-        const fileName = `noleggio-${serviceType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+        // faceva rifiutare il file allo storage (incidente firma "Huracán").
+        const fileName = percorsoStorage(`noleggio-${serviceType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
         const { error: upErr } = await supabase.storage
           .from('catalog-images')
           .upload(`noleggio-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true, contentType: file.type })

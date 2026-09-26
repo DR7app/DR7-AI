@@ -18,6 +18,7 @@ import type { Fornitore, FornitoreDocument, CrosscheckRow } from './types'
 import { separaDuplicati } from './fattureDuplicate'
 import EuropeanDateInput from '../../../../components/EuropeanDateInput'
 import JSZip from 'jszip'
+import { percorsoStorage } from '../../../../utils/percorsoStorage'
 
 interface Props {
     fornitore: Fornitore
@@ -364,7 +365,9 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                         const yy = dataDoc.getFullYear()
                         const mm = String(dataDoc.getMonth() + 1).padStart(2, '0')
                         const safe = (doc.numero_documento || 'fattura').replace(/[^\w-]/g, '_')
-                        const path = `fornitori/${doc.fornitore_id}/${yy}/${mm}/aruba-${safe}-${doc.id}.pdf`
+                        // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+                        // faceva rifiutare il file allo storage (incidente firma "Huracán").
+                        const path = percorsoStorage(`fornitori/${doc.fornitore_id}/${yy}/${mm}/aruba-${safe}-${doc.id}.pdf`)
                         const { error: upErr } = await supabase.storage
                             .from('fornitori-documents')
                             .upload(path, blob, { contentType: 'application/pdf', upsert: true })

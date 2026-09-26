@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import { invalidateCustomersCache } from '../../../utils/customersCache'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface ExtractedData {
   nome?: string
@@ -570,7 +571,9 @@ export default function BulkImportTab() {
               const { bucket, docType: storageDocType } = getDocStorageInfo(source.docType)
               const fileExt = file.name.split('.').pop()
               const fileName = `${storageDocType}_${Date.now()}_${source.fileIndex}.${fileExt}`
-              const filePath = `${createdClientId}/${fileName}`
+              // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+              // faceva rifiutare il file allo storage (incidente firma "Huracán").
+              const filePath = percorsoStorage(`${createdClientId}/${fileName}`)
 
               const { error: uploadError } = await supabase.storage
                 .from(bucket)

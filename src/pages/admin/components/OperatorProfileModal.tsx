@@ -32,6 +32,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import MoneyInput from '../../../components/MoneyInput'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface Operatore {
     id: string
@@ -1366,7 +1367,9 @@ function ContrattoPdfArea({ contratto, onChange }: { contratto: Contratto; onCha
         setUploading(true)
         try {
             const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
-            const path = `${contratto.id}/${Date.now()}_${safeName}`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const path = percorsoStorage(`${contratto.id}/${Date.now()}_${safeName}`)
             const { error: upErr } = await supabase.storage
                 .from('operatori-contratti')
                 .upload(path, file, { contentType: 'application/pdf', upsert: false })

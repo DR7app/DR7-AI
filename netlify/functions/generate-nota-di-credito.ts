@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { funzioneFerma } from './utils/systemControl'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -118,7 +119,9 @@ export const handler: Handler = async (event) => {
         let pdfUrl: string | null = null
         try {
             const pdfBytes = await generateInvoicePDF(nota as any)
-            const pdfFileName = `nota_credito_${nota.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const pdfFileName = percorsoStorage(`nota_credito_${nota.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`)
             const { error: uploadError } = await supabase.storage
                 .from('invoices')
                 .upload(pdfFileName, pdfBytes, { contentType: 'application/pdf', upsert: true })

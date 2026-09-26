@@ -23,6 +23,7 @@ import lazyWithRetry from '../../utils/lazyWithRetry'
 import SedePicker from '../../components/SedePicker'
 import { risorsa } from '../../utils/basePath'
 import { ScheletroPagina } from '../../components/Scheletro'
+import { percorsoStorage } from '../../utils/percorsoStorage'
 
 // Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
 // 25/08/2026 - questi erano import statici, quindi finivano nel chunk
@@ -592,7 +593,9 @@ export default function AdminDashboard() {
         return
       }
 
-      const path = `${opRow.id}/${Date.now()}.jpg`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const path = percorsoStorage(`${opRow.id}/${Date.now()}.jpg`)
       const { error: upErr } = await supabase.storage
         .from('operator-avatars')
         .upload(path, jpeg, { upsert: true, contentType: 'image/jpeg' })

@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -385,7 +386,9 @@ export const handler: Handler = async (event) => {
 
         // 7. Save and Upload
         const pdfBytes = await pdfDoc.save()
-        const fileName = `extensions/contratto_estensione_${bookingId}_${Date.now()}.pdf`
+        // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+        // faceva rifiutare il file allo storage (incidente firma "Huracán").
+        const fileName = percorsoStorage(`extensions/contratto_estensione_${bookingId}_${Date.now()}.pdf`)
 
         console.log(`[generate-extension-contract] Uploading to storage: ${fileName}`)
 

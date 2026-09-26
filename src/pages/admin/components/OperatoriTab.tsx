@@ -11,6 +11,7 @@ import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModa
 import ContrattiOperatoreView from './ContrattiOperatoreView'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 // 2026-05-18: Rilevazione Orari spostata DENTRO Operatori (sub-view).
 // Prima era una top-level tab "Rilevazione Orari" — ora vive insieme
@@ -793,7 +794,9 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
     try {
       const personaId = await ensurePersonaId(admin)
       if (!personaId) return
-      const path = `${personaId}/${Date.now()}.jpg`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const path = percorsoStorage(`${personaId}/${Date.now()}.jpg`)
       const { error: upErr } = await supabase.storage
         .from('operator-avatars')
         .upload(path, jpeg, { upsert: true, contentType: 'image/jpeg' })

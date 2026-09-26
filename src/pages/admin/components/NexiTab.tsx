@@ -13,6 +13,7 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import Paginazione from './Paginazione'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 /** Prenotazione mostrata nella ricerca "Collega prenotazione". */
 interface BookingLite {
@@ -1491,7 +1492,9 @@ export default function NexiTab() {
         const urls: string[] = []
         for (const file of addebitoPhotos) {
             const ext = file.name.split('.').pop() || 'jpg'
-            const path = `addebiti/${addebitoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const path = percorsoStorage(`addebiti/${addebitoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
             const { error } = await supabase.storage.from('contracts').upload(path, file)
             if (!error) {
                 const { data: publicUrl } = supabase.storage.from('contracts').getPublicUrl(path)

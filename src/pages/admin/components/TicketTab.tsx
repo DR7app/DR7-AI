@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 // ── Tipi ────────────────────────────────────────────────────────────────────
 interface TicketRecipient {
@@ -186,7 +187,9 @@ export default function TicketTab() {
             const allegati: Allegato[] = []
             for (const f of files) {
                 const safe = f.name.replace(/[^\w.\-]+/g, '_')
-                const path = `${ticketId}/${Date.now()}_${safe}`
+                // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+                // faceva rifiutare il file allo storage (incidente firma "Huracán").
+                const path = percorsoStorage(`${ticketId}/${Date.now()}_${safe}`)
                 const { error: upErr } = await supabase.storage.from('ticket-attachments').upload(path, f, { upsert: false })
                 if (upErr) { console.warn('[Ticket] upload allegato fallito:', upErr.message); continue }
                 const { data: pub } = supabase.storage.from('ticket-attachments').getPublicUrl(path)

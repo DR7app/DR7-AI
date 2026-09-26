@@ -9,6 +9,7 @@ import { clientStatusColor } from '../../../utils/clientStatusConfig'
 import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } from './CampaignCalendarView'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -363,7 +364,9 @@ export default function CampagnaMarketingTab() {
 
     async function uploadMedia(file: File, prefix: string): Promise<string> {
         const ext = file.name.split('.').pop() || 'bin'
-        const path = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+        // faceva rifiutare il file allo storage (incidente firma "Huracán").
+        const path = percorsoStorage(`${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
         const { error } = await supabase.storage
             .from('marketing-campaigns')
             .upload(path, file, { cacheControl: '3600', upsert: false })

@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -24,7 +25,9 @@ export const handler: Handler = async (event) => {
         }
 
         const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
-        const storagePath = `documents/${Date.now()}_${safeName}`
+        // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+        // faceva rifiutare il file allo storage (incidente firma "Huracán").
+        const storagePath = percorsoStorage(`documents/${Date.now()}_${safeName}`)
 
         const { error: uploadError } = await supabase.storage
             .from('contracts')

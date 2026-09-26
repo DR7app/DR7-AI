@@ -9,6 +9,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
 import Miniatura from '../../../components/Miniatura'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface CatalogVehicle {
   id: string
@@ -134,7 +135,9 @@ export default function TerraCatalogTab() {
     setUploadingImg(true)
     try {
       const ext = file.name.split('.').pop() || 'jpg'
-      const path = `vehicle-photos/${Date.now()}.${ext}`
+      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+      const path = percorsoStorage(`vehicle-photos/${Date.now()}.${ext}`)
       const { error: upErr } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '31536000', upsert: true })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('catalog-images').getPublicUrl(path)

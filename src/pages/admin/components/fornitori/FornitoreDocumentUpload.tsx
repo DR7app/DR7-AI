@@ -5,6 +5,7 @@ import Select from '../Select'
 import Button from '../Button'
 import { hashFile, DOCUMENT_TIPO_LABELS } from './types'
 import type { Fornitore, FornitoreDocument, DocumentTipo } from './types'
+import { percorsoStorage } from '../../../../utils/percorsoStorage'
 
 interface Props {
     fornitore: Fornitore
@@ -129,7 +130,9 @@ export default function FornitoreDocumentUpload({ fornitore, document: existingD
                 const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
                 const safeName = `${tipo}-${numeroDoc.replace(/[^\w-]/g, '_')}-${Date.now()}.${ext}`
                 const dataObj = new Date(dataDoc)
-                const path = `fornitori/${fornitore.id}/${dataObj.getFullYear()}/${String(dataObj.getMonth() + 1).padStart(2, '0')}/${safeName}`
+                // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+                // faceva rifiutare il file allo storage (incidente firma "Huracán").
+                const path = percorsoStorage(`fornitori/${fornitore.id}/${dataObj.getFullYear()}/${String(dataObj.getMonth() + 1).padStart(2, '0')}/${safeName}`)
 
                 const { error: upErr } = await supabase.storage
                     .from('fornitori-documents')

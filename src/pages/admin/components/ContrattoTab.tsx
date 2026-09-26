@@ -17,6 +17,7 @@ import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 import { scaricaAuditTrailPdf } from '../../../utils/scaricaAuditTrailPdf'
 import { apriAuditFirma } from '../../../utils/apriAuditFirma'
 import PulsanteSicurezzaFirma from './SicurezzaFirma'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface Contract {
   id: string
@@ -170,7 +171,9 @@ function fileModello(serviceType?: string): string {
  * fa il Noleggio Terra col master. Omesso = Terra, comportamento invariato.
  */
 export default function ContrattoTab({ serviceType }: { serviceType?: string } = {}) {
-  const NOME_MODELLO = fileModello(serviceType)
+  // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+  // faceva rifiutare il file allo storage (incidente firma "Huracán").
+  const NOME_MODELLO = percorsoStorage(fileModello(serviceType))
   const [contracts, setContracts] = useStatoTab<Contract[]>(`contratti:${serviceType || 'rental'}`, [])
   const [loading, setLoading] = useState(() => !statoPronto(`contratti:${serviceType || 'rental'}`))
   const [showForm, setShowForm] = useState(false)

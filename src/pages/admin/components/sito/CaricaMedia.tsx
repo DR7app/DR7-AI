@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../../supabaseClient'
+import { percorsoStorage } from '../../../../utils/percorsoStorage'
 
 /**
  * Carica un'immagine o un filmato per dr7.app e restituisce il suo indirizzo.
@@ -54,7 +55,9 @@ async function carica(file: File): Promise<string> {
     const max = filmato ? MAX_FILMATO_MB : MAX_IMMAGINE_MB
     if (file.size > max * 1024 * 1024) throw new Error(`File troppo pesante: massimo ${max} MB`)
     const nome = file.name.replace(/[^\w.\-]+/g, '_').slice(-80) || 'file'
-    const path = `sito/${Date.now()}_${nome}`
+    // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+    // faceva rifiutare il file allo storage (incidente firma "Huracán").
+    const path = percorsoStorage(`sito/${Date.now()}_${nome}`)
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
         cacheControl: '31536000', upsert: false, contentType: file.type,
     })

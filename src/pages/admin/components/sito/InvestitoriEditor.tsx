@@ -17,6 +17,7 @@ import type {
     IrTappa,
     IrPilastro,
 } from './siteCopyDefaults'
+import { percorsoStorage } from '../../../../utils/percorsoStorage'
 
 /**
  * Editor della pagina Investor Relations (/investitori), 22/09/2026.
@@ -140,7 +141,9 @@ function CaricaDocumento({ onChange }: { onChange: (v: string) => void }) {
         setInCorso(true)
         try {
             const nome = file.name.replace(/[^\w.-]+/g, '_').slice(-80) || 'documento.pdf'
-            const path = `sito/documenti/${Date.now()}_${nome}`
+            // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+            // faceva rifiutare il file allo storage (incidente firma "Huracán").
+            const path = percorsoStorage(`sito/documenti/${Date.now()}_${nome}`)
             const { error } = await supabase.storage.from('catalog-images').upload(path, file, {
                 cacheControl: '3600', upsert: false, contentType: file.type || 'application/pdf',
             })

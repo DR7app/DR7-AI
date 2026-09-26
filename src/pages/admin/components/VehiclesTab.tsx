@@ -14,6 +14,7 @@ import InFlottaEditor, { leggiDatiFlotta, scriviDatiFlotta, type DatiFlotta } fr
 import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
 import { ReportToolbar, ReportButton } from './ReportUI'
 import { caricaReportVeicoli } from '../../../utils/reportVeicoliPeriodo'
+import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 // Estrae un messaggio leggibile da qualunque shape di errore (Error,
 // PostgrestError di Supabase, oggetto generico). Senza questa logica
@@ -1169,7 +1170,9 @@ export default function VehiclesTab() {
                     try {
                       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
                       const fileName = `vehicle-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`
-                      const path = `vehicles/${fileName}`
+                      // 26/09/2026 — percorso passato da percorsoStorage: un nome con accenti o spazi
+                      // faceva rifiutare il file allo storage (incidente firma "Huracán").
+                      const path = percorsoStorage(`vehicles/${fileName}`)
                       const { error: upErr } = await supabase.storage
                         .from('vehicle-images')
                         .upload(path, file, { cacheControl: '31536000', upsert: false })
