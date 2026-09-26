@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { getInsuranceOptions } from '../../../utils/configLookup'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import PromozioniView from './PromozioniView'
 
 /**
  * PREVENDITE DR7 — 14/09/2026
@@ -121,7 +122,7 @@ interface ClienteScheda {
   telefono: string | null
 }
 
-type Vista = 'catalogo' | 'venduti' | 'popup'
+type Vista = 'catalogo' | 'venduti' | 'popup' | 'promozioni'
 type FiltroVenduti = 'tutte' | 'attiva' | 'terminata' | 'scaduta' | 'bloccata'
 
 const PAGATO = ['paid', 'completed', 'succeeded']
@@ -218,6 +219,11 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   const [salvataggio, setSalvataggio] = useState(false)
   const [caricamentoFoto, setCaricamentoFoto] = useState(false)
   const inputFoto = useRef<HTMLInputElement>(null)
+
+  // 26/09/2026 — "Nuova offerta": si sceglie Prevendita o Promozione.
+  const [sceltaOfferta, setSceltaOfferta] = useState(false)
+  const [richiestaNuovaPromo, setRichiestaNuovaPromo] = useState(false)
+  const promoGestita = useCallback(() => setRichiestaNuovaPromo(false), [])
 
   // Flotta (per scegliere i veicoli della prevendita)
   const [flotta, setFlotta] = useState<VeicoloFlotta[]>([])
@@ -753,13 +759,35 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-theme-text-primary">Prevendite</h2>
+          <h2 className="text-2xl font-bold text-theme-text-primary">Prevendite e Promozioni</h2>
           <p className="text-sm text-theme-text-muted mt-1">
-            Pacchetti di utilizzi pagati in anticipo. Le regole scritte qui il sito le applica da solo.
+            Prevendita: pacchetto pagato oggi e usato dopo. Promozione: prezzo speciale che il cliente prenota subito. Le regole scritte qui il sito le applica da solo.
           </p>
         </div>
         <div className="flex gap-2">
-          {vista === 'catalogo' && <Button onClick={apriNuova}>Nuova prevendita</Button>}
+          {(vista === 'catalogo' || vista === 'promozioni') && (
+            <div className="relative">
+              <Button onClick={() => setSceltaOfferta(v => !v)}>Nuova offerta</Button>
+              {sceltaOfferta && (
+                <div className="absolute right-0 mt-2 w-72 z-20 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg overflow-hidden">
+                  <button
+                    onClick={() => { setSceltaOfferta(false); setVista('catalogo'); apriNuova() }}
+                    className="w-full text-left px-4 py-3 hover:bg-theme-bg-hover border-b border-theme-border"
+                  >
+                    <p className="text-sm font-semibold text-theme-text-primary">Prevendita</p>
+                    <p className="text-xs text-theme-text-muted">Il cliente paga oggi un pacchetto e prenota dopo.</p>
+                  </button>
+                  <button
+                    onClick={() => { setSceltaOfferta(false); setVista('promozioni'); setRichiestaNuovaPromo(true) }}
+                    className="w-full text-left px-4 py-3 hover:bg-theme-bg-hover"
+                  >
+                    <p className="text-sm font-semibold text-theme-text-primary">Promozione</p>
+                    <p className="text-xs text-theme-text-muted">Prezzo speciale al giorno: il cliente prenota subito.</p>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {vista === 'venduti' && <Button onClick={() => setModaleVendita(true)}>Vendi a un cliente</Button>}
         </div>
       </div>
@@ -767,7 +795,8 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
       {/* Navigazione */}
       <div className="flex flex-wrap gap-2">
         {([
-          { k: 'catalogo' as Vista, l: 'Catalogo' },
+          { k: 'catalogo' as Vista, l: 'Catalogo prevendite' },
+          { k: 'promozioni' as Vista, l: 'Promozioni' },
           { k: 'venduti' as Vista, l: 'Prevendite vendute' },
           { k: 'popup' as Vista, l: 'Popup sito' },
         ]).map(v => (
@@ -852,6 +881,9 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
           )
         )
       )}
+
+      {/* ═══ PROMOZIONI ═══ */}
+      {vista === 'promozioni' && <PromozioniView apriNuovaRichiesta={richiestaNuovaPromo} onRichiestaGestita={promoGestita} />}
 
       {/* ═══ VENDUTE ═══ */}
       {vista === 'venduti' && (

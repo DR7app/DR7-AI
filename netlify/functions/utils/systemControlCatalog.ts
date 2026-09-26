@@ -295,6 +295,7 @@ export const CRON_SORVEGLIATI: CronSorvegliato[] = [
   { funzione: 'process-wallet-auto-recharges-cron',    etichetta: 'Ricariche wallet automatiche',    ogniMinuti: 60,    impatto: 'Le ricariche automatiche del wallet non partono.' },
   { funzione: 'weather-alert-cron',                    etichetta: 'Allerta meteo',                   ogniMinuti: 60,    impatto: 'I clienti non ricevono l allerta meteo prima dell uscita.' },
   { funzione: 'send-booking-reminders',                etichetta: 'Promemoria prenotazioni',         ogniMinuti: 120,   impatto: 'I promemoria di ritiro e riconsegna non partono.' },
+  { funzione: 'sync-google-reviews-cron',              etichetta: 'Recensioni Google',               ogniMinuti: 180,   impatto: 'Il sito smette di mostrare le recensioni Google piu recenti.' },
   { funzione: 'sollecito-pagamento-cron',              etichetta: 'Solleciti di pagamento',          ogniMinuti: 360,   impatto: 'I solleciti sulle somme da saldare non partono.' },
   { funzione: 'promo-incassi-cron',                    etichetta: 'Promo sugli incassi',             ogniMinuti: 480,   impatto: 'Le promo legate agli incassi non partono.' },
   { funzione: 'fornitori-fatture-sync-cron',           etichetta: 'Fatture fornitori dallo SDI',     ogniMinuti: 1440,  impatto: 'Le fatture dei fornitori non entrano in automatico.' },

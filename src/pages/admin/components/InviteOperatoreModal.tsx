@@ -41,6 +41,8 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
     { key: 'campagna-marketing', label: 'Campagna Marketing' },
     { key: 'referral', label: 'Referral' },
     { key: 'codice-sconto', label: 'Codice Sconto' },
+    // 26/09/2026 — prima non era assegnabile: solo la direzione vedeva la tab.
+    { key: 'prevendite', label: 'Prevendita e Promozioni' },
   ]},
   { name: 'Report', tabs: [
     { key: 'report-noleggio', label: 'Noleggio' },

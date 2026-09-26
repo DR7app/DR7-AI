@@ -3638,7 +3638,9 @@ export const INITIAL_FOOTER: FooterCopy = {
       text_en: '',
       link: 'https://share.google/o5c8DO8nmk3XMn0hF' },
   ],
-  manual_reviews_after_google: true,
+  // 26/09/2026 — le recensioni scritte a mano sono solo la riserva: di norma si
+  // vedono solo quelle vere di Google, dalla piu' recente.
+  manual_reviews_after_google: false,
   reviews_google_url: 'https://share.google/o5c8DO8nmk3XMn0hF',
   contact_company_name: 'DR7 S.p.A.',
   contact_legal_address_it: 'Sede Legale: Via del Fangario 25, 09122 Cagliari (CA) – Italia',

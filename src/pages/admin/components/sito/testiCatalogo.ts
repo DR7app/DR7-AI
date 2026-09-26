@@ -3082,6 +3082,13 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:d00c8e87",
+        "it": "Es. EX117YA",
+        "en": "E.g. EX117YA",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:94644791",
         "it": "I tuoi servizi:",
         "en": "Your services:",
@@ -3099,6 +3106,13 @@ const BLOCCO_1: VoceTesto[] = [
         "chiave": "s:44349eac",
         "it": "Inserisci codice (es. BDAY-XXXX-XXXX)",
         "en": "Enter code (e.g. BDAY-XXXX-XXXX)",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
+        "chiave": "s:15ea6aee",
+        "it": "Inserisci la targa del veicolo da lavare.",
+        "en": "Enter the plate of the vehicle to be washed.",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -3516,6 +3530,13 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:313c7d66",
+        "it": "Targa del veicolo",
+        "en": "Vehicle plate",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:1ff7aee4",
         "it": "Timeout — riprova il pagamento.",
         "en": "Timeout — please retry the payment.",
@@ -3661,13 +3682,6 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "Didn’t find the answer?",
         "file": "pages/FAQPage.tsx",
         "schermata": "faq"
-    },
-    {
-        "chiave": "s:cb815a3d",
-        "it": "Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927",
-        "en": "Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927",
-        "file": "pages/FirmaPage.tsx",
-        "schermata": "firma"
     },
     {
         "chiave": "s:072dc6f5",
@@ -4207,7 +4221,10 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "RSSMRA80A01H501U",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    },
+    }
+]
+
+const BLOCCO_2: VoceTesto[] = [
     {
         "chiave": "s:9d34c717",
         "it": "Sconto Online -5%:",
@@ -4221,10 +4238,7 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "Mechanical service",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    }
-]
-
-const BLOCCO_2: VoceTesto[] = [
+    },
     {
         "chiave": "s:a36ec340",
         "it": "Targa",
@@ -6310,7 +6324,10 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "25/03/2026",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_3: VoceTesto[] = [
     {
         "chiave": "s:a9ffd9b2",
         "it": "26 anni o più",
@@ -6324,10 +6341,7 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "26-69 years",
         "file": "components/ui/VehicleSearchForm.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_3: VoceTesto[] = [
+    },
     {
         "chiave": "s:65c97071",
         "it": "3. Bagagli",
@@ -6441,6 +6455,20 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:a2ca4597",
+        "it": "ACCEDI E PAGA COL WALLET",
+        "en": "SIGN IN AND PAY WITH WALLET",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:05000515",
+        "it": "Accedi per acquistare una prevendita.",
+        "en": "Sign in to buy a pre-sale.",
+        "file": "utils/carrelloCheckout.ts",
+        "schermata": null
+    },
+    {
         "chiave": "s:b1c15705",
         "it": "Accedi per prenotare",
         "en": "Sign in to book",
@@ -6518,6 +6546,13 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:00ae616b",
+        "it": "Acquisto non riuscito.",
+        "en": "Purchase failed.",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Update_Password",
         "it": "Aggiorna Password",
         "en": "Update Password",
@@ -6529,6 +6564,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Aggiungi",
         "en": "Add",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:10425049",
+        "it": "AGGIUNGI AL CARRELLO",
+        "en": "ADD TO CART",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -6571,6 +6613,20 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Agosto",
         "en": "August",
         "file": "components/ui/CalendarPicker.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:3f24efc0",
+        "it": "al",
+        "en": "to",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:0f82462e",
+        "it": "al giorno",
+        "en": "per day",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -6725,6 +6781,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Attendere…",
         "en": "Please wait…",
         "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:0a6b61bf",
+        "it": "Attendi il controllo della promozione.",
+        "en": "Please wait for the promotion check.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -7152,6 +7215,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Cauzione veicoli",
         "en": "Vehicle deposit",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:57a7339c",
+        "it": "Cauzione, assicurazione e km come una normale prenotazione.",
+        "en": "Deposit, insurance and km as in a normal booking.",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -7778,6 +7848,13 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:8b6316e0",
+        "it": "Controllo della promozione in corso...",
+        "en": "Checking the promotion...",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:315075bc",
         "it": "Controllo delle condizioni in corso...",
         "en": "Checking the conditions...",
@@ -8121,6 +8198,13 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:ba1b2c91",
+        "it": "DETTAGLI",
+        "en": "DETAILS",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:bd087037",
         "it": "Dettagli animali (razza, dimensione, peso)",
         "en": "Pet details (breed, size, weight)",
@@ -8343,7 +8427,10 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "Daytime",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_4: VoceTesto[] = [
     {
         "chiave": "k:Documents",
         "it": "Documenti",
@@ -8427,10 +8514,7 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "ID document (back)",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_4: VoceTesto[] = [
+    },
     {
         "chiave": "s:6e3528ad",
         "it": "Documento Secondo Conducente (fronte)",
@@ -9048,6 +9132,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:a21a8528",
+        "it": "Fino al",
+        "en": "Until",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:b6709177",
         "it": "Formati supportati: JPG, PNG, PDF • Max 5MB per file",
         "en": "Supported formats: JPG, PNG, PDF • Max 5MB per file",
@@ -9440,6 +9531,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:b3109307",
+        "it": "Il prezzo promozionale vale sui giorni di noleggio. Cauzione, assicurazione e km si scelgono come in una normale prenotazione e dipendono dal profilo del conducente. Non si somma ad altri codici sconto.",
+        "en": "The promotional price applies to the rental days. Deposit, insurance and km are chosen as in a normal booking and depend on the driver profile. Cannot be combined with other discount codes.",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:9326577e",
         "it": "Il sabato, la riconsegna in aeroporto deve essere entro le 11:00.",
         "en": "On Saturdays, airport drop-off must be by 11:00.",
@@ -9493,6 +9591,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Il veicolo deve essere di proprietà e immatricolato dal",
         "en": "The vehicle must be owned by you and registered from",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:002a4ec5",
+        "it": "Il veicolo di questa promozione non e disponibile online in questo momento. Scrivici su WhatsApp.",
+        "en": "The vehicle of this promotion is not available online right now. Contact us on WhatsApp.",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -10217,6 +10322,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:37ea59da",
+        "it": "La promozione non vale per questo veicolo.",
+        "en": "The promotion is not valid for this vehicle.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:e671854e",
         "it": "La restituzione del veicolo è prevista entro 1 ora e 30 minuti prima dell'orario di uscita, al fine di evitare eventuali variazioni.",
         "en": "The vehicle must be returned within 1 hour and 30 minutes before the pick-up time, to avoid any changes.",
@@ -10418,7 +10530,10 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "Location",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_5: VoceTesto[] = [
     {
         "chiave": "s:861e6ce1",
         "it": "Luogo di nascita",
@@ -10530,15 +10645,12 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "max",
         "file": "pages/PrevenditePage.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_5: VoceTesto[] = [
+    },
     {
         "chiave": "s:ac0e88f0",
         "it": "Massimo",
-        "en": "Max",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "en": "Maximum",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -10682,6 +10794,20 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:27fdf0ce",
+        "it": "minimo",
+        "en": "min",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:15592dee",
+        "it": "Minimo",
+        "en": "Minimum",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:ff2e7432",
         "it": "Modello di velivolo preferito (opzionale)",
         "en": "Preferred aircraft model (optional)",
@@ -10752,9 +10878,23 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:aef5da3e",
+        "it": "ne restano",
+        "en": "only",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:4a2463de",
         "it": "Ne restano",
         "en": "Only",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:5ea016ae",
+        "it": "Nella prenotazione paghi con carta o Credit Wallet, oppure la aggiungi al carrello.",
+        "en": "In the booking you pay by card or Credit Wallet, or add it to the cart.",
         "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
@@ -10850,6 +10990,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:d42efce7",
+        "it": "Noleggi dal",
+        "en": "Rentals from",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:8ab6d373",
         "it": "Noleggio",
         "en": "Rental",
@@ -10874,6 +11021,20 @@ const BLOCCO_5: VoceTesto[] = [
         "chiave": "s:b41f37c2",
         "it": "Noleggio auto",
         "en": "Car rental",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:64b18240",
+        "it": "Noleggio in promozione",
+        "en": "Promotional rental",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:11b01398",
+        "it": "Noleggio in promozione (",
+        "en": "Promotional rental (",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -11228,6 +11389,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:5bfb5c08",
+        "it": "PAGA CON CREDIT WALLET",
+        "en": "PAY WITH CREDIT WALLET",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:aea5928b",
         "it": "Paga in modo sicuro con la tua carta",
         "en": "Pay securely with your card",
@@ -11543,6 +11711,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:1829590a",
+        "it": "Posti",
+        "en": "Places",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:cb7dee14",
         "it": "posto/i",
         "en": "seat(s)",
@@ -11554,6 +11729,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Preferisce un volo diretto?",
         "en": "Do you prefer a direct flight?",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:c7866cf6",
+        "it": "PRENOTA",
+        "en": "BOOK",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -11627,6 +11809,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:6be394da",
+        "it": "Prenotazioni online momentaneamente sospese.",
+        "en": "Online bookings are temporarily suspended.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:c35d1de2",
         "it": "Prenoti come",
         "en": "Booking as",
@@ -11645,6 +11834,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Prevendita non utilizzabile per queste date",
         "en": "Pre-sale not usable for these dates",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:8576219f",
+        "it": "PREVENDITE",
+        "en": "PRE-SALES",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -11718,6 +11914,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:1b18f08d",
+        "it": "Prezzo speciale al giorno, posti limitati. Prenoti subito.",
+        "en": "Special daily price, limited availability. Book now.",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:a9dcae6b",
         "it": "Prezzo su richiesta",
         "en": "Price on request",
@@ -11778,6 +11981,20 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Profilo conducente:",
         "en": "Driver profile:",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:4c281cd9",
+        "it": "Promozione non valida per queste date.",
+        "en": "Promotion not valid for these dates.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:2e80c59b",
+        "it": "PROMOZIONI",
+        "en": "PROMOTIONS",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -11897,6 +12114,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Quanti bagagli avete in totale?",
         "en": "How many bags in total?",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:efbb3708",
+        "it": "Questa promozione non e piu disponibile.",
+        "en": "This promotion is no longer available.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -12409,7 +12633,10 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Pick day and time",
         "file": "components/ui/RentalSearchBar.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_6: VoceTesto[] = [
     {
         "chiave": "s:d9bed419",
         "it": "Scegli giorno e ora di riconsegna",
@@ -12633,10 +12860,7 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Choose the level of protection you want.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_6: VoceTesto[] = [
+    },
     {
         "chiave": "s:3d40c87b",
         "it": "Seleziona l'indirizzo dall'elenco (anche estero) — necessario per la fattura.",
@@ -12957,6 +13181,20 @@ const BLOCCO_6: VoceTesto[] = [
         "it": "Specificare tappe intermedie",
         "en": "Specify intermediate stops",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:1b4af44c",
+        "it": "Stai prenotando una promozione",
+        "en": "You are booking a promotion",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:250b40ff",
+        "it": "Stai prenotando una promozione: il prezzo e gia scontato e non si somma ad altri codici.",
+        "en": "You are booking a promotion: the price is already discounted and cannot be combined with other codes.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -13537,7 +13775,7 @@ const BLOCCO_6: VoceTesto[] = [
         "chiave": "s:89b5d210",
         "it": "Veicolo",
         "en": "Vehicle",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {

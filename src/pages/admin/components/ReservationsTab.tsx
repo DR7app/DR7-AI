@@ -12765,6 +12765,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     </span>
                   </div>
                 )}
+                {/* 26/09/2026 — prenotazione fatta con una promozione del sito */}
+                {selectedBooking.booking_details?.promo_id && (
+                  <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-dr7-gold/10 border border-dr7-gold/40">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/40">
+                      PROMO
+                    </span>
+                    <span className="text-xs text-theme-text-secondary">
+                      {selectedBooking.booking_details?.promo_titolo || 'Promozione'}
+                      {selectedBooking.booking_details?.promo_prezzo_giorno != null
+                        ? ` · € ${Number(selectedBooking.booking_details.promo_prezzo_giorno).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/giorno`
+                        : ''}
+                    </span>
+                  </div>
+                )}
                 {/* Customer Info */}
                 <div className=" p-4 rounded-lg">
                   <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
