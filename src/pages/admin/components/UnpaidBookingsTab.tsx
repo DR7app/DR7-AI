@@ -7,6 +7,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { isTestPlate } from '../../../utils/testPlates'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { linkFirmaGiaInviato } from '../../../utils/linkFirmaGiaInviato'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
@@ -916,16 +917,12 @@ export default function UnpaidBookingsTab() {
         // is the bug we're guarding against.
         if (isCarRental) {
           if (!isTour) {
-          const { data: existingContract } = await supabase
-            .from('contracts')
-            .select('signed_pdf_url')
-            .eq('booking_id', bookingId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          if (existingContract?.signed_pdf_url) {
-            logger.log('[Segna Pagato] Contract already signed for booking', bookingId, '— skipping regenerate + signature-init')
+          // 26/09/2026: non basta "gia' firmato". Una prenotazione Confermata
+          // da saldare ha gia' ricevuto il link alla conferma: segnandola
+          // pagata il contratto ripartiva. Ora si salta anche se il link e'
+          // ancora valido (vedi utils/linkFirmaGiaInviato.ts).
+          if (await linkFirmaGiaInviato(supabase, bookingId)) {
+            logger.log('[Segna Pagato] Link firma gia\' inviato o contratto firmato per', bookingId, '— niente nuovo contratto ne\' link')
           } else {
             try {
               const genRes = await authFetch('/.netlify/functions/generate-contract', {
@@ -2228,16 +2225,8 @@ export default function UnpaidBookingsTab() {
         // signing link for a contract the customer already signed.
         // Best-effort — any failure here is logged but does not abort the batch.
         try {
-          const { data: signedCheck } = await supabase
-            .from('contracts')
-            .select('signed_pdf_url')
-            .eq('booking_id', bookingId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          if (signedCheck?.signed_pdf_url) {
-            logger.log('[markAllCustomerPaid] Contract already signed for', bookingId, '— skipping regenerate + signature-init')
+          if (await linkFirmaGiaInviato(supabase, bookingId)) {
+            logger.log('[markAllCustomerPaid] Link firma gia\' inviato o contratto firmato per', bookingId, '— niente nuovo contratto ne\' link')
           } else {
             await authFetch('/.netlify/functions/generate-contract', {
               method: 'POST',

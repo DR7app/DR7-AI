@@ -1532,8 +1532,31 @@ const handler: Handler = async (event) => {
                     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
                     // Tour Noleggio Aria/Mare/Soggiorni: NESSUN contratto da firmare.
                     const isTourBooking = ['heli_rental', 'boat_rental', 'stay_rental'].includes(booking.service_type || '');
+                    // 26/09/2026 (direzione): se il cliente ha gia' un link di
+                    // firma valido (prenotazione Confermata da saldare: il link
+                    // parte alla conferma) o ha gia' firmato, il pagamento NON
+                    // rigenera il contratto e NON manda un altro link. Prima
+                    // ripartiva sempre, e su un contratto firmato la
+                    // rigenerazione annullava pure la firma. Stessa regola di
+                    // src/utils/linkFirmaGiaInviato.ts (Segna Pagato).
+                    const { data: contrattoFirmato } = await supabase
+                        .from('contracts')
+                        .select('signed_pdf_url')
+                        .eq('booking_id', booking.id)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    const { data: linkValidi } = await supabase
+                        .from('signature_requests')
+                        .select('id')
+                        .eq('booking_id', booking.id)
+                        .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
+                        .limit(1);
+                    const linkGiaInviato = !!contrattoFirmato?.signed_pdf_url || (linkValidi || []).length > 0;
                     if (isTourBooking) {
                         console.log('[nexi-payment-callback] Tour Aria/Mare/Soggiorni — nessun contratto da firmare');
+                    } else if (linkGiaInviato) {
+                        console.log(`[nexi-payment-callback] Link firma gia' inviato o contratto firmato (booking ${booking.id}) — niente nuovo contratto ne' link`);
                     } else {
                     const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
                         method: 'POST',
