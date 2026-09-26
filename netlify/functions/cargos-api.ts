@@ -323,7 +323,7 @@ function buildRecord(d: CargosRecordData): string {
     return fields.map((val, i) => padField(val, FIELD_SIZES[i])).join('')
 }
 
-export { buildRecord, AGENCY, FIELD_SIZES, CargosRecordData }
+export { buildRecord, AGENCY, FIELD_SIZES, CargosRecordData, getToken, callCargosApi }
 
 const handler: Handler = async (event) => {
     const corsHeaders = {

@@ -125,6 +125,11 @@
 # Recensioni Google — ogni tre ore copia le recensioni vere in
 # google_reviews_cache, da cui le legge il sito (tutte da Google Business
 # quando l'API e' approvata, altrimenti le 5 piu' recenti da Google Maps).
+# CARGOS — tabella ufficiale comuni e stati (Tabella 1). Gira ogni 15 minuti
+# ma ricarica solo se la tabella e' vuota o piu' vecchia di 25 giorni.
+[functions."cargos-luoghi-sync-cron"]
+  schedule = "*/15 * * * *"
+
 [functions."sync-google-reviews-cron"]
   schedule = "15 */3 * * *"
 
