@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import { funzioneFerma } from "./utils/systemControl";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -71,6 +72,11 @@ export const handler: Handler = async (event) => {
                 error: "Invio campagne sospeso temporaneamente. Riattiva manualmente in send-whatsapp-campaign-chunk.ts (CAMPAIGN_SENDS_ENABLED = true).",
             }),
         };
+    }
+    // Interruttore System Control: campagne spente = nessun messaggio inviato.
+    const ferma = await funzioneFerma("campagne_marketing");
+    if (ferma) {
+        return { statusCode: 503, body: JSON.stringify({ error: ferma }) };
     }
     if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
         return { statusCode: 500, body: JSON.stringify({ error: "Green API non configurato (GREEN_API_INSTANCE_ID/GREEN_API_TOKEN)" }) };

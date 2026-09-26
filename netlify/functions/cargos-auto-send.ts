@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata } from './utils/systemControl'
+import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata, funzioneFerma } from './utils/systemControl'
 
 /**
  * CARGOS Auto-Send — called after contract is signed
@@ -224,7 +224,11 @@ export async function avvisaDirezione(motivo: string, dettagli: string): Promise
 export async function sendToCargos(
     bookingId: string,
     opts?: { silent?: boolean },
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; skipped?: boolean; reason?: string }> {
+    // Interruttore System Control: CARGOS spento = nessun invio, nessun evento
+    // e nessuna coda (non e' un guasto). CARGOS riguarda solo il noleggio auto.
+    const ferma = await funzioneFerma('cargos', 'terra')
+    if (ferma) return { success: false, skipped: true, reason: 'cargos_off', error: ferma }
     const t0 = Date.now()
     const esito = await inviaCargos(bookingId, opts)
     try {
@@ -275,7 +279,9 @@ export const handler: Handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: 'bookingId richiesto' }) }
     }
     const esito = await sendToCargos(bookingId, { silent: true })
-    return { statusCode: esito.success ? 200 : 500, body: JSON.stringify(esito) }
+    // skipped (interruttore spento) = 200: la ripresa del System Control lo
+    // legge come "non eseguita", non come un guasto da ritentare.
+    return { statusCode: esito.success || esito.skipped ? 200 : 500, body: JSON.stringify(esito) }
 }
 
 async function inviaCargos(

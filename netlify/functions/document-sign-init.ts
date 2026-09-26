@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFromSmtp } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -55,6 +56,12 @@ export const handler: Handler = async (event) => {
         }
         if (!signerEmail && !signerPhone) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Serve almeno un contatto: telefono (WhatsApp) o email' }) }
+        }
+
+        // Interruttore System Control: firma spenta = nessuna richiesta creata.
+        const ferma = await funzioneFerma('firma_elettronica')
+        if (ferma) {
+            return { statusCode: 503, body: JSON.stringify({ error: ferma }) }
         }
 
         // Generate unique token

@@ -274,6 +274,20 @@ export async function accodaOperazione(op: OperazioneDaAccodare): Promise<string
       // Un'operazione gia' riuscita non torna mai in coda: e' la barriera
       // anti-doppione lato worker.
       if (e.stato === 'riuscita') return e.id
+      // Operazione presa in carico da una ripresa in corso (e' quella ripresa
+      // che sta richiamando questo endpoint): si annota l'errore e basta. Le
+      // transizioni di stato spettano a chi ha il gettone della presa in
+      // carico; rimetterla 'in_coda' qui riaprirebbe il blocco anti-doppione
+      // mentre la ripresa e' ancora aperta. updated_at resta com'e': e' il
+      // gettone.
+      if (e.stato === 'in_corso') {
+        await sb.from('sc_operations').update({
+          ultimo_errore: errore,
+          ultimo_errore_at: new Date().toISOString(),
+          gruppo_id: op.gruppoId || null,
+        }).eq('id', e.id).eq('stato', 'in_corso')
+        return e.id
+      }
       await sb.from('sc_operations').update({
         stato: 'in_coda',
         ultimo_errore: errore,
@@ -546,7 +560,39 @@ export async function statoFunzione(chiave: string, business = '*'): Promise<Sta
   } catch { return { attiva: true, manutenzione: false } }
 }
 
+/** Business del System Control dal `service_type` di una prenotazione (regola di businessScope). */
+export function businessDaServiceType(serviceType?: string | null): string {
+  const st = String(serviceType || '').toLowerCase()
+  if (!st) return '*'   // sconosciuto: vale solo lo spegnimento globale
+  if (st === 'boat_rental') return 'mare'
+  if (st === 'heli_rental') return 'aria'
+  if (st === 'stay_rental') return 'soggiorni'
+  if (st === 'car_wash' || st.startsWith('mechanical')) return 'lavaggio'
+  return 'terra'
+}
+
+/**
+ * Guardia da mettere PRIMA di un'azione governata da un interruttore.
+ * Ritorna null se si puo' procedere, altrimenti il messaggio da restituire.
+ * "Intero gestionale" spento o in manutenzione ferma anche questa funzione.
+ * In caso di dubbio (tabella assente, lettura fallita) la funzione resta
+ * accesa: e' la regola di statoFunzione.
+ */
+export async function funzioneFerma(chiave: string, business = '*'): Promise<string | null> {
+  const [f, g] = await Promise.all([statoFunzione(chiave, business), statoFunzione('gestionale', business)])
+  const ferma = !f.attiva || f.manutenzione ? f : !g.attiva || g.manutenzione ? g : null
+  if (!ferma) return null
+  return ferma.messaggio
+    || `Funzione ${ferma.manutenzione ? 'in manutenzione' : 'spenta'} dal System Control (${chiave}${business !== '*' ? `, ${business}` : ''}). Nessuna azione eseguita.`
+}
+
 // ── Prestazioni ────────────────────────────────────────────────────────────
+// Incremento atomico nel database (migrazione 20260926_system_control_metriche):
+// due chiamate simultanee non si pestano i piedi. Finche' la funzione SQL non
+// esiste si ripiega sulla lettura + scrittura di prima, e lo si ricorda per
+// non ritentare l'RPC a ogni richiesta.
+let rpcMetricaAssente = false
+
 export async function registraMetrica(
   tipo: 'funzione' | 'query' | 'pagina' | 'integrazione' | 'job',
   nome: string,
@@ -560,6 +606,15 @@ export async function registraMetrica(
     ora.setMinutes(0, 0, 0)
     const oraIso = ora.toISOString()
     const business = opts.business || '*'
+    if (!rpcMetricaAssente && typeof (sb as { rpc?: unknown }).rpc === 'function') {
+      const { error } = await sb.rpc('sc_registra_metrica', {
+        p_tipo: tipo, p_nome: nome.slice(0, 120), p_business: business, p_ora: oraIso,
+        p_durata_ms: Math.round(durataMs), p_errore: !!opts.errore,
+      })
+      if (!error) return
+      if (error.code === 'PGRST202' || error.code === '42883') rpcMetricaAssente = true
+      else throw error
+    }
     const { data } = await sb.from('sc_metrics')
       .select('id, chiamate, errori, durata_totale_ms, durata_max_ms')
       .eq('tipo', tipo).eq('nome', nome).eq('business', business).eq('ora', oraIso).maybeSingle()
@@ -603,11 +658,12 @@ export function conSystemControl<F extends (...args: never[]) => unknown>(
       const status = (res as { statusCode?: number })?.statusCode
       const errore = typeof status === 'number' && status >= 500
       const durata = Date.now() - t0
-      // Si registra solo cio' che serve al pannello Prestazioni: le chiamate
-      // lente e quelle in errore. Cronometrare anche le chiamate veloci
-      // aggiungerebbe una scrittura inutile su ogni richiesta.
-      // I cron fanno eccezione: il battito serve proprio a dire "sono girato".
-      if (opzioni.cron || errore || durata > 1000) await registraMetrica(tipoMetrica, nome, durata, { errore })
+      // Si contano TUTTE le chiamate: il pannello Prestazioni mostra tasso di
+      // errore e media, e contare solo le lente o le fallite dava un 100% di
+      // errori con una sola chiamata andata male su undici. Le funzioni
+      // avvolte sono poche (cron + tre API di lettura): una scrittura atomica
+      // in piu' per richiesta e' il prezzo di numeri veri.
+      await registraMetrica(tipoMetrica, nome, durata, { errore })
       if (errore) {
         let corpo = ''
         try { corpo = String((res as { body?: string }).body || '').slice(0, 500) } catch { /* ignora */ }

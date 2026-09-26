@@ -72,7 +72,9 @@ const handler: Handler = async (event) => {
     switch (azione) {
       // ── Rilancia un automatismo pianificato ────────────────────────────
       case 'riavvia_job': {
-        const job = JOB_RILANCIABILI.find(j => j.chiave === body.bersaglio)
+        // Dalla scheda di un problema arriva il nome della funzione, dalla vista
+        // Strumenti la chiave del job: valgono entrambi.
+        const job = JOB_RILANCIABILI.find(j => j.chiave === body.bersaglio || j.funzione === body.bersaglio)
         if (!job) { ok = false; messaggio = 'Automatismo sconosciuto.'; break }
         const carica = MODULI_JOB[job.funzione]
         if (!carica) { ok = false; messaggio = `${job.etichetta}: non rilanciabile da qui.`; break }

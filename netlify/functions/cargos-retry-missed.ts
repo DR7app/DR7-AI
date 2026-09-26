@@ -1,13 +1,17 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { sendToCargos, avvisaDirezione } from './cargos-auto-send'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const retryHandler: Handler = async () => {
+    // Interruttore System Control: CARGOS spento = il giro salta, niente
+    // riepilogo di "falliti" che fallimenti non sono.
+    const ferma = await funzioneFerma('cargos', 'terra')
+    if (ferma) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: ferma }) }
     try {
         console.log('[cargos-retry-missed] Checking for unsent CARGOS bookings...')
         const falliti: string[] = []
@@ -104,7 +108,10 @@ const retryHandler: Handler = async () => {
             // raccolgono e diventano UN riepilogo, secondo la frequenza scelta.
             const result = await sendToCargos(booking.id, { silent: true })
 
-            if (result.success) {
+            if (result.skipped) {
+                // spento a meta' giro dal System Control
+                skipped++
+            } else if (result.success) {
                 sent++
                 console.log(`[cargos-retry-missed] ✅ ${booking.customer_name} sent successfully`)
             } else {

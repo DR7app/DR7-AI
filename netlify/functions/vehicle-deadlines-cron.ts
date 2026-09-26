@@ -25,7 +25,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -79,6 +79,10 @@ async function resolveStaff(sb: ReturnType<typeof createClient>): Promise<Recipi
 }
 
 const cronHandler: Handler = async () => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
         return { statusCode: 200, body: JSON.stringify({ skipped: 'missing env' }) }
     }

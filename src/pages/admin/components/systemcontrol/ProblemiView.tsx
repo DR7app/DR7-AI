@@ -124,6 +124,21 @@ const COLORE_CONTROLLO: Record<string, string> = {
   sconosciuto: 'text-theme-text-muted',
 }
 
+const INTEGRAZIONE_AZIONI = new Set([
+  'testa_connessione', 'riconnetti', 'risincronizza', 'rigenera_connessione',
+  'aggiorna_credenziali', 'disabilita_integrazione', 'riattiva_integrazione',
+])
+
+// Azioni suggerite che non si eseguono dalla scheda del problema: dove si fanno.
+const DOVE_SI_FA: Record<string, string> = {
+  apri_fattura: 'Apri la fattura dalla tab Fatture: cerca il numero indicato nei dettagli del problema.',
+  apri_scheda_cliente: 'Apri la scheda dalla tab Clienti: il cliente e indicato nei dettagli del problema.',
+  sblocca_account: 'Lo sblocco di un account si fa dalla vista Strumenti, indicando l email.',
+  ricalcola_permessi: 'Il ricalcolo dei permessi si fa dalla vista Strumenti, indicando l operatore.',
+  ripristina_configurazione: 'Il ripristino di una configurazione si fa dalla vista Storico, scegliendo la versione.',
+  ricalcola_stato: 'Il ricalcolo dello stato si fa dalla schermata dell elemento coinvolto.',
+}
+
 function DettaglioProblema({ id, onChiudi, onAggiornato }: { id: string; onChiudi: () => void; onAggiornato: () => void }) {
   const [dati, setDati] = useState<{
     gruppo: GruppoProblema
@@ -149,6 +164,8 @@ function DettaglioProblema({ id, onChiudi, onAggiornato }: { id: string; onChiud
 
   async function esegui(chiave: string, motivo?: string) {
     setInCorso(chiave)
+    const esito = (r: { ok: boolean; messaggio: string }) => { if (r.ok) toast.success(r.messaggio, { duration: 8000 }); else toast.error(r.messaggio, { duration: 8000 }) }
+    const aperte = (dati?.operazioni || []).filter(o => ['in_coda', 'fallita', 'abbandonata'].includes(o.stato))
     try {
       if (chiave === 'apri_incidente') {
         const r = await systemControl.creaIncidente(id)
@@ -156,20 +173,31 @@ function DettaglioProblema({ id, onChiudi, onAggiornato }: { id: string; onChiud
       } else if (['segna_risolto', 'riapri', 'ignora'].includes(chiave)) {
         const r = await systemControl.azioneProblema(chiave, id, motivo)
         toast.success(r.messaggio)
-      } else if (chiave === 'testa_connessione' || chiave === 'riconnetti' || chiave === 'risincronizza' || chiave === 'aggiorna_credenziali') {
+      } else if (INTEGRAZIONE_AZIONI.has(chiave)) {
         const integrazione = dati?.gruppo.integrazione
         if (!integrazione) { toast.error('Questo problema non e legato a un collegamento.'); return }
-        const r = await systemControl.azioneIntegrazione(chiave, integrazione, motivo)
-        if (r.ok) toast.success(r.messaggio); else toast.error(r.messaggio)
-      } else if (chiave === 'riprova') {
-        const daRiprendere = (dati?.operazioni || []).filter(o => o.stato !== 'riuscita')
-        if (!daRiprendere.length) { toast('Nessuna operazione da riprendere per questo problema.'); return }
-        for (const o of daRiprendere.slice(0, 5)) {
-          const r = await systemControl.azioneOperazione('riprova', { id: o.id })
-          if (r.ok) toast.success(r.messaggio); else toast.error(r.messaggio)
-        }
+        esito(await systemControl.azioneIntegrazione(chiave, integrazione, motivo))
+      } else if (chiave === 'riprova' || chiave === 'riprova_invio' || chiave === 'riprova_webhook') {
+        if (!aperte.length) { toast('Nessuna operazione da riprendere per questo problema.'); return }
+        for (const o of aperte.slice(0, 5)) esito(await systemControl.azioneOperazione('riprova', { id: o.id }))
+        if (aperte.length > 5) toast(`Riprese le prime 5 di ${aperte.length}: le altre dalla vista Operazioni ferme.`)
+      } else if (chiave === 'riprova_piu_tardi' || chiave === 'annulla_operazione') {
+        if (!aperte.length) { toast('Nessuna operazione aperta per questo problema.'); return }
+        for (const o of aperte) esito(await systemControl.azioneOperazione(chiave, { id: o.id }))
+      } else if (chiave === 'riprova_tutte') {
+        const integrazione = dati?.gruppo.integrazione
+        esito(await systemControl.azioneOperazione('riprova_tutte', integrazione ? { integrazione } : { tipo: aperte[0]?.tipo }))
+      } else if (chiave === 'riavvia_job') {
+        // Il server riconosce l'automatismo dalla funzione del problema.
+        const funzione = dati?.gruppo.funzione
+        if (!funzione) { toast.error('Questo problema non indica quale automatismo rilanciare: usa la vista Strumenti.'); return }
+        esito(await systemControl.azioneSistema('riavvia_job', { bersaglio: funzione }))
+      } else if (chiave === 'controllo_adesso' || chiave === 'svuota_cache') {
+        esito(await systemControl.azioneSistema(chiave))
       } else {
-        toast('Questa azione si esegue dalla schermata dedicata.')
+        // Nessuna azione da qui: si dice DOVE farla invece di un generico rimando.
+        toast(DOVE_SI_FA[chiave] || 'Questa azione non si esegue da questa scheda.', { duration: 8000 })
+        return
       }
       await carica()
       onAggiornato()

@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { funzioneFerma } from './utils/systemControl'
 
 // Sends "Richiesta prolungamento SUPERCAR" the day before drop-off, at 18:00 Rome,
 // for rentals that:
@@ -68,6 +69,10 @@ async function greenApiSendMessage(phone: string, message: string): Promise<void
 }
 
 export const handler: Handler = async () => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
         return { statusCode: 500, body: JSON.stringify({ error: 'Supabase non configurato' }) }
     }

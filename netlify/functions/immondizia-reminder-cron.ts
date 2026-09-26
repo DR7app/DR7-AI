@@ -3,7 +3,7 @@
 // un WhatsApp al numero admin/direzione con l'elenco dei rifiuti da esporre.
 import { schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -12,6 +12,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 
 const cronHandler = async () => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     // "Domani" in Europe/Rome.
     const now = new Date()
     const romeNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))

@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
+import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -184,12 +185,14 @@ export const handler: Handler = async (event) => {
         // signing send (manual resend, auto-trigger from payment callback,
         // post-booking webhook) flows through here.
         const guardBookingId = bookingId || contract.booking_id
+        let serviceTypeFirma: string | null = null
         if (guardBookingId) {
             const { data: bookingRow } = await supabase
                 .from('bookings')
-                .select('status')
+                .select('status, service_type')
                 .eq('id', guardBookingId)
                 .maybeSingle()
+            serviceTypeFirma = bookingRow?.service_type || null
             const status = String(bookingRow?.status || '').toLowerCase()
             if (status === 'cancelled' || status === 'annullata') {
                 console.log(`[signature-init] Booking ${guardBookingId} is ${status} — refusing to send signing link`)
@@ -209,6 +212,13 @@ export const handler: Handler = async (event) => {
 
         if (!contract.pdf_url) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
+        }
+
+        // Interruttore System Control: firma spenta = nessun nuovo link e i
+        // link gia' inviati restano validi (il controllo sta PRIMA di annullarli).
+        const fermaFirma = await funzioneFerma('firma_elettronica', businessDaServiceType(serviceTypeFirma))
+        if (fermaFirma) {
+            return { statusCode: 503, body: JSON.stringify({ error: fermaFirma }) }
         }
 
         // Cancel any existing active signature requests for this contract OR booking.

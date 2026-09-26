@@ -1,4 +1,5 @@
 import fetch from 'node-fetch'
+import { funzioneFerma } from './utils/systemControl'
 
 // Production URLs (from official Aruba API docs)
 const ARUBA_AUTH_URL = process.env.ARUBA_AUTH_URL || 'https://auth.fatturazioneelettronica.aruba.it'
@@ -69,6 +70,10 @@ export async function getArubaToken(): Promise<string> {
  * Based on official docs: POST /services/invoice/upload
  */
 export async function uploadInvoiceToAruba(xmlContent: string, filename: string): Promise<{ id: string, filename: string }> {
+    // Interruttore System Control: i chiamanti automatici catturano l'errore e
+    // lasciano la fattura in bozza.
+    const ferma = await funzioneFerma('fatturazione_elettronica')
+    if (ferma) throw new Error(ferma)
     const token = await getArubaToken()
 
     // senderPIVA is OPTIONAL and only used for TD26 invoices (asset disposal)

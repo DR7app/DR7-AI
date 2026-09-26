@@ -7,7 +7,7 @@ import { authFetch } from './authFetch'
 const BASE = '/.netlify/functions'
 
 export type Severita = 'informativo' | 'basso' | 'medio' | 'alto' | 'critico'
-export type StatoServizio = 'operativo' | 'degradato' | 'problema' | 'critico'
+export type StatoServizio = 'operativo' | 'non_verificato' | 'degradato' | 'problema' | 'critico'
 
 export interface Servizio {
   chiave: string
@@ -132,7 +132,7 @@ export const systemControl = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ azione, ...corpo }),
     }),
-  interruttori: () => chiama<{ migrazioneEseguita: boolean; funzioni: { chiave: string; etichetta: string; descrizione: string; critica: boolean }[]; flags: Record<string, unknown>[]; storico?: Record<string, unknown>[] }>('system-control-flags'),
+  interruttori: () => chiama<{ migrazioneEseguita: boolean; funzioni: { chiave: string; etichetta: string; descrizione: string; critica: boolean; copertura?: 'collegata' | 'parziale' | 'non_collegata'; cosaFerma?: string }[]; flags: Record<string, unknown>[]; storico?: Record<string, unknown>[] }>('system-control-flags'),
   impostaInterruttore: (corpo: Record<string, unknown>) =>
     chiama<{ ok: boolean; messaggio: string; richiedeConferma?: boolean }>('system-control-flags', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),

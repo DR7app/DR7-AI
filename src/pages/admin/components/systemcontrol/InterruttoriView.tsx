@@ -9,7 +9,7 @@ import { BUSINESSES } from '../CentralinaProTab'
 import { Scheda, Bottone, Conferma } from './ui'
 import { dataOra } from './formato'
 
-interface Funzione { chiave: string; etichetta: string; descrizione: string; critica: boolean }
+interface Funzione { chiave: string; etichetta: string; descrizione: string; critica: boolean; copertura?: 'collegata' | 'parziale' | 'non_collegata'; cosaFerma?: string }
 interface Flag { id: string; chiave: string; business: string; attiva: boolean; manutenzione: boolean; messaggio: string | null; motivo: string | null; aggiornato_da: string | null; updated_at: string }
 
 const AMBITI = [{ id: '*', label: 'Tutte le aziende' }, ...BUSINESSES.map(b => ({ id: b.id, label: b.label }))]
@@ -61,7 +61,9 @@ export default function InterruttoriView() {
 
       <p className="text-xs text-theme-text-muted leading-relaxed">
         Spegnere una funzione non cancella niente: il gestionale smette solo di eseguirla, e le operazioni gia in coda
-        restano dove sono. La manutenzione mostra un messaggio agli utenti interessati invece di far fallire l operazione.
+        restano dove sono. In manutenzione le azioni collegate si fermano e
+        rispondono con il messaggio di manutenzione. Sotto ogni funzione e scritto cosa ferma davvero: quelle non ancora
+        collegate non si possono spegnere.
       </p>
 
       <Scheda titolo="Funzioni">
@@ -71,17 +73,25 @@ export default function InterruttoriView() {
               const flag = flagDi(f.chiave)
               const spenta = flag?.attiva === false
               const inManutenzione = flag?.manutenzione === true
+              const nonCollegata = f.copertura === 'non_collegata'
               return (
                 <div key={f.chiave} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className={`text-sm font-medium ${spenta ? 'text-theme-text-muted line-through' : 'text-theme-text-primary'}`}>{f.etichetta}</p>
+                        {nonCollegata && <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300">non collegato</span>}
+                        {f.copertura === 'parziale' && <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">parziale</span>}
                         {f.critica && <span className="text-[10px] px-1.5 py-0.5 rounded border border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300">critica</span>}
                         {spenta && <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300">SPENTA</span>}
                         {inManutenzione && <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">MANUTENZIONE</span>}
                       </div>
                       <p className="text-[11px] text-theme-text-muted mt-0.5">{f.descrizione}</p>
+                      {f.cosaFerma && (
+                        <p className="text-[11px] text-theme-text-secondary mt-0.5">
+                          <span className="font-medium">Cosa ferma: </span>{f.cosaFerma}
+                        </p>
+                      )}
                       {flag && (spenta || inManutenzione) && (
                         <p className="text-[11px] text-theme-text-muted mt-1">
                           Impostata da {flag.aggiornato_da || 'sconosciuto'} il {dataOra(flag.updated_at)}
@@ -93,7 +103,7 @@ export default function InterruttoriView() {
                       {spenta || inManutenzione ? (
                         <Bottone variante="primario" disabilitato={inCorso === f.chiave}
                           onClick={() => void imposta(f.chiave, { attiva: true, manutenzione: false })}>Riattiva</Bottone>
-                      ) : (
+                      ) : nonCollegata ? null : (
                         <>
                           <Bottone disabilitato={inCorso === f.chiave} onClick={() => setConferma({ funzione: f, azione: 'manutenzione' })}>Manutenzione</Bottone>
                           <Bottone variante="attenzione" disabilitato={inCorso === f.chiave} onClick={() => setConferma({ funzione: f, azione: 'spegni' })}>Spegni</Bottone>
@@ -140,8 +150,8 @@ export default function InterruttoriView() {
           titolo={conferma.azione === 'spegni' ? `Spegni «${conferma.funzione.etichetta}»` : `Metti «${conferma.funzione.etichetta}» in manutenzione`}
           testo={
             conferma.azione === 'spegni'
-              ? `La funzione smette di essere eseguita ${ambito === '*' ? 'per TUTTE le aziende' : `per ${AMBITI.find(a => a.id === ambito)?.label}`}. Nessun dato viene cancellato e puoi riaccenderla quando vuoi.`
-              : `Gli utenti vedranno un messaggio di manutenzione invece di un errore ${ambito === '*' ? 'su tutte le aziende' : `su ${AMBITI.find(a => a.id === ambito)?.label}`}.`
+              ? `La funzione smette di essere eseguita ${ambito === '*' ? 'per TUTTE le aziende' : `per ${AMBITI.find(a => a.id === ambito)?.label}`}. Cosa si ferma: ${conferma.funzione.cosaFerma || conferma.funzione.descrizione} Nessun dato viene cancellato e puoi riaccenderla quando vuoi.`
+              : `Le azioni collegate si fermano e rispondono con un messaggio di manutenzione ${ambito === '*' ? 'su tutte le aziende' : `su ${AMBITI.find(a => a.id === ambito)?.label}`}. Cosa si ferma: ${conferma.funzione.cosaFerma || conferma.funzione.descrizione}`
           }
           etichettaConferma={conferma.azione === 'spegni' ? 'Spegni' : 'Metti in manutenzione'}
           pericolosa={conferma.azione === 'spegni'}

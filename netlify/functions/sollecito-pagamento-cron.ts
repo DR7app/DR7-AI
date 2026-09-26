@@ -25,7 +25,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -84,6 +84,10 @@ function getRemainingCents(b: Booking): number {
 }
 
 const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerContext) => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     const skip = (reason: string) => {
         console.log('[sollecito-pagamento-cron] skip:', reason)
         return { statusCode: 200, body: JSON.stringify({ skipped: true, reason }) }

@@ -38,7 +38,7 @@ const handler: Handler = async (event) => {
       supabase.from('sc_error_groups').select('id, titolo, severita, occorrenze, ultima_comparsa, stato')
         .eq('integrazione', chiave).order('ultima_comparsa', { ascending: false }).limit(10),
       supabase.from('sc_operations').select('id, tipo, descrizione, stato, tentativi, ultimo_errore, prossimo_tentativo_at')
-        .eq('integrazione', chiave).in('stato', ['in_coda', 'fallita', 'abbandonata']).limit(50),
+        .eq('integrazione', chiave).in('stato', ['in_coda', 'in_corso', 'fallita', 'abbandonata']).limit(50),
     ])
     return {
       statusCode: 200, headers,
@@ -57,10 +57,13 @@ const handler: Handler = async (event) => {
     if (error && (error.code === '42P01' || error.code === 'PGRST205')) {
       return { statusCode: 200, headers, body: JSON.stringify({ migrazioneEseguita: false, integrazioni: [] }) }
     }
+    // Lettura fallita: meglio un errore visibile che quindici collegamenti
+    // mostrati come "mai testati" o, peggio, come a posto.
+    if (error) return { statusCode: 500, headers, body: JSON.stringify({ error: `Stato dei collegamenti non leggibile: ${error.message}` }) }
     const righe = (data || []) as Record<string, unknown>[]
     const perChiave = Object.fromEntries(righe.map(r => [String(r.chiave), r]))
     const { data: opsData } = await supabase.from('sc_operations')
-      .select('integrazione, stato').in('stato', ['in_coda', 'fallita', 'abbandonata']).limit(1000)
+      .select('integrazione, stato').in('stato', ['in_coda', 'in_corso', 'fallita', 'abbandonata']).limit(1000)
     const ops = (opsData || []) as { integrazione: string | null }[]
 
     const integrazioni = INTEGRAZIONI.map(meta => ({
@@ -88,73 +91,99 @@ const handler: Handler = async (event) => {
     let ok = true
     let extra: Record<string, unknown> = {}
 
+    // Ogni scrittura viene controllata: se il database rifiuta, l'azione e'
+    // fallita e va detto, anche nell'audit. Mai un "fatto" non fatto.
+    const scritturaFallita = (err: { message?: string } | null, righe: unknown[] | null, cosa: string): string | null => {
+      if (err) return `${cosa}: salvataggio rifiutato dal database (${err.message || 'errore'}).`
+      if (!righe || !righe.length) return `${cosa}: nessuna riga aggiornata.`
+      return null
+    }
+
     switch (azione) {
       case 'testa_connessione': {
         const esito = await testaConnessione(chiave)
-        ok = esito.ok
-        messaggio = esito.messaggio
-        await supabase.from('sc_integrations').upsert({
+        const { data: righe, error } = await supabase.from('sc_integrations').upsert({
           chiave, etichetta: meta.etichetta, categoria: meta.categoria,
           ultimo_test_at: ora, ultimo_test_ok: esito.ok, ultimo_test_messaggio: esito.messaggio.slice(0, 500),
           stato: esito.ok ? 'collegato' : 'errore',
           latenza_media_ms: esito.latenzaMs,
           ...(esito.ok ? { fallimenti_consecutivi: 0, circuito: 'chiuso', circuito_fino_a: null, ultima_chiamata_ok_at: ora } : {}),
           updated_at: ora,
-        }, { onConflict: 'chiave' })
+        }, { onConflict: 'chiave' }).select('chiave')
+        const ko = scritturaFallita(error, righe, 'Esito del test non salvato')
+        ok = esito.ok && !ko
+        messaggio = ko ? `${esito.messaggio} ${ko}` : esito.messaggio
         extra = { latenzaMs: esito.latenzaMs }
         break
       }
       case 'riconnetti':
       case 'rigenera_connessione': {
         // Azzera il blocco automatico e rilegge le credenziali, poi prova.
-        await supabase.from('sc_integrations').upsert({
+        const { data: righe1, error: e1 } = await supabase.from('sc_integrations').upsert({
           chiave, etichetta: meta.etichetta, categoria: meta.categoria,
           circuito: 'chiuso', circuito_fino_a: null, fallimenti_consecutivi: 0,
           abilitata: true, stato: 'sincronizzazione', ultimo_errore: null, updated_at: ora,
-        }, { onConflict: 'chiave' })
+        }, { onConflict: 'chiave' }).select('chiave')
+        const ko1 = scritturaFallita(e1, righe1, 'Azzeramento del collegamento non salvato')
+        if (ko1) { ok = false; messaggio = ko1; break }
         const esito = await testaConnessione(chiave)
-        ok = esito.ok
-        messaggio = esito.ok
-          ? `Collegamento ripristinato. ${esito.messaggio}`
-          : `Riconnessione tentata ma il servizio non risponde ancora. ${esito.messaggio}`
-        await supabase.from('sc_integrations').update({
+        const { data: righe2, error: e2 } = await supabase.from('sc_integrations').update({
           stato: esito.ok ? 'collegato' : 'errore',
           ultimo_test_at: ora, ultimo_test_ok: esito.ok, ultimo_test_messaggio: esito.messaggio.slice(0, 500),
           ...(esito.ok ? { ultima_chiamata_ok_at: ora } : {}),
           updated_at: ora,
-        }).eq('chiave', chiave)
+        }).eq('chiave', chiave).select('chiave')
+        const ko2 = scritturaFallita(e2, righe2, 'Esito della riconnessione non salvato')
+        ok = esito.ok && !ko2
+        messaggio = (esito.ok
+          ? `Collegamento ripristinato. ${esito.messaggio}`
+          : `Riconnessione tentata ma il servizio non risponde ancora. ${esito.messaggio}`) + (ko2 ? ` ${ko2}` : '')
         break
       }
       case 'risincronizza': {
-        // Rimette in coda SUBITO le operazioni ferme: nessun dato viene creato
-        // da zero, si riprendono solo quelle gia' registrate come non riuscite.
+        // Rimette in coda SUBITO le operazioni ferme a ripresa automatica:
+        // nessun dato viene creato da zero. Quelle a ripresa solo manuale
+        // (fatture, WhatsApp, riprese interrotte) restano ferme e si dicono.
         const { data, error } = await supabase.from('sc_operations')
           .update({ stato: 'in_coda', prossimo_tentativo_at: ora, tentativi: 0, updated_at: ora })
-          .eq('integrazione', chiave).in('stato', ['fallita', 'abbandonata']).select('id')
+          .eq('integrazione', chiave).in('stato', ['fallita', 'abbandonata']).eq('automatica', true).select('id')
+        const { data: manualiData } = await supabase.from('sc_operations')
+          .select('id').eq('integrazione', chiave).in('stato', ['in_coda', 'fallita', 'abbandonata']).eq('automatica', false)
+        const manuali = manualiData?.length || 0
         ok = !error
-        messaggio = error ? error.message : `${data?.length || 0} operazioni rimesse in coda. Partono al prossimo ciclo di auto-riparazione.`
-        await supabase.from('sc_integrations').update({ ultima_sync_at: ora, updated_at: ora }).eq('chiave', chiave)
-        extra = { rimesseInCoda: data?.length || 0 }
+        if (error) { messaggio = `Operazioni non rimesse in coda: ${error.message}`; break }
+        const { error: eSync } = await supabase.from('sc_integrations').update({ ultima_sync_at: ora, updated_at: ora }).eq('chiave', chiave)
+        messaggio = [
+          `${data?.length || 0} operazioni rimesse in coda: partono al prossimo ciclo di auto-riparazione.`,
+          manuali ? `${manuali} a ripresa solo manuale restano ferme: rilanciale una per una con Riprova.` : '',
+          eSync ? `Data di sincronizzazione non salvata (${eSync.message}).` : '',
+        ].filter(Boolean).join(' ')
+        extra = { rimesseInCoda: data?.length || 0, escluseManuali: manuali }
         break
       }
       case 'disabilita_integrazione': {
-        await supabase.from('sc_integrations').upsert({
+        const { data: righe, error } = await supabase.from('sc_integrations').upsert({
           chiave, etichetta: meta.etichetta, categoria: meta.categoria,
           abilitata: false, stato: 'disabilitata', note: body.motivo || null, updated_at: ora,
-        }, { onConflict: 'chiave' })
-        messaggio = 'Integrazione disattivata. Le operazioni continuano ad accodarsi e non vanno perse: riattivandola riprendono.'
+        }, { onConflict: 'chiave' }).select('chiave')
+        const ko = scritturaFallita(error, righe, 'Integrazione NON disattivata')
+        ok = !ko
+        messaggio = ko || 'Integrazione disattivata: il System Control non la contatta piu, ne con le riprese automatiche ne con Riprova. Le operazioni restano in coda e riprendono alla riattivazione.'
         break
       }
       case 'riattiva_integrazione': {
-        await supabase.from('sc_integrations').upsert({
+        const { data: righe, error } = await supabase.from('sc_integrations').upsert({
           chiave, etichetta: meta.etichetta, categoria: meta.categoria,
           abilitata: true, stato: 'sincronizzazione', circuito: 'chiuso', circuito_fino_a: null,
           fallimenti_consecutivi: 0, updated_at: ora,
-        }, { onConflict: 'chiave' })
-        const { data } = await supabase.from('sc_operations')
+        }, { onConflict: 'chiave' }).select('chiave')
+        const ko = scritturaFallita(error, righe, 'Integrazione NON riattivata')
+        if (ko) { ok = false; messaggio = ko; break }
+        const { data, error: eOps } = await supabase.from('sc_operations')
           .update({ stato: 'in_coda', prossimo_tentativo_at: prossimoTentativo(0), updated_at: ora })
-          .eq('integrazione', chiave).eq('stato', 'fallita').select('id')
-        messaggio = `Integrazione riattivata${data?.length ? `, ${data.length} operazioni rimesse in coda` : ''}.`
+          .eq('integrazione', chiave).eq('stato', 'fallita').eq('automatica', true).select('id')
+        messaggio = `Integrazione riattivata${data?.length ? `, ${data.length} operazioni rimesse in coda` : ''}.` +
+          (eOps ? ` Operazioni in sospeso non rimesse in coda: ${eOps.message}.` : '')
         break
       }
       case 'aggiorna_credenziali': {

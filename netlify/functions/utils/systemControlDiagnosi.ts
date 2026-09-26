@@ -88,8 +88,8 @@ export async function diagnosticaIntegrazione(sb: SupabaseClient, chiave: string
 
   // 3. Operazioni in sospeso su questa integrazione
   const { data: opsData } = await sb.from('sc_operations')
-    .select('id, stato').eq('integrazione', chiave).in('stato', ['in_coda', 'fallita', 'abbandonata']).limit(500)
-  const ops = (opsData || []) as { stato: string }[]
+    .select('id, stato, automatica').eq('integrazione', chiave).in('stato', ['in_coda', 'in_corso', 'fallita', 'abbandonata']).limit(500)
+  const ops = (opsData || []) as { stato: string; automatica: boolean | null }[]
   controlli.push({
     nome: 'Operazioni in sospeso',
     esito: ops.some(o => o.stato === 'abbandonata') ? 'ko' : ops.length ? 'attenzione' : 'ok',
@@ -126,8 +126,11 @@ export async function diagnosticaIntegrazione(sb: SupabaseClient, chiave: string
     return {
       controlli,
       conclusione: `${etichetta} risulta temporaneamente non disponibile.`,
-      azioneConsigliata: 'Nessuna azione necessaria: il gestionale ritenta da solo e nessuna operazione va persa.',
-      azioni: ['testa_connessione'], nessunaAzione: true,
+      // Le operazioni a ripresa solo manuale NON ripartono da sole: dirlo.
+      azioneConsigliata: ops.some(o => o.automatica === false)
+        ? `Il gestionale ritenta da solo le operazioni automatiche; ${ops.filter(o => o.automatica === false).length} a ripresa solo manuale vanno rilanciate con Riprova quando il servizio torna.`
+        : 'Nessuna azione necessaria: il gestionale ritenta da solo e nessuna operazione va persa.',
+      azioni: ['testa_connessione'], nessunaAzione: !ops.some(o => o.automatica === false),
     }
   }
   if (ops.some(o => o.stato === 'abbandonata')) {

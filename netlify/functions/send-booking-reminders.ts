@@ -1,7 +1,7 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -145,6 +145,10 @@ function getRomeDateString(offsetDays: number): string {
  * 3. IBAN DEPOSIT REQUEST: runs ONLY at 9 AM Rome → bookings ended yesterday
  */
 export const reminderHandler: Handler = async () => {
+  // Interruttore System Control: messaggi automatici spenti = il giro salta
+  // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+  const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+  if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
   console.log('=== Booking Reminders Check Started ===');
 
   if (!supabaseUrl || !supabaseServiceKey) {

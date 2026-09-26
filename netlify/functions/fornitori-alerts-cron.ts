@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminNotificationPhone } from './utils/notificationPhone'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 /**
  * Daily cron — Phase 4 smart alerts for the Fornitori module.
@@ -102,6 +102,10 @@ async function ensureAlert(params: {
 }
 
 const handler: Handler = async () => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     const today = new Date()
     const todayISO = today.toISOString().slice(0, 10)
     const in3 = new Date(today); in3.setDate(in3.getDate() + 3)

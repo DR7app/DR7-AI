@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import crypto from 'crypto'
+import { funzioneFerma } from './utils/systemControl'
 
 /**
  * CARGOS API Proxy — Polizia di Stato
@@ -408,6 +409,9 @@ const handler: Handler = async (event) => {
                 if (req.records.length > 100) {
                     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Massimo 100 record per invio' }) }
                 }
+                // Interruttore System Control: invio manuale bloccato se CARGOS e' spento.
+                const ferma = await funzioneFerma('cargos', 'terra')
+                if (ferma) return { statusCode: 503, headers: corsHeaders, body: JSON.stringify({ error: ferma }) }
                 const tokenResult = await getToken(password)
                 if (tokenResult.error) {
                     return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: tokenResult.error }) }

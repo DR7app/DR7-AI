@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 /**
  * Riordino PERIODICO del magazzino (24/08/2026).
@@ -35,6 +35,10 @@ function giorniTra(a: string, b: Date): number {
 }
 
 const handler: Handler = async () => {
+  // Interruttore System Control: messaggi automatici spenti = il giro salta
+  // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+  const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+  if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return { statusCode: 500, body: 'Missing Supabase config' }
   }

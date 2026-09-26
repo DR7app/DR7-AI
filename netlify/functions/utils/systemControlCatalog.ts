@@ -235,6 +235,21 @@ export const ENDPOINT_RETRY_CONSENTITI: ReadonlySet<string> = new Set([
   'process-pending-addebiti',
 ])
 
+// Interruttore del System Control che governa ogni integrazione: se la
+// funzione e' spenta, nessuna ripresa (automatica o manuale) la contatta.
+export const FUNZIONE_PER_INTEGRAZIONE: Readonly<Record<string, string>> = {
+  nexi: 'pagamenti_online',
+  aruba_sdi: 'fatturazione_elettronica',
+  email: 'invio_email',
+  green_api: 'invio_whatsapp',
+  trustera: 'firma_elettronica',
+  cargos: 'cargos',
+}
+
+// Oltre questo tempo un'operazione 'in_corso' non e' piu' in esecuzione: il
+// processo che l'aveva presa e' morto (timeout Netlify, deploy, crash).
+export const PRESA_IN_CARICO_SCADE_MIN = 15
+
 // ── Job pianificati che il Super Admin puo' rilanciare a mano ──────────────
 // Solo funzioni idempotenti: rilanciarle due volte non produce doppioni.
 export const JOB_RILANCIABILI: { chiave: string; etichetta: string; funzione: string; descrizione: string }[] = [

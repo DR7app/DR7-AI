@@ -4132,6 +4132,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           return
         }
 
+        // 503 = firma elettronica spenta dal System Control: e' una scelta,
+        // non un guasto, quindi niente invio diretto del PDF che la aggira.
+        if (retryRes.status === 503) {
+          toast.error(retryData?.error || 'Firma elettronica spenta dal System Control.', { duration: 12000 })
+          return
+        }
+
         // FINAL FALLBACK: signature-init still broken — send the raw PDF URL
         // via the SAME signature_request_link template the primary path
         // uses. Body lives in Messaggi di Sistema Pro (pro_richiesta_firma);

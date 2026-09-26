@@ -22,19 +22,20 @@ export function BadgeSeverita({ severita }: { severita: Severita }) {
 
 const COLORI_STATO: Record<StatoServizio, string> = {
   operativo: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+  non_verificato: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30',
   degradato: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30',
   problema:  'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30',
   critico:   'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/40',
 }
 
 const ETICHETTE_STATO: Record<StatoServizio, string> = {
-  operativo: 'Operativo', degradato: 'Degradato', problema: 'Problema', critico: 'Critico',
+  operativo: 'Operativo', non_verificato: 'Non verificato', degradato: 'Degradato', problema: 'Problema', critico: 'Critico',
 }
 
 export function BadgeStato({ stato }: { stato: StatoServizio }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${COLORI_STATO[stato] || COLORI_STATO.problema}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${stato === 'operativo' ? 'bg-emerald-500' : stato === 'degradato' ? 'bg-amber-500' : stato === 'problema' ? 'bg-orange-500' : 'bg-red-500'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${stato === 'operativo' ? 'bg-emerald-500' : stato === 'non_verificato' ? 'bg-slate-400' : stato === 'degradato' ? 'bg-amber-500' : stato === 'problema' ? 'bg-orange-500' : 'bg-red-500'}`} />
       {ETICHETTE_STATO[stato] || stato}
     </span>
   )

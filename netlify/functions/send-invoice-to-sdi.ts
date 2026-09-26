@@ -7,7 +7,7 @@ import { uploadInvoiceToAruba } from './aruba-utils'
 // ripetibile dal pannello. VOLUTAMENTE `automatica: false` — un ritentativo
 // automatico rinumererebbe la fattura e potrebbe mandarne una seconda allo
 // SDI. La ripresa la decide una persona.
-import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata } from './utils/systemControl'
+import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -24,6 +24,16 @@ export const handler: Handler = async (event) => {
 
         if (!invoiceId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Invoice ID is required' }) }
+        }
+
+        // Interruttore System Control: fatturazione spenta = nessuna trasmissione
+        // e nessuna rinumerazione. La fattura resta com'e'.
+        const ferma = await funzioneFerma('fatturazione_elettronica')
+        if (ferma) {
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ success: false, skipped: true, reason: 'fatturazione_elettronica_off', message: ferma })
+            }
         }
 
         // Fetch invoice from database

@@ -10,7 +10,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { registraAzione, statoFunzione, mascheraTesto, VERSIONE, AMBIENTE, conSystemControl } from './utils/systemControl'
-import { eseguiRitentativo } from './utils/systemControlRetry'
+import { eseguiRitentativo, recuperaOperazioniBloccate } from './utils/systemControlRetry'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -59,17 +59,43 @@ async function riapriCircuiti(): Promise<number> {
  * Problemi temporanei (classe 1) che non si vedono da due ore: il gestionale
  * li chiude da solo e lo scrive. Non spariscono: restano nello storico con
  * "risolto automaticamente".
+ *
+ * Il silenzio da solo non basta: restano aperti se hanno ancora operazioni
+ * collegate non riuscite, o se la loro integrazione risulta ancora in errore.
  */
 async function chiudiProblemiRientrati(): Promise<number> {
   const dueOreFa = new Date(Date.now() - 2 * 3600_000).toISOString()
+  const { data: candidatiData, error } = await supabase.from('sc_error_groups')
+    .select('id, integrazione')
+    .eq('classe_risoluzione', 1).in('stato', ['aperto', 'in_corso'])
+    .lt('ultima_comparsa', dueOreFa).limit(200)
+  if (error) throw new Error(`Lettura problemi da chiudere non riuscita: ${error.message}`)
+  const candidati = (candidatiData || []) as { id: string; integrazione: string | null }[]
+  if (!candidati.length) return 0
+
+  const { data: opsData, error: opsErr } = await supabase.from('sc_operations')
+    .select('gruppo_id').in('gruppo_id', candidati.map(c => c.id))
+    .in('stato', ['in_coda', 'in_corso', 'fallita', 'abbandonata'])
+  if (opsErr) throw new Error(`Lettura operazioni collegate non riuscita: ${opsErr.message}`)
+  const conOperazioniAperte = new Set(((opsData || []) as { gruppo_id: string }[]).map(o => o.gruppo_id))
+
+  const { data: integrData } = await supabase.from('sc_integrations').select('chiave, stato, abilitata')
+  const integrazioniKo = new Set(((integrData || []) as { chiave: string; stato: string; abilitata: boolean }[])
+    .filter(i => i.abilitata !== false && ['errore', 'credenziali_scadute', 'servizio_non_disponibile'].includes(i.stato))
+    .map(i => i.chiave))
+
+  const daChiudere = candidati
+    .filter(c => !conOperazioniAperte.has(c.id) && !(c.integrazione && integrazioniKo.has(c.integrazione)))
+    .map(c => c.id)
+  if (!daChiudere.length) return 0
+
   const { data } = await supabase.from('sc_error_groups')
     .update({
       stato: 'risolto', risolto_at: new Date().toISOString(),
       risolto_auto: true, risolto_da: 'auto-riparazione',
-      risolto_come: 'Problema temporaneo rientrato da solo: nessuna nuova occorrenza per due ore.',
+      risolto_come: 'Nessuna nuova occorrenza per due ore, nessuna operazione collegata ancora aperta e integrazione non in errore. Se si ripresenta, il problema si riapre da solo.',
     })
-    .eq('classe_risoluzione', 1).in('stato', ['aperto', 'in_corso'])
-    .lt('ultima_comparsa', dueOreFa).select('id')
+    .in('id', daChiudere).in('stato', ['aperto', 'in_corso']).select('id')
   return data?.length || 0
 }
 
@@ -220,6 +246,7 @@ const handler: Handler = async () => {
   try {
     risultato.rilascioNuovo = await registraRilascioNuovo()
     risultato.circuitiRiaperti = await riapriCircuiti()
+    risultato.operazioniBloccateRecuperate = await recuperaOperazioniBloccate(supabase)
     const op = await riprendiOperazioni()
     risultato.operazioniTentate = op.tentate
     risultato.operazioniRiuscite = op.riuscite

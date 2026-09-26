@@ -38,7 +38,7 @@ import { matchesAdvancedFilters, matchesServiceType, passesCustomerFilters, load
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 import { getEmailFromSmtp } from './utils/emailFrom'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 import { recuperaRichiesteIbanMancanti } from './utils/richiestaIbanCauzione'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
@@ -1544,6 +1544,10 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
 }
 
 const cronHandler = async () => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     const now = Date.now();
     console.log(`[scheduled-msgs] cron fired at ${new Date(now).toISOString()}`);
 

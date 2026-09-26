@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getAdminNotificationPhone } from './utils/notificationPhone'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 /**
  * fatture-bozza-alert-cron — promemoria giornaliero WhatsApp sulle fatture
@@ -33,6 +33,10 @@ const fmtEUR = (n: number) => Number(n || 0).toLocaleString('it-IT', { minimumFr
 const NOTE_DI_CREDITO = ['nota_credito', 'nota_di_credito', 'TD04']
 
 const handler: Handler = async () => {
+    // Interruttore System Control: messaggi automatici spenti = il giro salta
+    // (il battito resta registrato: il cron e' vivo, ha solo saltato).
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     const { data: righe, error } = await supabase
         .from('fatture')
         .select('id, numero_fattura, customer_name, importo_totale, data_emissione, stato, tipo_fattura, sdi_status, sdi_response')

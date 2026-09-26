@@ -21,8 +21,9 @@ import {
 } from './systemControl'
 import { testaConnessione } from './systemControlTest'
 import {
-  INTEGRAZIONI, CRON_SORVEGLIATI, tolleranzaMinuti,
+  INTEGRAZIONI, CRON_SORVEGLIATI, tolleranzaMinuti, PRESA_IN_CARICO_SCADE_MIN,
 } from './systemControlCatalog'
+import { scadenzaPresaInCarico } from './systemControlRetry'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -138,20 +139,38 @@ async function controllaAutomatismi(): Promise<{ voci: VoceControllo[]; problemi
   const voci: VoceControllo[] = []
   let problemi = 0
 
-  const nomi = CRON_SORVEGLIATI.map(c => c.funzione)
-  const { data } = await supabase.from('sc_metrics')
-    .select('nome, ora').eq('tipo', 'job').in('nome', nomi)
-    .order('ora', { ascending: false }).limit(1000)
+  // Ultimo battito PER automatismo: una sola lettura globale con limite
+  // perdeva i cron mensili, sommersi dai battiti di quelli ogni 5 minuti.
   const ultimo = new Map<string, string>()
-  for (const r of (data || []) as { nome: string; ora: string }[]) {
-    if (!ultimo.has(r.nome)) ultimo.set(r.nome, r.ora)
-  }
+  await Promise.all(CRON_SORVEGLIATI.map(async c => {
+    const { data } = await supabase.from('sc_metrics')
+      .select('ora').eq('tipo', 'job').eq('nome', c.funzione)
+      .order('ora', { ascending: false }).limit(1)
+    const r = (data || [])[0] as { ora?: string } | undefined
+    if (r?.ora) ultimo.set(c.funzione, r.ora)
+  }))
+  // Da quando esiste la sorveglianza: il primo battito di qualunque job.
+  const { data: primoData } = await supabase.from('sc_metrics')
+    .select('ora').eq('tipo', 'job').order('ora', { ascending: true }).limit(1)
+  const inizioSorveglianza = ((primoData || [])[0] as { ora?: string } | undefined)?.ora
 
   for (const cron of CRON_SORVEGLIATI) {
     const battito = ultimo.get(cron.funzione)
     if (!battito) {
-      // Nessun battito: puo' essere che la sorveglianza sia appena partita.
-      // Non si apre un problema, si dice solo che non si sa ancora.
+      const tolleranza = tolleranzaMinuti(cron.ogniMinuti)
+      const sorvegliatoDaMin = inizioSorveglianza ? (Date.now() - new Date(inizioSorveglianza).getTime()) / 60_000 : 0
+      if (sorvegliatoDaMin > tolleranza + 60) {
+        // La sorveglianza gira da piu' della cadenza di questo cron e lui non
+        // ha mai lasciato traccia: non sta girando, o non e' collegato.
+        problemi++
+        voci.push({
+          area: 'automatismi', esito: 'ko',
+          titolo: `${cron.etichetta}: mai girato`,
+          dettaglio: `La sorveglianza e attiva da ${Math.round(sorvegliatoDaMin / 60)} ore e questo automatismo non ha mai lasciato un battito (cadenza attesa: ${descriviCadenza(cron.ogniMinuti)}).`,
+        })
+        continue
+      }
+      // Sorveglianza appena partita: non si sa ancora.
       voci.push({
         area: 'automatismi', esito: 'attenzione',
         titolo: `${cron.etichetta}: nessun giro registrato`,
@@ -232,22 +251,50 @@ async function controllaErrori(): Promise<{ voci: VoceControllo[]; problemi: num
 
 // ── 4. Operazioni rimaste ferme ────────────────────────────────────────────
 async function controllaOperazioni(): Promise<{ voci: VoceControllo[]; problemi: number }> {
-  const { data } = await supabase.from('sc_operations')
-    .select('id, tipo, stato, tentativi, created_at, integrazione')
-    .in('stato', ['in_coda', 'fallita', 'abbandonata']).limit(1000)
-  const ops = (data || []) as { stato: string; tipo: string; created_at: string }[]
+  const { data, error } = await supabase.from('sc_operations')
+    .select('id, tipo, stato, tentativi, created_at, updated_at, integrazione, automatica')
+    .in('stato', ['in_coda', 'in_corso', 'fallita', 'abbandonata']).limit(1000)
+  if (error) {
+    return {
+      voci: [{
+        area: 'operazioni', esito: 'ko',
+        titolo: 'Coda operazioni non leggibile',
+        dettaglio: `La lettura della coda non e riuscita: ${mascheraTesto(error.message)}. Non si puo dire se ci sono operazioni ferme.`,
+      }],
+      problemi: 1,
+    }
+  }
+  const scadenza = scadenzaPresaInCarico()
+  const tutte = (data || []) as { stato: string; tipo: string; created_at: string; updated_at: string | null; automatica: boolean | null }[]
+  // 'in_corso' da pochi minuti = ripresa in esecuzione adesso, non e' ferma.
+  const bloccate = tutte.filter(o => o.stato === 'in_corso' && (o.updated_at || o.created_at) < scadenza)
+  const ops = tutte.filter(o => o.stato !== 'in_corso' || bloccate.includes(o))
 
   const abbandonate = ops.filter(o => o.stato === 'abbandonata')
+  const manuali = ops.filter(o => o.stato === 'in_coda' && o.automatica === false)
   const vecchie = ops.filter(o => o.stato === 'in_coda' && Date.now() - new Date(o.created_at).getTime() > 6 * 3600_000)
 
   const voci: VoceControllo[] = [{
     area: 'operazioni',
-    esito: abbandonate.length ? 'ko' : ops.length ? 'attenzione' : 'ok',
+    esito: abbandonate.length || bloccate.length ? 'ko' : ops.length ? 'attenzione' : 'ok',
     titolo: ops.length ? `${ops.length} operazioni in sospeso` : 'Nessuna operazione in sospeso',
     dettaglio: ops.length
-      ? `${abbandonate.length} hanno smesso di ritentare e aspettano una persona, ${vecchie.length} sono in coda da piu di sei ore.`
+      ? `${abbandonate.length} hanno smesso di ritentare e aspettano una persona, ` +
+        `${bloccate.length} risultano bloccate in esecuzione da oltre ${PRESA_IN_CARICO_SCADE_MIN} minuti, ` +
+        `${manuali.length} in coda ripartono solo con Riprova, ${vecchie.length} sono in coda da piu di sei ore.`
       : 'La coda e vuota.',
   }]
+
+  if (bloccate.length) {
+    await registraEvento({
+      messaggio: `${bloccate.length} operazioni risultano in esecuzione da oltre ${PRESA_IN_CARICO_SCADE_MIN} minuti senza esito.`,
+      titolo: 'Operazioni bloccate in esecuzione',
+      causa: 'Il processo che le stava eseguendo si e interrotto. Il ciclo di auto-riparazione le passa fra quelle da guardare a mano: prima di riprenderle verifica se l invio era partito.',
+      categoria: 'operazioni', modulo: 'controllo-orario', funzione: 'controllaOperazioni',
+      origine: 'cron', severita: 'alto', classe: 2, azioni: ['riprova', 'annulla_operazione'],
+      contesto: { bloccate: bloccate.length },
+    })
+  }
 
   if (abbandonate.length) {
     await registraEvento({
@@ -260,7 +307,7 @@ async function controllaOperazioni(): Promise<{ voci: VoceControllo[]; problemi:
     })
   }
 
-  return { voci, problemi: abbandonate.length ? 1 : 0 }
+  return { voci, problemi: abbandonate.length || bloccate.length ? 1 : 0 }
 }
 
 // ── 5. Database ────────────────────────────────────────────────────────────

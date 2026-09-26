@@ -15,18 +15,38 @@ const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABA
 
 // Funzioni spegnibili. Chi aggiunge una funzione nuova la mette qui: e'
 // l'elenco che il Super Admin vede nella tab.
-export const FUNZIONI_SPEGNIBILI: { chiave: string; etichetta: string; descrizione: string; critica: boolean }[] = [
-  { chiave: 'prenotazioni_online',  etichetta: 'Prenotazioni dal sito',      descrizione: 'I clienti possono prenotare dal sito pubblico.', critica: true },
-  { chiave: 'pagamenti_online',     etichetta: 'Pagamenti online',           descrizione: 'Link di pagamento e checkout Nexi.', critica: true },
-  { chiave: 'fatturazione_elettronica', etichetta: 'Fatturazione elettronica', descrizione: 'Trasmissione delle fatture allo SDI.', critica: true },
-  { chiave: 'invio_whatsapp',       etichetta: 'Invii WhatsApp',             descrizione: 'Tutti i messaggi WhatsApp automatici e manuali.', critica: false },
-  { chiave: 'invio_email',          etichetta: 'Invii e-mail',               descrizione: 'Tutte le e-mail automatiche.', critica: false },
-  { chiave: 'firma_elettronica',    etichetta: 'Firma elettronica',          descrizione: 'Invio contratti alla firma.', critica: true },
-  { chiave: 'cargos',               etichetta: 'Invii CARGOS',               descrizione: 'Comunicazioni obbligatorie.', critica: true },
-  { chiave: 'campagne_marketing',   etichetta: 'Campagne marketing',         descrizione: 'Invii massivi programmati.', critica: false },
-  { chiave: 'messaggi_automatici',  etichetta: 'Messaggi di sistema',        descrizione: 'Promemoria e messaggi automatici pianificati.', critica: false },
-  { chiave: 'auto_riparazione',     etichetta: 'Auto-riparazione',           descrizione: 'Il ciclo che ritenta da solo le operazioni fallite.', critica: false },
-  { chiave: 'gestionale',           etichetta: 'Intero gestionale',          descrizione: 'Solo per manutenzione programmata: mostra il messaggio a tutti.', critica: true },
+//
+// `copertura` dice la verita' su cosa ferma davvero l'interruttore:
+//  - 'collegata'     : ogni punto che esegue l'azione controlla l'interruttore;
+//  - 'parziale'      : alcuni punti si', altri no (`cosaFerma` dice quali);
+//  - 'non_collegata' : nessun punto lo controlla ancora. Non si puo' spegnere:
+//                      mostrerebbe SPENTA mentre tutto continua a girare.
+// Chi collega un nuovo punto usa funzioneFerma() (utils/systemControl.ts) e
+// aggiorna qui copertura e cosaFerma.
+export type Copertura = 'collegata' | 'parziale' | 'non_collegata'
+export const FUNZIONI_SPEGNIBILI: { chiave: string; etichetta: string; descrizione: string; critica: boolean; copertura: Copertura; cosaFerma: string }[] = [
+  { chiave: 'prenotazioni_online',  etichetta: 'Prenotazioni dal sito',      descrizione: 'I clienti possono prenotare dal sito pubblico.', critica: true,
+    copertura: 'non_collegata', cosaFerma: 'Non ancora collegato: il sito scrive le prenotazioni direttamente dal browser, serve un blocco nel database.' },
+  { chiave: 'pagamenti_online',     etichetta: 'Pagamenti online',           descrizione: 'Link di pagamento e checkout Nexi.', critica: true,
+    copertura: 'non_collegata', cosaFerma: 'Non ancora collegato ai link di pagamento e al checkout del sito.' },
+  { chiave: 'fatturazione_elettronica', etichetta: 'Fatturazione elettronica', descrizione: 'Trasmissione delle fatture allo SDI.', critica: true,
+    copertura: 'collegata', cosaFerma: 'Ogni trasmissione ad Aruba/SDI, manuale e automatica. Le fatture restano in bozza, nessun numero viene consumato.' },
+  { chiave: 'invio_whatsapp',       etichetta: 'Invii WhatsApp',             descrizione: 'Tutti i messaggi WhatsApp automatici e manuali.', critica: false,
+    copertura: 'non_collegata', cosaFerma: 'Oggi ferma solo gli avvisi del System Control: gli invii ai clienti partono da circa trenta punti non ancora collegati.' },
+  { chiave: 'invio_email',          etichetta: 'Invii e-mail',               descrizione: 'Tutte le e-mail automatiche.', critica: false,
+    copertura: 'non_collegata', cosaFerma: 'Non ancora collegato: le e-mail partono da circa venti punti diversi.' },
+  { chiave: 'firma_elettronica',    etichetta: 'Firma elettronica',          descrizione: 'Invio contratti alla firma.', critica: true,
+    copertura: 'collegata', cosaFerma: 'Nuovi invii alla firma di contratti e documenti. Le firme gia inviate restano firmabili.' },
+  { chiave: 'cargos',               etichetta: 'Invii CARGOS',               descrizione: 'Comunicazioni obbligatorie.', critica: true,
+    copertura: 'collegata', cosaFerma: 'Invio automatico, recupero ogni 30 minuti e invio manuale dalla tab CARGOS.' },
+  { chiave: 'campagne_marketing',   etichetta: 'Campagne marketing',         descrizione: 'Invii massivi programmati.', critica: false,
+    copertura: 'parziale', cosaFerma: 'Campagne WhatsApp (invio e programmazione). Non ferma promo automatiche, compleanni e richieste di recensione.' },
+  { chiave: 'messaggi_automatici',  etichetta: 'Messaggi di sistema',        descrizione: 'Promemoria e messaggi automatici pianificati.', critica: false,
+    copertura: 'parziale', cosaFerma: 'I messaggi pianificati e i promemoria a orario (cron). Non ferma i messaggi che partono subito dopo un evento, come la conferma di pagamento.' },
+  { chiave: 'auto_riparazione',     etichetta: 'Auto-riparazione',           descrizione: 'Il ciclo che ritenta da solo le operazioni fallite.', critica: false,
+    copertura: 'collegata', cosaFerma: 'Il ciclo ogni 5 minuti e il controllo orario.' },
+  { chiave: 'gestionale',           etichetta: 'Intero gestionale',          descrizione: 'Solo per manutenzione programmata: ferma tutte le funzioni collegate qui sopra.', critica: true,
+    copertura: 'parziale', cosaFerma: 'Ferma insieme tutte le funzioni collegate o parziali di questo elenco. Non blocca l accesso al gestionale ne le funzioni non collegate.' },
 ]
 
 const handler: Handler = async (event) => {
@@ -64,6 +84,14 @@ const handler: Handler = async (event) => {
 
     const business = body.business || '*'
     const spegnimento = body.attiva === false || body.manutenzione === true
+    // Un interruttore che nessuna funzione legge non si spegne: il pannello
+    // direbbe SPENTA mentre tutto continua. Riattivare resta sempre possibile.
+    if (spegnimento && funzione.copertura === 'non_collegata') {
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({ ok: false, messaggio: `«${funzione.etichetta}» non e ancora collegato: spegnerlo non fermerebbe nulla. ${funzione.cosaFerma}` }),
+      }
+    }
     // Spegnere una funzione critica per TUTTE le aziende esige la conferma
     // esplicita: e' l'unico modo per farlo per sbaglio, e non deve esistere.
     if (spegnimento && business === '*' && funzione.critica && !body.conferma) {

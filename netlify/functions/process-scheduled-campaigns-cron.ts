@@ -22,7 +22,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -367,6 +367,10 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
         return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'missing supabase env' }) }
     }
+    // Interruttore System Control: campagne spente = niente destinatari
+    // preparati e niente invii; le campagne pianificate aspettano.
+    const ferma = await funzioneFerma('campagne_marketing')
+    if (ferma) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: ferma }) }
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
     })

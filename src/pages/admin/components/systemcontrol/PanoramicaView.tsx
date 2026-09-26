@@ -20,8 +20,9 @@ interface Panoramica {
     daSviluppo: number
     piuGravi: GruppoProblema[]
   }
-  operazioni?: { inCoda: number; abbandonate: number; totale: number }
-  integrazioni?: { totale: number; conProblemi: number }
+  operazioni?: { inCoda: number; abbandonate: number; bloccate?: number; soloManuali?: number; totale: number }
+  integrazioni?: { totale: number; conProblemi: number; verificate?: number; maiVerificate?: number }
+  lettureFallite?: string[]
   prestazioni?: { chiamate24h: number; tassoErrore: number; mediaMs: number }
   interruttori?: { spente: { chiave: string; business: string }[]; manutenzione: { chiave: string; business: string }[] }
   backup?: { eseguito_at: string; esito: string; messaggio: string | null } | null
@@ -43,6 +44,10 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
 }) {
   const [dati, setDati] = useState<Panoramica | null>(null)
   const [caricamento, setCaricamento] = useState(true)
+  // Ultimo caricamento fallito: senza dati freschi non si mostra nessuno
+  // stato rassicurante, solo l'indisponibilita' e il pulsante per riprovare.
+  const [erroreCaricamento, setErroreCaricamento] = useState<string | null>(null)
+  const [aggiornatoAt, setAggiornatoAt] = useState<string | null>(null)
   const [inControllo, setInControllo] = useState(false)
   const [mostraTutte, setMostraTutte] = useState(false)
 
@@ -65,8 +70,12 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
     if (!silenzioso) setCaricamento(true)
     try {
       setDati(await systemControl.panoramica() as unknown as Panoramica)
+      setErroreCaricamento(null)
+      setAggiornatoAt(new Date().toISOString())
     } catch (e) {
-      toast.error((e as Error).message)
+      const msg = (e as Error).message || 'errore sconosciuto'
+      setErroreCaricamento(msg)
+      if (!silenzioso) toast.error(msg)
     } finally {
       setCaricamento(false)
     }
@@ -81,6 +90,20 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
   }, [])
 
   if (caricamento && !dati) return <p className="text-sm text-theme-text-muted">Controllo dello stato in corso...</p>
+
+  if (!dati) {
+    return (
+      <Scheda titolo="Stato non disponibile">
+        <div className="px-4 py-5 space-y-3">
+          <p className="text-sm text-theme-text-secondary leading-relaxed">
+            Non e stato possibile leggere lo stato della piattaforma{erroreCaricamento ? `: ${erroreCaricamento}` : '.'} Finche
+            la lettura non riesce, nessuno stato, contatore o problema mostrato qui sarebbe affidabile.
+          </p>
+          <Bottone onClick={() => void carica()} variante="primario">Riprova</Bottone>
+        </div>
+      </Scheda>
+    )
+  }
 
   if (dati && !dati.migrazioneEseguita) {
     return (
@@ -117,9 +140,10 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
       {/* Riga di intestazione: stato complessivo */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <BadgeStato stato={dati?.statoGenerale || 'operativo'} />
+          <BadgeStato stato={dati.statoGenerale || 'non_verificato'} />
           <span className="text-xs text-theme-text-muted">
-            Ambiente {dati?.ambiente} · versione {dati?.versione}
+            Ambiente {dati.ambiente} · versione {dati.versione}
+            {aggiornatoAt ? ` · letto alle ${dataOra(aggiornatoAt)}` : ''}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -129,6 +153,12 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
           <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
         </div>
       </div>
+
+      {erroreCaricamento && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Ultimo aggiornamento non riuscito ({erroreCaricamento}): i dati qui sotto sono quelli letti alle {aggiornatoAt ? dataOra(aggiornatoAt) : '—'} e potrebbero non essere piu veri.
+        </p>
+      )}
 
       {/* Controllo orario: il verbale dell'ultimo giro completo */}
       <Scheda
@@ -142,7 +172,7 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
         {dati?.ultimoControllo ? (
           <div className="px-4 py-3 space-y-3">
             <div className="flex flex-wrap items-center gap-3">
-              <BadgeStato stato={(dati.ultimoControllo.statoGenerale as StatoServizio) || 'operativo'} />
+              <BadgeStato stato={(dati.ultimoControllo.statoGenerale as StatoServizio) || 'non_verificato'} />
               <p className="text-sm text-theme-text-primary">{dati.ultimoControllo.riepilogo}</p>
             </div>
             {dati.ultimoControllo.inRitardo && (
@@ -207,12 +237,18 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
         <button onClick={() => onCambiaVista('operazioni')} className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:border-[#007aff]/50 transition-colors">
           <p className="text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Operazioni ferme</p>
           <p className="text-2xl font-light text-theme-text-primary">{dati?.operazioni?.totale ?? 0}</p>
-          <p className="text-[11px] text-theme-text-muted mt-1">{dati?.operazioni?.abbandonate ?? 0} aspettano te</p>
+          <p className="text-[11px] text-theme-text-muted mt-1">
+            {dati?.operazioni?.abbandonate ?? 0} aspettano te
+            {dati?.operazioni?.bloccate ? ` · ${dati.operazioni.bloccate} bloccate` : ''}
+          </p>
         </button>
         <button onClick={() => onCambiaVista('integrazioni')} className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:border-[#007aff]/50 transition-colors">
           <p className="text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Collegamenti</p>
           <p className="text-2xl font-light text-theme-text-primary">{dati?.integrazioni?.conProblemi ?? 0}</p>
-          <p className="text-[11px] text-theme-text-muted mt-1">con problemi su {dati?.integrazioni?.totale ?? 0}</p>
+          <p className="text-[11px] text-theme-text-muted mt-1">
+            con problemi su {dati?.integrazioni?.totale ?? 0}
+            {dati?.integrazioni?.maiVerificate ? ` · ${dati.integrazioni.maiVerificate} mai verificati` : ''}
+          </p>
         </button>
         <button onClick={() => onCambiaVista('prestazioni')} className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:border-[#007aff]/50 transition-colors">
           <p className="text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Errori 24h</p>
@@ -252,7 +288,9 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
               </button>
             ))}
           </div>
-        ) : <Vuoto testo="Nessun problema aperto. Tutto in ordine." />}
+        ) : <Vuoto testo={dati.lettureFallite?.includes('problemi aperti')
+          ? 'Problemi aperti non leggibili: impossibile dire se ce ne sono.'
+          : 'Nessun problema aperto.'} />}
       </Scheda>
 
       {/* Interruttori attivi, backup, rilascio */}
@@ -271,7 +309,9 @@ export default function PanoramicaView({ onApriProblema, onCambiaVista }: {
                 </p>
               ))}
             </div>
-          ) : <Vuoto testo="Tutte le funzioni sono attive." />}
+          ) : <Vuoto testo={dati.lettureFallite?.includes('interruttori')
+            ? 'Interruttori non leggibili: impossibile dire quali funzioni sono spente.'
+            : 'Nessun interruttore spento o in manutenzione.'} />}
         </Scheda>
 
         <Scheda titolo="Backup">
