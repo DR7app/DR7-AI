@@ -121,6 +121,7 @@ DR7 A.I.`
 <p style="font-size:12px;color:#999;margin-top:32px;border-top:1px solid #eee;padding-top:16px">Il link vale una sola volta e scade dopo un'ora. Se non hai richiesto tu la modifica, ignora questo messaggio: la password attuale resta valida.<br><br>DR7 A.I.</p>
 </div>`
 
+    // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },

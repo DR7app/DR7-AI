@@ -86,6 +86,7 @@ export const handler: Handler = async (event) => {
     const resend = new Resend(apiKey)
     const actionLabel = action === 'credit' ? 'CREDITO' : 'ADDEBITO'
 
+    // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
     const { error: emailError } = await resend.emails.send({
       from: await getEmailFrom('DR7 <info@dr7.app>'),
       to: await getOtpRecipients(),

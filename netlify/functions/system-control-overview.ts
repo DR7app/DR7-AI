@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { corsHeaders } from './cors-headers'
 import { requireAuth } from './require-auth'
 import { userHasRole } from './utils/adminRoles'
-import { INTEGRAZIONI, PRESA_IN_CARICO_SCADE_MIN } from './utils/systemControlCatalog'
+import { INTEGRAZIONI, PRESA_IN_CARICO_SCADE_MIN, provaReale } from './utils/systemControlCatalog'
 import { scadenzaPresaInCarico } from './utils/systemControlRetry'
 import { AMBIENTE, VERSIONE } from './utils/systemControl'
 
@@ -157,14 +157,21 @@ const handler: Handler = async (event) => {
   const perChiave = new Map(integr.map(i => [i.chiave, i]))
   const nome = (k: string) => INTEGRAZIONI.find(x => x.chiave === k)?.etichetta || k
   const rotte = integr.filter(i => i.abilitata !== false && ['errore', 'credenziali_scadute', 'servizio_non_disponibile'].includes(i.stato))
-  // Verificato = almeno un test riuscito o una chiamata vera andata a buon fine.
+  // Verificato = una prova che contatta davvero il servizio e' riuscita, o una
+  // chiamata vera e' andata a buon fine. "Solo credenziali" = le impostazioni
+  // ci sono ma il servizio non espone una prova sicura: non e' un guasto, ma
+  // si dice che la prova e' piu' debole.
   const attive = INTEGRAZIONI.filter(m => perChiave.get(m.chiave)?.abilitata !== false)
   const verificate = attive.filter(m => {
     const r = perChiave.get(m.chiave)
-    return !!r && (r.ultimo_test_ok === true || !!r.ultima_chiamata_ok_at)
+    return !!r && ((r.ultimo_test_ok === true && provaReale(m.chiave)) || !!r.ultima_chiamata_ok_at)
+  })
+  const soloCredenziali = attive.filter(m => {
+    const r = perChiave.get(m.chiave)
+    return !verificate.includes(m) && !!r && r.ultimo_test_ok === true
   })
   const nonConfigurate = attive.filter(m => m.variabili.length > 0 && m.variabili.every(v => !process.env[v]))
-  const maiVerificate = attive.filter(m => !verificate.includes(m) && !nonConfigurate.includes(m) && !rotte.some(r => r.chiave === m.chiave))
+  const maiVerificate = attive.filter(m => !verificate.includes(m) && !soloCredenziali.includes(m) && !nonConfigurate.includes(m) && !rotte.some(r => r.chiave === m.chiave))
   if (integrErr) {
     lettureFallite.push('integrazioni')
     servizi.push({
@@ -178,11 +185,12 @@ const handler: Handler = async (event) => {
         : rotte.length ? 'problema'
         // Un servizio mai configurato non e' un guasto, ma se nessuno e'
         // mai stato verificato non c'e' alcuna prova che qualcosa risponda.
-        : maiVerificate.length || !verificate.length ? 'non_verificato'
+        : maiVerificate.length || !(verificate.length + soloCredenziali.length) ? 'non_verificato'
         : 'operativo',
       dettaglio: [
         rotte.length ? `${rotte.length} collegamenti con problemi: ${rotte.map(i => nome(i.chiave)).join(', ')}.` : '',
-        `${verificate.length} su ${attive.length} verificati.`,
+        `${verificate.length} su ${attive.length} verificati con una chiamata reale.`,
+        soloCredenziali.length ? `Solo credenziali presenti (nessuna prova sicura possibile): ${soloCredenziali.map(m => m.etichetta).join(', ')}.` : '',
         maiVerificate.length ? `Mai verificati: ${maiVerificate.map(m => m.etichetta).join(', ')}. Premi Testa connessione o Controlla adesso.` : '',
         nonConfigurate.length ? `Non configurati: ${nonConfigurate.map(m => m.etichetta).join(', ')}.` : '',
       ].filter(Boolean).join(' '),

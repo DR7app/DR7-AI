@@ -21,7 +21,7 @@ import {
 } from './systemControl'
 import { testaConnessione } from './systemControlTest'
 import {
-  INTEGRAZIONI, CRON_SORVEGLIATI, tolleranzaMinuti, PRESA_IN_CARICO_SCADE_MIN,
+  INTEGRAZIONI, CRON_SORVEGLIATI, tolleranzaMinuti, PRESA_IN_CARICO_SCADE_MIN, provaReale,
 } from './systemControlCatalog'
 import { scadenzaPresaInCarico } from './systemControlRetry'
 
@@ -58,12 +58,20 @@ async function controllaCollegamenti(): Promise<{ voci: VoceControllo[]; problem
   const voci: VoceControllo[] = []
   let problemi = 0
 
-  for (const meta of INTEGRAZIONI) {
+  // Le prove partono tutte insieme (ognuna ha il suo tempo massimo in
+  // testaConnessione): in fila, un servizio lento ritardava tutti gli altri.
+  const esiti = await Promise.all(INTEGRAZIONI.map(async meta => {
     const configurabili = meta.variabili.length
     const presenti = meta.variabili.filter(v => !!process.env[v]).length
-    const maiConfigurata = configurabili > 0 && presenti === 0
+    if (configurabili > 0 && presenti === 0) return { meta, esito: null }
+    return { meta, esito: await testaConnessione(meta.chiave) }
+  }))
 
-    if (maiConfigurata) {
+  for (const { meta, esito } of esiti) {
+    const configurabili = meta.variabili.length
+    const presenti = meta.variabili.filter(v => !!process.env[v]).length
+
+    if (!esito) {
       voci.push({
         area: 'collegamenti', esito: 'attenzione',
         titolo: `${meta.etichetta}: non configurato`,
@@ -76,22 +84,23 @@ async function controllaCollegamenti(): Promise<{ voci: VoceControllo[]; problem
       continue
     }
 
-    const esito = await testaConnessione(meta.chiave)
+    const reale = provaReale(meta.chiave)
     await aggiornaIntegrazione(meta.chiave, {
       stato: esito.ok ? 'collegato' : 'errore',
       ultimo_test_at: ora(),
       ultimo_test_ok: esito.ok,
       ultimo_test_messaggio: esito.messaggio.slice(0, 500),
       latenza_media_ms: esito.latenzaMs,
+      // ultima_chiamata_ok_at solo se il servizio e' stato contattato davvero.
       ...(esito.ok
-        ? { fallimenti_consecutivi: 0, ultima_chiamata_ok_at: ora() }
+        ? { fallimenti_consecutivi: 0, ...(reale ? { ultima_chiamata_ok_at: ora() } : {}) }
         : { ultimo_errore: esito.messaggio.slice(0, 500), ultimo_errore_at: ora() }),
     })
 
     if (esito.ok) {
       voci.push({
         area: 'collegamenti', esito: 'ok',
-        titolo: meta.etichetta,
+        titolo: reale ? meta.etichetta : `${meta.etichetta}: solo credenziali`,
         dettaglio: `${esito.messaggio} (${esito.latenzaMs} ms)`,
       })
       continue

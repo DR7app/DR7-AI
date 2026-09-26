@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import nodemailer from 'nodemailer'
 import { pecHostFor, pecProviderFor, PEC_PORT } from './utils/pecServer'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -1137,6 +1138,13 @@ const handler: Handler = async (event) => {
             case 'sendPec': {
                 if (!req.multaData || !req.driverData) {
                     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Dati multa e conducente richiesti' }) }
+                }
+
+                // Interruttore System Control: e-mail spente = nessuna PEC inviata, la multa resta com'e'.
+                const fermaEmail = await funzioneFerma('invio_email')
+                if (fermaEmail) {
+                    console.warn('[process-multa] invio saltato: ' + fermaEmail)
+                    return { statusCode: 503, headers: corsHeaders, body: JSON.stringify({ error: fermaEmail }) }
                 }
 
                 // Il contratto deve partire INSIEME al verbale: si risolve

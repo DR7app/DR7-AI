@@ -78,6 +78,13 @@ export const handler: Handler = async (event) => {
     if (ferma) {
         return { statusCode: 503, body: JSON.stringify({ error: ferma }) };
     }
+    // Interruttore System Control: WhatsApp spento = nessun messaggio (i
+    // destinatari restano da inviare e ripartono alla riaccensione).
+    const fermaWa = await funzioneFerma("invio_whatsapp");
+    if (fermaWa) {
+        console.warn("[send-whatsapp-campaign-chunk] invio saltato: " + fermaWa);
+        return { statusCode: 503, body: JSON.stringify({ error: fermaWa, skipped: true, reason: "invio_whatsapp_off", message: fermaWa }) };
+    }
     if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
         return { statusCode: 500, body: JSON.stringify({ error: "Green API non configurato (GREEN_API_INSTANCE_ID/GREEN_API_TOKEN)" }) };
     }

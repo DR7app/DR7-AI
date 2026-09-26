@@ -2,7 +2,7 @@ import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -188,7 +188,10 @@ const cancelHandler: Handler = async () => {
                     bookingRef: booking.id.substring(0, 8).toUpperCase(),
                     link_status: linkDeactivated ? 'disattivato' : 'non trovato/già scaduto',
                 });
-                if (adminMessage) {
+                // Interruttore System Control: WhatsApp spento = avviso admin saltato, l'annullamento resta.
+                const fermaWa = adminMessage ? await funzioneFerma('invio_whatsapp') : null
+                if (fermaWa) console.warn('[cancel-unpaid-nexi-bookings] invio saltato: ' + fermaWa)
+                if (adminMessage && !fermaWa) {
                     await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

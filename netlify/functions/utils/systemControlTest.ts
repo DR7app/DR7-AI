@@ -24,6 +24,16 @@ const SEGRETI_ENV: Record<string, string[]> = {
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
+// Ogni prova ha un tempo massimo: un servizio appeso non deve impedire al
+// controllo orario di finire e di scrivere il suo verbale.
+const TEMPO_MASSIMO_MS = 8_000
+function conTempoMassimo<T>(p: PromiseLike<T>): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>((_, rifiuta) => setTimeout(() => rifiuta(new Error(`Nessuna risposta entro ${TEMPO_MASSIMO_MS / 1000} secondi`)), TEMPO_MASSIMO_MS)),
+  ])
+}
+
 /** Prova davvero il collegamento. Non restituisce mai valori di credenziali. */
 export async function testaConnessione(chiave: string): Promise<EsitoTest> {
   const meta = INTEGRAZIONE_BY_CHIAVE[chiave]
@@ -35,22 +45,22 @@ export async function testaConnessione(chiave: string): Promise<EsitoTest> {
   try {
     switch (meta.test) {
       case 'supabase': {
-        const { error } = await supabase.from('admins').select('id', { head: true, count: 'exact' }).limit(1)
+        const { error } = await conTempoMassimo(supabase.from('admins').select('id', { head: true, count: 'exact' }).limit(1))
         return { ok: !error, messaggio: error ? mascheraTesto(error.message) : 'Il database risponde alle letture.', latenzaMs: durata() }
       }
       case 'auth': {
-        const { error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 })
+        const { error } = await conTempoMassimo(supabase.auth.admin.listUsers({ page: 1, perPage: 1 }))
         return { ok: !error, messaggio: error ? mascheraTesto(error.message) : 'Il servizio di accesso risponde.', latenzaMs: durata() }
       }
       case 'storage': {
-        const { data, error } = await supabase.storage.listBuckets()
+        const { data, error } = await conTempoMassimo(supabase.storage.listBuckets())
         return { ok: !error, messaggio: error ? mascheraTesto(error.message) : `Archivio raggiungibile (${data?.length || 0} contenitori).`, latenzaMs: durata() }
       }
       case 'http': {
         // Firma elettronica: si controlla che l app di firma risponda.
         if (chiave === 'trustera') {
           const base = process.env.SIGNING_BASE_URL || 'https://dr7trust.com'
-          const res = await fetch(base, { method: 'GET' })
+          const res = await fetch(base, { method: 'GET', signal: AbortSignal.timeout(TEMPO_MASSIMO_MS) })
           return {
             ok: res.ok || res.status === 401 || res.status === 403,
             messaggio: res.ok ? 'L app di firma risponde.' : `L app di firma ha risposto ${res.status}.`,
@@ -63,7 +73,7 @@ export async function testaConnessione(chiave: string): Promise<EsitoTest> {
           const id = process.env.GREEN_API_INSTANCE_ID
           const token = process.env.GREEN_API_TOKEN
           if (!id || !token) return { ok: false, messaggio: 'Credenziali WhatsApp non configurate.', latenzaMs: durata() }
-          const res = await fetch(`https://api.green-api.com/waInstance${id}/getStateInstance/${token}`)
+          const res = await fetch(`https://api.green-api.com/waInstance${id}/getStateInstance/${token}`, { signal: AbortSignal.timeout(TEMPO_MASSIMO_MS) })
           const stato = res.ok ? ((await res.json()) as { stateInstance?: string })?.stateInstance : null
           return {
             ok: res.ok && stato === 'authorized',
@@ -72,7 +82,7 @@ export async function testaConnessione(chiave: string): Promise<EsitoTest> {
           }
         }
         if (!meta.testUrl) return { ok: false, messaggio: 'Nessuna prova disponibile.', latenzaMs: durata() }
-        const res = await fetch(meta.testUrl)
+        const res = await fetch(meta.testUrl, { signal: AbortSignal.timeout(TEMPO_MASSIMO_MS) })
         return { ok: res.ok, messaggio: res.ok ? 'Il servizio risponde.' : `Il servizio ha risposto ${res.status}.`, latenzaMs: durata() }
       }
       // Credenziali che stanno nel database (service_secrets), non fra le
@@ -109,6 +119,10 @@ export async function testaConnessione(chiave: string): Promise<EsitoTest> {
         return { ok: true, messaggio: 'Nessuna prova prevista per questo collegamento.', latenzaMs: durata() }
     }
   } catch (err) {
-    return { ok: false, messaggio: mascheraTesto((err as Error)?.message || String(err)), latenzaMs: durata() }
+    const e = err as Error
+    const messaggio = e?.name === 'TimeoutError' || e?.name === 'AbortError'
+      ? `Nessuna risposta entro ${TEMPO_MASSIMO_MS / 1000} secondi.`
+      : (e?.message || String(err))
+    return { ok: false, messaggio: mascheraTesto(messaggio), latenzaMs: durata() }
   }
 }

@@ -5,6 +5,7 @@ import { Resend } from 'resend';
 import { getMessageTemplate } from './utils/messageTemplates';
 import { getMarketingConfig } from './utils/loadMarketing';
 import { getEmailFrom } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -56,6 +57,12 @@ const handler: Handler = async (event) => {
 
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: getHeaders(event.headers.origin), body: JSON.stringify({ error: 'Method Not Allowed' }) };
+  }
+
+  // Interruttore System Control: campagne marketing spente = nessuna promo parte.
+  const fermaCampagne = await funzioneFerma('campagne_marketing');
+  if (fermaCampagne) {
+    return { statusCode: 503, headers: getHeaders(event.headers.origin), body: JSON.stringify({ success: false, skipped: true, reason: 'campagne_marketing_off', error: fermaCampagne, message: fermaCampagne }) };
   }
 
   try {
@@ -131,6 +138,22 @@ const handler: Handler = async (event) => {
         headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: 'WhatsApp non disponibile per questo candidato' }),
       };
+    }
+
+    // Interruttore System Control: canale spento = nessuna richiesta creata e
+    // candidato lasciato com'e' (si invia quando il canale torna acceso).
+    if (!previewOnly) {
+      const businessRecensione = candidate.service_type === 'WASH' ? 'lavaggio' : 'terra';
+      const fermaCanale = (needsWhatsapp ? await funzioneFerma('invio_whatsapp', businessRecensione) : null)
+        || (needsEmail ? await funzioneFerma('invio_email', businessRecensione) : null);
+      if (fermaCanale) {
+        console.warn('[review-send] invio saltato: ' + fermaCanale);
+        return {
+          statusCode: 503,
+          headers: getHeaders(event.headers.origin),
+          body: JSON.stringify({ error: fermaCanale, skipped: true }),
+        };
+      }
     }
 
     // 3a. Lo stato del candidato comanda: solo TO_SEND (mai inviato) e FAILED

@@ -9,6 +9,7 @@ import { loadBusinessConfig, businessRowForServiceType } from './utils/businessC
 import { datiContrattoMancanti, elencoLeggibile } from './utils/datiContrattoMancanti'
 import { createHash } from 'crypto'
 import QRCode from 'qrcode'
+import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -537,7 +538,10 @@ async function reconductSignedContract(params: {
     } catch (e: any) { console.warn('[reconduct] update signature_requests fallito (non blocca invio):', e?.message) }
     try {
         const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID, GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
-        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && customerPhone) {
+        // Interruttore System Control: WhatsApp spento = contratto ricondotto ma non inviato.
+        const fermaWa = await funzioneFerma('invio_whatsapp', businessDaServiceType((booking as { service_type?: string | null }).service_type))
+        if (fermaWa) console.warn('[generate-contract] invio saltato: ' + fermaWa)
+        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && customerPhone && !fermaWa) {
             let cleanPhone = String(customerPhone).replace(/\D/g, '')
             if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
             if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone

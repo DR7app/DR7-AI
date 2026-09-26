@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
 import { getEmailFrom } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 /**
  * Ordine di magazzino via EMAIL (24/08/2026).
@@ -71,6 +72,14 @@ const handler: Handler = async (event) => {
     const html = `<pre style="font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:14px;white-space:pre-wrap">${
       testo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     }</pre>`
+
+    // Interruttore System Control: e-mail spente = ordine NON inviato (503),
+    // cosi' ne' la schermata ne' il cron lo segnano come partito.
+    const fermaEmail = await funzioneFerma('invio_email')
+    if (fermaEmail) {
+      console.warn('[send-magazzino-ordine-email] invio saltato: ' + fermaEmail)
+      return { statusCode: 503, headers, body: JSON.stringify({ success: false, skipped: true, reason: 'invio_email_off', message: fermaEmail, error: fermaEmail }) }
+    }
 
     // 1) Resend. 2) Solo se manca la chiave, si prova l'SMTP storico.
     const viaResend = await inviaConResend(dest, subject, testo, html)

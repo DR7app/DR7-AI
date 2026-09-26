@@ -84,12 +84,12 @@ vi.mock('@supabase/supabase-js', () => {
 
 import { createClient } from '@supabase/supabase-js'
 import { handler as overview } from '../system-control-overview'
-import { handler as flags } from '../system-control-flags'
+import { handler as flags, FUNZIONI_SPEGNIBILI } from '../system-control-flags'
 import { handler as integrations } from '../system-control-integrations'
 import { handler as operations } from '../system-control-operations'
 import { handler as worker } from '../system-control-worker'
 import { handler as metrics } from '../system-control-metrics'
-import { accodaOperazione, conSystemControl, funzioneFerma, registraEvento, statoFunzione } from './systemControl'
+import { accodaOperazione, conSystemControl, funzioneFerma, registraEvento, statoFunzione, svuotaCacheFunzioni } from './systemControl'
 import { eseguiRitentativo } from './systemControlRetry'
 import { eseguiControlloOrario } from './systemControlControllo'
 import { INTEGRAZIONI } from './systemControlCatalog'
@@ -121,6 +121,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-09-25T12:00:00Z'))
   sim.tables = { admins: [{ id: 'a1', email: 'reviewer@example.invalid', permissions: ['role:direzione'], archived_at: null }] }
   sim.errors = {}; sim.queries = []; sim.seq = 0
+  svuotaCacheFunzioni()
   sim.user = { id: 'audit-user', email: 'reviewer@example.invalid' }
   vi.stubEnv('SYSTEM_CONTROL_ALERT_PHONES', '')
   vi.stubEnv('CONTEXT', 'development')
@@ -273,15 +274,15 @@ describe('Functional acceptance checks — failures identify defects', () => {
 })
 
 describe('Correzioni del 26/09/2026', () => {
-  it('refuses to switch off a switch that no code reads', async () => {
-    const res = await call(flags, request({ chiave: 'pagamenti_online', attiva: false, conferma: true }))
-    expect(res.body.ok).toBe(false)
-    expect(res.body.messaggio).toMatch(/non e ancora collegato/)
-    expect(sim.tables.sc_flags).toBeUndefined()
+  it('every switch in the panel is wired to the code that performs the action', () => {
+    // Un interruttore aggiunto senza collegarlo va dichiarato non_collegata:
+    // il pannello allora non lo lascia spegnere. Oggi sono tutti collegati.
+    expect(FUNZIONI_SPEGNIBILI.filter(f => f.copertura !== 'collegata').map(f => f.chiave)).toEqual([])
   })
   it('funzioneFerma stops a wired function, also through the global gestionale switch', async () => {
     expect(await funzioneFerma('cargos', 'terra')).toBeNull()
     sim.tables.sc_flags = [{ chiave: 'gestionale', business: '*', attiva: true, manutenzione: true, messaggio: 'Manutenzione in corso' }]
+    svuotaCacheFunzioni()
     expect(await funzioneFerma('cargos', 'terra')).toBe('Manutenzione in corso')
   })
   it('does not retry an operation whose switch is off', async () => {

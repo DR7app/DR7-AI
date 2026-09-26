@@ -23,7 +23,7 @@
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -96,6 +96,9 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     console.log('[maxi-promo-cron] skip:', reason)
     return { statusCode: 200, body: JSON.stringify({ skipped: true, reason }) }
   }
+  // Interruttore System Control: campagne marketing spente = nessuna promo parte.
+  const fermaCampagne = await funzioneFerma('campagne_marketing')
+  if (fermaCampagne) return skip(fermaCampagne)
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return skip('missing supabase env')
   if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) return skip('missing green api env')

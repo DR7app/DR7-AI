@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { Resend } from 'resend';
 import { getGoogleReviewLink } from './utils/loadMarketing';
 import { getEmailFrom } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -32,6 +33,17 @@ export const handler: Handler = async (event) => {
 
     // Letto da centralina_pro_config.config.marketing.google_review_link.
     const reviewLink = await getGoogleReviewLink();
+
+    // Interruttore System Control: e-mail spente = nessun invio e nessuna
+    // prenotazione segnata come "richiesta inviata" (success:false).
+    const fermaEmail = await funzioneFerma('invio_email');
+    if (fermaEmail) {
+      console.warn('[send-review-request] invio saltato: ' + fermaEmail);
+      return {
+        statusCode: 503,
+        body: JSON.stringify({ success: false, skipped: true, reason: 'invio_email_off', message: fermaEmail, error: fermaEmail }),
+      };
+    }
 
     for (const booking of bookings) {
       if (!booking.email) {

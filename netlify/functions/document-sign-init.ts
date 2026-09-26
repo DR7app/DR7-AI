@@ -125,7 +125,14 @@ export const handler: Handler = async (event) => {
         // template Pro (document_signature_link) per entrambi i canali.
         let sentVia = ''
 
-        if (signerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+        // Interruttore System Control: canale spento = si prova l'altro; se
+        // sono spenti entrambi si risponde con il motivo, non con un guasto.
+        const fermaWa = signerPhone ? await funzioneFerma('invio_whatsapp') : null
+        const fermaEmail = signerEmail ? await funzioneFerma('invio_email') : null
+        if (fermaWa) console.warn('[document-sign-init] invio saltato: ' + fermaWa)
+        if (fermaEmail) console.warn('[document-sign-init] invio saltato: ' + fermaEmail)
+
+        if (signerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !fermaWa) {
             try {
                 // Body comes EXCLUSIVELY from Messaggi di Sistema Pro.
                 // No hardcoded fallback — if no Pro template, we skip the send.
@@ -168,7 +175,7 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        if (!sentVia && signerEmail) {
+        if (!sentVia && signerEmail && !fermaEmail) {
             try {
                 const resolvedMessage = await renderTemplate('document_signature_link', { signerName, docName, contractNumber: docName, signingUrl })
                 if (!resolvedMessage) {
@@ -186,6 +193,10 @@ export const handler: Handler = async (event) => {
             } catch (mailErr: any) {
                 console.warn('[document-sign-init] Email error:', mailErr.message)
             }
+        }
+
+        if (!sentVia && (fermaWa || fermaEmail) && (!signerPhone || fermaWa) && (!signerEmail || fermaEmail)) {
+            return { statusCode: 503, body: JSON.stringify({ error: fermaWa || fermaEmail }) }
         }
 
         if (!sentVia) {

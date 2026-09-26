@@ -101,6 +101,7 @@ const handler: Handler = async (event) => {
       };
     }
 
+    // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
     const response = await fetch(greenApiUrl, {

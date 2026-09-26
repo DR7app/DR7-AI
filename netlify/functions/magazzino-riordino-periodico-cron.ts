@@ -132,6 +132,10 @@ const handler: Handler = async () => {
           }),
         })
         if (!r.ok) throw new Error(`whatsapp HTTP ${r.status}`)
+        // 200 con skipped (es. WhatsApp spento dal System Control) = ordine NON
+        // inviato: non va segnato come mandato.
+        const esitoWa = await r.json().catch(() => ({})) as { skipped?: boolean; message?: string; reason?: string }
+        if (esitoWa.skipped) throw new Error(`whatsapp non inviato: ${esitoWa.message || esitoWa.reason || 'saltato'}`)
       }
       await supabase.from('inv_ordini')
         .update({ stato: 'inviato', sent_at: new Date().toISOString() }).eq('id', ord.id)

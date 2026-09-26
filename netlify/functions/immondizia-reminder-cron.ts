@@ -64,6 +64,13 @@ const cronHandler = async () => {
     }
     if (!phone) { console.warn('[immondizia-reminder] nessun numero admin'); return { statusCode: 200, body: JSON.stringify({ ok: true, sent: false, reason: 'no_admin_phone' }) } }
 
+    // Interruttore System Control: WhatsApp spento = promemoria saltato.
+    const fermaWa = await funzioneFerma('invio_whatsapp')
+    if (fermaWa) {
+        console.warn('[immondizia-reminder-cron] invio saltato: ' + fermaWa)
+        return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaWa }) }
+    }
+
     try {
         const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
         const resp = await fetch(url, {

@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { funzioneFerma } from './utils/systemControl'
+import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 
 // Sends "Richiesta prolungamento SUPERCAR" the day before drop-off, at 18:00 Rome,
 // for rentals that:
@@ -219,6 +219,10 @@ export const handler: Handler = async () => {
         const finalMessage = [header, body, footer].filter(Boolean).join('\n\n')
 
         try {
+            // Interruttore System Control: WhatsApp spento = non si invia e non si
+            // segna come inviato (riparte al prossimo giro se ancora in tempo).
+            const fermaWa = await funzioneFerma('invio_whatsapp', businessDaServiceType(b.service_type))
+            if (fermaWa) { console.warn('[rental-extension-supercar-cron] invio saltato: ' + fermaWa); skipped++; continue }
             await greenApiSendMessage(phone, finalMessage)
             await sb.from('bookings').update({ extension_reminder_sent_at: new Date().toISOString() }).eq('id', b.id)
             sent++

@@ -1375,8 +1375,14 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
         }).join('\n');
 
         // 9) Invio (WhatsApp allo staff). Email/in-app: FASE 7 (alarm) / follow-up.
+        // Interruttore System Control: canale spento = saltato senza errore; se
+        // non parte nulla il claim viene liberato qui sotto e riprova dopo.
+        const fermaWa = await funzioneFerma('invio_whatsapp');
+        const fermaEmail = await funzioneFerma('invio_email');
+        if (fermaWa) console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWa);
+        if (fermaEmail) console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaEmail);
         let ok = false;
-        for (const r of recipients) {
+        for (const r of (fermaWa ? [] : recipients)) {
             try {
                 const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1386,7 +1392,7 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
             } catch { errors++; }
         }
         // Email: stesso testo, agli indirizzi scelti in Centralina Pro.
-        for (const to of cfg.email) {
+        for (const to of (fermaEmail ? [] : cfg.email)) {
             try {
                 await avvisoTransporter.sendMail({
                     from: await getEmailFromSmtp('"DR7 Cauzioni" <info@dr7.app>'),
@@ -1517,6 +1523,14 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
         return { sent, skipped: skipped + due.length, errors, reason: 'Nessun destinatario: valerio@/ilenia@dr7.app senza "contatto interno" (numero WhatsApp)' };
     }
 
+    // Interruttore System Control: WhatsApp spento = promemoria non inviato e
+    // cauzioni NON marcate, cosi' partono al giro dopo la riaccensione.
+    const fermaWaRimborso = await funzioneFerma('invio_whatsapp');
+    if (fermaWaRimborso) {
+        console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWaRimborso);
+        return { sent, skipped: skipped + due.length, errors, reason: fermaWaRimborso };
+    }
+
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
     for (const r of recipients) {
         try {
@@ -1548,6 +1562,14 @@ const cronHandler = async () => {
     // (il battito resta registrato: il cron e' vivo, ha solo saltato).
     const fermaMessaggi = await funzioneFerma('messaggi_automatici')
     if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
+    // Interruttore System Control: WhatsApp spento = il giro intero salta, cosi'
+    // nessun messaggio viene reclamato, loggato come errore o segnato inviato:
+    // restano tutti in attesa e partono al primo giro dopo la riaccensione.
+    const fermaWa = await funzioneFerma('invio_whatsapp')
+    if (fermaWa) {
+        console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWa)
+        return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaWa }) }
+    }
     const now = Date.now();
     console.log(`[scheduled-msgs] cron fired at ${new Date(now).toISOString()}`);
 

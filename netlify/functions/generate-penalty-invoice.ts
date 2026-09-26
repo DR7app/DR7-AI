@@ -5,6 +5,7 @@ import { uploadInvoiceToAruba } from './aruba-utils'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
 import { loadBusinessConfig } from './utils/businessConfig'
+import { funzioneFerma } from './utils/systemControl'
 
 /**
  * 2026-08-12 (roadmap #33): aliquota per tipologia di voce, da Centralina Pro
@@ -416,7 +417,10 @@ export const handler: Handler = async (event) => {
                 await supabase.from('fatture').update({ pdf_url: pdfUrl }).eq('id', invoice.id)
 
                 const customerPhone = invoice.customer_phone || resolvedPhone || ''
-                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                // Interruttore System Control: WhatsApp spento = fattura creata, PDF non inviato.
+                const fermaWa = await funzioneFerma('invio_whatsapp')
+                if (fermaWa) console.warn('[generate-penalty-invoice] invio saltato: ' + fermaWa)
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !fermaWa) {
                     let cleanPhone = customerPhone.replace(/\D/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone

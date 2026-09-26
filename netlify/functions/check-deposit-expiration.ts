@@ -143,6 +143,13 @@ const scheduledHandler: Handler = async (event) => {
         // Send alarm email to admin
         const adminEmail = process.env.ADMIN_EMAIL || 'info@dr7.app'
 
+        // Interruttore System Control: e-mail spente = il giro salta l'avviso.
+        const fermaEmail = await funzioneFerma('invio_email')
+        if (fermaEmail) {
+            console.warn('[check-deposit-expiration] invio saltato: ' + fermaEmail)
+            return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaEmail }) }
+        }
+
         await transporter.sendMail({
             from: await getEmailFromSmtp('"DR7 Allarmi" <info@dr7.app>'),
             to: adminEmail,

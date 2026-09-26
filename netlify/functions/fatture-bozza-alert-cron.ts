@@ -86,6 +86,13 @@ const handler: Handler = async () => {
         return { statusCode: 200, body: JSON.stringify({ ok: true, bozze: bozze.length, inviato: false, motivo: 'green_api_mancante' }) }
     }
 
+    // Interruttore System Control: WhatsApp spento = nessun avviso in questo giro.
+    const fermaWa = await funzioneFerma('invio_whatsapp')
+    if (fermaWa) {
+        console.warn('[fatture-bozza-alert-cron] invio saltato: ' + fermaWa)
+        return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaWa, bozze: bozze.length, inviato: false }) }
+    }
+
     try {
         const adminPhone = await getAdminNotificationPhone()
         await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {

@@ -5,6 +5,7 @@ import { requireAuth } from './require-auth'
 import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
 import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
 import { handler as syncCauzione } from './sync-booking-cauzione';
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -35,6 +36,10 @@ const handler: Handler = async (event) => {
 
     try {
         const { cauzioneId: inputCauzioneId, customerId, amount, customerEmail, customerName, description, expirationHours, bookingId } = JSON.parse(event.body || '{}');
+        // Interruttore System Control: pagamenti online spenti = nessun nuovo
+        // link o checkout Nexi. Callback e addebiti su carta salvata non passano da qui.
+        const fermaPagamenti = await funzioneFerma('pagamenti_online')
+        if (fermaPagamenti) return { statusCode: 503, headers, body: JSON.stringify({ error: fermaPagamenti, code: 'pagamenti_online_off' }) }
 
         if (!amount) {
             return {

@@ -131,7 +131,7 @@ const INTEGRAZIONE_AZIONI = new Set([
 
 // Azioni suggerite che non si eseguono dalla scheda del problema: dove si fanno.
 const DOVE_SI_FA: Record<string, string> = {
-  apri_fattura: 'Apri la fattura dalla tab Fatture: cerca il numero indicato nei dettagli del problema.',
+  apri_fattura: 'Apri la fattura dalla tab Fattura: cerca il numero indicato nei dettagli del problema.',
   apri_scheda_cliente: 'Apri la scheda dalla tab Clienti: il cliente e indicato nei dettagli del problema.',
   sblocca_account: 'Lo sblocco di un account si fa dalla vista Strumenti, indicando l email.',
   ricalcola_permessi: 'Il ricalcolo dei permessi si fa dalla vista Strumenti, indicando l operatore.',

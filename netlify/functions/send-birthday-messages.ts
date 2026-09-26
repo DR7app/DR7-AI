@@ -2,7 +2,7 @@ import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getMarketingConfig } from './utils/loadMarketing';
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,6 +25,18 @@ function generateDiscountCode(): string {
 
 const birthdayHandler: Handler = async (event) => {
   console.log('[Birthday Auto] Starting automatic birthday message sender...');
+
+  // Interruttore System Control: campagne marketing spente = nessuna promo parte.
+  const fermaCampagne = await funzioneFerma('campagne_marketing');
+  if (fermaCampagne) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaCampagne }) };
+
+  // Interruttore System Control: WhatsApp spento = il giro salta prima di
+  // generare codici sconto o segnare invii (il battito del cron resta).
+  const fermaWa = await funzioneFerma('invio_whatsapp');
+  if (fermaWa) {
+    console.warn('[send-birthday-messages] invio saltato: ' + fermaWa);
+    return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'invio_whatsapp_off', message: fermaWa }) };
+  }
 
   // Check configuration
   if (!supabaseUrl || !supabaseServiceKey) {

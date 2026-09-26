@@ -388,6 +388,7 @@ export const handler: Handler = async (event) => {
         hour: '2-digit', minute: '2-digit',
       })
 
+      // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
         from: await getEmailFrom('DR7 <info@dr7.app>'),

@@ -10,6 +10,7 @@ import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 import { hasApprovedOverride } from './utils/verifyOverride'
 import { loadBusinessConfig } from './utils/businessConfig'
 import { isFatturaPrincipale, isUscitaSdi, TIPO_ESTENSIONE } from './utils/fatturaTipi'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -1372,7 +1373,11 @@ export const handler: Handler = async (event) => {
                 // Send PDF via WhatsApp to customer
                 const customerPhone = invoice.customer_phone || resolvedPhone || ''
                 // Una sola volta per fattura, chiunque sia il chiamante.
-                const puoInviare = customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN
+                // Interruttore System Control: WhatsApp spento = fattura creata, PDF non inviato.
+                // Il controllo sta PRIMA della prenotazione dell'invio, cosi' resta inviabile dopo.
+                const fermaWa = await funzioneFerma('invio_whatsapp')
+                if (fermaWa) console.warn('[generate-invoice-from-booking] invio saltato: ' + fermaWa)
+                const puoInviare = customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !fermaWa
                     ? await riservaInvioWhatsappFattura(invoice.id)
                     : false
                 if (puoInviare) {
@@ -2168,6 +2173,13 @@ async function sendWalletFatturaPdfAndWhatsApp(
         }
         if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
             console.log('[Wallet Fattura PDF] Green API not configured — skipping WhatsApp send')
+            return publicUrl
+        }
+
+        // Interruttore System Control: WhatsApp spento = PDF salvato, non inviato.
+        const fermaWa = await funzioneFerma('invio_whatsapp')
+        if (fermaWa) {
+            console.warn('[generate-invoice-from-booking] invio saltato: ' + fermaWa)
             return publicUrl
         }
 

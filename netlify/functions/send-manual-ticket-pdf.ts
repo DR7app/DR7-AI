@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import nodemailer from 'nodemailer'
 import { getEmailFromSmtp } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -135,6 +136,17 @@ export const handler: Handler = async (event) => {
 
         const pdfBytes = await pdfDoc.save()
         const pdfBuffer = Buffer.from(pdfBytes)
+
+        // Interruttore System Control: e-mail spente = il biglietto resta
+        // registrato, si saltano solo le due e-mail.
+        const fermaEmail = await funzioneFerma('invio_email')
+        if (fermaEmail) {
+            console.warn('[send-manual-ticket-pdf] invio saltato: ' + fermaEmail)
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ success: true, emailSent: false, skipped: true, reason: 'invio_email_off', message: fermaEmail })
+            }
+        }
 
         // 2. Send Email to Customer
         console.log(`[send-manual-ticket-pdf] Sending email to customer: ${email}`)

@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getGoogleReviewLink } from './utils/loadMarketing';
+import { funzioneFerma, businessDaServiceType } from './utils/systemControl';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -142,6 +143,13 @@ const reviewHandler: Handler = async (event) => {
         }
         if (cleanPhone.length < 10) {
           console.log(`[Review WhatsApp] Skipping ${booking.customer_name}: invalid phone ${booking.customer_phone}`);
+          continue;
+        }
+
+        // Interruttore System Control: WhatsApp spento = non si invia e non si registra.
+        const fermaWa = await funzioneFerma('invio_whatsapp', businessDaServiceType(booking.service_type || 'rental'));
+        if (fermaWa) {
+          console.warn('[send-review-whatsapp] invio saltato: ' + fermaWa);
           continue;
         }
 

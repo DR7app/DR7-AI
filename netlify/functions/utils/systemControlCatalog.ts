@@ -235,6 +235,14 @@ export const ENDPOINT_RETRY_CONSENTITI: ReadonlySet<string> = new Set([
   'process-pending-addebiti',
 ])
 
+// Prove che contattano davvero il servizio. Le altre ('env', 'segreto',
+// 'nessuno') verificano solo che le credenziali ci siano: "credenziali
+// presenti" non e' "il servizio risponde", e il pannello lo dice.
+const PROVE_REALI: ReadonlySet<string> = new Set(['supabase', 'auth', 'storage', 'http'])
+export function provaReale(chiave: string): boolean {
+  return PROVE_REALI.has(INTEGRAZIONE_BY_CHIAVE[chiave]?.test || '')
+}
+
 // Interruttore del System Control che governa ogni integrazione: se la
 // funzione e' spenta, nessuna ripresa (automatica o manuale) la contatta.
 export const FUNZIONE_PER_INTEGRAZIONE: Readonly<Record<string, string>> = {

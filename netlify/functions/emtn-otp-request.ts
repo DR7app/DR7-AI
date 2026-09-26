@@ -83,6 +83,7 @@ export const handler: Handler = async (event) => {
         try {
             const apiKey = process.env.RESEND_API_KEY
             if (!apiKey) throw new Error('RESEND_API_KEY mancante')
+            // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
             const resend = new Resend(apiKey)
             await resend.emails.send({
                 from: await getEmailFrom('DR7 <info@dr7.app>'),
@@ -121,6 +122,7 @@ export const handler: Handler = async (event) => {
             if (!greenInstance || !greenToken) throw new Error('Green API non configurata')
             const normPhone = phone.replace(/\D/g, '').replace(/^00/, '')
             const chatId = `${normPhone.length === 10 ? '39' + normPhone : normPhone}@c.us`
+            // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
             const url = `https://api.green-api.com/waInstance${greenInstance}/sendMessage/${greenToken}`
             const res = await fetch(url, {
                 method: 'POST',

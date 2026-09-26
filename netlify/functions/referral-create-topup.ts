@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -26,6 +27,10 @@ const handler: Handler = async (event) => {
 
   try {
     const { participant_id, amount } = JSON.parse(event.body || '{}');
+    // Interruttore System Control: pagamenti online spenti = nessun nuovo
+    // link o checkout Nexi. Callback e addebiti su carta salvata non passano da qui.
+    const fermaPagamenti = await funzioneFerma('pagamenti_online')
+    if (fermaPagamenti) return { statusCode: 503, headers, body: JSON.stringify({ error: fermaPagamenti, code: 'pagamenti_online_off' }) }
 
     if (!participant_id || !amount || amount <= 0) {
       return {

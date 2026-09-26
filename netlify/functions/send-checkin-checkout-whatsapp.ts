@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { resolveKeyForContext } from "./utils/messageTemplates";
 import { resolveVehicleName } from "./utils/resolveVehicleName";
+import { funzioneFerma, businessDaServiceType } from "./utils/systemControl";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -88,6 +89,7 @@ const handler: Handler = async (event) => {
 
   let successCount = 0;
   const errors: string[] = [];
+  const saltati: string[] = [];
 
   for (const booking of bookings) {
     const customerPhone =
@@ -187,6 +189,14 @@ const handler: Handler = async (event) => {
     }
     const message = applyVars(dbTemplate);
 
+    // Interruttore System Control: WhatsApp spento = questo invio salta.
+    const fermaWa = await funzioneFerma('invio_whatsapp', businessDaServiceType(booking.service_type));
+    if (fermaWa) {
+      console.warn('[send-checkin-checkout-whatsapp] invio saltato: ' + fermaWa);
+      saltati.push(`${booking.id}: ${fermaWa}`);
+      continue;
+    }
+
     try {
       const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
@@ -255,6 +265,9 @@ const handler: Handler = async (event) => {
       sent: successCount,
       total: bookings.length,
       errors: errors.length > 0 ? errors : undefined,
+      skipped: saltati.length > 0 ? saltati.length : undefined,
+      reason: saltati.length > 0 ? 'invio_whatsapp_off' : undefined,
+      message: saltati.length > 0 ? saltati[0].split(': ').slice(1).join(': ') : undefined,
     }),
   };
 };

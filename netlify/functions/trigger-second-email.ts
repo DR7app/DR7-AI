@@ -6,6 +6,7 @@ import { PDFDocument } from 'pdf-lib'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFrom } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -171,6 +172,18 @@ export const handler: Handler = async (event) => {
         }
 
         const pdfAttached = attachments.length > 0
+
+        // Interruttore System Control: e-mail spente = seconda e-mail NON inviata
+        // e addebito NON segnato come second_email_sent (il conteggio non parte).
+        const fermaEmail = await funzioneFerma('invio_email')
+        if (fermaEmail) {
+            console.warn('[trigger-second-email] invio saltato: ' + fermaEmail)
+            return {
+                statusCode: 503,
+                headers,
+                body: JSON.stringify({ success: false, skipped: true, reason: 'invio_email_off', message: fermaEmail, error: fermaEmail })
+            }
+        }
 
         const resend = new Resend(process.env.RESEND_API_KEY)
         const { data: emailData, error: emailError } = await resend.emails.send({

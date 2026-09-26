@@ -4,7 +4,8 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "20.18.0"
+  # Vite 7 richiede Node ^20.19 o >=22.12: con 20.18 il build avvisava.
+  NODE_VERSION = "20.19.0"
   NPM_FLAGS = "--legacy-peer-deps"
 
 [dev]

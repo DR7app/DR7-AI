@@ -33,6 +33,11 @@ async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
     }
   } catch { /* fallback: no wrapper */ }
 
+  // Interruttore System Control: WhatsApp spento = non inviato (false): il
+  // promemoria non viene segnato come mandato.
+  const fermaWa = await funzioneFerma('invio_whatsapp');
+  if (fermaWa) { console.warn('[trigger-reminders] invio saltato: ' + fermaWa); return false; }
+
   const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
   const response = await fetch(url, {
     method: 'POST',

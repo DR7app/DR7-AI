@@ -5,7 +5,7 @@ import { PDFDocument } from 'pdf-lib'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFrom } from './utils/emailFrom'
-import { conSystemControl } from './utils/systemControl'
+import { conSystemControl, funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -105,7 +105,13 @@ const processHandler: Handler = async () => {
         .eq('status', 'email_sent')
         .lte('charge_after', now)
 
-    for (const addebito of (readyForSecondEmail || [])) {
+    // Interruttore System Control: e-mail spente = la seconda comunicazione non
+    // parte e l'addebito resta 'email_sent' (niente addebito senza preavviso):
+    // riparte al primo giro dopo la riaccensione.
+    const fermaEmail = (readyForSecondEmail || []).length ? await funzioneFerma('invio_email') : null
+    if (fermaEmail) console.warn('[process-pending-addebiti] invio saltato: ' + fermaEmail)
+
+    for (const addebito of (fermaEmail ? [] : (readyForSecondEmail || []))) {
         try {
             const amountFormatted = (addebito.amount_cents / 100).toFixed(2)
 

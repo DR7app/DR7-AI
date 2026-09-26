@@ -14,6 +14,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
+import { funzioneFerma, businessDaServiceType } from './systemControl'
 
 // system_message_send_log.booking_id e' UUID: le entita' con id testuale (es.
 // l'orderId "MIT-..." di una pre-autorizzazione) facevano fallire SIA la select
@@ -625,6 +626,14 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
 }
 
 export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking, recipientPhone }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
+    // Interruttore System Control: messaggi di sistema spenti = anche quelli
+    // legati a un evento (pagamento, prenotazione...) non partono. Nessuna riga
+    // di log: il dedup resta libero.
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici', businessDaServiceType(syntheticBooking?.service_type))
+    if (fermaMessaggi) {
+        console.warn('[triggerSystemMessageEvent] invio saltato: ' + fermaMessaggi)
+        return { sent: 0, skipped: 1, errors: 0 }
+    }
     const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
 
@@ -727,6 +736,14 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let resp: any = null
             try { resp = await res.json() } catch { /* ignore */ }
+
+            // WhatsApp spento dal System Control: NESSUNA riga di log. La riga
+            // bloccherebbe il dedup e il messaggio non partirebbe piu', neanche
+            // dopo la riaccensione; senza riga il cron puo' ancora inviarlo.
+            if (resp?.skipped && /_off$/.test(String(resp?.reason || ''))) {
+                skipped++
+                continue
+            }
 
             await supabase.from('system_message_send_log').insert({
                 system_message_id: tpl.id,

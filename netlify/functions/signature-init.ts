@@ -36,6 +36,10 @@ async function sendWhatsAppSigningLink(
 ): Promise<boolean> {
     if (!phone || !GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) return false
 
+    // Interruttore System Control: WhatsApp spento = link non inviato.
+    const fermaWa = await funzioneFerma('invio_whatsapp')
+    if (fermaWa) { console.warn('[signature-init] invio saltato: ' + fermaWa); return false }
+
     try {
         const cleanedPhone = cleanPhone(phone)
         const chatId = `${cleanedPhone}@c.us`
@@ -219,6 +223,13 @@ export const handler: Handler = async (event) => {
         const fermaFirma = await funzioneFerma('firma_elettronica', businessDaServiceType(serviceTypeFirma))
         if (fermaFirma) {
             return { statusCode: 503, body: JSON.stringify({ error: fermaFirma }) }
+        }
+        // Interruttore System Control: il link parte SOLO via WhatsApp, quindi con
+        // WhatsApp spento non si annullano i link vecchi e non se ne crea uno
+        // che nessuno ricevera'.
+        const fermaWaFirma = await funzioneFerma('invio_whatsapp', businessDaServiceType(serviceTypeFirma))
+        if (fermaWaFirma) {
+            return { statusCode: 503, body: JSON.stringify({ error: fermaWaFirma, skipped: true, reason: 'invio_whatsapp_off' }) }
         }
 
         // Cancel any existing active signature requests for this contract OR booking.

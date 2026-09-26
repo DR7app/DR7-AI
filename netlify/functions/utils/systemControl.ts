@@ -539,8 +539,23 @@ export async function registraConfig(c: {
 // ── Interruttori funzione / manutenzione ───────────────────────────────────
 export interface StatoFunzione { attiva: boolean; manutenzione: boolean; messaggio?: string | null }
 
+// Cache breve: un cron che manda 500 messaggi non deve fare 500 letture.
+// 30 secondi = il tempo massimo perche' uno spegnimento abbia effetto.
+const CACHE_FUNZIONE_MS = 30_000
+const cacheFunzione = new Map<string, { at: number; stato: StatoFunzione }>()
+export function svuotaCacheFunzioni(): void { cacheFunzione.clear() }
+
 /** Legge un interruttore. In caso di dubbio la funzione resta ACCESA. */
 export async function statoFunzione(chiave: string, business = '*'): Promise<StatoFunzione> {
+  const k = `${chiave}|${business}`
+  const c = cacheFunzione.get(k)
+  if (c && Date.now() - c.at < CACHE_FUNZIONE_MS) return c.stato
+  const stato = await leggiStatoFunzione(chiave, business)
+  cacheFunzione.set(k, { at: Date.now(), stato })
+  return stato
+}
+
+async function leggiStatoFunzione(chiave: string, business: string): Promise<StatoFunzione> {
   const sb = db()
   if (!sb) return { attiva: true, manutenzione: false }
   try {

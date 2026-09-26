@@ -4,6 +4,8 @@
 //
 // Idempotent on bookings.dr7_privilege_sent_at — never sends twice.
 
+import { funzioneFerma } from "./systemControl"
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any
 
@@ -92,6 +94,20 @@ export async function sendDr7Privilege(
     if ((booking.customer_name || "").toLowerCase() === "lavaggio rientro") {
         console.log(`${tag} skip: lavaggio_rientro`)
         return { sent: false, skipped: "lavaggio_rientro" }
+    }
+
+    // Interruttore System Control: WhatsApp spento = nessun codice generato e
+    // dr7_privilege_sent_at resta vuoto (nessun invio perso ne' fatto).
+    // Interruttore System Control: DR7 Privilege e' una promo = campagne marketing.
+    const fermaCampagne = await funzioneFerma("campagne_marketing", kind === "lavaggio" ? "lavaggio" : "terra")
+    if (fermaCampagne) {
+        console.warn(`[dr7Privilege] invio saltato: ${fermaCampagne}`)
+        return { sent: false, skipped: "campagne_marketing_off" }
+    }
+    const fermaWa = await funzioneFerma("invio_whatsapp", kind === "lavaggio" ? "lavaggio" : "terra")
+    if (fermaWa) {
+        console.warn(`[dr7Privilege] invio saltato: ${fermaWa}`)
+        return { sent: false, skipped: "invio_whatsapp_off" }
     }
 
     // Phone

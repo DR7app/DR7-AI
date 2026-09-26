@@ -270,6 +270,12 @@ const handler: Handler = async () => {
         ))
 
         const body = lines.join('\n')
+        // Interruttore System Control: WhatsApp spento = riepilogo calcolato ma non inviato.
+        const fermaWa = await funzioneFerma('invio_whatsapp')
+        if (fermaWa) {
+            console.warn('[fornitori-alerts-cron] invio saltato: ' + fermaWa)
+            return { statusCode: 200, body: JSON.stringify({ ok: true, summary, skipped: true, reason: fermaWa }) }
+        }
         try {
             const adminPhone = await getAdminNotificationPhone()
             await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {

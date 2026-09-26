@@ -62,6 +62,8 @@ export interface Operazione {
 }
 
 export interface IntegrazioneRiga {
+  /** Tipo di prova: supabase/auth/storage/http contattano il servizio, le altre verificano solo le credenziali. */
+  test?: string
   chiave: string
   etichetta: string
   categoria: string

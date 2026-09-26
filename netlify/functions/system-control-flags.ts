@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import { corsHeaders } from './cors-headers'
 import { requireAuth } from './require-auth'
 import { userHasRole } from './utils/adminRoles'
-import { registraAzione, registraConfig } from './utils/systemControl'
+import { registraAzione, registraConfig, svuotaCacheFunzioni } from './utils/systemControl'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -26,27 +26,27 @@ const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABA
 export type Copertura = 'collegata' | 'parziale' | 'non_collegata'
 export const FUNZIONI_SPEGNIBILI: { chiave: string; etichetta: string; descrizione: string; critica: boolean; copertura: Copertura; cosaFerma: string }[] = [
   { chiave: 'prenotazioni_online',  etichetta: 'Prenotazioni dal sito',      descrizione: 'I clienti possono prenotare dal sito pubblico.', critica: true,
-    copertura: 'non_collegata', cosaFerma: 'Non ancora collegato: il sito scrive le prenotazioni direttamente dal browser, serve un blocco nel database.' },
+    copertura: 'collegata', cosaFerma: 'Le prenotazioni dei clienti dal sito (bloccate nel database, anche con credito wallet). Lo staff prenota sempre dal gestionale; una prenotazione gia pagata viene sempre registrata.' },
   { chiave: 'pagamenti_online',     etichetta: 'Pagamenti online',           descrizione: 'Link di pagamento e checkout Nexi.', critica: true,
-    copertura: 'non_collegata', cosaFerma: 'Non ancora collegato ai link di pagamento e al checkout del sito.' },
+    copertura: 'collegata', cosaFerma: 'Checkout Nexi del sito, link di pagamento, link di preautorizzazione cauzione e ricariche. Non ferma gli addebiti su carta salvata gia autorizzati dal cliente ne le conferme di pagamenti gia fatti.' },
   { chiave: 'fatturazione_elettronica', etichetta: 'Fatturazione elettronica', descrizione: 'Trasmissione delle fatture allo SDI.', critica: true,
     copertura: 'collegata', cosaFerma: 'Ogni trasmissione ad Aruba/SDI, manuale e automatica. Le fatture restano in bozza, nessun numero viene consumato.' },
   { chiave: 'invio_whatsapp',       etichetta: 'Invii WhatsApp',             descrizione: 'Tutti i messaggi WhatsApp automatici e manuali.', critica: false,
-    copertura: 'non_collegata', cosaFerma: 'Oggi ferma solo gli avvisi del System Control: gli invii ai clienti partono da circa trenta punti non ancora collegati.' },
+    copertura: 'collegata', cosaFerma: 'Ogni messaggio WhatsApp ai clienti e allo staff; i messaggi automatici restano in attesa e partono alla riaccensione. Esclusi i codici di sicurezza (OTP, codici wallet): senza, nessuno potrebbe accedere.' },
   { chiave: 'invio_email',          etichetta: 'Invii e-mail',               descrizione: 'Tutte le e-mail automatiche.', critica: false,
-    copertura: 'non_collegata', cosaFerma: 'Non ancora collegato: le e-mail partono da circa venti punti diversi.' },
+    copertura: 'collegata', cosaFerma: 'Ogni e-mail, dal gestionale e dal sito. Esclusi i codici di sicurezza, il recupero password e la verifica dell account.' },
   { chiave: 'firma_elettronica',    etichetta: 'Firma elettronica',          descrizione: 'Invio contratti alla firma.', critica: true,
     copertura: 'collegata', cosaFerma: 'Nuovi invii alla firma di contratti e documenti. Le firme gia inviate restano firmabili.' },
   { chiave: 'cargos',               etichetta: 'Invii CARGOS',               descrizione: 'Comunicazioni obbligatorie.', critica: true,
     copertura: 'collegata', cosaFerma: 'Invio automatico, recupero ogni 30 minuti e invio manuale dalla tab CARGOS.' },
   { chiave: 'campagne_marketing',   etichetta: 'Campagne marketing',         descrizione: 'Invii massivi programmati.', critica: false,
-    copertura: 'parziale', cosaFerma: 'Campagne WhatsApp (invio e programmazione). Non ferma promo automatiche, compleanni e richieste di recensione.' },
+    copertura: 'collegata', cosaFerma: 'Campagne WhatsApp, promo automatiche (Maxi Promo, promo incassi), auguri di compleanno, richieste di recensione e DR7 Privilege.' },
   { chiave: 'messaggi_automatici',  etichetta: 'Messaggi di sistema',        descrizione: 'Promemoria e messaggi automatici pianificati.', critica: false,
-    copertura: 'parziale', cosaFerma: 'I messaggi pianificati e i promemoria a orario (cron). Non ferma i messaggi che partono subito dopo un evento, come la conferma di pagamento.' },
+    copertura: 'collegata', cosaFerma: 'Messaggi pianificati, promemoria a orario e messaggi legati a un evento (es. conferma di pagamento). Non ferma i codici di sicurezza.' },
   { chiave: 'auto_riparazione',     etichetta: 'Auto-riparazione',           descrizione: 'Il ciclo che ritenta da solo le operazioni fallite.', critica: false,
     copertura: 'collegata', cosaFerma: 'Il ciclo ogni 5 minuti e il controllo orario.' },
-  { chiave: 'gestionale',           etichetta: 'Intero gestionale',          descrizione: 'Solo per manutenzione programmata: ferma tutte le funzioni collegate qui sopra.', critica: true,
-    copertura: 'parziale', cosaFerma: 'Ferma insieme tutte le funzioni collegate o parziali di questo elenco. Non blocca l accesso al gestionale ne le funzioni non collegate.' },
+  { chiave: 'gestionale',           etichetta: 'Intero gestionale',          descrizione: 'Solo per manutenzione programmata: ferma tutte le funzioni qui sopra.', critica: true,
+    copertura: 'collegata', cosaFerma: 'Ferma insieme tutte le funzioni di questo elenco (prenotazioni, pagamenti, invii, fatture, CARGOS, firma). Il gestionale resta consultabile dallo staff.' },
 ]
 
 const handler: Handler = async (event) => {
@@ -122,6 +122,8 @@ const handler: Handler = async (event) => {
       .upsert(riga, { onConflict: 'chiave,business' }).select('*').single()
 
     if (!error && dopo) {
+      // Effetto immediato in questa istanza; le altre lo vedono entro 30 s.
+      svuotaCacheFunzioni()
       await registraConfig({
         tabella: 'sc_flags', rigaId: String((dopo as { id: string }).id),
         etichetta: `${funzione.etichetta} — ${business === '*' ? 'tutte le aziende' : business}`,

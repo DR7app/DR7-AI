@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import { funzioneFerma } from "./utils/systemControl";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -183,6 +184,9 @@ async function callClaudeAPI(messages: Array<{role: string, content: string}>, s
 }
 
 async function sendWhatsAppMessage(chatId: string, message: string): Promise<boolean> {
+  // Interruttore System Control: WhatsApp spento = nessuna risposta automatica.
+  const fermaWa = await funzioneFerma('invio_whatsapp');
+  if (fermaWa) { console.warn('[whatsapp-ai-webhook] invio saltato: ' + fermaWa); return false; }
   try {
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 

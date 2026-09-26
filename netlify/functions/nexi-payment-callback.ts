@@ -10,6 +10,15 @@ import { lookupBin as lookupBinShared } from './utils/binLookup';
 import { applyTokenizedCardUpdate } from './utils/nexiCards';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 import { inviaRichiestaIbanCauzione } from './utils/richiestaIbanCauzione';
+import { funzioneFerma } from './utils/systemControl';
+
+// Interruttore System Control: WhatsApp spento = avviso admin saltato, il
+// pagamento resta registrato e tutto il resto prosegue.
+async function whatsappFermo(): Promise<boolean> {
+    const ferma = await funzioneFerma('invio_whatsapp');
+    if (ferma) console.warn('[nexi-payment-callback] invio saltato: ' + ferma);
+    return !!ferma;
+}
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -677,7 +686,7 @@ const handler: Handler = async (event) => {
 
                 // Admin notification
                 const NOTIFICATION_PHONE = await getAdminNotificationPhone();
-                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !(await whatsappFermo())) {
                     const adminMsg = await renderTemplate('payment_received_damages_admin', { customer_name: booking.customer_name, amountEur, paymentType: paymentPurpose });
                     if (adminMsg === null) {
                         console.log('[nexi-payment-callback] Template "payment_received_damages_admin" missing/disabled — skipping send');
@@ -899,7 +908,7 @@ const handler: Handler = async (event) => {
 
                 // Admin notification
                 const NOTIFICATION_PHONE = await getAdminNotificationPhone();
-                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !(await whatsappFermo())) {
                     const adminMsg = await renderTemplate('payment_received_extension_admin', { customer_name: booking.customer_name, amountEur, vehicle_name: booking.vehicle_name || 'N/A' });
                     if (adminMsg === null) {
                         console.log('[nexi-payment-callback] Template "payment_received_extension_admin" missing/disabled — skipping send');
@@ -1765,7 +1774,7 @@ const handler: Handler = async (event) => {
 
                             // Notify admin
                             const NOTIFICATION_PHONE = await getAdminNotificationPhone();
-                            if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                            if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !(await whatsappFermo())) {
                                 const adminBonusMsg = await renderTemplate('wallet_bonus_credit_admin', { customer_name: booking.customer_name || '-', cardLabel, bonusEur, percentLabel, newBalance: newBalance.toFixed(2), bookingRef: booking.id.substring(0, 8).toUpperCase() });
                                 if (adminBonusMsg === null) {
                                     console.log('[nexi-payment-callback] Template "wallet_bonus_credit_admin" missing/disabled — skipping send');

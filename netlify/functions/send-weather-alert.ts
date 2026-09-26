@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { funzioneFerma } from './utils/systemControl'
 import { loadMeteoConfig, toMeteoBusiness, TEMPLATE_TERRA, TEMPLATE_MARE, type MeteoBusiness } from './weather-config'
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
@@ -207,6 +208,9 @@ export async function ensureWeatherTemplates(supabase: SupabaseClient): Promise<
  * `templateKey` e `oreAvanti` arrivano dal cron, che ha gia' letto la config
  * del business: senza, li si rilegge qui.
  */
+/** Invio fermato da un interruttore del System Control (non e' un guasto). */
+export class InvioSpentoError extends Error {}
+
 export async function runWeatherAlert(
   supabase: SupabaseClient,
   opts: {
@@ -318,6 +322,14 @@ export async function runWeatherAlert(
   }
   if (!messageBody || !messageBody.trim()) messageBody = fallbackBody
 
+  // Interruttore System Control: WhatsApp spento = errore, cosi' il cron non
+  // segna l'allerta come inviata e la manda al giro dopo la riaccensione.
+  const fermaWa = await funzioneFerma('invio_whatsapp', business)
+  if (fermaWa) {
+    console.warn('[send-weather-alert] invio saltato: ' + fermaWa)
+    throw new InvioSpentoError(fermaWa)
+  }
+
   const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
   let sent = 0
@@ -395,6 +407,9 @@ const handler: Handler = async (event) => {
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    if (e instanceof InvioSpentoError) {
+      return { statusCode: 503, headers, body: JSON.stringify({ success: false, skipped: true, reason: 'invio_whatsapp_off', message: msg, error: msg }) }
+    }
     return { statusCode: 500, headers, body: JSON.stringify({ error: msg }) }
   }
 }

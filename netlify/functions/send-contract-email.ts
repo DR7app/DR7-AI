@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFromSmtp } from './utils/emailFrom'
+import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -128,6 +129,13 @@ export const handler: Handler = async (event) => {
                     content: pdfBuffer
                 }
             ]
+        }
+
+        // Interruttore System Control: e-mail spente = contratto non inviato (503).
+        const fermaEmail = await funzioneFerma('invio_email', businessDaServiceType(booking.service_type))
+        if (fermaEmail) {
+            console.warn('[send-contract-email] invio saltato: ' + fermaEmail)
+            return { statusCode: 503, body: JSON.stringify({ success: false, skipped: true, reason: 'invio_email_off', message: fermaEmail, error: fermaEmail }) }
         }
 
         console.log('[send-contract-email] Sending email to:', recipientEmail)

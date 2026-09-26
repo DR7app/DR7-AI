@@ -20,6 +20,7 @@
  *
  * Everything that is NOT a send endpoint passes straight through untouched.
  */
+import toast from 'react-hot-toast'
 
 // Requests whose duplicate within the window must be suppressed. Match is a
 // simple substring test on the URL, so both '/.netlify/functions/foo' and an
@@ -149,6 +150,19 @@ function dedupedResponse(): Response {
   })
 }
 
+// System Control: un invio saltato perche' la funzione e' spenta risponde con
+// `reason`/`code` che finisce in '_off' (es. invio_whatsapp_off). Molte
+// schermate guardano solo res.ok e direbbero "inviato": qui, per TUTTI gli
+// invii, si mostra una volta sola che il messaggio non e' partito e perche'.
+async function segnalaInterruttoreSpento(r: Response): Promise<void> {
+  if (!(r.headers.get('content-type') || '').includes('json')) return
+  const corpo = await r.json().catch(() => null) as { reason?: unknown; code?: unknown; message?: unknown; error?: unknown } | null
+  const codice = String(corpo?.reason ?? corpo?.code ?? '')
+  if (!/_off$/.test(codice)) return
+  const testo = String(corpo?.message ?? corpo?.error ?? 'Funzione spenta dal System Control.')
+  toast.error(`Non eseguito: ${testo}`, { id: `sc-${codice}`, duration: 8000 })
+}
+
 let installed = false
 
 /**
@@ -192,6 +206,7 @@ export function installSendDedupe(): void {
     }
 
     const promise = realFetch(input as RequestInfo, init)
+    promise.then((r) => segnalaInterruttoreSpento(r.clone())).catch(() => { /* mai bloccante */ })
     inflight.set(sig, { promise })
     promise
       .then(

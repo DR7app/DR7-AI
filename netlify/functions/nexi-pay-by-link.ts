@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
 import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -51,6 +52,10 @@ const handler: Handler = async (event) => {
             customerId, // 2026-08-28: link creato dal tab Clienti (senza prenotazione):
                         // serve al callback per registrare la carta sulla scheda giusta
         } = JSON.parse(event.body || '{}');
+        // Interruttore System Control: pagamenti online spenti = nessun nuovo
+        // link o checkout Nexi. Callback e addebiti su carta salvata non passano da qui.
+        const fermaPagamenti = await funzioneFerma('pagamenti_online')
+        if (fermaPagamenti) return { statusCode: 503, headers, body: JSON.stringify({ error: fermaPagamenti, code: 'pagamenti_online_off' }) }
 
         if (!NEXI_API_KEY) {
             return { statusCode: 500, headers, body: JSON.stringify({ error: 'Configurazione Nexi mancante (API key)' }) };

@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateInvoicePDF } from './invoice-pdf-utils'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -129,7 +130,10 @@ export const handler: Handler = async (event) => {
                 await supabase.from('fatture').update({ pdf_url: pdfUrl }).eq('id', nota.id)
 
                 const customerPhone = nota.customer_phone || ''
-                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                // Interruttore System Control: WhatsApp spento = nota creata, PDF non inviato.
+                const fermaWa = await funzioneFerma('invio_whatsapp')
+                if (fermaWa) console.warn('[generate-nota-di-credito] invio saltato: ' + fermaWa)
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && !fermaWa) {
                     let cleanPhone = String(customerPhone).replace(/\D/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone

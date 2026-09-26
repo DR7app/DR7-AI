@@ -202,6 +202,11 @@ const reminderHandler: Handler = async () => {
                 continue
             }
 
+            // Interruttore System Control: WhatsApp spento = promemoria non inviato
+            // e non registrato (riparte al giro dopo la riaccensione).
+            const fermaWa = await funzioneFerma('invio_whatsapp')
+            if (fermaWa) { console.warn('[signature-reminder] invio saltato: ' + fermaWa); continue }
+
             try {
                 const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
                 const waResponse = await fetch(greenApiUrl, {

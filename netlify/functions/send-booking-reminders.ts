@@ -1,7 +1,7 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
-import { conSystemControl, funzioneFerma } from './utils/systemControl'
+import { conSystemControl, funzioneFerma, businessDaServiceType } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,7 +42,11 @@ async function loadWrapper(): Promise<{ header: string; footer: string }> {
   } catch { return { header: '', footer: '' }; }
 }
 
-async function sendWhatsApp(instanceId: string, token: string, phone: string, message: string): Promise<boolean> {
+async function sendWhatsApp(instanceId: string, token: string, phone: string, message: string, business = '*'): Promise<boolean> {
+  // Interruttore System Control: WhatsApp spento = non inviato (false), quindi
+  // il promemoria non viene segnato e riparte al prossimo giro.
+  const fermaWa = await funzioneFerma('invio_whatsapp', business);
+  if (fermaWa) { console.warn('[send-booking-reminders] invio saltato: ' + fermaWa); return false; }
   const cleanNum = cleanPhone(phone);
   if (!cleanNum) {
     console.warn('Invalid phone number:', phone);
@@ -301,7 +305,7 @@ export const reminderHandler: Handler = async () => {
 
           if (!message) { console.log(`[Extension >24h] Skipping ${booking.id} — template disabled`); continue; }
 
-          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
+          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message, 'terra');
 
           if (success) {
             await supabase.from('bookings').update({
@@ -400,7 +404,7 @@ export const reminderHandler: Handler = async () => {
 
           if (!message) { console.log(`[Extension ≤24h] Skipping ${booking.id} — template disabled`); continue; }
 
-          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
+          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message, 'terra');
 
           if (success) {
             await supabase.from('bookings').update({
@@ -528,7 +532,7 @@ export const reminderHandler: Handler = async () => {
             continue;
           }
 
-          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
+          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message, businessDaServiceType(bookingSvc));
 
           if (success) {
             await supabase.from('bookings').update({

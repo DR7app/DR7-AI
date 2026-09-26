@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import nodemailer from 'nodemailer'
 import { getEmailFromSmtp } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 // SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
@@ -84,6 +85,13 @@ export const handler: Handler = async (event) => {
         const errors: string[] = []
 
         // Send email to each customer
+        // Interruttore System Control: e-mail spente = nessun invio (503).
+        const fermaEmail = await funzioneFerma('invio_email')
+        if (fermaEmail) {
+            console.warn('[send-gift-voucher] invio saltato: ' + fermaEmail)
+            return { statusCode: 503, body: JSON.stringify({ success: false, skipped: true, reason: 'invio_email_off', message: fermaEmail, error: fermaEmail }) }
+        }
+
         for (const customer of customers as Customer[]) {
             if (!customer.email) {
                 errors.push(`${customer.nome} ${customer.cognome}: no email address`)

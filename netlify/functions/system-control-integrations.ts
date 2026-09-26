@@ -11,7 +11,7 @@ import { requireAuth } from './require-auth'
 import { userHasRole } from './utils/adminRoles'
 import { registraAzione, prossimoTentativo } from './utils/systemControl'
 import { diagnosticaIntegrazione } from './utils/systemControlDiagnosi'
-import { INTEGRAZIONI, INTEGRAZIONE_BY_CHIAVE } from './utils/systemControlCatalog'
+import { INTEGRAZIONI, INTEGRAZIONE_BY_CHIAVE, provaReale } from './utils/systemControlCatalog'
 import { testaConnessione } from './utils/systemControlTest'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -107,7 +107,7 @@ const handler: Handler = async (event) => {
           ultimo_test_at: ora, ultimo_test_ok: esito.ok, ultimo_test_messaggio: esito.messaggio.slice(0, 500),
           stato: esito.ok ? 'collegato' : 'errore',
           latenza_media_ms: esito.latenzaMs,
-          ...(esito.ok ? { fallimenti_consecutivi: 0, circuito: 'chiuso', circuito_fino_a: null, ultima_chiamata_ok_at: ora } : {}),
+          ...(esito.ok ? { fallimenti_consecutivi: 0, circuito: 'chiuso', circuito_fino_a: null, ...(provaReale(chiave) ? { ultima_chiamata_ok_at: ora } : {}) } : {}),
           updated_at: ora,
         }, { onConflict: 'chiave' }).select('chiave')
         const ko = scritturaFallita(error, righe, 'Esito del test non salvato')
@@ -130,7 +130,7 @@ const handler: Handler = async (event) => {
         const { data: righe2, error: e2 } = await supabase.from('sc_integrations').update({
           stato: esito.ok ? 'collegato' : 'errore',
           ultimo_test_at: ora, ultimo_test_ok: esito.ok, ultimo_test_messaggio: esito.messaggio.slice(0, 500),
-          ...(esito.ok ? { ultima_chiamata_ok_at: ora } : {}),
+          ...(esito.ok && provaReale(chiave) ? { ultima_chiamata_ok_at: ora } : {}),
           updated_at: ora,
         }).eq('chiave', chiave).select('chiave')
         const ko2 = scritturaFallita(e2, righe2, 'Esito della riconnessione non salvato')

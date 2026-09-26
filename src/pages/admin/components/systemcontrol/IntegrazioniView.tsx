@@ -64,6 +64,7 @@ export default function IntegrazioniView() {
                       {r.ultima_sync_at ? ` · sincronizzato ${quandoRelativo(r.ultima_sync_at)}` : ''}
                       {r.operazioniInSospeso ? ` · ${r.operazioniInSospeso} operazioni in sospeso` : ''}
                       {r.credenzialiTotali ? ` · ${r.credenzialiTotali - r.credenzialiMancanti}/${r.credenzialiTotali} impostazioni` : ''}
+                      {r.test && !['supabase', 'auth', 'storage', 'http'].includes(r.test) ? ' · prova: solo credenziali, il servizio non viene contattato' : ''}
                     </p>
                     {r.ultimo_errore && <p className="text-[11px] text-red-600 dark:text-red-400 mt-1 line-clamp-1">{r.ultimo_errore}</p>}
                   </div>

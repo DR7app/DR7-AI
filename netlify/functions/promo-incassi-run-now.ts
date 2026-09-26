@@ -12,6 +12,7 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { computeVehicleMonthlyRevenue } from './utils/vehicleRevenue'
 import { requireAuth } from './require-auth'
+import { funzioneFerma } from './utils/systemControl'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -46,6 +47,9 @@ export const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     const skip = (reason: string) => ({ statusCode: 200, body: JSON.stringify({ skipped: true, reason }) })
+    // Interruttore System Control: campagne marketing spente = nessuna promo parte.
+    const fermaCampagne = await funzioneFerma('campagne_marketing')
+    if (fermaCampagne) return { statusCode: 503, body: JSON.stringify({ skipped: true, reason: 'campagne_marketing_off', error: fermaCampagne }) }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return skip('missing supabase env')
     if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) return skip('missing green api env')
 

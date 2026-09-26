@@ -147,6 +147,7 @@ export const handler: Handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'RESEND_API_KEY non configurata' }) }
       }
       const resend = new Resend(apiKey)
+      // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
       const { error: emailError } = await resend.emails.send({
         from: await getEmailFrom('DR7 <info@dr7.app>'),
         to: email,

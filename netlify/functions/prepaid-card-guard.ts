@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { renderTemplate } from './utils/messageTemplates'
 import { getAdminNotificationPhone } from './utils/notificationPhone'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -274,6 +275,12 @@ export async function notifyPrepaidBlocked(params: {
         const adminMessage = await renderTemplate('prepaid_card_blocked_admin', { customerName: params.customerName || '-', amount: params.amount || '0', bookingRef: params.bookingRef || '' })
         if (!adminMessage) {
             // No Pro template → skip admin notification
+            return
+        }
+        // Interruttore System Control: WhatsApp spento = avviso admin saltato, il blocco resta.
+        const fermaWa = await funzioneFerma('invio_whatsapp')
+        if (fermaWa) {
+            console.warn('[prepaid-card-guard] invio saltato: ' + fermaWa)
             return
         }
         const adminPhone = await getAdminNotificationPhone()

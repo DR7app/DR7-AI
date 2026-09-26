@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { funzioneFerma } from './utils/systemControl';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -35,6 +36,13 @@ export const handler: Handler = async (event) => {
     }
     if (!message) {
         return { statusCode: 400, body: JSON.stringify({ error: 'Messaggio mancante' }) };
+    }
+
+    // Interruttore System Control: WhatsApp spento = nessun invio (503).
+    const fermaWa = await funzioneFerma('invio_whatsapp');
+    if (fermaWa) {
+        console.warn('[send-whatsapp-voucher] invio saltato: ' + fermaWa);
+        return { statusCode: 503, body: JSON.stringify({ success: false, skipped: true, reason: 'invio_whatsapp_off', message: fermaWa, error: fermaWa }) };
     }
 
     const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;

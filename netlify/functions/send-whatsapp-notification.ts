@@ -6,7 +6,7 @@ import { langFromPhone, translateText } from './utils/i18n';
 // System Control: un messaggio non partito diventa un'operazione ripetibile
 // dal pannello. `automatica: false` di proposito — un ritentativo automatico
 // rischierebbe di mandare due volte lo stesso messaggio al cliente.
-import { registraEvento, accodaOperazione, segnaChiamata } from './utils/systemControl';
+import { registraEvento, accodaOperazione, segnaChiamata, funzioneFerma, businessDaServiceType } from './utils/systemControl';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -28,7 +28,13 @@ function wrapAsEmailHtml(plainText: string): string {
 </body></html>`;
 }
 
-async function sendEmailViaResend(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+async function sendEmailViaResend(to: string, subject: string, html: string, business = '*'): Promise<{ ok: boolean; error?: string }> {
+  // Interruttore System Control: e-mail spente = copia e-mail non inviata.
+  const fermaEmail = await funzioneFerma('invio_email', business);
+  if (fermaEmail) {
+    console.warn('[send-whatsapp-notification] invio saltato: ' + fermaEmail);
+    return { ok: false, error: fermaEmail };
+  }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY missing' };
   // Mittente scelto in Centralina Pro > Gestione PEC & Email (con ripiego
@@ -1012,6 +1018,17 @@ const handler: Handler = async (event) => {
     console.warn('[send-whatsapp] auto-translate skipped:', e);
   }
 
+  // Interruttore System Control: WhatsApp spento = nessun invio, nessuna coda
+  // di ripresa. Risposta di "saltato" (success:false) come gli altri skip.
+  const fermaWa = await funzioneFerma('invio_whatsapp', businessDaServiceType(booking?.service_type));
+  if (fermaWa) {
+    console.warn('[send-whatsapp-notification] invio saltato: ' + fermaWa);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: false, skipped: true, reason: 'invio_whatsapp_off', message: fermaWa }),
+    };
+  }
+
   try {
     // Send via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
@@ -1072,7 +1089,7 @@ const handler: Handler = async (event) => {
           if (recipientEmail && typeof recipientEmail === 'string' && recipientEmail.includes('@')) {
             const subject = (emailMeta.email_subject?.trim?.()) || emailMeta.label || 'DR7';
             const html = wrapAsEmailHtml(wrappedMessage);
-            const sent = await sendEmailViaResend(recipientEmail, subject, html);
+            const sent = await sendEmailViaResend(recipientEmail, subject, html, businessDaServiceType(booking?.service_type));
             if (sent.ok) {
               console.log(`[send-whatsapp] Email also sent to ${recipientEmail} (subject: "${subject}")`);
             } else {

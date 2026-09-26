@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFrom } from './utils/emailFrom'
+import { funzioneFerma } from './utils/systemControl'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -96,14 +97,20 @@ export const handler: Handler = async (event) => {
                 }
             }
             const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
-            const { error: emailError } = await resend.emails.send({
-                from: await getEmailFrom('DR7 <info@dr7.app>'),
-                to: customerEmail,
-                subject: emailSubject,
-                html: emailHtml,
-            })
-            if (emailError) throw new Error(emailError.message)
-            console.log(`[nexi-nuovo-addebito] Initial email sent to ${customerEmail}`)
+            // Interruttore System Control: e-mail spente = avviso saltato, l'addebito resta programmato.
+            const fermaEmail = await funzioneFerma('invio_email')
+            if (fermaEmail) {
+                console.warn('[nexi-nuovo-addebito] invio saltato: ' + fermaEmail)
+            } else {
+                const { error: emailError } = await resend.emails.send({
+                    from: await getEmailFrom('DR7 <info@dr7.app>'),
+                    to: customerEmail,
+                    subject: emailSubject,
+                    html: emailHtml,
+                })
+                if (emailError) throw new Error(emailError.message)
+                console.log(`[nexi-nuovo-addebito] Initial email sent to ${customerEmail}`)
+            }
         } else {
             console.log('[nexi-nuovo-addebito] sendEmail=false — nessuna email, addebito diretto alla fase di charge')
         }
