@@ -14,9 +14,11 @@
  */
 import { useEffect, useState } from 'react'
 import { ScheletroLista } from '../../../components/Scheletro'
-import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
-import SelettoreCategorieEMTN from './emtn/SelettoreCategorieEMTN'
-import { EMTN_CATEGORIE, CATEGORIA_DI_VOCE, type EMTNVoce } from './emtn/emtnCategorie'
+import EMTNPraticaModal from './emtn/EMTNPraticaModal'
+import EMTNCodaApprovazioni from './emtn/EMTNCodaApprovazioni'
+import EMTNPosizioniCliente from './emtn/EMTNPosizioniCliente'
+import { EMTN_CATEGORIE, type EMTNVoce } from './emtn/emtnCategorie'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 import { authFetch } from '../../../utils/authFetch'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
@@ -176,13 +178,15 @@ interface EventoRete {
     giorniAlSaldo: number | null
 }
 
-type EMTNView = 'ricerca' | 'risk-report' | 'segnalazione' | 'mie-segnalazioni' | 'audit' | 'regolamento'
+type EMTNView = 'ricerca' | 'risk-report' | 'segnalazione' | 'mie-segnalazioni' | 'approvazioni' | 'audit' | 'regolamento'
 
 const TABS: Array<{ key: EMTNView; label: string }> = [
     { key: 'ricerca', label: 'Ricerca Cliente' },
     { key: 'risk-report', label: 'Mobility Risk Report' },
     { key: 'segnalazione', label: 'Segnalazione' },
     { key: 'mie-segnalazioni', label: 'I miei eventi' },
+    // 28/09/2026: coda approvazioni EMTN (workflow, fase 9), solo direzione.
+    { key: 'approvazioni', label: 'Da approvare' },
     { key: 'audit', label: 'Audit & Log' },
     { key: 'regolamento', label: 'Regolamento EMTN' },
 ]
@@ -198,8 +202,12 @@ export default function EMTNTab() {
     // Ricerca per cliente estero (senza codice fiscale).
     const [modoEstero, setModoEstero] = useState(false)
     const [datiEstero, setDatiEstero] = useState<DatiEstero>(ESTERO_VUOTO)
-    const [reportOpen, setReportOpen] = useState(false)
-    const [reportPrefill, setReportPrefill] = useState<ReportPrefill | null>(null)
+    // 28/09/2026: la segnalazione e' una pratica documentale con analisi AI
+    // (EMTNPraticaModal). `posizioneId` = aggiornamento di una posizione.
+    const [pratica, setPratica] = useState<{ posizioneId: string | null; contesto: string | null } | null>(null)
+    const [versionePosizioni, setVersionePosizioni] = useState(0)
+    const { hasRole } = useAdminRole()
+    const isDirezioneEMTN = hasRole('direzione')
 
     // Promuove un danno/penale DR7 a evento EMTN: assicura che il
     // cliente sia caricato (runSearch se manca o non corrisponde),
@@ -212,22 +220,15 @@ export default function EMTNTab() {
         if (!data || data.client.codice_fiscale !== cf) {
             await runSearch(cf)
         }
-        const isPenale = ev.kind === 'penale'
-        const isInsoluto = ev.kind === 'insoluto'
-        const nomeTipo = isInsoluto ? 'Importo' : isPenale ? 'Penale' : 'Danno'
-        const headline = (isInsoluto ? `Non saldato: ${ev.label}` : `${nomeTipo} non saldato: ${ev.label}`).slice(0, 100)
-        // La voce parte gia' selezionata; le altre del cliente si
-        // aggiungono (o si tolgono) dal modale.
+        // La voce da cui si parte resta come contesto della pratica: i dati
+        // dell'evento li estrae l'analisi dai documenti, non si scrivono a mano.
         const cliente = damagedClients.find(c => c.events.includes(ev))
         const voce = cliente ? vociDi(cliente).find(v => v.key.startsWith(`${cliente.events.indexOf(ev)}|`)) : undefined
-        setReportPrefill({
-            types: [CATEGORIA_DI_VOCE[ev.kind]],
-            voci: voce ? [voce] : [],
-            headline,
-            description: ev.note ? `Note interne: ${ev.note}` : '',
-            occurredAt: ev.eventDate || new Date().toISOString().slice(0, 10),
-        })
-        setReportOpen(true)
+        const nomeTipo = ev.kind === 'insoluto' ? 'Importo da saldare' : ev.kind === 'penale' ? 'Penale' : 'Danno'
+        const contesto = voce
+            ? `Voce del gestionale: ${nomeTipo} · ${voce.label} · ${voce.vehicle || 'veicolo n/d'} · importo €${voce.amount.toFixed(2)}, residuo €${voce.remaining.toFixed(2)}. Carica contratto, verbali, preventivo/fattura e comunicazioni relativi.`
+            : `Voce del gestionale: ${nomeTipo} · ${ev.label}`
+        setPratica({ posizioneId: null, contesto })
     }
 
     const [damagedClients, setDamagedClients] = useState<ClientWithDamages[]>([])
@@ -252,14 +253,6 @@ export default function EMTNTab() {
     useEffect(() => {
         loadDamagedClients()
     }, [])
-
-    // Voci del cliente aperto: per CF, o per email se estero.
-    const clienteAperto = data ? damagedClients.find(c =>
-        data.client.codice_fiscale
-            ? c.codice_fiscale === data.client.codice_fiscale
-            : !!data.client.email && (c.customer_email || '').toLowerCase() === data.client.email.toLowerCase(),
-    ) : undefined
-    const vociDelCliente = clienteAperto ? vociDi(clienteAperto) : []
 
     const cfValid = CF_REGEX.test(cfInput.trim().toUpperCase())
 
@@ -362,9 +355,14 @@ export default function EMTNTab() {
                                 <ClienteHeaderCard client={data.client} riskBand={data.riskBand} />
                                 <MobilityRiskReportDisponibile />
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                    <SegnalazioneEventoCard onOpenModal={(types) => { setReportPrefill({ types }); setReportOpen(true) }} />
+                                    <SegnalazioneEventoCard onOpenModal={() => setPratica({ posizioneId: null, contesto: null })} />
                                     <StatoSegnalazioneCard events={data.recentEvents} />
                                 </div>
+                                <EMTNPosizioniCliente
+                                    clientId={data.client.id}
+                                    versione={versionePosizioni}
+                                    onAggiorna={(posizioneId) => setPratica({ posizioneId, contesto: null })}
+                                />
                             </>
                         )}
                     </main>
@@ -397,7 +395,13 @@ export default function EMTNTab() {
                 </div>
             )}
 
-            {activeView !== 'ricerca' && (
+            {activeView === 'approvazioni' && (
+                isDirezioneEMTN
+                    ? <EMTNCodaApprovazioni />
+                    : <PlaceholderView label="Da approvare: riservato alla direzione EMTN" />
+            )}
+
+            {activeView !== 'ricerca' && activeView !== 'approvazioni' && (
                 <PlaceholderView label={TABS.find(t => t.key === activeView)?.label || ''} />
             )}
 
@@ -405,13 +409,14 @@ export default function EMTNTab() {
 
             {data && (
                 <>
-                    <EMTNEventReportModal
-                        open={reportOpen}
-                        onClose={() => { setReportOpen(false); setReportPrefill(null) }}
-                        onCreated={refresh}
+                    <EMTNPraticaModal
+                        open={!!pratica}
+                        onClose={() => setPratica(null)}
+                        onInviata={() => { setVersionePosizioni(v => v + 1); refresh() }}
                         clientId={data.client.id}
-                        prefill={reportPrefill}
-                        vociDisponibili={vociDelCliente}
+                        nomeCliente={identitaCliente(data.client)}
+                        posizioneId={pratica?.posizioneId || null}
+                        contesto={pratica?.contesto || null}
                     />
                 </>
             )}
@@ -768,26 +773,21 @@ function ScoreGauge({ score, stroke }: { score: number; stroke: string }) {
 
 /* ---------- Segnalazione Evento (col 1 di 3 bottom) ---------- */
 
-function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: (types: string[]) => void }) {
-    // Piu' categorie insieme, scelte dal menu con ricerca.
-    const [selected, setSelected] = useState<string[]>([])
+function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
+    // 28/09/2026: niente piu' tipologia scelta a mano. L'operatore carica i
+    // documenti, l'analisi individua e classifica gli eventi (66 categorie
+    // EMTN), l'operatore rivede e invia in approvazione.
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden flex flex-col">
             <div className="border-l-4 border-amber-500 px-4 py-3 flex-1 flex flex-col">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1">Segnalazione evento</h3>
                 <p className="text-[11px] text-theme-text-muted mb-3">
-                    Segnala un evento avvenuto durante il noleggio. Tutte le segnalazioni sono soggette a revisione.
+                    Carica i documenti del noleggio: l'analisi individua gli eventi, estrae i dati e li confronta con il gestionale. Rivedi, invia: il cliente viene informato e la direzione EMTN approva prima della pubblicazione.
                 </p>
-                <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">
-                    Tipologia evento{selected.length > 0 ? ` (${selected.length})` : ''}
-                </p>
-                <div className="mb-3">
-                    <SelettoreCategorieEMTN value={selected} onChange={setSelected} />
-                </div>
                 <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Documentazione obbligatoria</p>
                 <button
                     type="button"
-                    onClick={() => onOpenModal(selected)}
+                    onClick={() => onOpenModal()}
                     className="rounded-xl border-2 border-dashed border-theme-border bg-theme-bg-primary px-4 py-4 text-center hover:border-amber-500/60 transition-colors mb-3"
                 >
                     <svg className="w-5 h-5 mx-auto text-theme-text-muted mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -798,11 +798,10 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: (types: string[]
                 </button>
                 <button
                     type="button"
-                    onClick={() => onOpenModal(selected)}
-                    disabled={selected.length === 0}
+                    onClick={() => onOpenModal()}
                     className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 text-white text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-600"
                 >
-                    Invia segnalazione evento
+                    Apri pratica di segnalazione
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
                     </svg>
