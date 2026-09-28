@@ -265,6 +265,10 @@ export const handler: Handler = async (event) => {
         // (`estensione:<bookingId>:<indice>`) la seconda chiamata ritrova la
         // fattura gia' emessa invece di crearne una gemella.
         idempotencyKey,
+        // 28/09/2026: l'ordine Nexi dalla cui pagina di esito arriva la
+        // richiesta (sito, PaymentSuccessPage via generate-fattura). Vedi il
+        // controllo prima della ricerca della fattura principale.
+        nexiOrderId,
     } = body
 
     // ── WALLET / CREDIT RECHARGE FATTURA (no auth required) ───────────────
@@ -792,6 +796,35 @@ export const handler: Handler = async (event) => {
         // fatture di estensione e righe annullate. Tra le rimaste vince quella
         // gia' uscita verso SDI (ha valore fiscale), altrimenti la piu'
         // vecchia — cosi' si aggiorna sempre la stessa riga.
+        // 28/09/2026 — ESTENSIONE FATTURATA PER INTERO. Il cliente paga il link
+        // dell'estensione e atterra sulla pagina di esito del sito, che ritrova
+        // la prenotazione e chiedeva qui la fattura dell'intera prenotazione.
+        // La principale DR7-2026-1978 (Audi RS3) era ancora in bozza: e' stata
+        // ricostruita sul price_total gia' comprensivo dell'estensione (1.990
+        // EUR) e mandata allo SDI un secondo dopo la fattura dell'estensione da
+        // 400. I link del gestionale diversi dal pagamento della prenotazione li
+        // fattura nexi-payment-callback, con il solo importo del link.
+        if (!extensionAmount && !includePenalties && nexiOrderId) {
+            const { data: tx } = await supabase
+                .from('nexi_transactions')
+                .select('metadata')
+                .eq('order_id', String(nexiOrderId))
+                .order('created_at', { ascending: false })
+                .limit(1)
+            const scopo = (tx?.[0] as any)?.metadata?.payment_purpose || null
+            if (scopo && scopo !== 'booking') {
+                console.log(`[Invoice] Ordine ${nexiOrderId} = link "${scopo}" su ${bookingId}: la fattura la emette nexi-payment-callback, salto`)
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: `Pagamento "${scopo}": fattura emessa dal callback Nexi, non quella della prenotazione.`,
+                        skipped: true,
+                        reason: 'link_non_prenotazione',
+                    })
+                }
+            }
+        }
+
         let existingInvoice: any = null
         if (!extensionAmount) {
             const COLONNE_FATTURA = 'id, numero_fattura, sdi_status, aruba_invoice_id, tipo_fattura, stato, created_at'
