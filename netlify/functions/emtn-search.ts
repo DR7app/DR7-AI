@@ -22,6 +22,7 @@ import {
     jsonResponse,
     normalizeCF,
 } from './utils/emtn'
+import { cercaStoricoRete } from './utils/emtnRete'
 
 export const handler: Handler = async (event) => {
     const origin = event.headers.origin || event.headers.Origin
@@ -506,7 +507,11 @@ export const handler: Handler = async (event) => {
     // green. Una sola pendenza non saldata -> yellow. Pendenze rilevanti
     // (>= 1000 EUR) o evento approvato nel network -> red.
     const sc = stats || { total_rentals: 0, regular_rentals: 0, negative_events: 0, events_under_review: 0 }
-    const dr7Unpaid = unpaidDamageTotal + unpaidPenaltyTotal
+    // 28/09/2026: storico della rete EMTN (copie vendute): solo per codice
+    // fiscale, anonimo. Un residuo non saldato altrove pesa come uno interno.
+    const storicoRete = estero ? [] : await cercaStoricoRete(sb, cf)
+    const reteResiduo = storicoRete.reduce((t, e) => t + (e.statoPagamento === 'paid' ? 0 : e.residuo), 0)
+    const dr7Unpaid = unpaidDamageTotal + unpaidPenaltyTotal + reteResiduo
     const band: 'green' | 'yellow' | 'red' =
         sc.negative_events > 0 || dr7Unpaid >= 1000 ? 'red'
         : sc.events_under_review > 0 || dr7Unpaid > 0 ? 'yellow'
@@ -563,6 +568,11 @@ export const handler: Handler = async (event) => {
             unpaidPenaltyTotal: Math.round(unpaidPenaltyTotal * 100) / 100,
             lastBookingDate,
             firstBookingDate,
+        },
+        // Eventi di altri operatori della rete: nessun nome, nessun operatore.
+        rete: {
+            eventi: storicoRete,
+            residuo: Math.round(reteResiduo * 100) / 100,
         },
     }, origin)
 }

@@ -25,7 +25,8 @@
     "testi:gen": "node scripts/genTestiCatalogo.mjs",
     "wallet:verifica": "node scripts/verificaWalletPrenotazione.mjs",
     "wallet:vincolato": "node scripts/verificaWalletVincolato.mjs",
-    "wallet:autorizzazione": "node scripts/verificaWalletAutorizzazione.mjs"
+    "wallet:autorizzazione": "node scripts/verificaWalletAutorizzazione.mjs",
+    "emtn:rete": "esbuild scripts/emtn-rete/importa-storico.ts --bundle --platform=node --format=esm --packages=external --log-level=warning --outfile=node_modules/.cache/emtn-rete.mjs && node node_modules/.cache/emtn-rete.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

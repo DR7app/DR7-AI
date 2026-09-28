@@ -159,6 +159,20 @@ interface SearchResponse {
     reportUnlocked: boolean
     recentEvents: RecentEvent[]
     dr7History?: DR7History
+    rete?: { eventi: EventoRete[]; residuo: number }
+}
+
+// Storico della rete EMTN (copie vendute): eventi di altri operatori, anonimi,
+// visibili solo cercando un codice fiscale.
+interface EventoRete {
+    tipo: 'danno' | 'penale' | 'insoluto'
+    voce: string | null
+    importo: number
+    pagato: number
+    residuo: number
+    statoPagamento: 'paid' | 'partial' | 'pending'
+    dataEvento: string | null
+    giorniAlSaldo: number | null
 }
 
 type EMTNView = 'ricerca' | 'risk-report' | 'segnalazione' | 'mie-segnalazioni' | 'audit' | 'regolamento'
@@ -365,6 +379,9 @@ export default function EMTNTab() {
                                     riskLevel={data.riskLevel}
                                     dr7History={data.dr7History}
                                 />
+                                {data.rete && data.rete.eventi.length > 0 && (
+                                    <ReteEmtnCard eventi={data.rete.eventi} residuo={data.rete.residuo} />
+                                )}
                                 <AttivitaRecenti events={data.recentEvents} dr7History={data.dr7History} />
                                 <AlertSistema events={data.recentEvents} />
                                 <InformazioniLegali />
@@ -1023,6 +1040,42 @@ function AttivitaRecenti({ events, dr7History }: { events: RecentEvent[]; dr7His
                     ))}
                 </ul>
             )}
+        </section>
+    )
+}
+
+/* ---------- Sidebar: Rete EMTN (storico di altri operatori, anonimo) ---------- */
+
+function ReteEmtnCard({ eventi, residuo }: { eventi: EventoRete[]; residuo: number }) {
+    const fmt = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const nomeTipo = (t: EventoRete['tipo']) => t === 'danno' ? 'Danno' : t === 'penale' ? 'Penale' : 'Da saldare'
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <div className="flex items-center justify-between mb-1">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Rete EMTN</h3>
+                <span className={'text-[10px] font-semibold tabular-nums ' + (residuo > 0 ? 'text-red-400' : 'text-emerald-500')}>
+                    {residuo > 0 ? `Non saldato ${fmt(residuo)}` : 'Tutto saldato'}
+                </span>
+            </div>
+            <p className="text-[10px] text-theme-text-muted mb-2">Eventi registrati da un operatore della rete EMTN.</p>
+            <ul className="space-y-2">
+                {eventi.map((e, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                        <span className={
+                            'mt-1 w-1.5 h-1.5 rounded-full shrink-0 ' +
+                            (e.statoPagamento === 'paid' ? 'bg-emerald-500' : e.statoPagamento === 'partial' ? 'bg-amber-500' : 'bg-red-500')
+                        }/>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-xs text-theme-text-primary truncate" title={e.voce || ''}>
+                                {nomeTipo(e.tipo)}{e.voce ? ` · ${e.voce}` : ''}
+                            </p>
+                            <p className="text-[10px] text-theme-text-muted truncate">
+                                {formatDate(e.dataEvento) || '—'} · {fmt(e.importo)} · {e.statoPagamento === 'paid' ? 'Pagato' : e.statoPagamento === 'partial' ? `Parziale, residuo ${fmt(e.residuo)}` : 'Non pagato'}
+                            </p>
+                        </div>
+                    </li>
+                ))}
+            </ul>
         </section>
     )
 }
