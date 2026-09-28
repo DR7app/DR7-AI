@@ -12,7 +12,8 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
 import EuropeanDateInput from '../../../../components/EuropeanDateInput'
-import { EMTN_CATEGORIE, CATEGORIA_DI_VOCE, type EMTNVoce } from './emtnCategorie'
+import { CATEGORIA_DI_VOCE, type EMTNVoce } from './emtnCategorie'
+import SelettoreCategorieEMTN from './SelettoreCategorieEMTN'
 
 const ALLOWED_EXTS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'doc', 'docx']
 const MAX_BYTES = 10 * 1024 * 1024
@@ -79,9 +80,6 @@ export default function EMTNEventReportModal({ open, onClose, onCreated, clientI
 
     const vociDaAggiungere = vociDisponibili.filter(v => !voci.some(x => x.key === v.key))
 
-    function toggleCategoria(id: string) {
-        setTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
-    }
     function aggiungiVoce(key: string) {
         const v = vociDisponibili.find(x => x.key === key)
         if (!v) return
@@ -181,25 +179,9 @@ export default function EMTNEventReportModal({ open, onClose, onCreated, clientI
                     <form onSubmit={submit} className="space-y-4">
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wider text-theme-text-muted mb-2">
-                                Categorie <span className="normal-case font-normal tracking-normal">(anche piu' di una, clicca di nuovo per togliere)</span>
+                                Categorie <span className="normal-case font-normal tracking-normal">(anche piu' di una)</span>
                             </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {EMTN_CATEGORIE.map(t => {
-                                    const active = types.includes(t.id)
-                                    return (
-                                        <button key={t.id} type="button" onClick={() => toggleCategoria(t.id)} title={t.helper}
-                                            aria-pressed={active}
-                                            className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium border text-left ${
-                                                active
-                                                    ? 'border-dr7-gold bg-dr7-gold/10 text-theme-text-primary'
-                                                    : 'border-theme-border bg-theme-bg-primary text-theme-text-secondary hover:border-theme-border-light'
-                                            }`}>
-                                            <span>{t.label}</span>
-                                            {active && <span aria-hidden className="text-theme-text-muted">×</span>}
-                                        </button>
-                                    )
-                                })}
-                            </div>
+                            <SelettoreCategorieEMTN value={types} onChange={setTypes} accento="gold" />
                         </div>
 
                         <div>

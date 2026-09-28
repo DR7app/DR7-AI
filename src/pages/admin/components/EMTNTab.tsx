@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react'
 import { ScheletroLista } from '../../../components/Scheletro'
 import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
+import SelettoreCategorieEMTN from './emtn/SelettoreCategorieEMTN'
 import { EMTN_CATEGORIE, CATEGORIA_DI_VOCE, type EMTNVoce } from './emtn/emtnCategorie'
 import { authFetch } from '../../../utils/authFetch'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -768,9 +769,8 @@ function ScoreGauge({ score, stroke }: { score: number; stroke: string }) {
 /* ---------- Segnalazione Evento (col 1 di 3 bottom) ---------- */
 
 function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: (types: string[]) => void }) {
-    // Piu' categorie insieme: un clic aggiunge, un secondo clic toglie.
+    // Piu' categorie insieme, scelte dal menu con ricerca.
     const [selected, setSelected] = useState<string[]>([])
-    const toggle = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(k => k !== id) : [...prev, id])
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden flex flex-col">
             <div className="border-l-4 border-amber-500 px-4 py-3 flex-1 flex flex-col">
@@ -781,28 +781,8 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: (types: string[]
                 <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">
                     Tipologia evento{selected.length > 0 ? ` (${selected.length})` : ''}
                 </p>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                    {EMTN_CATEGORIE.map(cat => {
-                        const active = selected.includes(cat.id)
-                        return (
-                            <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => toggle(cat.id)}
-                                aria-pressed={active}
-                                title={cat.helper}
-                                className={
-                                    'flex items-center justify-between gap-1 px-2.5 py-2 rounded-lg border text-[11px] transition-colors text-left ' +
-                                    (active
-                                        ? 'border-amber-500 bg-amber-500/10 text-theme-text-primary'
-                                        : 'border-theme-border text-theme-text-primary hover:border-amber-500/60')
-                                }
-                            >
-                                <span className="leading-tight">{cat.label}</span>
-                                {active && <span aria-hidden className="text-theme-text-muted">×</span>}
-                            </button>
-                        )
-                    })}
+                <div className="mb-3">
+                    <SelettoreCategorieEMTN value={selected} onChange={setSelected} />
                 </div>
                 <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Documentazione obbligatoria</p>
                 <button
