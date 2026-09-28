@@ -379,6 +379,9 @@ export default function EMTNTab() {
                                     riskLevel={data.riskLevel}
                                     dr7History={data.dr7History}
                                 />
+                                {data.dr7History && (data.dr7History.damages.length + data.dr7History.penalties.length) > 0 && (
+                                    <StoricoDr7Card history={data.dr7History} />
+                                )}
                                 {data.rete && data.rete.eventi.length > 0 && (
                                     <ReteEmtnCard eventi={data.rete.eventi} residuo={data.rete.residuo} />
                                 )}
@@ -1040,6 +1043,42 @@ function AttivitaRecenti({ events, dr7History }: { events: RecentEvent[]; dr7His
                     ))}
                 </ul>
             )}
+        </section>
+    )
+}
+
+/* ---------- Sidebar: Storico DR7 (danni e penali di questa azienda) ---------- */
+
+// 28/09/2026: la scheda mostrava solo il totale NON pagato. Un danno saldato
+// (es. 13.000 EUR sulla Clio di Nelson Badini) non compariva da nessuna parte.
+function StoricoDr7Card({ history }: { history: DR7History }) {
+    const fmt = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const voci = [
+        ...history.damages.map(v => ({ ...v, tipo: 'Danno' })),
+        ...history.penalties.map(v => ({ ...v, tipo: 'Penale' })),
+    ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    const residuo = history.unpaidDamageTotal + history.unpaidPenaltyTotal
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Storico DR7 · Danni e penali</h3>
+                <span className={'text-[10px] font-semibold tabular-nums ' + (residuo > 0 ? 'text-red-400' : 'text-emerald-500')}>
+                    {residuo > 0 ? `Non saldato ${fmt(residuo)}` : 'Tutto saldato'}
+                </span>
+            </div>
+            <ul className="space-y-2">
+                {voci.map((v, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                        <span className={'mt-1 w-1.5 h-1.5 rounded-full shrink-0 ' + (v.paid ? 'bg-emerald-500' : 'bg-red-500')}/>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-xs text-theme-text-primary truncate" title={v.label}>{v.tipo} · {v.label}</p>
+                            <p className="text-[10px] text-theme-text-muted truncate">
+                                {formatDate(v.date) || '—'}{v.vehicle ? ` · ${v.vehicle}` : ''} · {fmt(v.amount)} · {v.paid ? 'Pagato' : 'Non pagato'}
+                            </p>
+                        </div>
+                    </li>
+                ))}
+            </ul>
         </section>
     )
 }
