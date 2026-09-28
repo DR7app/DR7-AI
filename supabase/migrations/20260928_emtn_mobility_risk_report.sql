@@ -146,3 +146,9 @@ SET description = 'Email al cliente quando una segnalazione EMTN viene inviata i
     updated_at = now()
 WHERE message_key = 'pro_emtn_segnalazione_cliente'
   AND message_body LIKE 'Gentile {nome},%la informiamo che%';
+
+-- Storage privato dei documenti EMTN: il bucket non esisteva, nessun upload
+-- EMTN (vecchia segnalazione compresa) poteva essere salvato.
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('emtn-documents', 'emtn-documents', false, 10485760)
+ON CONFLICT (id) DO NOTHING;

@@ -106,14 +106,23 @@ export const handler: Handler = async (event) => {
         const { prenotazioni } = await prenotazioniCliente(sb, cliente?.codice_fiscale || null)
         type Voce = { label?: string; total?: number; amount?: number; quantity?: number; paymentStatus?: string }
         const importo = (v: Voce) => Number(v.total ?? Number(v.amount || 0) * Number(v.quantity || 1))
+        const ids = prenotazioni.slice(0, 40).map(b => b.id)
+        const { data: contratti } = ids.length
+            ? await sb.from('contracts').select('booking_id, contract_number, created_at').in('booking_id', ids).order('created_at', { ascending: false })
+            : { data: [] as { booking_id: string; contract_number: string }[] }
         const noleggi = await Promise.all(prenotazioni.slice(0, 40).map(async b => {
             const bd = b.booking_details || {}
             const danni = (Array.isArray(bd.danni) ? bd.danni : []) as Voce[]
             const penali = (Array.isArray(bd.penalties) ? bd.penalties : []) as Voce[]
             const nonPagato = [...danni, ...penali].filter(v => String(v.paymentStatus || '').toLowerCase() !== 'paid').reduce((a, v) => a + importo(v), 0)
             const documenti = (danni.length || penali.length) ? await documentiPrenotazione(sb, b.id) : null
+            // Insoluto sul noleggio stesso (non danni/penali): conta come voce aperta.
+            const insoluto = !['paid', 'completed', 'succeeded'].includes(String(b.payment_status || '').toLowerCase()) && Number(b.price_total || 0) > 0
+                ? Math.max(0, (Number(b.price_total || 0) - Number(b.amount_paid || 0)) / 100) : 0
             return {
                 id: b.id, veicolo: b.vehicle_name, targa: b.vehicle_plate, ritiro: b.pickup_date, riconsegna: b.dropoff_date,
+                contratto: (contratti || []).find(c => c.booking_id === b.id)?.contract_number || null,
+                insoluto: Math.round(insoluto * 100) / 100,
                 danni: danni.map(v => ({ label: v.label || 'Danno', importo: importo(v), pagato: String(v.paymentStatus || '').toLowerCase() === 'paid' })),
                 penali: penali.map(v => ({ label: v.label || 'Penale', importo: importo(v), pagato: String(v.paymentStatus || '').toLowerCase() === 'paid' })),
                 non_pagato: Math.round(nonPagato * 100) / 100,
@@ -123,7 +132,9 @@ export const handler: Handler = async (event) => {
         const richiesto = body.bookingId ? String(body.bookingId) : null
         const conVoci = noleggi.filter(n => n.danni.length || n.penali.length)
         const suggerito = (richiesto && noleggi.some(n => n.id === richiesto) ? richiesto : null)
-            || conVoci.find(n => n.non_pagato > 0)?.id || conVoci[0]?.id || null
+            || conVoci.find(n => n.non_pagato > 0)?.id
+            || noleggi.find(n => n.insoluto > 0)?.id
+            || conVoci[0]?.id || null
         // Il noleggio suggerito ha sempre la lista documenti, anche senza voci.
         const sel = noleggi.find(n => n.id === suggerito)
         if (sel && !sel.documenti) sel.documenti = (await documentiPrenotazione(sb, sel.id)).map(d => ({ nome: d.nome, tipo: d.tipo, descrizione: d.descrizione }))
@@ -148,18 +159,22 @@ export const handler: Handler = async (event) => {
         for (const d of await documentiPrenotazione(sb, bookingId)) {
             if (escludi.has(d.nome)) continue
             let dati: Buffer | null = null
-            if (d.tipo === 'estratto') {
-                dati = await estrattoGestionalePdf(sb, bookingId)
-            } else if (d.bucket && d.path) {
-                const { data: blob } = await sb.storage.from(d.bucket).download(d.path)
-                dati = blob ? Buffer.from(await blob.arrayBuffer()) : null
+            try {
+                if (d.tipo === 'estratto') {
+                    dati = await estrattoGestionalePdf(sb, bookingId)
+                } else if (d.bucket && d.path) {
+                    const { data: blob } = await sb.storage.from(d.bucket).download(d.path)
+                    dati = blob ? Buffer.from(await blob.arrayBuffer()) : null
+                }
+            } catch (e) {
+                console.error('[emtn-pratica] documento gestionale', d.nome, e)
             }
-            if (!dati) { mancanti.push(d.nome); continue }
+            if (!dati) { mancanti.push(`${d.descrizione}: file non trovato`); continue }
             const sha256 = crypto.createHash('sha256').update(dati).digest('hex')
             if (documenti.some((x: { sha256?: string }) => x.sha256 === sha256)) continue
             const path = percorsoStorage(`analisi/${analisiId}/${Date.now()}-gestionale-${d.nome}`)
             const { error: upErr } = await sb.storage.from('emtn-documents').upload(path, dati, { contentType: 'application/pdf', upsert: false })
-            if (upErr) { mancanti.push(d.nome); continue }
+            if (upErr) { mancanti.push(`${d.descrizione}: salvataggio fallito (${upErr.message})`); continue }
             documenti.push({ path, nome: d.nome, mime: 'application/pdf', estensione: 'pdf', size: dati.length, sha256, origine: 'gestionale', caricato_at: new Date().toISOString(), caricato_da: operatorEmail ?? null })
             allegati.push(d.nome)
         }

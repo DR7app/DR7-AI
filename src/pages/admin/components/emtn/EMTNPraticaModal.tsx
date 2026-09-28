@@ -53,6 +53,8 @@ interface Noleggio {
     danni: { label: string; importo: number; pagato: boolean }[]
     penali: { label: string; importo: number; pagato: boolean }[]
     non_pagato: number
+    contratto: string | null
+    insoluto: number
     documenti: { nome: string; tipo: string; descrizione: string }[] | null
 }
 
@@ -163,7 +165,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                 setLavoro('Documenti dal gestionale DR7…')
                 const r = await chiama<{ allegati?: string[]; mancanti?: string[]; error?: string }>({ azione: 'allega_gestionale', analisiId: id, bookingId: noleggioScelto, escludi: [...esclusi] })
                 if (!r.ok) throw new Error(r.data.error || 'Documenti del gestionale non allegati')
-                if ((r.data.mancanti || []).length) toast(`Non trovati nello storage: ${r.data.mancanti!.join(', ')}`)
+                if ((r.data.mancanti || []).length) toast.error(`Non allegati: ${r.data.mancanti!.join(' · ')}`, { duration: 8000 })
             }
             const giaCaricati = new Set((stato?.documenti || []).map(d => d.nome))
             for (let i = 0; i < files.length; i++) {
@@ -262,7 +264,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                     <input
                                         value={cercaNoleggio}
                                         onChange={e => setCercaNoleggio(e.target.value)}
-                                        placeholder="Cerca per veicolo, targa, data (gg/mm/aaaa), danno o penale, codice DR7…"
+                                        placeholder="Cerca: targa, n. contratto, veicolo, data noleggio (gg/mm/aaaa o mese), danno, penale, codice DR7…"
                                         className={`${inputCls} mb-2`}
                                     />
                                 )}
@@ -272,7 +274,9 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                             const q = cercaNoleggio.trim().toLowerCase()
                                             if (!q || n.id === noleggioScelto) return true
                                             const testo = [
-                                                n.veicolo, n.targa, giorno(n.ritiro), giorno(n.riconsegna), `DR7-${n.id.slice(0, 8)}`,
+                                                n.veicolo, n.targa, n.contratto, giorno(n.ritiro), giorno(n.riconsegna), `DR7-${n.id.slice(0, 8)}`,
+                                                n.ritiro ? new Date(n.ritiro).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', month: 'long', year: 'numeric' }) : '',
+                                                n.insoluto > 0 ? 'insoluto da saldare' : '',
                                                 ...n.danni.map(v => v.label), ...n.penali.map(v => v.label),
                                                 n.danni.length ? 'danno' : '', n.penali.length ? 'penale' : '', n.non_pagato > 0 ? 'non pagato' : '',
                                             ].filter(Boolean).join(' ').toLowerCase()
@@ -287,7 +291,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                                         <input type="radio" name="noleggio-emtn" checked={scelto} readOnly className="mt-0.5" />
                                                         <div className="min-w-0 flex-1">
                                                             <p className="text-xs font-semibold text-theme-text-primary">
-                                                                {n.veicolo || 'Veicolo n/d'} {n.targa ? `· ${n.targa}` : ''} <span className="font-normal text-theme-text-muted">· {giorno(n.ritiro)} → {giorno(n.riconsegna)} · DR7-{n.id.slice(0, 8).toUpperCase()}</span>
+                                                                {n.veicolo || 'Veicolo n/d'} {n.targa ? `· ${n.targa}` : ''} <span className="font-normal text-theme-text-muted">· {giorno(n.ritiro)} → {giorno(n.riconsegna)} · {n.contratto ? `Contratto ${n.contratto}` : 'nessun contratto'} · DR7-{n.id.slice(0, 8).toUpperCase()}</span>
                                                             </p>
                                                             {voci.length > 0 ? (
                                                                 <p className="text-[11px] text-theme-text-secondary">
@@ -295,6 +299,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                                                     {n.non_pagato > 0 && <span className="text-red-600 dark:text-red-400 font-semibold"> · non pagato {eur(n.non_pagato)}</span>}
                                                                 </p>
                                                             ) : <p className="text-[11px] text-theme-text-muted">Nessun danno o penale registrato</p>}
+                                                            {n.insoluto > 0 && <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold">Noleggio da saldare: {eur(n.insoluto)}</p>}
                                                             {scelto && (
                                                                 <div className="mt-1.5 space-y-0.5">
                                                                     {(n.documenti || [{ nome: 'contratto', tipo: 'contratto', descrizione: 'Contratto' }, { nome: 'fatture', tipo: 'fattura', descrizione: 'Fatture' }, { nome: 'estratto', tipo: 'estratto', descrizione: 'Estratto del gestionale' }]).map(d => (
