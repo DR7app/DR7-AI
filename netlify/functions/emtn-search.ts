@@ -365,11 +365,17 @@ export const handler: Handler = async (event) => {
     const unlocked = true
     const { data: events } = await sb
         .from('emtn_events')
-        .select('id, type, status, headline, occurred_at, created_at')
+        .select('*')
         .eq('client_id', client!.id)
         .order('created_at', { ascending: false })
         .limit(20)
-    const recentEvents: unknown[] = events || []
+    // '*' perche' `categorie` (migrazione 20260928) puo' mancare su un
+    // database non aggiornato; al browser vanno solo questi campi.
+    const recentEvents: unknown[] = (events || []).map((e: Record<string, unknown>) => ({
+        id: e.id, type: e.type, status: e.status, headline: e.headline,
+        occurred_at: e.occurred_at, created_at: e.created_at,
+        categorie: Array.isArray(e.categorie) && e.categorie.length > 0 ? e.categorie : [e.type],
+    }))
 
     await audit(sb, {
         operatorId, operatorEmail, action: 'SEARCH', success: true, ip, userAgent: ua,

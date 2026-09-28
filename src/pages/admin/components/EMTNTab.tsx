@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react'
 import { ScheletroLista } from '../../../components/Scheletro'
 import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
+import { EMTN_CATEGORIE, CATEGORIA_DI_VOCE, type EMTNVoce } from './emtn/emtnCategorie'
 import { authFetch } from '../../../utils/authFetch'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
@@ -51,6 +52,21 @@ interface ClientWithDamages {
     last_vehicle: string | null
     bookings_with_events: number
     events: DamageEvent[]
+}
+
+// Le righe di un cliente come voci allegabili a una segnalazione EMTN.
+// La chiave parte dall'indice: due righe identiche restano distinte.
+function vociDi(c: ClientWithDamages): EMTNVoce[] {
+    return c.events.map((ev, i) => ({
+        key: `${i}|${ev.kind}|${ev.bookingId}`,
+        kind: ev.kind,
+        label: ev.label,
+        vehicle: ev.vehicle,
+        eventDate: ev.eventDate,
+        amount: ev.amount,
+        remaining: ev.remaining,
+        bookingId: ev.bookingId,
+    }))
 }
 
 const CF_REGEX = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/
@@ -121,10 +137,17 @@ interface DR7History {
 interface RecentEvent {
     id: string
     type: string
+    categorie?: string[]
     status: string
     headline: string
     occurred_at?: string
     created_at: string
+}
+
+// Tutte le categorie di una segnalazione, con il loro nome.
+function nomiCategorie(e: RecentEvent): string {
+    const ids = e.categorie && e.categorie.length > 0 ? e.categorie : [e.type]
+    return ids.map(id => EMTN_CATEGORIE.find(c => c.id === id)?.label || id.replace(/_/g, ' ')).join(', ')
 }
 interface SearchResponse {
     client: EMTNClient
@@ -174,24 +197,19 @@ export default function EMTNTab() {
         if (!data || data.client.codice_fiscale !== cf) {
             await runSearch(cf)
         }
-        const fmt = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         const isPenale = ev.kind === 'penale'
         const isInsoluto = ev.kind === 'insoluto'
-        // Map: il "kind" del booking_details non corrisponde 1:1 ai tipi
-        // EMTN. Scelta di default sensata; l'operatore puo\' cambiarla nel modale.
-        const type = isPenale || isInsoluto ? 'INSOLVENCY' : 'UNPAID_DAMAGE'
         const nomeTipo = isInsoluto ? 'Importo' : isPenale ? 'Penale' : 'Danno'
         const headline = (isInsoluto ? `Non saldato: ${ev.label}` : `${nomeTipo} non saldato: ${ev.label}`).slice(0, 100)
-        const lines = [
-            `${isInsoluto ? ev.label : nomeTipo} registrato il ${formatDate(ev.eventDate) || 'data n/d'} sul veicolo ${ev.vehicle || 'n/d'}.`,
-            `Importo: ${fmt(ev.amount)} · Pagato: ${fmt(ev.amountPaid)} · Residuo: ${fmt(ev.remaining)}.`,
-            ev.note ? `Note interne: ${ev.note}` : null,
-            `Booking di riferimento: ${ev.bookingId}.`,
-        ].filter(Boolean)
+        // La voce parte gia' selezionata; le altre del cliente si
+        // aggiungono (o si tolgono) dal modale.
+        const cliente = damagedClients.find(c => c.events.includes(ev))
+        const voce = cliente ? vociDi(cliente).find(v => v.key.startsWith(`${cliente.events.indexOf(ev)}|`)) : undefined
         setReportPrefill({
-            type,
+            types: [CATEGORIA_DI_VOCE[ev.kind]],
+            voci: voce ? [voce] : [],
             headline,
-            description: lines.join('\n'),
+            description: ev.note ? `Note interne: ${ev.note}` : '',
             occurredAt: ev.eventDate || new Date().toISOString().slice(0, 10),
         })
         setReportOpen(true)
@@ -219,6 +237,14 @@ export default function EMTNTab() {
     useEffect(() => {
         loadDamagedClients()
     }, [])
+
+    // Voci del cliente aperto: per CF, o per email se estero.
+    const clienteAperto = data ? damagedClients.find(c =>
+        data.client.codice_fiscale
+            ? c.codice_fiscale === data.client.codice_fiscale
+            : !!data.client.email && (c.customer_email || '').toLowerCase() === data.client.email.toLowerCase(),
+    ) : undefined
+    const vociDelCliente = clienteAperto ? vociDi(clienteAperto) : []
 
     const cfValid = CF_REGEX.test(cfInput.trim().toUpperCase())
 
@@ -321,7 +347,7 @@ export default function EMTNTab() {
                                 <ClienteHeaderCard client={data.client} riskBand={data.riskBand} />
                                 <MobilityRiskReportDisponibile />
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                    <SegnalazioneEventoCard onOpenModal={() => setReportOpen(true)} />
+                                    <SegnalazioneEventoCard onOpenModal={(types) => { setReportPrefill({ types }); setReportOpen(true) }} />
                                     <StatoSegnalazioneCard events={data.recentEvents} />
                                 </div>
                             </>
@@ -364,6 +390,7 @@ export default function EMTNTab() {
                         onCreated={refresh}
                         clientId={data.client.id}
                         prefill={reportPrefill}
+                        vociDisponibili={vociDelCliente}
                     />
                 </>
             )}
@@ -720,17 +747,10 @@ function ScoreGauge({ score, stroke }: { score: number; stroke: string }) {
 
 /* ---------- Segnalazione Evento (col 1 di 3 bottom) ---------- */
 
-const EVENT_CATEGORIES = [
-    { key: 'danni', label: 'Danni non risarciti', icon: 'M12 9v3m0 4h.01' },
-    { key: 'incidente', label: 'Incidente', icon: 'M12 8v4l3 3' },
-    { key: 'mancata', label: 'Mancata restituzione', icon: 'M6 6l12 12M6 18L18 6' },
-    { key: 'frode', label: 'Frode / falso', icon: 'M12 4v8m0 4h.01' },
-    { key: 'furto', label: 'Furto del veicolo', icon: 'M5 13l4 4L19 7' },
-    { key: 'ostile', label: 'Comportamento ostile', icon: 'M12 14a4 4 0 100-8 4 4 0 000 8z' },
-]
-
-function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
-    const [selected, setSelected] = useState<string | null>(null)
+function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: (types: string[]) => void }) {
+    // Piu' categorie insieme: un clic aggiunge, un secondo clic toglie.
+    const [selected, setSelected] = useState<string[]>([])
+    const toggle = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(k => k !== id) : [...prev, id])
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden flex flex-col">
             <div className="border-l-4 border-amber-500 px-4 py-3 flex-1 flex flex-col">
@@ -738,27 +758,28 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
                 <p className="text-[11px] text-theme-text-muted mb-3">
                     Segnala un evento avvenuto durante il noleggio. Tutte le segnalazioni sono soggette a revisione.
                 </p>
-                <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Tipologia evento</p>
+                <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">
+                    Tipologia evento{selected.length > 0 ? ` (${selected.length})` : ''}
+                </p>
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                    {EVENT_CATEGORIES.map(cat => {
-                        const active = selected === cat.key
+                    {EMTN_CATEGORIE.map(cat => {
+                        const active = selected.includes(cat.id)
                         return (
                             <button
-                                key={cat.key}
+                                key={cat.id}
                                 type="button"
-                                onClick={() => setSelected(cat.key)}
+                                onClick={() => toggle(cat.id)}
+                                aria-pressed={active}
+                                title={cat.helper}
                                 className={
-                                    'flex flex-col items-start gap-1 px-2.5 py-2 rounded-lg border text-[11px] transition-colors text-left ' +
+                                    'flex items-center justify-between gap-1 px-2.5 py-2 rounded-lg border text-[11px] transition-colors text-left ' +
                                     (active
                                         ? 'border-amber-500 bg-amber-500/10 text-theme-text-primary'
                                         : 'border-theme-border text-theme-text-primary hover:border-amber-500/60')
                                 }
                             >
-                                <svg className="w-3.5 h-3.5 text-theme-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                    <circle cx="12" cy="12" r="9"/>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d={cat.icon}/>
-                                </svg>
                                 <span className="leading-tight">{cat.label}</span>
+                                {active && <span aria-hidden className="text-theme-text-muted">×</span>}
                             </button>
                         )
                     })}
@@ -766,7 +787,7 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
                 <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Documentazione obbligatoria</p>
                 <button
                     type="button"
-                    onClick={onOpenModal}
+                    onClick={() => onOpenModal(selected)}
                     className="rounded-xl border-2 border-dashed border-theme-border bg-theme-bg-primary px-4 py-4 text-center hover:border-amber-500/60 transition-colors mb-3"
                 >
                     <svg className="w-5 h-5 mx-auto text-theme-text-muted mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -777,8 +798,8 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
                 </button>
                 <button
                     type="button"
-                    onClick={onOpenModal}
-                    disabled={!selected}
+                    onClick={() => onOpenModal(selected)}
+                    disabled={selected.length === 0}
                     className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 text-white text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-600"
                 >
                     Invia segnalazione evento
@@ -819,7 +840,7 @@ function StatoSegnalazioneCard({ events }: { events: RecentEvent[] }) {
                             <li key={e.id} className="flex items-start justify-between gap-2 text-[11px]">
                                 <div className="min-w-0">
                                     <p className="text-theme-text-primary truncate">{e.headline}</p>
-                                    <p className="text-[10px] text-theme-text-muted truncate">{e.type.replace(/_/g, ' ')} · {formatDate(e.created_at)}</p>
+                                    <p className="text-[10px] text-theme-text-muted truncate">{nomiCategorie(e)} · {formatDate(e.created_at)}</p>
                                 </div>
                                 <span className={`px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ${t}`}>
                                     {e.status.replace(/_/g, ' ')}
@@ -974,7 +995,7 @@ function AttivitaRecenti({ events, dr7History }: { events: RecentEvent[]; dr7His
     events.slice(0, 4 - items.length).forEach(e => items.push({
         id: e.id,
         title: e.headline,
-        subtitle: `${e.type.replace(/_/g, ' ')} · ${formatDate(e.created_at) || ''}`,
+        subtitle: `${nomiCategorie(e)} · ${formatDate(e.created_at) || ''}`,
         tone: 'info',
     }))
 
