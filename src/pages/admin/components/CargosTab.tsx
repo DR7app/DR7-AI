@@ -8,6 +8,8 @@ import Input from './Input'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { logger } from '../../../utils/logger'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import { RisolutoreLuoghi, creaCercaSupabase, type ClienteSupabaseMinimo } from '../../../utils/luoghiCargos'
+import { luoghiRecordCargos, testiLuoghiCliente } from '../../../utils/cargosLuoghiRecord'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -84,42 +86,16 @@ function padField(value: string, maxLen: number): string {
     return (value || '').substring(0, maxLen).padEnd(maxLen, ' ')
 }
 
-// CARGOS location codes (9-digit, from reference table 1 - COMUNI_STATI)
-// Format: prefix + standard ISTAT code
-const ISTAT_CODES: Record<string, string> = {
-    'CAGLIARI': '420092009',
-    'SASSARI': '420090064',
-    'NUORO': '420091051',
-    'ORISTANO': '420092555',
-    'QUARTU SANT\'ELENA': '420092051',
-    'OLBIA': '420090047',
-    'ALGHERO': '420090003',
-    'CARBONIA': '420092012',
-    'IGLESIAS': '420092033',
-    'SELARGIUS': '420092068',
-    'MONSERRATO': '420092109',
-    'VILLACIDRO': '420092092',
-    'SANLURI': '420092057',
-    'LANUSEI': '420091037',
-    'ROMA': '412058091',
-    'MILANO': '403015146',
-    'TORINO': '401001272',
-    'NAPOLI': '415063049',
-    'FIRENZE': '409048017',
-    'BOLOGNA': '408037006',
-    'PALERMO': '419082053',
-    'GENOVA': '407010025',
-    'BARI': '416072006',
-    'CATANIA': '419087015',
-    'VENEZIA': '405027042',
-    // Nationality codes (states)
-    'ITALIA': '100000100',
-    'ITALY': '100000100',
-    'FRANCIA': '100000215',
-    'FRANCE': '100000215',
-    'GERMANIA': '100000216',
-    'GERMANY': '100000216',
-}
+// 26/09/2026 — i codici dei luoghi (comuni e stati) vengono dalla Tabella 1
+// ufficiale CARGOS (cargos_luoghi), non piu' da ~25 nomi scritti a mano: vedi
+// utils/luoghiCargos.ts e utils/cargosLuoghiRecord.ts, condivisi con
+// l'invio automatico. Si precaricano in un colpo solo quando si caricano le
+// prenotazioni, poi i record si costruiscono in modo sincrono.
+const risolutoreLuoghi = new RisolutoreLuoghi(
+    // cast: confrontare il client tipizzato con l'interfaccia minima manda tsc in ricorsione (TS2589)
+    creaCercaSupabase(supabase as unknown as ClienteSupabaseMinimo),
+    msg => console.warn(msg),
+)
 
 // Payment type (field 2) — C=Contanti, B=Bonifico, K=Carta, etc.
 // CARGOS TIPO_PAGAMENTO codes (from reference table 0)
@@ -217,18 +193,6 @@ function guessVehicleModel(vehicleName: string): string {
     return parts.length > 1 ? parts.slice(1).join(' ') : vehicleName
 }
 
-// 2026-08-20: nessun ripiego silenzioso su Cagliari — vedi nota in
-// cargos-auto-send.ts. `null` = comune sconosciuto, da chiedere all'operatore.
-function lookupIstatCode(cityName: string): string | null {
-    if (!cityName) return null
-    const upper = cityName.toUpperCase().trim()
-    return ISTAT_CODES[upper] || null
-}
-/** Per il record: sconosciuto = campo VUOTO, mai un codice inventato. */
-function istatOrEmpty(cityName: string | null | undefined): string {
-    return lookupIstatCode(cityName || '') || ''
-}
-
 function getPaymentType(booking: BookingForCargos): string {
     const method = booking.booking_details?.payment_method ||
         booking.booking_details?.paymentMethod || ''
@@ -298,6 +262,7 @@ function buildCargosRecord(booking: BookingForCargos): string {
 
     // Second driver from booking_details
     const driver2 = bd.second_driver || bd.secondDriver || null
+    const luoghi = luoghiRecordCargos(risolutoreLuoghi, c, bd)
 
     const fields = [
         /* 0  */ booking.id.substring(0, 50),
@@ -325,31 +290,31 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 22 */ surname.toUpperCase(),
         /* 23 */ firstName.toUpperCase(),
         /* 24 */ birthDate.includes('/') ? birthDate : formatDateOnlyCargos(birthDate),
-        /* 25 */ istatOrEmpty(c?.luogo_nascita || rapp.luogo_nascita || bd.customer?.birthPlace || ''),
-        /* 26 */ istatOrEmpty(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
-        /* 27 */ istatOrEmpty(c?.citta || ''),
-        /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
+        /* 25 */ luoghi.nascita,
+        /* 26 */ luoghi.cittadinanza,
+        /* 27 */ luoghi.residenza,
+        /* 28 */ sanitizeCargos(luoghi.indirizzo),
         /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || rapp.documento?.tipo || 'CI'] || 'IDENT',
         /* 30 */ c?.documento_numero || c?.numero_documento_rappresentante || rapp.documento?.numero || bd.customer?.documentNumber || c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || '',
-        /* 31 */ istatOrEmpty(rapp.documento?.luogo || c?.citta || ''),
+        /* 31 */ luoghi.rilascioDocumento,
         /* 32 */ (() => {
             if (c?.tipo_cliente === 'azienda') {
                 return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || 'ND000000000'
             }
             return c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || ''
         })(),
-        /* 33 */ istatOrEmpty(c?.patente_rilasciata_da || c?.citta || ''),
+        /* 33 */ luoghi.rilascioPatente,
         /* 34 */ c?.telefono || booking.customer_phone || '',
         /* 35 */ driver2?.cognome || driver2?.surname || '',
         /* 36 */ driver2?.nome || driver2?.name || '',
         /* 37 */ formatDateOnlyCargos(driver2?.data_nascita || driver2?.birthDate || ''),
-        /* 38 */ istatOrEmpty(driver2?.luogo_nascita || driver2?.birthPlace || ''),
-        /* 39 */ istatOrEmpty(driver2?.nazionalita || ''),
+        /* 38 */ luoghi.nascita2,
+        /* 39 */ luoghi.cittadinanza2,
         /* 40 */ '',  // Driver 2 doc type
         /* 41 */ '',  // Driver 2 doc number
         /* 42 */ '',  // Driver 2 doc issue place
         /* 43 */ driver2?.numero_patente || driver2?.patente_numero || driver2?.licenseNumber || '',
-        /* 44 */ istatOrEmpty(driver2?.luogo_nascita || ''),
+        /* 44 */ luoghi.patente2,
         /* 45 */ driver2?.telefono || driver2?.phone || '',
     ]
 
@@ -405,11 +370,10 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
         // partiva lo stesso con Cagliari al posto del luogo vero. Ma questa e'
         // una dichiarazione alla Polizia di Stato: un luogo di nascita inventato
         // e' un'informazione FALSA trasmessa a un'autorita'. Ora blocca.
-        const luogoNascita = c?.luogo_nascita || bd.customer?.birthPlace || ''
-        if (!luogoNascita) {
-            issues.push({ field: 'Luogo Nascita', message: 'Luogo di nascita mancante', severity: 'error' })
-        } else if (lookupIstatCode(luogoNascita) === null) {
-            issues.push({ field: 'Luogo Nascita', message: `Luogo di nascita non riconosciuto ("${luogoNascita}") — codice ISTAT assente`, severity: 'error' })
+        // 26/09/2026: stessi controlli dell'invio automatico (luoghiRecordCargos),
+        // sulla tabella ufficiale: luogo di nascita, cittadinanza.
+        for (const msg of luoghiRecordCargos(risolutoreLuoghi, c, bd).errori) {
+            issues.push({ field: 'Luoghi', message: msg, severity: 'error' })
         }
     }
 
@@ -960,6 +924,7 @@ export default function CargosTab() {
                 return { ...b, vehicle_plate: resolvedPlate || b.vehicle_plate, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
             })
 
+            await risolutoreLuoghi.precarica(enriched.flatMap(b => testiLuoghiCliente(b.customerData, b.booking_details)))
             setBookings(enriched)
             // Auto-select all
             setSelectedIds(new Set(enriched.map(b => b.id)))
