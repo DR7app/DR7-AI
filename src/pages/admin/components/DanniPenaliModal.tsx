@@ -10,6 +10,7 @@ import { sanitizeMoney } from '../../../utils/money'
 import { useWalletPenale } from '../../../components/WalletPenale'
 import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import { tariffaSforoKm, kmInclusiContratto } from '../../../utils/sforoKmContratto'
 
 interface DanniPenaliModalProps {
     /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
@@ -106,6 +107,10 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // che si chiama "Urban" ha id `scooter`. La modale mostrava l'id grezzo e
     // mandava l'operatore su un "tab scooter" che nell'interfaccia non esiste.
     const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({})
+    // 28/09/2026 — Sforo Km collegato al contratto: tabella Km di Centralina
+    // Pro (da cui il contratto stampa la tariffa) e numero del contratto.
+    const [kmCentralina, setKmCentralina] = useState<unknown>(null)
+    const [numeroContratto, setNumeroContratto] = useState<string>('')
 
     useEffect(() => {
         if (!isOpen) return
@@ -139,6 +144,10 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     }
                     setCategoryLabels(mappa)
                 }
+                const kmBusiness = (business as { km?: unknown })?.km
+                if (!cancelled) {
+                    setKmCentralina((Array.isArray(kmBusiness) && kmBusiness.length) ? kmBusiness : (main as { km?: unknown })?.km ?? null)
+                }
                 const cfg = { penali: business?.penali ?? main?.penali, danni: business?.danni ?? main?.danni } as { penali?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>; danni?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> } | undefined
                 if (!cancelled && cfg) {
                     const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
@@ -164,6 +173,20 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 }
             } catch {
                 // ignore
+            }
+
+            // 1b. Il contratto del cliente per questa prenotazione (l'ultimo).
+            try {
+                const { data: contratto } = await supabase
+                    .from('contracts')
+                    .select('contract_number')
+                    .eq('booking_id', booking.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                if (!cancelled) setNumeroContratto(String(contratto?.contract_number || ''))
+            } catch {
+                // senza numero la riga resta utilizzabile, cambia solo la dicitura
             }
 
             // 2. Resolve vehicle category. Cascading fallback chain:
@@ -329,16 +352,20 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // If the admin hasn't configured a list for this category, the modal
     // shows the empty-state below so the operator knows where to fix it.
     //
-    // SPECIAL CASE — Km Sforo: when a penalty has id 'km_sforo' (or
-    // 'sforo_km' / 'km_eccesso'), its per-km amount is taken from the
-    // BOOKING's locked-in rate (booking.km_overage_fee) — what was agreed
-    // in the contract at booking time — NOT the current Centralina Pro
-    // price. All other penalties continue to read from Centralina.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const bookingSforoRate = Number((booking as any).km_overage_fee
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ?? (booking as { booking_details?: any }).booking_details?.km_overage_fee
-        ?? 0)
+    // SPECIAL CASE — Km Sforo: la tariffa EUR/km e' quella del CONTRATTO del
+    // cliente, non il prezzo della riga in Centralina > Penali. 28/09/2026:
+    // prima si leggeva solo booking.km_overage_fee, che non viene mai salvato,
+    // e la riga restava a 0 EUR/km e disabilitata. Ora la stessa regola del
+    // contratto (sforoKmContratto.ts): prenotazione, poi Centralina Pro > Km.
+    // L'operatore scrive i km in piu' percorsi, il totale e' km x tariffa.
+    const bookingSforoRate = tariffaSforoKm(booking, kmCentralina, vehicleCategory)
+    const kmContratto = kmInclusiContratto(booking.booking_details)
+    const descrizioneSforo = bookingSforoRate > 0
+        ? [
+            `€${bookingSforoRate.toFixed(2)}/km — tariffa ${numeroContratto ? `contratto ${numeroContratto}` : 'contratto'}`,
+            kmContratto.illimitati ? 'km illimitati' : kmContratto.totale > 0 ? `${kmContratto.totale} km inclusi` : '',
+        ].filter(Boolean).join(' · ')
+        : 'Tariffa sforo non configurata in Centralina Pro > Km per questa categoria'
 
     // Match Sforo Km rows liberally — by id OR by label keyword. Admins might
     // have used different ids in Centralina (sforo_kilometri, km_extra, ecc.)
@@ -374,9 +401,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 return {
                     ...it,
                     amount: bookingSforoRate,
-                    description: bookingSforoRate > 0
-                        ? `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`
-                        : 'Tariffa contratto non disponibile',
+                    description: descrizioneSforo,
                 }
             }
             return it
@@ -389,12 +414,12 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 id: 'km_sforo',
                 label: 'Sforo Km',
                 amount: bookingSforoRate,
-                description: `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`,
+                description: descrizioneSforo,
             },
             ...overridden,
         ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [penaliFromCfg, vehicleCategory, bookingSforoRate])
+    }, [penaliFromCfg, vehicleCategory, bookingSforoRate, descrizioneSforo])
     const danniPresetList: PenaltyPreset[] = useMemo(() => {
         if (!danniFromCfg) return []
         // Raw category first, then legacy alias fallback (same logic as

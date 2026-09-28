@@ -11,6 +11,7 @@ import { createHash } from 'crypto'
 import QRCode from 'qrcode'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
+import { tariffaSforoKm, kmInclusiContratto } from '../../src/utils/sforoKmContratto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -970,57 +971,22 @@ export const handler: Handler = async (event) => {
         // KM limit: recognize BOTH shapes.
         //   admin shape:   booking_details.unlimited_km=true  + km_limit='Illimitati'
         //   website shape: booking_details.kmPackage.type='unlimited' + includedKm>=9999
-        const bdKmPkg = booking.booking_details?.kmPackage || {}
-        const isUnlimitedKm =
-            booking.booking_details?.unlimited_km === true
-            || booking.booking_details?.km_limit === 'Illimitati'
-            || bdKmPkg.type === 'unlimited'
-            || bdKmPkg.distance === 'unlimited'
-            || Number(bdKmPkg.includedKm) >= 9999
+        // 28/09/2026: km inclusi letti con la stessa regola della penale Sforo
+        // Km (src/utils/sforoKmContratto.ts). Forma gestionale (km_limit, gia'
+        // comprensivo dei km_packages: mai risommarli, contratto a 300 km su
+        // una prenotazione da 200 — direzione 03/06/2026) e forma sito
+        // (kmPackage.includedKm, gia' base + pacchetto).
+        const kmContratto = kmInclusiContratto(booking.booking_details)
+        const isUnlimitedKm = kmContratto.illimitati
+        const computedTotalKm = kmContratto.totale
         const rawKmLimit = booking.booking_details?.km_limit
-        const includedKmNum = Number(bdKmPkg.includedKm)
-        const websiteIncludedKm = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999
-            ? String(includedKmNum)
-            : null
         // 2026-05-17: coercion a stringa per evitare TypeError su .includes()
         // se km_limit e' stato salvato come numero.
         const rawKmLimitStr = rawKmLimit == null ? null : String(rawKmLimit)
-        const rawKmLimitNum = Number(rawKmLimitStr)
-        const baseKmFromRaw = Number.isFinite(rawKmLimitNum) && rawKmLimitNum > 0 ? rawKmLimitNum : 0
-
-        // Admin shape (NUOVO 2026-05-16): booking_details.km_packages e' una
-        // LISTA di pacchetti, ciascuno con { km, quantity, total_km, ... }.
-        // Sommiamo total_km di tutti i pacchetti acquistati. Questo va
-        // AGGIUNTO al km base (km_limit raw) — al contrario del website
-        // shape dove includedKm gia' include tutto.
-        const adminKmPackages = Array.isArray(booking.booking_details?.km_packages)
-            ? booking.booking_details?.km_packages as Array<{ total_km?: number | string }>
-            : []
-        const adminPackageKmTotal = adminKmPackages.reduce((acc, p) => {
-            const t = Number(p?.total_km)
-            return acc + (Number.isFinite(t) && t > 0 ? t : 0)
-        }, 0)
-
-        // Website shape: kmPackage.includedKm gia' INCLUDE base + pacchetto.
-        const totalFromWebsitePackage = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999 ? includedKmNum : 0
-
-        // Calcolo del km totale che andra' sul contratto:
-        //  - Admin shape (km_packages array > 0): km_limit GIA' INCLUDE
-        //    base + pacchetti (la form lo somma a save time dal 2026-05-18,
-        //    commit 0fa300d4). NON ri-aggiungere o usciamo con DOPPIO conteggio:
-        //    booking mostra 200km, contratto stampa 300km. Bug riportato
-        //    direzione 2026-06-03.
-        //  - Website shape (kmPackage.includedKm > 0): usa direttamente quello.
-        //  - Else: usa km_limit raw.
-        let computedTotalKm = 0
-        if (adminPackageKmTotal > 0) {
-            // km_limit gia' include i pacchetti — usa direttamente baseKmFromRaw.
-            computedTotalKm = baseKmFromRaw
-        } else if (totalFromWebsitePackage > 0) {
-            computedTotalKm = totalFromWebsitePackage
-        } else {
-            computedTotalKm = baseKmFromRaw
-        }
+        const includedKmNum = Number(booking.booking_details?.kmPackage?.includedKm)
+        const websiteIncludedKm = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999
+            ? String(includedKmNum)
+            : null
         const kmLimitRaw = isUnlimitedKm
             ? 'Illimitati'
             : (computedTotalKm > 0
@@ -1784,6 +1750,12 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // The loop below will try to set each key; if the field doesn't exist in the PDF, it will just skip it.
         // vehicleModel is now calculated earlier as parsedModel
 
+        const tariffaSforo = tariffaSforoKm(
+            booking,
+            (cpCfg?.config as { km?: unknown } | null)?.km,
+            vehicleCategory,
+        )
+
         const dataMap = {
             // Contract Info
             'ContractNumber': contractNumber,
@@ -1868,48 +1840,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'LivelloCarburante': '',
             'VehicleKMRange': '',
             'KMRange': '',
-            'KMOverageFee': (() => {
-                // 2026-05-17: fallback su Centralina Pro per categoria veicolo.
-                // Prima usavamo solo booking.km_overage_fee — se la booking
-                // era stata creata senza quel campo (admin booking senza
-                // pacchetto km, importi vecchi), il contratto mostrava sforo
-                // vuoto. Ora leggiamo da centralina_pro_config.km[<cat>].sforo
-                // come fallback.
-                if (booking.km_overage_fee && Number(booking.km_overage_fee) > 0) {
-                    return `€${Number(booking.km_overage_fee).toFixed(2)}`
-                }
-                const vehCat = String(vehicleCategory || '').toLowerCase()
-                const proKm = (cpCfg?.config as { km?: Array<{ id: string; sforo?: number | string }> } | null)?.km
-                if (Array.isArray(proKm)) {
-                    const aliases = (vehCat === 'supercars' || vehCat === 'supercar' || vehCat === 'exotic')
-                        ? ['supercars', 'supercar', 'exotic']
-                        : [vehCat]
-                    for (const a of aliases) {
-                        const entry = proKm.find(k => String(k.id).toLowerCase() === a)
-                        const v = Number(entry?.sforo)
-                        if (Number.isFinite(v) && v > 0) return `€${v.toFixed(2)}`
-                    }
-                }
-                return ''
-            })(),
-            'SforoPerKM': (() => {
-                if (booking.km_overage_fee && Number(booking.km_overage_fee) > 0) {
-                    return `€${Number(booking.km_overage_fee).toFixed(2)}`
-                }
-                const vehCat = String(vehicleCategory || '').toLowerCase()
-                const proKm = (cpCfg?.config as { km?: Array<{ id: string; sforo?: number | string }> } | null)?.km
-                if (Array.isArray(proKm)) {
-                    const aliases = (vehCat === 'supercars' || vehCat === 'supercar' || vehCat === 'exotic')
-                        ? ['supercars', 'supercar', 'exotic']
-                        : [vehCat]
-                    for (const a of aliases) {
-                        const entry = proKm.find(k => String(k.id).toLowerCase() === a)
-                        const v = Number(entry?.sforo)
-                        if (Number.isFinite(v) && v > 0) return `€${v.toFixed(2)}`
-                    }
-                }
-                return ''
-            })(),
+            // 28/09/2026: stessa regola della penale Sforo Km (Danni/Penali):
+            // src/utils/sforoKmContratto.ts. Prenotazione, poi Centralina Pro.
+            'KMOverageFee': tariffaSforo > 0 ? `€${tariffaSforo.toFixed(2)}` : '',
+            'SforoPerKM': tariffaSforo > 0 ? `€${tariffaSforo.toFixed(2)}` : '',
 
 
             // Rental Specifics — resolve location IDs to addresses
