@@ -350,18 +350,31 @@ export const handler: Handler = async (event) => {
         }
     }
 
-    // 28/09/2026: danni/penali presenti SOLO in fattura (es. "Danno
-    // prenotazione 88CDFF9D - distrutta macchina", 13.000 EUR sulla Clio di
-    // Nelson Badini): la scheda cliente DR7 li mostra, EMTN no. Stessa regola
-    // della tab Danni/Penali: se la prenotazione ha gia' la sua lista la
-    // fattura ne e' solo il documento (non si conta due volte); note di
-    // credito e fatture annullate non sono addebiti.
+    // 28/09/2026: danni/penali presenti in fattura ma non nella lista della
+    // prenotazione (es. "Danno prenotazione 88CDFF9D - distrutta macchina",
+    // 13.000 EUR sulla Clio di Nelson Badini): la scheda cliente DR7 li
+    // mostra, EMTN no. Riga per riga: con gemella in booking_details la lista
+    // resta la fonte; senza gemella si conta, una volta sola anche se la
+    // fattura e' stata riemessa. Note di credito e fatture annullate escluse.
     const conDanniInFattura = new Set<string>()
     {
         const bookingIds = bookings.map(b => b.id)
-        const conLista = new Set(bookings
-            .filter(b => (b.booking_details?.danni || []).length > 0 || (b.booking_details?.penalties || []).length > 0)
-            .map(b => b.id))
+        const vociLista = (b: DR7Booking | undefined): string[] => {
+            if (!b) return []
+            const voci = [...(b.booking_details?.danni || []), ...(b.booking_details?.penalties || [])] as (DanniItem & { description?: string })[]
+            return voci.map(it => String(it?.label || it?.description || '')).filter(Boolean)
+        }
+        // Stessa regola di GestioneDanniTab.stessaVoce: "Penale - X" == "X".
+        const nomeVoce = (t: string) => t.toLowerCase().trim().replace(/^(penale|danno)\s*-\s*/, '')
+        const stessaVoce = (etichetta: string, description: string): boolean => {
+            const a = nomeVoce(etichetta)
+            const b = nomeVoce(description)
+            if (!a || !b) return false
+            if (a === b) return true
+            const d = description.toLowerCase()
+            return a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a) || d.includes(a))
+        }
+        const righeContate = new Set<string>()
         const byId = new Map(bookings.map(b => [b.id, b]))
         type FatturaRiga = { description?: string; total?: number; unit_price?: number; quantity?: number; amountPaid?: number; paymentStatus?: string }
         type FatturaDb = { id: string; booking_id: string | null; stato: string | null; data_emissione: string | null; items: FatturaRiga[] | null; tipo_fattura: string | null; related_invoice_id: string | null }
@@ -388,11 +401,20 @@ export const handler: Handler = async (event) => {
             visti.add(f.id)
             if (!Array.isArray(f.items)) continue
             if (f.tipo_fattura === 'nota_di_credito' || annullate.has(String(f.id))) continue
-            if (f.booking_id && conLista.has(f.booking_id)) continue
+            const gemelle = vociLista(f.booking_id ? byId.get(f.booking_id) : undefined)
             const righe = f.items.filter(it => typeof it?.description === 'string').map(it => ({ it, tipo: tipoRiga(String(it.description)) }))
             const righePenali = righe.filter(r => r.tipo !== null)
             if (righePenali.length === 0) continue
             const lineTotal = (it: FatturaRiga) => Number(it.total) || (Number(it.unit_price) || 0) * (Number(it.quantity) || 1)
+            const daContare = righePenali.filter(r => {
+                const desc = String(r.it.description)
+                if (gemelle.some(g => stessaVoce(g, desc))) return false
+                const chiave = `${f.booking_id || f.id}|${desc.toLowerCase().trim()}|${lineTotal(r.it).toFixed(2)}`
+                if (righeContate.has(chiave)) return false
+                righeContate.add(chiave)
+                return true
+            })
+            if (daContare.length === 0) continue
             const altre = righe.filter(r => r.tipo === null && String(r.it.description).trim().toLowerCase() !== 'sconto')
             const sconto = righe.filter(r => String(r.it.description).trim().toLowerCase() === 'sconto')
                 .reduce((t, r) => t + Math.abs(Number(r.it.total ?? r.it.unit_price) || 0), 0)
@@ -402,7 +424,7 @@ export const handler: Handler = async (event) => {
             const fatturaPagata = stato === 'paid' || stato === 'pagata'
             const bk = f.booking_id ? byId.get(f.booking_id) : undefined
             const refDate = bk?.pickup_date || bk?.appointment_date || f.data_emissione || null
-            for (const { it, tipo } of righePenali) {
+            for (const { it, tipo } of daContare) {
                 const total = Math.round(lineTotal(it) * (1 - quota) * 100) / 100
                 const pagato = it.amountPaid != null ? Number(it.amountPaid) * (1 - quota) : (fatturaPagata ? total : 0)
                 const ps = String(it.paymentStatus || '').toLowerCase()
