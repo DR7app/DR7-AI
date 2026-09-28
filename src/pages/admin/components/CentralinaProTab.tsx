@@ -2590,8 +2590,6 @@ export default function CentralinaProTab() {
                 danni={danni}
                 setDanni={setDanni}
                 categories={categories}
-                km={km}
-                setKm={setKm}
               />
             )}
             {section === 'p9' && (
@@ -6531,16 +6529,12 @@ function DanniPenaliSection({
   danni,
   setDanni,
   categories,
-  km,
-  setKm,
 }: {
   penali: PenaliConfig
   setPenali: (next: PenaliConfig) => void
   danni: DanniConfig
   setDanni: (next: DanniConfig) => void
   categories: Category[]
-  km: KmConfig[]
-  setKm: (next: KmConfig[]) => void
 }) {
   const [kind, setKind] = useState<'penali' | 'danni'>('penali')
   const config = kind === 'penali' ? penali : danni
@@ -6586,7 +6580,7 @@ function DanniPenaliSection({
         titleNoun={titleNoun}
         itemNoun={itemNoun}
         categories={categories}
-        sforo={kind === 'penali' ? { km, setKm } : undefined}
+        sforoDaContratto={kind === 'penali'}
       />
     </div>
   )
@@ -6598,15 +6592,15 @@ function FeeListEditor({
   titleNoun,
   itemNoun,
   categories,
-  sforo,
+  sforoDaContratto = false,
 }: {
   config: PenaliConfig
   setConfig: (next: PenaliConfig) => void
   titleNoun: string
   itemNoun: string
   categories: Category[]
-  /** Solo Penali: la voce "Sforo km" legge e scrive la tariffa di Km & Sforo. */
-  sforo?: { km: KmConfig[]; setKm: (next: KmConfig[]) => void }
+  /** Solo Penali: la voce "Sforo km" non ha prezzo, vale quello del contratto. */
+  sforoDaContratto?: boolean
 }) {
   const categoryList = categories.length > 0
     ? categories.map(c => ({ id: c.id, label: c.label }))
@@ -6621,17 +6615,10 @@ function FeeListEditor({
   }, [categories])
   const items = config[activeCategory] || []
 
-  // 28/09/2026 — la voce "Sforo km" non ha un prezzo suo. Era salvata a 0 EUR
-  // in tutte le categorie, e la penale usciva a 0. Vale la tariffa per km del
-  // CONTRATTO, cioe' Km & Sforo > sforo di questa categoria: il campo qui la
-  // mostra e la modifica, un solo numero in un solo posto.
-  const kmCategoria = sforo?.km.find(k => k.id === activeCategory)
-  function setSforoCategoria(v: number | '') {
-    if (!sforo) return
-    const esiste = sforo.km.some(k => k.id === activeCategory)
-    if (!esiste) return
-    sforo.setKm(sforo.km.map(k => (k.id === activeCategory ? { ...k, sforo: v } : k)))
-  }
+  // 28/09/2026 — la voce "Sforo km" non ha un prezzo suo: era salvata a 0 EUR
+  // in tutte le categorie e la penale usciva a 0. La tariffa per km e' quella
+  // scritta sul CONTRATTO di ogni cliente (sforoKmContratto.ts), quindi qui
+  // non si mostra ne' si scrive un importo.
 
   function patchItem(idx: number, p: Partial<PenaliItem>) {
     const next = items.map((it, i) => (i === idx ? { ...it, ...p } : it))
@@ -6698,20 +6685,9 @@ function FeeListEditor({
                   placeholder={`Nome ${itemNoun}`}
                   className="flex-1 min-w-0 bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 transition-colors"
                 />
-                {sforo && isVoceSforoKm(it) ? (
-                  <div className="relative w-32 flex-shrink-0">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
-                    <MoneyInput
-                      min={0}
-                      value={kmCategoria ? kmCategoria.sforo : ''}
-                      disabled={!kmCategoria}
-                      onChange={(__v: string) => {
-                        setSforoCategoria(__v === '' ? '' : Number(__v))
-                      }}
-                      placeholder="0"
-                      className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-10 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 disabled:opacity-40"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">/km</span>
+                {sforoDaContratto && isVoceSforoKm(it) ? (
+                  <div className="w-32 flex-shrink-0 rounded-lg border border-theme-border bg-theme-bg-tertiary px-3 py-1.5 text-center text-[13px] font-medium text-theme-text-secondary">
+                    Da contratto
                   </div>
                 ) : (
                   <div className="relative w-32 flex-shrink-0">
@@ -6738,11 +6714,9 @@ function FeeListEditor({
                   </svg>
                 </button>
               </div>
-              {sforo && isVoceSforoKm(it) && (
+              {sforoDaContratto && isVoceSforoKm(it) && (
                 <p className="mt-1.5 text-[12px] text-theme-text-secondary">
-                  {kmCategoria
-                    ? 'Tariffa per km del contratto: e\u2019 la stessa di Km & Sforo. In Danni/Penali si scrivono i km in piu\u2019 e il totale e\u2019 km \u00d7 tariffa.'
-                    : 'Questa categoria non e\u2019 in Km & Sforo: aggiungila li\u2019 per dare una tariffa alla penale.'}
+                  {'Tariffa per km scritta sul contratto di ogni cliente. In Danni/Penali si scrivono i km in pi\u00f9 e il totale \u00e8 km \u00d7 tariffa del contratto.'}
                 </p>
               )}
             </li>
