@@ -204,7 +204,7 @@ export default function EMTNTab() {
     const [datiEstero, setDatiEstero] = useState<DatiEstero>(ESTERO_VUOTO)
     // 28/09/2026: la segnalazione e' una pratica documentale con analisi AI
     // (EMTNPraticaModal). `posizioneId` = aggiornamento di una posizione.
-    const [pratica, setPratica] = useState<{ posizioneId: string | null; contesto: string | null } | null>(null)
+    const [pratica, setPratica] = useState<{ posizioneId: string | null; contesto: string | null; bookingId?: string | null } | null>(null)
     const [versionePosizioni, setVersionePosizioni] = useState(0)
     const { hasRole } = useAdminRole()
     const isDirezioneEMTN = hasRole('direzione')
@@ -228,7 +228,7 @@ export default function EMTNTab() {
         const contesto = voce
             ? `Voce del gestionale: ${nomeTipo} · ${voce.label} · ${voce.vehicle || 'veicolo n/d'} · importo €${voce.amount.toFixed(2)}, residuo €${voce.remaining.toFixed(2)}. Carica contratto, verbali, preventivo/fattura e comunicazioni relativi.`
             : `Voce del gestionale: ${nomeTipo} · ${ev.label}`
-        setPratica({ posizioneId: null, contesto })
+        setPratica({ posizioneId: null, contesto, bookingId: ev.bookingId })
     }
 
     const [damagedClients, setDamagedClients] = useState<ClientWithDamages[]>([])
@@ -430,6 +430,7 @@ export default function EMTNTab() {
                         nomeCliente={identitaCliente(data.client)}
                         posizioneId={pratica?.posizioneId || null}
                         contesto={pratica?.contesto || null}
+                        bookingId={pratica?.bookingId || null}
                     />
                 </>
             )}

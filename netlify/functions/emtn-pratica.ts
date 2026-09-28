@@ -24,6 +24,9 @@ import { requireAuth } from './require-auth'
 import { audit, clientIp, getServiceSupabase, jsonResponse } from './utils/emtn'
 import { userHasRole } from './utils/adminRoles'
 import { emailAlCliente, whatsappApprovazione, operatoreSegnalante } from './utils/emtnNotifiche'
+import { prenotazioniCliente, documentiPrenotazione, estrattoGestionalePdf } from './utils/emtnGestionale'
+import crypto from 'crypto'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 import {
     normalizzaRisultato, motiviRevisioneManuale, categoriaEMTN, etichettaStato, DECISIONI_EMTN,
     type RisultatoAnalisi, type ControlloGestionale,
@@ -90,6 +93,78 @@ export const handler: Handler = async (event) => {
         if (error || !data) return jsonResponse(500, { error: 'Apertura pratica fallita' }, origin)
         await audit(sb, { operatorId, operatorEmail, clientId, action: 'REPORT_EVENT', success: true, ip, userAgent: ua, metadata: { analisi_id: data.id, fase: 'apertura_pratica', posizione_id: posizioneId } })
         return jsonResponse(201, { analisiId: data.id }, origin)
+    }
+
+    // ── noleggi del cliente con i documenti che DR7 ha gia' ──
+    // Come CARGOS: niente da caricare a mano, i dati vengono dal gestionale.
+    // Preselezionato il noleggio dei danni/penali: quello indicato dallo
+    // schermo (voce da cui parte la segnalazione) oppure il primo con danni o
+    // penali non pagati, poi il primo con danni o penali.
+    if (azione === 'noleggi') {
+        const clientId = String(body.clientId || '')
+        const { data: cliente } = await sb.from('emtn_clients').select('codice_fiscale').eq('id', clientId).maybeSingle()
+        const { prenotazioni } = await prenotazioniCliente(sb, cliente?.codice_fiscale || null)
+        type Voce = { label?: string; total?: number; amount?: number; quantity?: number; paymentStatus?: string }
+        const importo = (v: Voce) => Number(v.total ?? Number(v.amount || 0) * Number(v.quantity || 1))
+        const noleggi = await Promise.all(prenotazioni.slice(0, 40).map(async b => {
+            const bd = b.booking_details || {}
+            const danni = (Array.isArray(bd.danni) ? bd.danni : []) as Voce[]
+            const penali = (Array.isArray(bd.penalties) ? bd.penalties : []) as Voce[]
+            const nonPagato = [...danni, ...penali].filter(v => String(v.paymentStatus || '').toLowerCase() !== 'paid').reduce((a, v) => a + importo(v), 0)
+            const documenti = (danni.length || penali.length) ? await documentiPrenotazione(sb, b.id) : null
+            return {
+                id: b.id, veicolo: b.vehicle_name, targa: b.vehicle_plate, ritiro: b.pickup_date, riconsegna: b.dropoff_date,
+                danni: danni.map(v => ({ label: v.label || 'Danno', importo: importo(v), pagato: String(v.paymentStatus || '').toLowerCase() === 'paid' })),
+                penali: penali.map(v => ({ label: v.label || 'Penale', importo: importo(v), pagato: String(v.paymentStatus || '').toLowerCase() === 'paid' })),
+                non_pagato: Math.round(nonPagato * 100) / 100,
+                documenti: documenti?.map(d => ({ nome: d.nome, tipo: d.tipo, descrizione: d.descrizione })) || null,
+            }
+        }))
+        const richiesto = body.bookingId ? String(body.bookingId) : null
+        const conVoci = noleggi.filter(n => n.danni.length || n.penali.length)
+        const suggerito = (richiesto && noleggi.some(n => n.id === richiesto) ? richiesto : null)
+            || conVoci.find(n => n.non_pagato > 0)?.id || conVoci[0]?.id || null
+        // Il noleggio suggerito ha sempre la lista documenti, anche senza voci.
+        const sel = noleggi.find(n => n.id === suggerito)
+        if (sel && !sel.documenti) sel.documenti = (await documentiPrenotazione(sb, sel.id)).map(d => ({ nome: d.nome, tipo: d.tipo, descrizione: d.descrizione }))
+        return jsonResponse(200, { noleggi, suggerito }, origin)
+    }
+
+    // ── allega i documenti del gestionale alla pratica ──────
+    if (azione === 'allega_gestionale') {
+        const analisiId = String(body.analisiId || '')
+        const bookingId = String(body.bookingId || '')
+        const escludi = new Set<string>(Array.isArray(body.escludi) ? body.escludi.map(String) : [])
+        const { data: analisi } = await sb.from('emtn_analisi').select('id, client_id, documenti, created_by, stato').eq('id', analisiId).maybeSingle()
+        if (!analisi || analisi.created_by !== operatorId) return jsonResponse(404, { error: 'Pratica non trovata' }, origin)
+        if (analisi.stato === 'in_corso' || analisi.stato === 'inviata') return jsonResponse(409, { error: 'Pratica gia\' in analisi o inviata' }, origin)
+        const { data: cliente } = await sb.from('emtn_clients').select('codice_fiscale').eq('id', analisi.client_id).maybeSingle()
+        const { prenotazioni } = await prenotazioniCliente(sb, cliente?.codice_fiscale || null)
+        if (!prenotazioni.some(b => b.id === bookingId)) return jsonResponse(403, { error: 'Il noleggio non appartiene a questo cliente' }, origin)
+
+        const documenti = Array.isArray(analisi.documenti) ? [...analisi.documenti] : []
+        const allegati: string[] = []
+        const mancanti: string[] = []
+        for (const d of await documentiPrenotazione(sb, bookingId)) {
+            if (escludi.has(d.nome)) continue
+            let dati: Buffer | null = null
+            if (d.tipo === 'estratto') {
+                dati = await estrattoGestionalePdf(sb, bookingId)
+            } else if (d.bucket && d.path) {
+                const { data: blob } = await sb.storage.from(d.bucket).download(d.path)
+                dati = blob ? Buffer.from(await blob.arrayBuffer()) : null
+            }
+            if (!dati) { mancanti.push(d.nome); continue }
+            const sha256 = crypto.createHash('sha256').update(dati).digest('hex')
+            if (documenti.some((x: { sha256?: string }) => x.sha256 === sha256)) continue
+            const path = percorsoStorage(`analisi/${analisiId}/${Date.now()}-gestionale-${d.nome}`)
+            const { error: upErr } = await sb.storage.from('emtn-documents').upload(path, dati, { contentType: 'application/pdf', upsert: false })
+            if (upErr) { mancanti.push(d.nome); continue }
+            documenti.push({ path, nome: d.nome, mime: 'application/pdf', estensione: 'pdf', size: dati.length, sha256, origine: 'gestionale', caricato_at: new Date().toISOString(), caricato_da: operatorEmail ?? null })
+            allegati.push(d.nome)
+        }
+        await sb.from('emtn_analisi').update({ documenti, booking_id: bookingId }).eq('id', analisiId)
+        return jsonResponse(200, { allegati, mancanti }, origin)
     }
 
     // ── stato ───────────────────────────────────────────────

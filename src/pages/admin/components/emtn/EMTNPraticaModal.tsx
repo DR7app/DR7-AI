@@ -44,6 +44,21 @@ interface StatoAnalisi {
     emailCliente: string | null
 }
 
+interface Noleggio {
+    id: string
+    veicolo: string | null
+    targa: string | null
+    ritiro: string | null
+    riconsegna: string | null
+    danni: { label: string; importo: number; pagato: boolean }[]
+    penali: { label: string; importo: number; pagato: boolean }[]
+    non_pagato: number
+    documenti: { nome: string; tipo: string; descrizione: string }[] | null
+}
+
+const giorno = (v: string | null) => v ? new Date(v).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '—'
+const eur = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
 interface Props {
     open: boolean
     onClose: () => void
@@ -53,6 +68,8 @@ interface Props {
     posizioneId?: string | null
     /** Testo di contesto (es. la voce di danno da cui parte la segnalazione). */
     contesto?: string | null
+    /** Noleggio della voce di danno/penale da cui parte la segnalazione. */
+    bookingId?: string | null
 }
 
 const inputCls = 'w-full bg-theme-bg-primary border border-theme-border rounded-lg px-2.5 py-1.5 text-xs text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-dr7-gold/50'
@@ -62,7 +79,7 @@ const ESITO_COLORE: Record<string, string> = {
 }
 const esitoCls = (e: string) => ESITO_COLORE[e] || 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
 
-export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, nomeCliente, posizioneId = null, contesto = null }: Props) {
+export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, nomeCliente, posizioneId = null, contesto = null, bookingId = null }: Props) {
     const [fase, setFase] = useState<Fase>('documenti')
     const [files, setFiles] = useState<File[]>([])
     const [analisiId, setAnalisiId] = useState<string | null>(null)
@@ -75,13 +92,28 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
     const [emailPopup, setEmailPopup] = useState('')
     const [esitoInvio, setEsitoInvio] = useState<{ emailInviata: boolean; erroreEmail: string | null; notificaDr7: boolean; motiviRevisione: string[] } | null>(null)
     const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+    // Come CARGOS: i documenti che DR7 ha gia' (contratto, fatture, estratto
+    // del gestionale) si allegano da soli dal noleggio dei danni/penali.
+    const [noleggi, setNoleggi] = useState<Noleggio[] | null>(null)
+    const [noleggioScelto, setNoleggioScelto] = useState<string | null>(null)
+    const [esclusi, setEsclusi] = useState<Set<string>>(new Set())
 
     useEffect(() => {
         if (!open) return
         setFase('documenti'); setFiles([]); setAnalisiId(null); setStato(null); setBozza(null)
         setLavoro(null); setErrore(null); setErroriInvio([]); setChiediEmail(false); setEmailPopup(''); setEsitoInvio(null)
-        return () => { if (timer.current) clearInterval(timer.current) }
-    }, [open])
+        setNoleggi(null); setNoleggioScelto(null); setEsclusi(new Set())
+        let annullato = false
+        authFetch('/.netlify/functions/emtn-pratica', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ azione: 'noleggi', clientId, bookingId }),
+        }).then(r => r.json()).then((j: { noleggi?: Noleggio[]; suggerito?: string | null }) => {
+            if (annullato) return
+            setNoleggi(j.noleggi || [])
+            setNoleggioScelto(j.suggerito || null)
+        }).catch(() => { if (!annullato) setNoleggi([]) })
+        return () => { annullato = true; if (timer.current) clearInterval(timer.current) }
+    }, [open, clientId, bookingId])
 
     if (!open) return null
 
@@ -115,7 +147,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
     }
 
     async function analizza() {
-        if (files.length === 0) { setErrore('Carica almeno un documento'); return }
+        if (files.length === 0 && !noleggioScelto) { setErrore('Scegli il noleggio o carica almeno un documento'); return }
         setErrore(null)
         try {
             let id = analisiId
@@ -125,6 +157,12 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                 if (!r.ok || !r.data.analisiId) throw new Error(r.data.error || 'Apertura pratica fallita')
                 id = r.data.analisiId
                 setAnalisiId(id)
+            }
+            if (noleggioScelto) {
+                setLavoro('Documenti dal gestionale DR7…')
+                const r = await chiama<{ allegati?: string[]; mancanti?: string[]; error?: string }>({ azione: 'allega_gestionale', analisiId: id, bookingId: noleggioScelto, escludi: [...esclusi] })
+                if (!r.ok) throw new Error(r.data.error || 'Documenti del gestionale non allegati')
+                if ((r.data.mancanti || []).length) toast(`Non trovati nello storage: ${r.data.mancanti!.join(', ')}`)
             }
             const giaCaricati = new Set((stato?.documenti || []).map(d => d.nome))
             for (let i = 0; i < files.length; i++) {
@@ -214,9 +252,51 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                     {fase === 'documenti' && (
                         <>
                             {contesto && <p className="rounded-lg border border-theme-border bg-theme-bg-primary px-3 py-2 text-xs text-theme-text-secondary">{contesto}</p>}
-                            <p className="text-xs text-theme-text-secondary">
-                                Carica i documenti della pratica: l'analisi li legge tutti, individua gli eventi, estrae i dati e li confronta con il gestionale. Nessun dato va scritto a mano. Carica solo cio' che serve alla segnalazione.
-                            </p>
+                            <section>
+                                <h4 className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-1">Noleggio dei danni / penali</h4>
+                                <p className="text-[11px] text-theme-text-muted mb-2">I documenti che DR7 ha gia' su questo noleggio vengono allegati da soli: niente da caricare.</p>
+                                {noleggi === null && <p className="text-xs text-theme-text-muted">Ricerca dei noleggi del cliente…</p>}
+                                {noleggi && noleggi.length === 0 && <p className="text-xs text-theme-text-muted">Nessun noleggio DR7 trovato per questo cliente: carica i documenti qui sotto.</p>}
+                                {noleggi && noleggi.length > 0 && (
+                                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                                        {[...noleggi].sort((a, b) => Number(b.danni.length + b.penali.length > 0) - Number(a.danni.length + a.penali.length > 0)).map(n => {
+                                            const scelto = n.id === noleggioScelto
+                                            const voci = [...n.danni.map(v => ({ ...v, tipo: 'Danno' })), ...n.penali.map(v => ({ ...v, tipo: 'Penale' }))]
+                                            return (
+                                                <div key={n.id} onClick={() => { if (!scelto) { setNoleggioScelto(n.id); setEsclusi(new Set()) } }}
+                                                    className={`block rounded-lg border px-3 py-2 cursor-pointer ${scelto ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border bg-theme-bg-primary hover:border-theme-text-muted'}`}>
+                                                    <div className="flex items-start gap-2">
+                                                        <input type="radio" name="noleggio-emtn" checked={scelto} readOnly className="mt-0.5" />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-xs font-semibold text-theme-text-primary">
+                                                                {n.veicolo || 'Veicolo n/d'} {n.targa ? `· ${n.targa}` : ''} <span className="font-normal text-theme-text-muted">· {giorno(n.ritiro)} → {giorno(n.riconsegna)}</span>
+                                                            </p>
+                                                            {voci.length > 0 ? (
+                                                                <p className="text-[11px] text-theme-text-secondary">
+                                                                    {voci.map(v => `${v.tipo} ${v.label} ${eur(v.importo)}${v.pagato ? ' (pagato)' : ''}`).join(' · ')}
+                                                                    {n.non_pagato > 0 && <span className="text-red-600 dark:text-red-400 font-semibold"> · non pagato {eur(n.non_pagato)}</span>}
+                                                                </p>
+                                                            ) : <p className="text-[11px] text-theme-text-muted">Nessun danno o penale registrato</p>}
+                                                            {scelto && (
+                                                                <div className="mt-1.5 space-y-0.5">
+                                                                    {(n.documenti || [{ nome: 'contratto', tipo: 'contratto', descrizione: 'Contratto' }, { nome: 'fatture', tipo: 'fattura', descrizione: 'Fatture' }, { nome: 'estratto', tipo: 'estratto', descrizione: 'Estratto del gestionale' }]).map(d => (
+                                                                        <label key={d.nome} className="flex items-center gap-2 text-[11px] text-theme-text-primary" onClick={e => e.stopPropagation()}>
+                                                                            <input type="checkbox" checked={!esclusi.has(d.nome)} disabled={!n.documenti}
+                                                                                onChange={() => setEsclusi(prev => { const x = new Set(prev); if (x.has(d.nome)) x.delete(d.nome); else x.add(d.nome); return x })} />
+                                                                            {d.descrizione}
+                                                                        </label>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </section>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted">Altri documenti (facoltativo)</p>
                             <div className="flex flex-wrap gap-1.5">
                                 {DOCUMENTI_SUGGERITI.map(d => <span key={d} className="rounded-full border border-theme-border px-2 py-0.5 text-[10px] text-theme-text-muted">{d}</span>)}
                             </div>
@@ -226,7 +306,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                 className="block rounded-xl border-2 border-dashed border-theme-border bg-theme-bg-primary px-4 py-6 text-center cursor-pointer hover:border-dr7-gold/60"
                             >
                                 <input type="file" multiple accept={ACCETTATI} className="hidden" onChange={e => { aggiungiFile(e.target.files); e.target.value = '' }} />
-                                <span className="block text-sm font-medium text-theme-text-primary">Carica documenti</span>
+                                <span className="block text-sm font-medium text-theme-text-primary">Aggiungi documenti (verbali, foto, preventivi, comunicazioni…)</span>
                                 <span className="block text-[11px] text-theme-text-muted">PDF, JPG, PNG o WEBP · max 10 MB ciascuno</span>
                             </label>
                             {files.length > 0 && (
@@ -379,7 +459,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                 <div className="flex items-center justify-end gap-2 px-5 sm:px-6 py-3 border-t border-theme-border">
                     {lavoro && <span className="mr-auto text-xs text-theme-text-muted">{lavoro}</span>}
                     {fase === 'documenti' && (
-                        <button type="button" onClick={analizza} disabled={!!lavoro || files.length === 0}
+                        <button type="button" onClick={analizza} disabled={!!lavoro || (files.length === 0 && !noleggioScelto)}
                             className="px-4 py-2 rounded-lg bg-dr7-gold text-black text-sm font-semibold disabled:opacity-50">Analizza documenti</button>
                     )}
                     {fase === 'revisione' && (
