@@ -46,7 +46,7 @@ function getExpirationAlarmHTML(cauzioni: any[]): string {
     return `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; background-color: #000000; color: #ffffff; padding: 40px 20px;">
       <div style="text-align: center; margin-bottom: 30px;">
-        <img src="https://dr7-empire-admin.netlify.app/DR7logo1.png" alt="DR7" style="height: 60px;" />
+        <img src="https://dr7.app/DR7logo1.png" alt="DR7" style="height: 60px;" />
       </div>
       
       <h1 style="color: #ff9900; font-size: 24px; margin-bottom: 20px; text-align: center;">⏰ ALLARME SCADENZA CAUZIONE</h1>
