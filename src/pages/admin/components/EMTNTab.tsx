@@ -291,6 +291,14 @@ export default function EMTNTab() {
         }
     }
 
+    // Apre la fiche del cliente e subito la pratica di segnalazione:
+    // dalla lista clienti ("Segnala") e dalla scheda "Segnalazione".
+    async function apriPratica(cf: string) {
+        await runSearch(cf)
+        setActiveView('ricerca')
+        setPratica({ posizioneId: null, contesto: null })
+    }
+
     async function handleSearchSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (searching) return
@@ -335,6 +343,7 @@ export default function EMTNTab() {
                                 error={damagedError}
                                 onSelect={(cf) => runSearch(cf)}
                                 onReportDamage={reportDamageAsEMTN}
+                                onSegnala={apriPratica}
                             />
                         )}
                         {data && (
@@ -401,7 +410,11 @@ export default function EMTNTab() {
                     : <PlaceholderView label="Da approvare: riservato alla direzione EMTN" />
             )}
 
-            {activeView !== 'ricerca' && activeView !== 'approvazioni' && (
+            {activeView === 'segnalazione' && (
+                <SegnalazioneView onApri={apriPratica} searching={searching} error={error} />
+            )}
+
+            {activeView !== 'ricerca' && activeView !== 'approvazioni' && activeView !== 'segnalazione' && (
                 <PlaceholderView label={TABS.find(t => t.key === activeView)?.label || ''} />
             )}
 
@@ -485,6 +498,42 @@ function TabStrip({ activeView, onChange, canExport }: {
                 Esporta report
             </button>
         </div>
+    )
+}
+
+/** Scheda "Segnalazione": codice fiscale e si apre la pratica documentale. */
+function SegnalazioneView({ onApri, searching, error }: { onApri: (cf: string) => void; searching: boolean; error: string | null }) {
+    const [cf, setCf] = useState('')
+    const valido = CF_REGEX.test(cf.trim().toUpperCase())
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden">
+            <div className="border-l-4 border-amber-500 px-5 py-4 space-y-3">
+                <div>
+                    <h2 className="text-base font-bold text-theme-text-primary">Nuova segnalazione EMTN</h2>
+                    <p className="text-xs text-theme-text-muted mt-0.5">
+                        1. Codice fiscale del cliente · 2. Carica i documenti · 3. L'analisi estrae e verifica i dati · 4. Controlli e invii: il cliente viene informato e la direzione EMTN approva.
+                    </p>
+                </div>
+                <form
+                    onSubmit={e => { e.preventDefault(); if (valido && !searching) onApri(cf.trim().toUpperCase()) }}
+                    className="flex flex-col sm:flex-row gap-2"
+                >
+                    <input
+                        value={cf}
+                        onChange={e => setCf(e.target.value.toUpperCase())}
+                        placeholder="Codice fiscale del cliente"
+                        maxLength={16}
+                        className="flex-1 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm font-mono text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                    />
+                    <button type="submit" disabled={!valido || searching}
+                        className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold disabled:opacity-50">
+                        {searching ? 'Ricerca…' : 'Apri pratica e carica documenti'}
+                    </button>
+                </form>
+                {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+                <p className="text-[11px] text-theme-text-muted">Cliente estero senza codice fiscale: cercalo da "Ricerca Cliente" &gt; Estero e usa "Apri pratica di segnalazione" nella sua scheda.</p>
+            </div>
+        </section>
     )
 }
 
@@ -1336,12 +1385,14 @@ function EventiCliente({ events, totals, onReport, canReport }: {
     )
 }
 
-function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage }: {
+function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage, onSegnala }: {
     clients: ClientWithDamages[]
     loading: boolean
     error: string | null
     onSelect: (cf: string) => void
     onReportDamage: (cf: string | null, ev: DamageEvent) => void
+    /** Apre direttamente la pratica di segnalazione EMTN del cliente. */
+    onSegnala: (cf: string) => void
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     function toggle(key: string) {
@@ -1447,7 +1498,21 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                                                 </td>
                                                 <td className="px-2 py-2 text-theme-text-muted">{formatDate(c.last_event_date) || '—'}</td>
                                                 <td className="px-2 py-2 text-theme-text-muted truncate max-w-[160px]">{c.last_vehicle || '—'}</td>
-                                                <td className="px-2 py-2 text-right">
+                                                <td className="px-2 py-2 text-right whitespace-nowrap">
+                                                    <button
+                                                        type="button"
+                                                        disabled={!canOpen}
+                                                        onClick={(e) => { e.stopPropagation(); if (canOpen && cf) onSegnala(cf) }}
+                                                        title={canOpen ? 'Apri una pratica di segnalazione EMTN per questo cliente' : 'CF mancante'}
+                                                        className={
+                                                            'inline-flex items-center gap-1 px-2 py-1 mr-1.5 rounded border text-[10px] font-semibold ' +
+                                                            (canOpen
+                                                                ? 'border-amber-500/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10'
+                                                                : 'border-theme-border text-theme-text-muted cursor-not-allowed')
+                                                        }
+                                                    >
+                                                        Segnala
+                                                    </button>
                                                     <button
                                                         type="button"
                                                         disabled={!canOpen}
