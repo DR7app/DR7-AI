@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tariffaSforoKm, kmInclusiContratto } from './sforoKmContratto'
+import { tariffaSforoKm, kmInclusiContratto, isVoceSforoKm } from './sforoKmContratto'
 
 // Estratto reale di centralina_pro_config (riga main) del 28/09/2026.
 const KM_MAIN = [
@@ -53,5 +53,17 @@ describe('kmInclusiContratto', () => {
     it('formato storico o assente = 0', () => {
         expect(kmInclusiContratto({ km_limit: '100/giorno' })).toEqual({ illimitati: false, totale: 0 })
         expect(kmInclusiContratto(null)).toEqual({ illimitati: false, totale: 0 })
+    })
+})
+
+describe('isVoceSforoKm', () => {
+    it('riconosce la voce per etichetta anche con id casuale', () => {
+        expect(isVoceSforoKm({ id: 'jet190hf', label: 'Sforo km' })).toBe(true)
+        expect(isVoceSforoKm({ id: 'km_sforo', label: 'Qualsiasi' })).toBe(true)
+        expect(isVoceSforoKm({ id: 'abc', label: 'Eccesso km' })).toBe(true)
+    })
+    it('non confonde le altre penali', () => {
+        expect(isVoceSforoKm({ id: 'x1', label: 'Ritardo check-out (per min)' })).toBe(false)
+        expect(isVoceSforoKm({ id: 'x2', label: 'Pulizia straordinaria' })).toBe(false)
     })
 })

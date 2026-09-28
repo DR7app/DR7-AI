@@ -87,3 +87,18 @@ export function kmInclusiContratto(bookingDetails: unknown): { illimitati: boole
     if (dalSito > 0) return { illimitati: false, totale: dalSito }
     return { illimitati: false, totale: base }
 }
+
+/**
+ * La voce "Sforo Km" di Centralina > Danni & Penali, riconosciuta per id o
+ * etichetta (gli id delle voci sono casuali: "Sforo km" in main ha id
+ * `jet190hf`). Non ha un prezzo proprio: vale la tariffa €/km del contratto.
+ */
+export function isVoceSforoKm(voce: { id?: string; label?: string }): boolean {
+    const id = String(voce.id || '').toLowerCase()
+    const label = String(voce.label || '').toLowerCase()
+    if (id.includes('sforo') || id.includes('eccesso')) return true
+    if (label.includes('sforo')) return true
+    if (label.includes('km extra') || label.includes('km eccesso')) return true
+    if (label.includes('eccesso km')) return true
+    return false
+}

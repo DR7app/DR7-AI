@@ -10,7 +10,7 @@ import { sanitizeMoney } from '../../../utils/money'
 import { useWalletPenale } from '../../../components/WalletPenale'
 import { isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
-import { tariffaSforoKm, kmInclusiContratto } from '../../../utils/sforoKmContratto'
+import { tariffaSforoKm, kmInclusiContratto, isVoceSforoKm } from '../../../utils/sforoKmContratto'
 
 interface DanniPenaliModalProps {
     /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
@@ -367,18 +367,8 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         ].filter(Boolean).join(' · ')
         : 'Tariffa sforo non configurata in Centralina Pro > Km per questa categoria'
 
-    // Match Sforo Km rows liberally — by id OR by label keyword. Admins might
-    // have used different ids in Centralina (sforo_kilometri, km_extra, ecc.)
-    // so we don't want a strict id whitelist.
-    const isSforoRow = (it: { id?: string; label?: string }): boolean => {
-        const id = String(it.id || '').toLowerCase()
-        const label = String(it.label || '').toLowerCase()
-        if (id.includes('sforo') || id.includes('eccesso')) return true
-        if (label.includes('sforo')) return true
-        if (label.includes('km extra') || label.includes('km eccesso')) return true
-        if (label.includes('eccesso km')) return true
-        return false
-    }
+    // Voce Sforo Km: stessa regola dell'editor di Centralina > Danni & Penali.
+    const isSforoRow = isVoceSforoKm
 
     const penaltyList: PenaltyPreset[] = useMemo(() => {
         // 1) raw category (Hypercar/Scooter/Supercar Elité/Suv Luxury/Moto/etc),
