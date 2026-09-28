@@ -235,23 +235,34 @@ export const handler: Handler = async (event) => {
     // Risolviamo prima gli user_id corrispondenti al CF e poi tiriamo
     // le loro bookings. Fallback finale su booking_details (CF salvato
     // nel JSON quando il cliente non era ancora autenticato).
+    // 28/09/2026: le prenotazioni create dall'admin NON hanno l'auth user in
+    // bookings.user_id ma l'id della scheda cliente (customers_extended.id),
+    // oppure lo tengono solo in booking_details.customer_id. Cercando solo
+    // per customers_extended.user_id (spesso NULL) un cliente come Nelson
+    // Badini risultava senza prenotazioni. Ora si cerca per: id scheda,
+    // user_id, customer_id nel JSON, email (case-insensitive) e CF nel JSON.
     const { data: profileMatches } = estero
         ? await sb
             .from('customers_extended')
-            .select('user_id')
+            .select('id, user_id, email')
             .ilike('nome', nomeE)
             .ilike('cognome', cognomeE)
             .eq('data_nascita', nascitaE)
         : await sb
             .from('customers_extended')
-            .select('user_id')
+            .select('id, user_id, email')
             .eq('codice_fiscale', cf)
+    const profili = (profileMatches || []) as { id: string | null; user_id: string | null; email: string | null }[]
     const matchedUserIds = Array.from(new Set(
-        (profileMatches || []).map(p => p.user_id).filter(Boolean) as string[]
+        profili.flatMap(p => [p.id, p.user_id]).filter(Boolean) as string[]
+    ))
+    const matchedEmails = Array.from(new Set(
+        profili.map(p => String(p.email || '').trim().toLowerCase()).filter(e => e.includes('@'))
     ))
 
     type RawBooking = DR7Booking & {
         user_id?: string | null
+        customer_email?: string | null
         booking_details?: (DR7Booking['booking_details'] & {
             codice_fiscale?: string
             codiceFiscale?: string
@@ -260,31 +271,36 @@ export const handler: Handler = async (event) => {
     }
 
     const collected = new Map<string, RawBooking>()
+    const COLONNE_BOOKING = 'id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id, customer_email'
+    const filtri: string[] = []
     if (matchedUserIds.length > 0) {
-        const { data } = await sb
-            .from('bookings')
-            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id')
-            .in('user_id', matchedUserIds)
-            .order('pickup_date', { ascending: false })
-            .limit(50)
-        for (const b of (data || []) as RawBooking[]) collected.set(b.id, b)
+        const lista = matchedUserIds.join(',')
+        filtri.push(`user_id.in.(${lista})`)
+        filtri.push(`booking_details->>customer_id.in.(${lista})`)
+        filtri.push(`booking_details->customer->>customerId.in.(${lista})`)
     }
-    // Fallback: bookings dove il CF e\' annidato in booking_details
-    // (records senza user_id risolto). Filtro lato JS, limite a 500
-    // righe per non leggere milioni di record.
-    if (collected.size === 0 && !estero) {
-        const { data } = await sb
-            .from('bookings')
-            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id')
-            .not('booking_details', 'is', null)
-            .order('pickup_date', { ascending: false })
-            .limit(500)
-        for (const b of (data || []) as RawBooking[]) {
-            const bdCf = b.booking_details?.codice_fiscale
-                || b.booking_details?.codiceFiscale
-                || b.booking_details?.customer?.codice_fiscale
-                || b.booking_details?.customer?.codiceFiscale
-            if (bdCf && String(bdCf).trim().toUpperCase() === cf) collected.set(b.id, b)
+    for (const e of matchedEmails) {
+        // Virgole e parentesi romperebbero il filtro .or(): quelle email si saltano.
+        if (!/[,()]/.test(e)) filtri.push(`customer_email.ilike.${e}`)
+    }
+    if (!estero && cf) {
+        filtri.push(`booking_details->>codice_fiscale.eq.${cf}`)
+        filtri.push(`booking_details->>codiceFiscale.eq.${cf}`)
+        filtri.push(`booking_details->customer->>codice_fiscale.eq.${cf}`)
+        filtri.push(`booking_details->customer->>codiceFiscale.eq.${cf}`)
+    }
+    if (filtri.length > 0) {
+        for (let page = 0; page < 10; page++) {
+            const { data, error: bErr } = await sb
+                .from('bookings')
+                .select(COLONNE_BOOKING)
+                .or(filtri.join(','))
+                .order('pickup_date', { ascending: false })
+                .range(page * 1000, page * 1000 + 999)
+            if (bErr) { console.error('[emtn-search] bookings or() failed', bErr.message); break }
+            const got = (data || []) as RawBooking[]
+            for (const b of got) collected.set(b.id, b)
+            if (got.length < 1000) break
         }
     }
 
@@ -334,11 +350,90 @@ export const handler: Handler = async (event) => {
         }
     }
 
+    // 28/09/2026: danni/penali presenti SOLO in fattura (es. "Danno
+    // prenotazione 88CDFF9D - distrutta macchina", 13.000 EUR sulla Clio di
+    // Nelson Badini): la scheda cliente DR7 li mostra, EMTN no. Stessa regola
+    // della tab Danni/Penali: se la prenotazione ha gia' la sua lista la
+    // fattura ne e' solo il documento (non si conta due volte); note di
+    // credito e fatture annullate non sono addebiti.
+    const conDanniInFattura = new Set<string>()
+    {
+        const bookingIds = bookings.map(b => b.id)
+        const conLista = new Set(bookings
+            .filter(b => (b.booking_details?.danni || []).length > 0 || (b.booking_details?.penalties || []).length > 0)
+            .map(b => b.id))
+        const byId = new Map(bookings.map(b => [b.id, b]))
+        type FatturaRiga = { description?: string; total?: number; unit_price?: number; quantity?: number; amountPaid?: number; paymentStatus?: string }
+        type FatturaDb = { id: string; booking_id: string | null; stato: string | null; data_emissione: string | null; items: FatturaRiga[] | null; tipo_fattura: string | null; related_invoice_id: string | null }
+        const fatture: FatturaDb[] = []
+        const COLONNE_FATTURA = 'id, booking_id, stato, data_emissione, items, tipo_fattura, related_invoice_id'
+        for (let i = 0; i < bookingIds.length; i += 100) {
+            const { data } = await sb.from('fatture').select(COLONNE_FATTURA).in('booking_id', bookingIds.slice(i, i + 100))
+            fatture.push(...((data || []) as FatturaDb[]))
+        }
+        for (const e of matchedEmails) {
+            const { data } = await sb.from('fatture').select(COLONNE_FATTURA).is('booking_id', null).ilike('customer_email', e)
+            fatture.push(...((data || []) as FatturaDb[]))
+        }
+        const annullate = new Set(fatture.filter(f => f.tipo_fattura === 'nota_di_credito' && f.related_invoice_id).map(f => String(f.related_invoice_id)))
+        const tipoRiga = (d: string): 'danno' | 'penale' | null => {
+            const x = d.toLowerCase().trim()
+            if (x.includes('danno prenotazione') || x.startsWith('danno')) return 'danno'
+            if (x.includes('penale prenotazione') || x.startsWith('penale')) return 'penale'
+            return null
+        }
+        const visti = new Set<string>()
+        for (const f of fatture) {
+            if (visti.has(f.id)) continue
+            visti.add(f.id)
+            if (!Array.isArray(f.items)) continue
+            if (f.tipo_fattura === 'nota_di_credito' || annullate.has(String(f.id))) continue
+            if (f.booking_id && conLista.has(f.booking_id)) continue
+            const righe = f.items.filter(it => typeof it?.description === 'string').map(it => ({ it, tipo: tipoRiga(String(it.description)) }))
+            const righePenali = righe.filter(r => r.tipo !== null)
+            if (righePenali.length === 0) continue
+            const lineTotal = (it: FatturaRiga) => Number(it.total) || (Number(it.unit_price) || 0) * (Number(it.quantity) || 1)
+            const altre = righe.filter(r => r.tipo === null && String(r.it.description).trim().toLowerCase() !== 'sconto')
+            const sconto = righe.filter(r => String(r.it.description).trim().toLowerCase() === 'sconto')
+                .reduce((t, r) => t + Math.abs(Number(r.it.total ?? r.it.unit_price) || 0), 0)
+            const lordo = righePenali.reduce((t, r) => t + lineTotal(r.it), 0)
+            const quota = altre.length === 0 && sconto > 0 && lordo > 0 ? Math.min(1, sconto / lordo) : 0
+            const stato = String(f.stato || '').toLowerCase()
+            const fatturaPagata = stato === 'paid' || stato === 'pagata'
+            const bk = f.booking_id ? byId.get(f.booking_id) : undefined
+            const refDate = bk?.pickup_date || bk?.appointment_date || f.data_emissione || null
+            for (const { it, tipo } of righePenali) {
+                const total = Math.round(lineTotal(it) * (1 - quota) * 100) / 100
+                const pagato = it.amountPaid != null ? Number(it.amountPaid) * (1 - quota) : (fatturaPagata ? total : 0)
+                const ps = String(it.paymentStatus || '').toLowerCase()
+                const paid = ps === 'paid' || (ps !== 'pending' && ps !== 'partial' && pagato >= total - 0.005)
+                const voce = {
+                    bookingId: f.booking_id || '',
+                    vehicle: bk ? (bk.vehicle_name || bk.vehicle_plate) : null,
+                    date: refDate,
+                    label: String(it.description),
+                    amount: total,
+                    quantity: 1,
+                    paid,
+                    note: undefined as string | undefined,
+                }
+                if (f.booking_id) conDanniInFattura.add(f.booking_id)
+                if (tipo === 'danno') {
+                    if (!paid) unpaidDamageTotal += Math.max(0, total - pagato)
+                    dr7Damages.push(voce)
+                } else {
+                    if (!paid) unpaidPenaltyTotal += Math.max(0, total - pagato)
+                    dr7Penalties.push(voce)
+                }
+            }
+        }
+    }
+
     const totalRentals = bookings.length
     const regularRentals = bookings.filter(b => {
         const danni = b.booking_details?.danni || []
         const penali = b.booking_details?.penalties || []
-        return danni.length === 0 && penali.length === 0
+        return danni.length === 0 && penali.length === 0 && !conDanniInFattura.has(b.id)
     }).length
 
     // Sync emtn_stats_cache: cosi' il prossimo lookup parte gia' caldo

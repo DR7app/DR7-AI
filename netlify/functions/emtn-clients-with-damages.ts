@@ -311,6 +311,9 @@ export const handler: Handler = async (event) => {
     for (const p of allWithCf as ExtRow[]) {
         if (!p.codice_fiscale) continue
         if (p.user_id && !profByUserId.has(p.user_id)) profByUserId.set(p.user_id, p)
+        // Le prenotazioni create dall'admin mettono in bookings.user_id l'id
+        // della scheda cliente, non l'auth user.
+        if (p.id && !profByUserId.has(p.id)) profByUserId.set(p.id, p)
         const e = normEmail(p.email)
         if (e && !profByEmail.has(e)) profByEmail.set(e, p)
         const fullName = normName([p.nome, p.cognome].filter(Boolean).join(' '))
