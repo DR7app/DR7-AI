@@ -97,12 +97,13 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
     const [noleggi, setNoleggi] = useState<Noleggio[] | null>(null)
     const [noleggioScelto, setNoleggioScelto] = useState<string | null>(null)
     const [esclusi, setEsclusi] = useState<Set<string>>(new Set())
+    const [cercaNoleggio, setCercaNoleggio] = useState('')
 
     useEffect(() => {
         if (!open) return
         setFase('documenti'); setFiles([]); setAnalisiId(null); setStato(null); setBozza(null)
         setLavoro(null); setErrore(null); setErroriInvio([]); setChiediEmail(false); setEmailPopup(''); setEsitoInvio(null)
-        setNoleggi(null); setNoleggioScelto(null); setEsclusi(new Set())
+        setNoleggi(null); setNoleggioScelto(null); setEsclusi(new Set()); setCercaNoleggio('')
         let annullato = false
         authFetch('/.netlify/functions/emtn-pratica', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -258,8 +259,25 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                 {noleggi === null && <p className="text-xs text-theme-text-muted">Ricerca dei noleggi del cliente…</p>}
                                 {noleggi && noleggi.length === 0 && <p className="text-xs text-theme-text-muted">Nessun noleggio DR7 trovato per questo cliente: carica i documenti qui sotto.</p>}
                                 {noleggi && noleggi.length > 0 && (
+                                    <input
+                                        value={cercaNoleggio}
+                                        onChange={e => setCercaNoleggio(e.target.value)}
+                                        placeholder="Cerca per veicolo, targa, data (gg/mm/aaaa), danno o penale, codice DR7…"
+                                        className={`${inputCls} mb-2`}
+                                    />
+                                )}
+                                {noleggi && noleggi.length > 0 && (
                                     <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                                        {[...noleggi].sort((a, b) => Number(b.danni.length + b.penali.length > 0) - Number(a.danni.length + a.penali.length > 0)).map(n => {
+                                        {[...noleggi].filter(n => {
+                                            const q = cercaNoleggio.trim().toLowerCase()
+                                            if (!q || n.id === noleggioScelto) return true
+                                            const testo = [
+                                                n.veicolo, n.targa, giorno(n.ritiro), giorno(n.riconsegna), `DR7-${n.id.slice(0, 8)}`,
+                                                ...n.danni.map(v => v.label), ...n.penali.map(v => v.label),
+                                                n.danni.length ? 'danno' : '', n.penali.length ? 'penale' : '', n.non_pagato > 0 ? 'non pagato' : '',
+                                            ].filter(Boolean).join(' ').toLowerCase()
+                                            return q.split(/\s+/).every(p => testo.includes(p))
+                                        }).sort((a, b) => Number(b.danni.length + b.penali.length > 0) - Number(a.danni.length + a.penali.length > 0)).map(n => {
                                             const scelto = n.id === noleggioScelto
                                             const voci = [...n.danni.map(v => ({ ...v, tipo: 'Danno' })), ...n.penali.map(v => ({ ...v, tipo: 'Penale' }))]
                                             return (
@@ -269,7 +287,7 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                                         <input type="radio" name="noleggio-emtn" checked={scelto} readOnly className="mt-0.5" />
                                                         <div className="min-w-0 flex-1">
                                                             <p className="text-xs font-semibold text-theme-text-primary">
-                                                                {n.veicolo || 'Veicolo n/d'} {n.targa ? `· ${n.targa}` : ''} <span className="font-normal text-theme-text-muted">· {giorno(n.ritiro)} → {giorno(n.riconsegna)}</span>
+                                                                {n.veicolo || 'Veicolo n/d'} {n.targa ? `· ${n.targa}` : ''} <span className="font-normal text-theme-text-muted">· {giorno(n.ritiro)} → {giorno(n.riconsegna)} · DR7-{n.id.slice(0, 8).toUpperCase()}</span>
                                                             </p>
                                                             {voci.length > 0 ? (
                                                                 <p className="text-[11px] text-theme-text-secondary">
