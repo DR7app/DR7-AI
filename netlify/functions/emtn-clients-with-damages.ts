@@ -11,6 +11,14 @@
  *     l'unico link al cliente e\' user_id (verso auth.users) e i
  *     campi denormalizzati customer_email / customer_name.
  *
+ * 28/09/2026: la lista mostrava 57 clienti su ~106. Tre buchi:
+ *   - bookings letta con .limit(2000) ma PostgREST taglia a 1000: sparivano
+ *     tutte le prenotazioni piu' vecchie (72 su 129 con danni/penali lette);
+ *   - le penali presenti SOLO in fattura (come in Danni/Penali) non c'erano;
+ *   - i clienti "In attesa di pagamento" senza danni/penali (prenotazione o
+ *     estensione non saldata) non c'erano.
+ *   Ora tutto e' paginato e le tre fonti finiscono nella stessa lista.
+ *
  * Strategia di aggregazione:
  *   1. Tira tutte le bookings con booking_details non null.
  *   2. Filtra a quelle con danni[] o penalties[] non vuoti.
@@ -24,6 +32,7 @@
 import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
 import { getServiceSupabase, jsonResponse } from './utils/emtn'
+import { isTestPlate } from '../../src/utils/testPlates'
 
 type DanniItem = {
     label?: string
@@ -40,6 +49,7 @@ type DanniItem = {
     // popoliamo li\' (TODO migration). Per ora derivati da fatture.
     paidAt?: string | null
     paidVia?: string | null
+    discount?: number
 }
 
 type FatturaItem = {
@@ -60,6 +70,11 @@ type FatturaRow = {
     data_emissione: string | null
     created_at: string | null
     items: FatturaItem[] | null
+    numero_fattura: string | null
+    customer_name: string | null
+    customer_email: string | null
+    tipo_fattura: string | null
+    related_invoice_id: string | null
 }
 
 interface BookingRow {
@@ -72,9 +87,15 @@ interface BookingRow {
     customer_phone: string | null
     vehicle_name: string | null
     vehicle_plate: string | null
+    status: string | null
+    payment_status: string | null
+    price_total: number | null
+    amount_paid: number | null
+    created_at: string | null
     booking_details: {
         danni?: DanniItem[]
         penalties?: DanniItem[]
+        extension_history?: { payment_status?: string; additional_amount?: number; amount_paid?: number; new_dropoff_date?: string }[]
         codice_fiscale?: string
         codiceFiscale?: string
         customer?: { codice_fiscale?: string; codiceFiscale?: string }
@@ -90,7 +111,9 @@ interface CustomerProfile {
 }
 
 interface EventDetail {
-    kind: 'danno' | 'penale'
+    // 'insoluto' = prenotazione o estensione ancora da saldare
+    // (stessa regola della tab "In attesa di pagamento").
+    kind: 'danno' | 'penale' | 'insoluto'
     bookingId: string
     label: string
     vehicle: string | null
@@ -116,6 +139,7 @@ interface Aggregated {
     unpaid_damage_total: number
     paid_penalty_total: number
     unpaid_penalty_total: number
+    unpaid_other_total: number
     last_event_date: string | null
     last_vehicle: string | null
     bookings_with_events: number
@@ -126,9 +150,11 @@ function num(v: unknown): number {
     const n = Number(v)
     return Number.isFinite(n) ? n : 0
 }
+// `total` e' il LISTINO; lo sconto (`discount`) si toglie sempre, come in
+// Danni/Penali e in "In attesa di pagamento": conta il prezzo finale.
 function itemTotal(it: DanniItem): number {
-    if (typeof it.total === 'number') return num(it.total)
-    return num(it.amount) * (num(it.quantity) || 1)
+    const lordo = it.total != null && it.total !== ('' as unknown) ? num(it.total) : num(it.amount) * (num(it.quantity) || 1)
+    return Math.max(0, Math.round((lordo - num(it.discount)) * 100) / 100)
 }
 function isPaid(it: DanniItem): boolean {
     const ps = String(it.paymentStatus || '').toLowerCase()
@@ -175,20 +201,84 @@ export const handler: Handler = async (event) => {
 
     const sb = getServiceSupabase()
 
-    const { data, error } = await sb
-        .from('bookings')
-        .select('id, pickup_date, appointment_date, user_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, booking_details')
-        .not('booking_details', 'is', null)
-        .order('pickup_date', { ascending: false })
-        .limit(2000)
+    // PostgREST restituisce al massimo 1000 righe per richiesta: si legge a
+    // pagine finche' una pagina torna corta.
+    async function tutteLeRighe<T>(pagina: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>): Promise<T[]> {
+        const out: T[] = []
+        for (let page = 0; page < 50; page++) {
+            const { data, error } = await pagina(page * 1000, page * 1000 + 999)
+            if (error) throw new Error(error.message)
+            const got = (data || []) as T[]
+            out.push(...got)
+            if (got.length < 1000) break
+        }
+        return out
+    }
 
-    if (error) return jsonResponse(500, { error: error.message }, origin)
+    let rows: BookingRow[]
+    let fattureTutte: FatturaRow[]
+    let allWithCf: (CustomerProfile & { id?: string | null; telefono?: string | null })[]
+    try {
+        [rows, fattureTutte, allWithCf] = await Promise.all([
+            tutteLeRighe<BookingRow>((from, to) => sb
+                .from('bookings')
+                .select('id, pickup_date, appointment_date, user_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, status, payment_status, price_total, amount_paid, created_at, booking_details')
+                .order('pickup_date', { ascending: false })
+                .order('id', { ascending: true })
+                .range(from, to)),
+            tutteLeRighe<FatturaRow>((from, to) => sb
+                .from('fatture')
+                .select('id, booking_id, stato, data_emissione, created_at, items, numero_fattura, customer_name, customer_email, tipo_fattura, related_invoice_id')
+                .order('id', { ascending: true })
+                .range(from, to)),
+            tutteLeRighe<CustomerProfile & { id?: string | null; telefono?: string | null }>((from, to) => sb
+                .from('customers_extended')
+                .select('user_id, id, email, codice_fiscale, nome, cognome, telefono')
+                .not('codice_fiscale', 'is', null)
+                .order('id', { ascending: true })
+                .range(from, to)),
+        ])
+    } catch (err) {
+        return jsonResponse(500, { error: (err as Error).message }, origin)
+    }
 
-    const rows = (data || []) as BookingRow[]
+    const PAGATO = new Set(['paid', 'completed', 'succeeded'])
+    const TERMINALE = new Set(['cancelled', 'annullata', 'completed', 'completata'])
+    const TEST_VISIBLE_FROM = '2026-05-05T00:00:00Z'
+
+    // Stessa regola della tab "In attesa di pagamento" (UnpaidBookingsTab):
+    // prenotazione non saldata (anche completata) ed estensioni con residuo.
+    // Le prenotazioni annullate non devono nulla per il noleggio in se'.
+    function insolutiDellaPrenotazione(b: BookingRow): { label: string; amount: number; amountPaid: number; eventDate: string | null }[] {
+        const out: { label: string; amount: number; amountPaid: number; eventDate: string | null }[] = []
+        if (String(b.customer_name || '') === 'Lavaggio Rientro') return out
+        if (String(b.status || '') === 'deleted') return out
+        if (isTestPlate(b.vehicle_plate) && !(b.created_at && b.created_at >= TEST_VISIBLE_FROM)) return out
+        const status = String(b.status || '')
+        const annullata = status === 'cancelled' || status === 'annullata'
+        if (annullata) return out
+        if (!PAGATO.has(String(b.payment_status || ''))) {
+            const tot = num(b.price_total) / 100
+            const pag = Math.min(num(b.amount_paid) / 100, tot)
+            out.push({ label: 'Prenotazione da saldare', amount: tot, amountPaid: pag, eventDate: b.pickup_date || b.appointment_date || null })
+        }
+        if (!TERMINALE.has(status)) {
+            for (const ext of b.booking_details?.extension_history || []) {
+                const ps = String(ext?.payment_status || '')
+                if (ps !== 'pending' && ps !== 'partial' && ps !== 'nexi_pay_by_link') continue
+                const amt = num(ext.additional_amount)
+                const paid = num(ext.amount_paid)
+                if (amt - paid <= 0) continue
+                out.push({ label: 'Estensione da saldare', amount: amt, amountPaid: paid, eventDate: ext.new_dropoff_date || b.pickup_date || null })
+            }
+        }
+        return out
+    }
+
     const interesting = rows.filter(b => {
         const d = b.booking_details?.danni || []
         const p = b.booking_details?.penalties || []
-        return d.length > 0 || p.length > 0
+        return (Array.isArray(d) && d.length > 0) || (Array.isArray(p) && p.length > 0) || insolutiDellaPrenotazione(b).length > 0
     })
 
     // Batch resolution: per ogni booking interessante prepara una serie
@@ -217,11 +307,8 @@ export const handler: Handler = async (event) => {
         return digits.length >= 7 ? digits.slice(-9) : null // ultimi 9 digit per gestire prefisso paese
     }
 
-    const { data: allWithCf } = await sb
-        .from('customers_extended')
-        .select('user_id, id, email, codice_fiscale, nome, cognome, telefono')
-        .not('codice_fiscale', 'is', null)
-    for (const p of (allWithCf || []) as ExtRow[]) {
+    // allWithCf: letta (paginata) insieme alle prenotazioni, piu' sopra.
+    for (const p of allWithCf as ExtRow[]) {
         if (!p.codice_fiscale) continue
         if (p.user_id && !profByUserId.has(p.user_id)) profByUserId.set(p.user_id, p)
         const e = normEmail(p.email)
@@ -254,13 +341,12 @@ export const handler: Handler = async (event) => {
     const bookingIds = Array.from(new Set(interesting.map(b => b.id)))
     const fatturaByBookingItem = new Map<string, { paidAt: string; numero: string }>()
     const fatturaByBooking = new Map<string, { paidAt: string; numero: string }>()
+    // 28/09/2026: le fatture sono gia' tutte in memoria (paginate): un .in()
+    // con centinaia di id rischiava di sfondare la lunghezza dell'URL.
+    const idsInteressanti = new Set(bookingIds)
     if (bookingIds.length > 0) {
-        const { data: fatture } = await sb
-            .from('fatture')
-            .select('id, booking_id, stato, data_emissione, created_at, items, numero_fattura')
-            .in('booking_id', bookingIds)
-        for (const f of (fatture || []) as (FatturaRow & { numero_fattura?: string })[]) {
-            if (!f.booking_id) continue
+        for (const f of fattureTutte) {
+            if (!f.booking_id || !idsInteressanti.has(f.booking_id)) continue
             const isPaid = String(f.stato || '').toLowerCase() === 'paid'
             if (!isPaid) continue
             const paidAt = f.data_emissione || f.created_at || ''
@@ -299,46 +385,51 @@ export const handler: Handler = async (event) => {
 
     const byGroup = new Map<string, Aggregated>()
 
-    for (const b of interesting) {
-        const danni = b.booking_details?.danni || []
-        const penalties = b.booking_details?.penalties || []
-        if (danni.length === 0 && penalties.length === 0) continue
-        const ref = b.pickup_date || b.appointment_date || null
-
-        const email = normEmail(b.customer_email)
-        const nameKey = normName(b.customer_name)
-        const phoneKey = normPhone(b.customer_phone)
+    // Trova (o crea) il cliente a cui appartiene una riga: stessa risoluzione
+    // per le tre fonti (danni/penali, fatture, insoluti).
+    function aggregatoPer(src: {
+        id: string
+        user_id: string | null
+        customer_name: string | null
+        customer_email: string | null
+        customer_phone: string | null
+        booking_details: BookingRow['booking_details']
+    }): Aggregated {
+        const email = normEmail(src.customer_email)
+        const nameKey = normName(src.customer_name)
+        const phoneKey = normPhone(src.customer_phone)
         const profile =
-            (b.user_id && profByUserId.get(b.user_id)) ||
+            (src.user_id && profByUserId.get(src.user_id)) ||
             (email && profByEmail.get(email)) ||
             (nameKey && profByName.get(nameKey)) ||
             (phoneKey && profByPhone.get(phoneKey)) ||
             null
         const cf =
             normCF(profile?.codice_fiscale) ||
-            normCF(b.booking_details?.codice_fiscale) ||
-            normCF(b.booking_details?.codiceFiscale) ||
-            normCF(b.booking_details?.customer?.codice_fiscale) ||
-            normCF(b.booking_details?.customer?.codiceFiscale)
+            normCF(src.booking_details?.codice_fiscale) ||
+            normCF(src.booking_details?.codiceFiscale) ||
+            normCF(src.booking_details?.customer?.codice_fiscale) ||
+            normCF(src.booking_details?.customer?.codiceFiscale)
         const fullName = profile && (profile.nome || profile.cognome)
             ? [profile.nome, profile.cognome].filter(Boolean).join(' ')
-            : (b.customer_name || null)
+            : (src.customer_name || null)
 
         // Group key: CF se risolto, altrimenti email, altrimenti name.
-        const groupKey = cf || email || normName(fullName) || `__booking_${b.id}`
+        const groupKey = cf || email || normName(fullName) || `__booking_${src.id}`
 
         const existing = byGroup.get(groupKey)
         const agg: Aggregated = existing || {
             codice_fiscale: cf,
             customer_name: fullName,
-            customer_email: b.customer_email,
-            customer_phone: b.customer_phone,
+            customer_email: src.customer_email,
+            customer_phone: src.customer_phone,
             damages_count: 0,
             penalties_count: 0,
             paid_damage_total: 0,
             unpaid_damage_total: 0,
             paid_penalty_total: 0,
             unpaid_penalty_total: 0,
+            unpaid_other_total: 0,
             last_event_date: null,
             last_vehicle: null,
             bookings_with_events: 0,
@@ -349,10 +440,45 @@ export const handler: Handler = async (event) => {
         } else {
             if (!agg.codice_fiscale && cf) agg.codice_fiscale = cf
             if (!agg.customer_name && fullName) agg.customer_name = fullName
-            if (!agg.customer_email && b.customer_email) agg.customer_email = b.customer_email
-            if (!agg.customer_phone && b.customer_phone) agg.customer_phone = b.customer_phone
+            if (!agg.customer_email && src.customer_email) agg.customer_email = src.customer_email
+            if (!agg.customer_phone && src.customer_phone) agg.customer_phone = src.customer_phone
         }
+        return agg
+    }
 
+    function aggiungi(agg: Aggregated, ev: EventDetail) {
+        if (ev.kind === 'danno') {
+            agg.damages_count += 1
+            if (ev.paymentStatus === 'paid') agg.paid_damage_total += ev.amount
+            else {
+                agg.paid_damage_total += ev.amountPaid
+                agg.unpaid_damage_total += ev.remaining
+            }
+        } else if (ev.kind === 'penale') {
+            agg.penalties_count += 1
+            if (ev.paymentStatus === 'paid') agg.paid_penalty_total += ev.amount
+            else {
+                agg.paid_penalty_total += ev.amountPaid
+                agg.unpaid_penalty_total += ev.remaining
+            }
+        } else {
+            agg.unpaid_other_total += ev.remaining
+        }
+        if (ev.eventDate && (!agg.last_event_date || ev.eventDate > agg.last_event_date)) {
+            agg.last_event_date = ev.eventDate
+            agg.last_vehicle = ev.vehicle
+        }
+        agg.events.push(ev)
+    }
+
+    for (const b of interesting) {
+        const danni = Array.isArray(b.booking_details?.danni) ? b.booking_details!.danni! : []
+        const penalties = Array.isArray(b.booking_details?.penalties) ? b.booking_details!.penalties! : []
+        const insoluti = insolutiDellaPrenotazione(b)
+        if (danni.length === 0 && penalties.length === 0 && insoluti.length === 0) continue
+        const ref = b.pickup_date || b.appointment_date || null
+
+        const agg = aggregatoPer(b)
         agg.bookings_with_events += 1
         const veh = b.vehicle_name || b.vehicle_plate || null
         function buildEvent(kind: 'danno' | 'penale', it: DanniItem): EventDetail {
@@ -384,33 +510,109 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        for (const d of danni) {
-            agg.damages_count += 1
-            const ev = buildEvent('danno', d)
-            if (ev.paymentStatus === 'paid') agg.paid_damage_total += ev.amount
-            else {
-                agg.paid_damage_total += ev.amountPaid
-                agg.unpaid_damage_total += ev.remaining
-            }
-            if (ev.eventDate && (!agg.last_event_date || ev.eventDate > agg.last_event_date)) {
-                agg.last_event_date = ev.eventDate
-                agg.last_vehicle = veh
-            }
-            agg.events.push(ev)
+        for (const d of danni) aggiungi(agg, buildEvent('danno', d))
+        for (const p of penalties) aggiungi(agg, buildEvent('penale', p))
+        for (const x of insoluti) {
+            const amount = Math.round(x.amount * 100) / 100
+            const amountPaid = Math.round(x.amountPaid * 100) / 100
+            aggiungi(agg, {
+                kind: 'insoluto',
+                bookingId: b.id,
+                label: x.label,
+                vehicle: veh,
+                eventDate: x.eventDate,
+                paidAt: null,
+                daysToPay: null,
+                amount,
+                amountPaid,
+                remaining: Math.max(0, Math.round((amount - amountPaid) * 100) / 100),
+                paymentStatus: amountPaid > 0 ? 'partial' : 'pending',
+                fatturaNumero: null,
+                note: null,
+            })
         }
-        for (const p of penalties) {
-            agg.penalties_count += 1
-            const ev = buildEvent('penale', p)
-            if (ev.paymentStatus === 'paid') agg.paid_penalty_total += ev.amount
-            else {
-                agg.paid_penalty_total += ev.amountPaid
-                agg.unpaid_penalty_total += ev.remaining
-            }
-            if (ev.eventDate && (!agg.last_event_date || ev.eventDate > agg.last_event_date)) {
-                agg.last_event_date = ev.eventDate
-                agg.last_vehicle = veh
-            }
-            agg.events.push(ev)
+    }
+
+    // 28/09/2026: penali/danni presenti SOLO in fattura (stessa regola della
+    // tab Danni/Penali): righe "Penale - X" / "Danno - X" / "Penale|Danno
+    // prenotazione ...". Se la prenotazione ha gia' la sua lista in
+    // booking_details la fattura e' solo il documento di quella lista (spesso
+    // riemessa 2-3 volte): contarla sarebbe un doppio. Note di credito e
+    // fatture annullate da una nota di credito non sono addebiti.
+    const bookingById = new Map(rows.map(b => [b.id, b]))
+    const conLista = new Set(rows
+        .filter(b => (Array.isArray(b.booking_details?.danni) && b.booking_details!.danni!.length > 0)
+            || (Array.isArray(b.booking_details?.penalties) && b.booking_details!.penalties!.length > 0))
+        .map(b => b.id))
+    const fattureAnnullate = new Set(fattureTutte
+        .filter(f => f.tipo_fattura === 'nota_di_credito' && f.related_invoice_id)
+        .map(f => String(f.related_invoice_id)))
+    const tipoRiga = (description: string): 'danno' | 'penale' | null => {
+        const d = description.toLowerCase().trim()
+        if (d.includes('danno prenotazione') || d.startsWith('danno')) return 'danno'
+        if (d.includes('penale prenotazione') || d.startsWith('penale')) return 'penale'
+        return null
+    }
+    for (const f of fattureTutte) {
+        if (!Array.isArray(f.items)) continue
+        if (f.tipo_fattura === 'nota_di_credito' || fattureAnnullate.has(String(f.id))) continue
+        if (f.booking_id && conLista.has(f.booking_id)) continue
+        const righe = f.items
+            .filter(it => typeof it?.description === 'string')
+            .map(it => ({ it, tipo: tipoRiga(String(it.description)) }))
+        const righePenali = righe.filter(r => r.tipo !== null)
+        if (righePenali.length === 0) continue
+        const lineTotal = (it: FatturaItem) => num(it.total) || num(it.unit_price) * (num(it.quantity) || 1)
+        // Sconto della fattura ripartito sulle righe solo se la fattura
+        // contiene SOLO penali/danni (come Danni/Penali).
+        const altre = righe.filter(r => r.tipo === null && String(r.it.description).trim().toLowerCase() !== 'sconto')
+        const sconto = righe
+            .filter(r => String(r.it.description).trim().toLowerCase() === 'sconto')
+            .reduce((s, r) => s + Math.abs(num(r.it.total ?? r.it.unit_price)), 0)
+        const lordo = righePenali.reduce((s, r) => s + lineTotal(r.it), 0)
+        const quota = altre.length === 0 && sconto > 0 && lordo > 0 ? Math.min(1, sconto / lordo) : 0
+        const stato = String(f.stato || '').toLowerCase()
+        const fatturaPagata = stato === 'paid' || stato === 'pagata'
+
+        const bk = f.booking_id ? bookingById.get(f.booking_id) : undefined
+        const nome = f.customer_name || bk?.customer_name || null
+        const mail = f.customer_email || bk?.customer_email || null
+        if (!nome && !mail) continue
+        const agg = aggregatoPer({
+            id: f.booking_id || `fattura_${f.id}`,
+            user_id: bk?.user_id || null,
+            customer_name: nome,
+            customer_email: mail,
+            customer_phone: bk?.customer_phone || null,
+            booking_details: bk?.booking_details || null,
+        })
+        agg.bookings_with_events += 1
+        const paidAt = fatturaPagata ? (f.data_emissione || f.created_at || null) : null
+        const eventDate = bk?.pickup_date || bk?.appointment_date || f.data_emissione || null
+        for (const { it, tipo } of righePenali) {
+            const total = Math.round(lineTotal(it) * (1 - quota) * 100) / 100
+            const ap = it.amountPaid != null
+                ? Math.min(total, Math.round(num(it.amountPaid) * (1 - quota) * 100) / 100)
+                : (fatturaPagata ? total : 0)
+            const ps = String(it.paymentStatus || '').toLowerCase()
+            const status: 'paid' | 'partial' | 'pending' =
+                ps === 'paid' ? 'paid' : ps === 'partial' ? 'partial' : ps === 'pending' ? 'pending'
+                : ap >= total - 0.005 ? 'paid' : ap > 0 ? 'partial' : 'pending'
+            aggiungi(agg, {
+                kind: tipo!,
+                bookingId: f.booking_id || '',
+                label: String(it.description),
+                vehicle: bk ? (bk.vehicle_name || bk.vehicle_plate || null) : null,
+                eventDate,
+                paidAt: status === 'pending' ? null : paidAt,
+                daysToPay: status === 'pending' ? null : daysBetween(eventDate, paidAt),
+                amount: total,
+                amountPaid: status === 'paid' ? total : ap,
+                remaining: status === 'paid' ? 0 : Math.max(0, Math.round((total - ap) * 100) / 100),
+                paymentStatus: status,
+                fatturaNumero: f.numero_fattura || null,
+                note: null,
+            })
         }
     }
 
@@ -497,14 +699,14 @@ export const handler: Handler = async (event) => {
             if (a.last_event_date > b.last_event_date) return -1
         } else if (a.last_event_date) return -1
         else if (b.last_event_date) return 1
-        const aUnpaid = a.unpaid_damage_total + a.unpaid_penalty_total
-        const bUnpaid = b.unpaid_damage_total + b.unpaid_penalty_total
+        const aUnpaid = a.unpaid_damage_total + a.unpaid_penalty_total + a.unpaid_other_total
+        const bUnpaid = b.unpaid_damage_total + b.unpaid_penalty_total + b.unpaid_other_total
         return bUnpaid - aUnpaid
     })
 
     return jsonResponse(200, {
         count: clients.length,
-        totalUnpaid: clients.reduce((s, c) => s + c.unpaid_damage_total + c.unpaid_penalty_total, 0),
+        totalUnpaid: clients.reduce((s, c) => s + c.unpaid_damage_total + c.unpaid_penalty_total + c.unpaid_other_total, 0),
         clients,
     }, origin)
 }

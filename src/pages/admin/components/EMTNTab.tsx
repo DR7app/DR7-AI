@@ -19,7 +19,8 @@ import { authFetch } from '../../../utils/authFetch'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface DamageEvent {
-    kind: 'danno' | 'penale'
+    // 'insoluto' = prenotazione/estensione ancora da saldare ("In attesa di pagamento")
+    kind: 'danno' | 'penale' | 'insoluto'
     bookingId: string
     label: string
     vehicle: string | null
@@ -45,6 +46,7 @@ interface ClientWithDamages {
     unpaid_damage_total: number
     paid_penalty_total: number
     unpaid_penalty_total: number
+    unpaid_other_total?: number
     last_event_date: string | null
     last_vehicle: string | null
     bookings_with_events: number
@@ -174,12 +176,14 @@ export default function EMTNTab() {
         }
         const fmt = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         const isPenale = ev.kind === 'penale'
+        const isInsoluto = ev.kind === 'insoluto'
         // Map: il "kind" del booking_details non corrisponde 1:1 ai tipi
         // EMTN. Scelta di default sensata; l'operatore puo\' cambiarla nel modale.
-        const type = isPenale ? 'INSOLVENCY' : 'UNPAID_DAMAGE'
-        const headline = `${isPenale ? 'Penale' : 'Danno'} non saldato: ${ev.label}`.slice(0, 100)
+        const type = isPenale || isInsoluto ? 'INSOLVENCY' : 'UNPAID_DAMAGE'
+        const nomeTipo = isInsoluto ? 'Importo' : isPenale ? 'Penale' : 'Danno'
+        const headline = (isInsoluto ? `Non saldato: ${ev.label}` : `${nomeTipo} non saldato: ${ev.label}`).slice(0, 100)
         const lines = [
-            `${isPenale ? 'Penale' : 'Danno'} registrato il ${formatDate(ev.eventDate) || 'data n/d'} sul veicolo ${ev.vehicle || 'n/d'}.`,
+            `${isInsoluto ? ev.label : nomeTipo} registrato il ${formatDate(ev.eventDate) || 'data n/d'} sul veicolo ${ev.vehicle || 'n/d'}.`,
             `Importo: ${fmt(ev.amount)} · Pagato: ${fmt(ev.amountPaid)} · Residuo: ${fmt(ev.remaining)}.`,
             ev.note ? `Note interne: ${ev.note}` : null,
             `Booking di riferimento: ${ev.bookingId}.`,
@@ -1116,7 +1120,7 @@ function ConformitaFooter() {
 
 function EventiCliente({ events, totals, onReport, canReport }: {
     events: DamageEvent[]
-    totals: { paidDamage: number; unpaidDamage: number; paidPenalty: number; unpaidPenalty: number }
+    totals: { paidDamage: number; unpaidDamage: number; paidPenalty: number; unpaidPenalty: number; unpaidOther?: number }
     onReport?: (ev: DamageEvent) => void
     canReport: boolean
 }) {
@@ -1132,6 +1136,9 @@ function EventiCliente({ events, totals, onReport, canReport }: {
                 <span className="text-theme-text-primary">Danni non pagati: <span className="text-red-400 font-semibold tabular-nums">{fmt(totals.unpaidDamage)}</span></span>
                 <span className="text-theme-text-primary">Penali pagate: <span className="text-emerald-500 font-semibold tabular-nums">{fmt(totals.paidPenalty)}</span></span>
                 <span className="text-theme-text-primary">Penali non pagate: <span className="text-red-400 font-semibold tabular-nums">{fmt(totals.unpaidPenalty)}</span></span>
+                {(totals.unpaidOther || 0) > 0 && (
+                    <span className="text-theme-text-primary">Prenotazioni da saldare: <span className="text-red-400 font-semibold tabular-nums">{fmt(totals.unpaidOther || 0)}</span></span>
+                )}
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-[11px]">
@@ -1164,7 +1171,9 @@ function EventiCliente({ events, totals, onReport, canReport }: {
                                 : 'Da pagare'
                             const kindTone = ev.kind === 'danno'
                                 ? 'border-red-500/40 text-red-400 bg-red-500/10'
-                                : 'border-orange-500/40 text-orange-400 bg-orange-500/10'
+                                : ev.kind === 'insoluto'
+                                    ? 'border-amber-500/40 text-amber-500 bg-amber-500/10'
+                                    : 'border-orange-500/40 text-orange-400 bg-orange-500/10'
                             const daysTone =
                                 ev.daysToPay == null ? 'text-theme-text-muted'
                                 : ev.daysToPay <= 7 ? 'text-emerald-500'
@@ -1174,7 +1183,7 @@ function EventiCliente({ events, totals, onReport, canReport }: {
                                 <tr key={ev.bookingId + '-' + i} className="border-t border-theme-border">
                                     <td className="px-2 py-1">
                                         <span className={'px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ' + kindTone}>
-                                            {ev.kind === 'danno' ? 'Danno' : 'Penale'}
+                                            {ev.kind === 'danno' ? 'Danno' : ev.kind === 'insoluto' ? 'Da saldare' : 'Penale'}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1 text-theme-text-primary">
@@ -1201,7 +1210,7 @@ function EventiCliente({ events, totals, onReport, canReport }: {
                                         <span className={'px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ' + tone}>{statusLabel}</span>
                                     </td>
                                     <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.fatturaNumero || '—'}</td>
-                                    <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.bookingId.slice(0, 8)}…</td>
+                                    <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.bookingId ? `${ev.bookingId.slice(0, 8)}…` : '—'}</td>
                                     <td className="px-2 py-1 text-right">
                                         {onReport && (
                                             <button
@@ -1209,7 +1218,7 @@ function EventiCliente({ events, totals, onReport, canReport }: {
                                                 disabled={!canReport}
                                                 onClick={() => onReport(ev)}
                                                 title={canReport
-                                                    ? `Segnala questo ${ev.kind === 'danno' ? 'danno' : 'penale'} alla rete EMTN`
+                                                    ? `Segnala questo ${ev.kind === 'danno' ? 'danno' : ev.kind === 'insoluto' ? 'importo non saldato' : 'penale'} alla rete EMTN`
                                                     : 'CF mancante: aggiungilo a customers_extended prima di segnalare'}
                                                 className={
                                                     'inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-semibold ' +
@@ -1251,7 +1260,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
             return next
         })
     }
-    const totalUnpaid = clients.reduce((s, c) => s + c.unpaid_damage_total + c.unpaid_penalty_total, 0)
+    const totalUnpaid = clients.reduce((s, c) => s + c.unpaid_damage_total + c.unpaid_penalty_total + (c.unpaid_other_total || 0), 0)
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden">
             <div className="border-l-4 border-red-500 px-4 py-3">
@@ -1262,7 +1271,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                             </svg>
                         </span>
-                        <h3 className="text-sm font-semibold">Clienti DR7 con danni o penali registrati</h3>
+                        <h3 className="text-sm font-semibold">Clienti DR7 con danni, penali o in attesa di pagamento</h3>
                     </div>
                     <div className="flex items-center gap-3 text-[11px]">
                         <span className="text-theme-text-muted">{clients.length} clienti</span>
@@ -1274,7 +1283,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                     </div>
                 </div>
                 <p className="text-[11px] text-theme-text-muted mb-3">
-                    Lista dei clienti che hanno almeno un danno o una penale nei record DR7. Clicca un cliente per aprirlo nella rete EMTN.
+                    Tutti i clienti con almeno un danno o una penale (anche solo in fattura) e tutti quelli in attesa di pagamento. Clicca un cliente per aprirlo nella rete EMTN.
                 </p>
                 {loading && (
                     <ScheletroLista righe={4} className="py-2" />
@@ -1284,7 +1293,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                 )}
                 {!loading && !error && clients.length === 0 && (
                     <p className="text-[11px] text-theme-text-muted italic py-2">
-                        Nessun cliente con danni o penali nei record DR7.
+                        Nessun cliente con danni, penali o pagamenti in sospeso nei record DR7.
                     </p>
                 )}
                 {!loading && !error && clients.length > 0 && (
@@ -1305,7 +1314,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                             </thead>
                             <tbody>
                                 {clients.map((c, idx) => {
-                                    const unpaid = c.unpaid_damage_total + c.unpaid_penalty_total
+                                    const unpaid = c.unpaid_damage_total + c.unpaid_penalty_total + (c.unpaid_other_total || 0)
                                     const cf = c.codice_fiscale
                                     const rowKey = cf || c.customer_email || c.customer_name || `row-${idx}`
                                     const canOpen = !!cf
@@ -1376,6 +1385,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                                                                 unpaidDamage: c.unpaid_damage_total,
                                                                 paidPenalty: c.paid_penalty_total,
                                                                 unpaidPenalty: c.unpaid_penalty_total,
+                                                                unpaidOther: c.unpaid_other_total || 0,
                                                             }}
                                                             canReport={!!cf}
                                                             onReport={(ev) => onReportDamage(cf, ev)}
