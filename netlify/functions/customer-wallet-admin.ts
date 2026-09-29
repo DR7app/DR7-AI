@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { hasApprovedOverride } from './utils/verifyOverride';
+import { userIsStaff } from './utils/adminRoles';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -113,6 +114,12 @@ const handler: Handler = async (event) => {
 
     if (authError || !user) {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Token non valido' }) };
+    }
+
+    // 29/09/2026: il token da solo non basta, i clienti del sito ne hanno uno
+    // dello stesso progetto e potevano accreditarsi il wallet da qui.
+    if (!(await userIsStaff(user.id, user.email))) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Riservato agli operatori del gestionale' }) };
     }
 
     const { action, customer_id, user_id, amount, description, query, nature, overrideId,

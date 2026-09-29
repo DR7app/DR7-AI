@@ -73,3 +73,29 @@ export async function userHasRole(userEmail: string | null | undefined, role: Ad
     return false
   }
 }
+
+/**
+ * 29/09/2026 — e' un operatore del gestionale? Stessa regola di
+ * dr7_is_staff() nel database: riga in `admins` non archiviata, piu' il
+ * failsafe della direzione. Le function che agiscono per conto dell'ufficio
+ * (wallet, rimborsi...) DEVONO chiamarla: un token valido da solo non basta,
+ * anche i clienti del sito hanno un token di questo stesso progetto.
+ */
+export async function userIsStaff(userId: string | null | undefined, userEmail: string | null | undefined): Promise<boolean> {
+  const email = (userEmail || '').toLowerCase()
+  if (email && ROLE_FAILSAFE[email]) return true
+  if (!userId) return false
+  try {
+    const { data, error } = await getClient()
+      .from('admins')
+      .select('id, archived_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) throw error
+    const riga = data as { archived_at?: string | null } | null
+    return !!riga && !riga.archived_at
+  } catch (e) {
+    console.warn('[adminRoles] staff lookup failed for', userId, e)
+    return false
+  }
+}
