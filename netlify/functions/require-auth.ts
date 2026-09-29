@@ -2,7 +2,8 @@
  * Shared authentication middleware for Netlify functions.
  *
  * Validates requests using EITHER:
- *   1. Supabase JWT (Authorization: Bearer <jwt>) — validated via supabase.auth.getUser()
+ *   1. Supabase JWT (Authorization: Bearer <jwt>) of a STAFF user (active row in
+ *      `admins`, or the direzione failsafe) — a customer JWT gets 403
  *   2. Admin API token (Authorization: Bearer <ADMIN_API_TOKEN>) — for legacy/internal calls
  *
  * Usage:
@@ -11,6 +12,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { corsHeaders } from './cors-headers'
+import { userIsStaff } from './utils/adminRoles'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -49,6 +51,17 @@ export async function requireAuth(event: { headers: Record<string, string> }): P
       return {
         user: null,
         error: { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid or expired token' }) }
+      }
+    }
+
+    // 29/09/2026: un token valido NON basta. I clienti di dr7.app hanno un
+    // token dello stesso progetto Supabase: senza questo controllo potevano
+    // chiamare le 78 function del gestionale che usano requireAuth. Stessa
+    // regola di dr7_is_staff() nel database.
+    if (!(await userIsStaff(user.id, user.email))) {
+      return {
+        user: null,
+        error: { statusCode: 403, headers, body: JSON.stringify({ error: 'Riservato agli operatori del gestionale' }) }
       }
     }
 
