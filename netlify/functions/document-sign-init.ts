@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFromSmtp } from './utils/emailFrom'
 import { funzioneFerma } from './utils/systemControl'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -147,7 +148,7 @@ export const handler: Handler = async (event) => {
                     const waResponse = await fetch(greenApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chatId, message: resolvedMessage })
+                        body: JSON.stringify({ chatId, message: await nellaLinguaDelTelefono(cleanedPhone, resolvedMessage) })
                     })
 
                     const waResult = await waResponse.json()

@@ -4,6 +4,7 @@ import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
 import { funzioneFerma } from './utils/systemControl'
 import { loadMeteoConfig, toMeteoBusiness, TEMPLATE_TERRA, TEMPLATE_MARE, type MeteoBusiness } from './weather-config'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
@@ -339,7 +340,7 @@ export async function runWeatherAlert(
       const resp = await fetch(greenApiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: `${rcpt.phone}@c.us`, message: componiMessaggio(messageBody, rcpt) }),
+        body: JSON.stringify({ chatId: `${rcpt.phone}@c.us`, message: await nellaLinguaDelTelefono(rcpt.phone, componiMessaggio(messageBody, rcpt)) }),
       })
       const result = await resp.json()
       if (!resp.ok || result.error) { console.error('[send-weather-alert] Green API error for', rcpt.phone, result); failed++; continue }

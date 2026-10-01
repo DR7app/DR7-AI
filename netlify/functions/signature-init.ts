@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -56,7 +57,7 @@ async function sendWhatsAppSigningLink(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chatId,
-                message: sigMessage
+                message: await nellaLinguaDelTelefono(cleanedPhone, sigMessage)
             })
         })
 

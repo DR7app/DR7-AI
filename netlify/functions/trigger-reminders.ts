@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { funzioneFerma } from './utils/systemControl'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,7 +43,7 @@ async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chatId: `${cleanNum}@c.us`, message: wrappedMsg }),
+    body: JSON.stringify({ chatId: `${cleanNum}@c.us`, message: await nellaLinguaDelTelefono(cleanNum, wrappedMsg) }),
   });
 
   const responseBody = await response.text();

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getGoogleReviewLink } from './utils/loadMarketing';
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl';
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -161,7 +162,7 @@ const reviewHandler: Handler = async (event) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chatId: `${cleanPhone}@c.us`,
-            message: personalizedMessage
+            message: await nellaLinguaDelTelefono(cleanPhone, personalizedMessage)
           })
         });
 

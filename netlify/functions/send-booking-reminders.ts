@@ -2,6 +2,7 @@ import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { conSystemControl, funzioneFerma, businessDaServiceType } from './utils/systemControl'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -62,7 +63,7 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chatId: `${cleanNum}@c.us`,
-        message: wrappedMessage,
+        message: await nellaLinguaDelTelefono(cleanNum, wrappedMessage),
       }),
     });
 

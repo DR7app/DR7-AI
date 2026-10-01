@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { funzioneFerma } from "./utils/systemControl";
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -188,9 +189,10 @@ export const handler: Handler = async (event) => {
             continue;
         }
 
-        const personalized = message
+        // Nella lingua del prefisso del destinatario (+39 resta italiano).
+        const personalized = await nellaLinguaDelTelefono(phone, message
             .replace(/{nome}/g, nome)
-            .replace(/{cognome}/g, cognome);
+            .replace(/{cognome}/g, cognome));
 
         try {
             if (imageUrls.length === 0 && !videoUrl) {

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { resolveKeyForContext } from "./utils/messageTemplates";
 import { resolveVehicleName } from "./utils/resolveVehicleName";
 import { funzioneFerma, businessDaServiceType } from "./utils/systemControl";
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -217,7 +218,7 @@ const handler: Handler = async (event) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId: `${cleanPhone}@c.us`,
-          message: wrappedMsg,
+          message: await nellaLinguaDelTelefono(cleanPhone, wrappedMsg),
         }),
       });
 

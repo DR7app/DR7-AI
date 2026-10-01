@@ -2,6 +2,7 @@ import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { renderTemplate } from './utils/messageTemplates'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -214,7 +215,7 @@ const reminderHandler: Handler = async () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chatId: `${cleanedPhone}@c.us`,
-                        message: message
+                        message: await nellaLinguaDelTelefono(cleanedPhone, message)
                     })
                 })
 

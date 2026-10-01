@@ -5,6 +5,7 @@
 // Idempotent on bookings.dr7_privilege_sent_at — never sends twice.
 
 import { funzioneFerma } from "./systemControl"
+import { nellaLinguaDelTelefono } from './i18n'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any
@@ -66,7 +67,7 @@ async function sendGreenApi(phone: string, message: string): Promise<void> {
     const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId: `${phone}@c.us`, message }),
+        body: JSON.stringify({ chatId: `${phone}@c.us`, message: await nellaLinguaDelTelefono(phone, message) }),
     })
     const result = await res.json().catch(() => ({}))
     if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`)

@@ -13,6 +13,7 @@ import { isFatturaPrincipale, isUscitaSdi, TIPO_ESTENSIONE } from './utils/fattu
 import { funzioneFerma } from './utils/systemControl'
 import { classificaRispostaGreenApi, classificaEccezioneGreenApi, leggiCorpo, rigaLogWhatsapp, type EsitoGreenApi } from './utils/esitoGreenApi'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -1468,7 +1469,7 @@ export const handler: Handler = async (event) => {
                         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
                         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
-                        const caption = (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                        const caption = await nellaLinguaDelTelefono(cleanPhone, (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? '')
                         let waEsito: EsitoGreenApi
                         try {
                             const waResponse = await fetch(greenApiUrl, {
@@ -2283,7 +2284,7 @@ async function sendWalletFatturaPdfAndWhatsApp(
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
-        const caption = (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+        const caption = await nellaLinguaDelTelefono(cleanPhone, (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? '')
         let waEsito: EsitoGreenApi
         try {
             const waResponse = await fetch(greenApiUrl, {

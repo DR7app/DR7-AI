@@ -8,6 +8,7 @@ import { renderTemplate } from './utils/messageTemplates'
 import { loadBusinessConfig } from './utils/businessConfig'
 import { funzioneFerma } from './utils/systemControl'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 /**
  * 2026-08-12 (roadmap #33): aliquota per tipologia di voce, da Centralina Pro
@@ -436,7 +437,7 @@ export const handler: Handler = async (event) => {
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: pdfUrl,
                             fileName: `Fattura_${invoice.numero_fattura}.pdf`,
-                            caption: (await renderTemplate('penalty_invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                            caption: await nellaLinguaDelTelefono(cleanPhone, (await renderTemplate('penalty_invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? '')
                         })
                     })
 

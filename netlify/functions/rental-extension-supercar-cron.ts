@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 // Sends "Richiesta prolungamento SUPERCAR" the day before drop-off, at 18:00 Rome,
 // for rentals that:
@@ -62,7 +63,7 @@ async function greenApiSendMessage(phone: string, message: string): Promise<void
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: `${phone}@c.us`, message }),
+        body: JSON.stringify({ chatId: `${phone}@c.us`, message: await nellaLinguaDelTelefono(phone, message) }),
     })
     const result = await res.json().catch(() => ({}))
     if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`)

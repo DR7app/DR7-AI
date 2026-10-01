@@ -5,7 +5,7 @@
 // Traduttore: DeepL Free (se presente una key in service_secrets 'deepl_api_key'
 // o env DEEPL_API_KEY) altrimenti MyMemory (gratis, senza key, con chunking a
 // 480 char). Cache in tabella `translation_cache` per non ri-tradurre.
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // ── Prefisso telefonico E.164 (senza +, come normalizzato da Green API) → lingua ──
 // Longest-prefix match. Default configurabile dal chiamante (fallback 'en').
@@ -254,4 +254,30 @@ export async function translateText(
   } catch { /* ignora */ }
 
   return final
+}
+
+/**
+ * Il testo nella lingua del prefisso del destinatario (+48 → polacco,
+ * +39 → resta italiano). Da usare su OGNI invio WhatsApp al cliente.
+ *
+ * 01/10/2026: la traduzione esisteva ma la usava solo
+ * send-whatsapp-notification. Il link di firma, i promemoria, le fatture
+ * partivano dalle altre function direttamente su Green API, sempre in
+ * italiano: un cliente polacco al banco ha ricevuto il contratto in italiano.
+ * Fail-safe come translateText: qualunque errore = testo originale.
+ */
+export async function nellaLinguaDelTelefono(phone: string | null | undefined, text: string): Promise<string> {
+  if (!text || !text.trim()) return text
+  const lang = langFromPhone(phone, 'en')
+  if (lang === 'it') return text
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  if (!url || !key) return text
+  try {
+    const sb = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+    return await translateText(sb, text, lang, 'it')
+  } catch (e) {
+    console.warn('[i18n] traduzione saltata:', e)
+    return text
+  }
 }

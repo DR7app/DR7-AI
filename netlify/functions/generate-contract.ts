@@ -12,6 +12,7 @@ import QRCode from 'qrcode'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
 import { tariffaSforoKm, kmInclusiContratto } from '../../src/utils/sforoKmContratto'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -570,7 +571,7 @@ async function reconductSignedContract(params: {
             } catch (e: any) { console.warn('[reconduct] template caption fallback:', e?.message) }
             await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption }),
+                body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption: await nellaLinguaDelTelefono(cleanPhone, caption) }),
             })
         }
     } catch (e: any) { console.error('[reconduct] WhatsApp errore:', e?.message) }

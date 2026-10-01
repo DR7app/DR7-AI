@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { funzioneFerma } from './utils/systemControl'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -161,7 +162,7 @@ export const handler: Handler = async (event) => {
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: pdfUrl,
                             fileName: `Nota_di_Credito_${nota.numero_fattura}.pdf`,
-                            caption: `Nota di Credito ${nota.numero_fattura} - DR7`,
+                            caption: await nellaLinguaDelTelefono(cleanPhone, `Nota di Credito ${nota.numero_fattura} - DR7`),
                         }),
                     })
                     const waResult = await waResponse.json().catch(() => ({}))

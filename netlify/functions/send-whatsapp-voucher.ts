@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { funzioneFerma } from './utils/systemControl';
+import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -63,7 +64,7 @@ export const handler: Handler = async (event) => {
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: `${phone}@c.us`, message: personalized }),
+                body: JSON.stringify({ chatId: `${phone}@c.us`, message: await nellaLinguaDelTelefono(phone, personalized) }),
             });
             const result = await res.json().catch(() => ({}));
             if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`);
