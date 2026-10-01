@@ -12,12 +12,14 @@ import { moduloDanniSinistri } from './danniSinistri'
 import { moduloManutenzione } from './manutenzione'
 import { moduloMulteOfficina } from './multeOfficina'
 import { moduloLeadPreparazione } from './leadPreparazione'
+import { moduloOperativo } from './operativo'
 
 export const MODULI_ALLARMI: ModuloAllarmi[] = [
     moduloDanniSinistri,
     moduloManutenzione,
     moduloMulteOfficina,
     moduloLeadPreparazione,
+    moduloOperativo,
 ]
 
 export function detectorsDeiModuli(): Record<string, Detector> {
