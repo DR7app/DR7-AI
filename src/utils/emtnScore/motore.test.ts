@@ -138,7 +138,44 @@ describe('EMTN Score', () => {
         expect(r.score).toBe(solo.score)
     })
 
+    it('fusione: una voce piccola pagata non azzera una pratica grande aperta', () => {
+        const r = score([
+            evento({ id: 'p', bookingId: 'b1', fonte: 'emtn_pratica', importo: 13000, residuo: 13000, statoPagamento: 'aperto' }),
+            evento({ id: 'v', bookingId: 'b1', importo: 500, pagato: 500 }),
+        ], noleggi(3))
+        expect(r.dettaglio.nonSaldati).toBe(1)
+        expect(r.dettaglio.residuo).toBe(12500)
+        expect(r.flag.some(f => f.codice === 'insoluto_grave_danni')).toBe(true)
+    })
+
+    it('danno non attribuibile al cliente: nessun flag, nessun peso', () => {
+        const r = score([evento({ importo: 5000, residuo: 5000, statoPagamento: 'aperto', responsabilita: 'non_attribuibile' })], noleggi(10))
+        expect(r.flag).toHaveLength(0)
+        expect(r.dettaglio.eventiConsiderati).toBe(0)
+    })
+
+    it('data in formato italiano: l\'evento non sparisce', () => {
+        const r = score([evento({ data: '15/07/2026', importo: 5000, pagato: 5000 })], noleggi(10))
+        expect(r.dettaglio.eventiConsiderati).toBe(1)
+    })
+
+    it('un solo noleggio, tutto saldato: alto rischio si\', critico no', () => {
+        const r = score([evento({ bookingId: 'b1', importo: 13000, pagato: 13000 })], noleggi(1))
+        expect(r.livello).not.toBe('Critical')
+        expect(r.profiloInCostruzione).toBe(true)
+    })
+
+    it('100 EUR non pagati pesano meno di un danno grosso pagato', () => {
+        const piccolo = score([evento({ famiglia: 'pulizia', label: 'Igenizzazione', importo: 100, residuo: 100, statoPagamento: 'aperto' })], noleggi(10))
+        const grosso = score([evento({ importo: 13000, pagato: 13000 })], noleggi(10))
+        expect(piccolo.dettaglio.rischioTotale).toBeLessThan(grosso.dettaglio.rischioTotale)
+    })
+
     it('classifica le voci DR7', () => {
+        expect(classificaVoce('igenizzazione straordinaria', 'penale')).toBe('pulizia')
+        expect(classificaVoce('penale prenotazione X - pattana', 'penale')).toBe('danno')
+        expect(classificaVoce('uscita perimetro sassari', 'penale')).toBe('violazione_contratto')
+        expect(classificaVoce('annullamento estensione dopo blocco auto 10%', 'penale')).toBe('regolarizzazione')
         expect(classificaVoce('Fermo veicolo incidente/danni', 'penale')).toBe('danno')
         expect(classificaVoce('Penale - Carburante mancante', 'penale')).toBe('carburante')
         expect(classificaVoce('Penale per guidatore non citato nel contratto', 'penale')).toBe('guida_non_autorizzata')

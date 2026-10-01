@@ -21,9 +21,9 @@
  * Cambiare un parametro = nuova VERSIONE_ALGORITMO: ogni ricalcolo salvato
  * dice con quale versione e' stato fatto.
  */
-import { type EventoNormalizzato, type Famiglia, type NoleggioNormalizzato } from './normalizza'
+import { ORDINE_FAMIGLIA, type EventoNormalizzato, type Famiglia, type NoleggioNormalizzato } from './normalizza'
 
-export const VERSIONE_ALGORITMO = 'emtn-score-1.2.0'
+export const VERSIONE_ALGORITMO = 'emtn-score-1.3.0'
 
 /* ---------- parametri v1 ---------- */
 
@@ -136,9 +136,29 @@ function emivitaMesi(g: number): number {
  */
 export function raggruppaIncidenti(eventi: EventoNormalizzato[]): EventoNormalizzato[] {
     const gruppi = new Map<string, EventoNormalizzato[]>()
+    const pratiche: EventoNormalizzato[] = []
     for (const e of eventi) {
+        // Le pratiche EMTN si agganciano dopo: possono avere una famiglia
+        // diversa dalle voci DR7 dello stesso noleggio (es. guida non
+        // autorizzata + danno) ma raccontano lo stesso fatto.
+        if (e.fonte === 'emtn_pratica' && e.bookingId) { pratiche.push(e); continue }
         const k = e.bookingId ? `${e.bookingId}|${e.famiglia}` : e.id
         gruppi.set(k, [...(gruppi.get(k) || []), e])
+    }
+    for (const p of pratiche) {
+        const stessa = `${p.bookingId}|${p.famiglia}`
+        let k: string | undefined = gruppi.has(stessa) ? stessa : undefined
+        if (!k) {
+            // Il gruppo con l'importo maggiore dello stesso noleggio.
+            let max = -1
+            for (const [kk, g] of gruppi) {
+                if (!kk.startsWith(`${p.bookingId}|`)) continue
+                const tot = g.reduce((t, e) => t + e.importo, 0)
+                if (tot > max) { max = tot; k = kk }
+            }
+        }
+        k = k || stessa
+        gruppi.set(k, [...(gruppi.get(k) || []), p])
     }
     // id stabile anche con una sola voce: se domani se ne aggiunge una sulla
     // stessa prenotazione, lo storico non vede un evento "nuovo".
@@ -148,16 +168,20 @@ export function raggruppaIncidenti(eventi: EventoNormalizzato[]): EventoNormaliz
 }
 
 function unisciIncidente(chiave: string, g: EventoNormalizzato[]): EventoNormalizzato {
-    const perFonte = new Map<string, { importo: number; residuo: number }>()
+    const perFonte = new Map<string, { importo: number; pagato: number }>()
     for (const e of g) {
-        const f = perFonte.get(e.fonte) || { importo: 0, residuo: 0 }
+        const f = perFonte.get(e.fonte) || { importo: 0, pagato: 0 }
         f.importo += e.importo
-        f.residuo += e.statoPagamento === 'pagato' ? 0 : e.residuo
+        f.pagato += e.statoPagamento === 'pagato' ? e.importo : Math.max(0, e.importo - e.residuo)
         perFonte.set(e.fonte, f)
     }
     const fonti = [...perFonte.values()].filter(f => f.importo > 0)
+    // Importo e pagato: il maggiore tra le fonti (raccontano lo stesso fatto).
+    // Il residuo e' cio' che manca all'importo: una voce piccola pagata non
+    // azzera una pratica grande ancora aperta.
     const importo = fonti.reduce((m, f) => Math.max(m, f.importo), 0)
-    const residuo = fonti.length ? Math.min(...fonti.map(f => f.residuo)) : 0
+    const pagatoMax = fonti.reduce((m, f) => Math.max(m, f.pagato), 0)
+    const residuo = Math.max(0, Math.round((importo - pagatoMax) * 100) / 100)
     const tuttiPagati = g.every(e => e.statoPagamento === 'pagato' || e.statoPagamento === 'non_applicabile')
     const statoPagamento: EventoNormalizzato['statoPagamento'] = importo <= 0
         ? (g.some(e => e.statoPagamento === 'aperto') ? 'aperto' : tuttiPagati && g.some(e => e.statoPagamento === 'pagato') ? 'pagato' : 'non_applicabile')
@@ -166,8 +190,10 @@ function unisciIncidente(chiave: string, g: EventoNormalizzato[]): EventoNormali
     const giorni = g.map(e => e.giorniAlSaldo).filter((x): x is number => x != null)
     const ordine = <T extends string>(valori: Array<T | null>, priorita: T[]): T | null => priorita.find(p => valori.includes(p)) ?? null
     const principale = [...g].sort((a, b) => b.importo - a.importo)[0]
+    const famiglia = ORDINE_FAMIGLIA.find(f => g.some(e => e.famiglia === f)) || principale.famiglia
     return {
         ...principale,
+        famiglia,
         id: `incidente:${chiave}`,
         label: g.length > 1 ? `${principale.label} (${g.length} voci, un solo episodio)` : principale.label,
         data: primo(g.map(e => e.data)),
@@ -188,9 +214,15 @@ function unisciIncidente(chiave: string, g: EventoNormalizzato[]): EventoNormali
     }
 }
 
+/** Data mancante o illeggibile = evento tenuto (mai sparito per un formato). */
+function nonFuturo(e: EventoNormalizzato, oggi: Date): boolean {
+    const t = e.data ? Date.parse(e.data) : NaN
+    return !Number.isFinite(t) || t <= oggi.getTime()
+}
+
 function contributiEventi(eventi: EventoNormalizzato[], oggi: Date): ContributoEvento[] {
     const validi = raggruppaIncidenti(eventi.filter(eventoConta))
-        .filter(e => !e.data || Date.parse(e.data) <= oggi.getTime())
+        .filter(e => nonFuturo(e, oggi))
         .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')))
     // Recidiva per INCIDENTE: piu' voci della stessa prenotazione (es. due
     // danni sullo stesso rientro) sono un solo episodio, non una ripetizione.
@@ -199,8 +231,11 @@ function contributiEventi(eventi: EventoNormalizzato[], oggi: Date): ContributoE
         const motivi: string[] = []
         const g = gravitaEvento(e)
         let m = 1
-        if (e.statoPagamento === 'aperto') { m *= 3; motivi.push('non saldato') }
-        else if (e.statoPagamento === 'parziale') { m *= 2; motivi.push('saldato in parte') }
+        // Il peso dell'insoluto cresce con il residuo: 100 EUR aperti non
+        // valgono quanto 13.000.
+        const ecoRes = scalaEconomica(e.residuo)
+        if (e.statoPagamento === 'aperto') { m *= 1.5 + 1.5 * ecoRes; motivi.push('non saldato') }
+        else if (e.statoPagamento === 'parziale') { m *= 1.3 + 0.9 * ecoRes; motivi.push('saldato in parte') }
         else if (e.statoPagamento === 'pagato') {
             if (e.giorniAlSaldo != null && e.giorniAlSaldo <= 7) { m *= 0.6; motivi.push('saldato subito') }
             else if (e.giorniAlSaldo != null && e.giorniAlSaldo <= 30) { m *= 0.8; motivi.push('saldato') }
@@ -220,7 +255,8 @@ function contributiEventi(eventi: EventoNormalizzato[], oggi: Date): ContributoE
         const lista = visti.get(e.famiglia) || []
         if (!lista.includes(incidente)) lista.push(incidente)
         visti.set(e.famiglia, lista)
-        const k = lista.indexOf(incidente)
+        // La famiglia generica "penale" mette insieme fatti diversi: niente recidiva.
+        const k = e.famiglia === 'penale' ? 0 : lista.indexOf(incidente)
         // Fatti lievi (km, carburante...): la ripetizione pesa, ma con un tetto.
         const rec = Math.min(g < 0.2 ? 2.5 : 5, 1 + 0.6 * k + 0.15 * k * k)
         if (k > 0) motivi.push(`recidiva (${k + 1}a volta)`)
@@ -288,9 +324,10 @@ export interface RisultatoEMTNScore {
     }
 }
 
-function flagCritici(eventi: EventoNormalizzato[]): FlagCritico[] {
+/** Flag sugli stessi eventi del calcolo: documentati, non futuri, uniti per incidente. */
+function flagCritici(tutti: EventoNormalizzato[], oggi: Date): FlagCritico[] {
     const out: FlagCritico[] = []
-    for (const e of eventi) {
+    for (const e of raggruppaIncidenti(tutti.filter(eventoConta)).filter(x => nonFuturo(x, oggi))) {
         if (!e.verificato || e.inRevisione || e.contestazione === 'accolta') continue
         if (e.famiglia === 'furto' && e.accertato) out.push({ codice: 'furto', label: 'Furto/appropriazione accertata', tetto: 0, eventoId: e.id })
         if (e.famiglia === 'frode' && e.accertato) out.push({ codice: 'frode', label: 'Frode accertata', tetto: 0, eventoId: e.id })
@@ -406,7 +443,7 @@ export interface InputScore {
 export function calcolaEMTNScore(input: InputScore): RisultatoEMTNScore {
     const oggi = input.oggi || new Date()
     const base = calcolaGrezzo(input.eventi, input.noleggi, oggi)
-    const flag = flagCritici(input.eventi)
+    const flag = flagCritici(input.eventi, oggi)
     const override = input.override || null
     if (override?.tipo === 'flag_critico') {
         flag.push({ codice: 'override', label: `Flag della direzione: ${override.motivo}`, tetto: override.valore ?? 0, eventoId: null })
@@ -422,7 +459,11 @@ export function calcolaEMTNScore(input: InputScore): RisultatoEMTNScore {
     const profiloInCostruzione = base.noleggiConclusi < 3 || confidence < 35
     const aperti = base.contributi.filter(c => c.evento.statoPagamento === 'aperto' || c.evento.statoPagamento === 'parziale')
     const minimo: LivelloRischio = aperti.some(c => c.evento.famiglia === 'danno') ? 'High' : aperti.length > 0 ? 'Moderate' : 'Very Low'
-    const livello = livelloDa(score, flag, minimo)
+    let livello = livelloDa(score, flag, minimo)
+    // Critical = flag accertato, pendenza aperta o storico sufficiente. Con
+    // un solo noleggio e tutto saldato il profilo e' "in costruzione": alto
+    // rischio si', critico no.
+    if (livello === 'Critical' && profiloInCostruzione && flag.length === 0 && aperti.length === 0) livello = 'High'
     const band: RisultatoEMTNScore['band'] = livello === 'Very Low' || livello === 'Low' ? 'green' : livello === 'Moderate' ? 'yellow' : 'red'
     const level = band === 'green' ? 1 : band === 'yellow' ? 2 : 3
 
@@ -435,7 +476,7 @@ export function calcolaEMTNScore(input: InputScore): RisultatoEMTNScore {
     if (haStoria) {
         const prima = calcolaGrezzo(input.eventi, input.noleggi, seiMesiFa)
         let s = prima.scoreCalcolato
-        for (const f of flagCritici(input.eventi.filter(e => !e.data || Date.parse(e.data) <= seiMesiFa.getTime()))) s = Math.min(s, f.tetto)
+        for (const f of flagCritici(input.eventi, seiMesiFa)) s = Math.min(s, f.tetto)
         scorePrecedente6Mesi = s
         const delta = base.scoreCalcolato - s
         trend = delta >= 3 ? 'Improving' : delta <= -3 ? 'Deteriorating' : 'Stable'

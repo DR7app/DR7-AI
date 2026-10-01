@@ -79,6 +79,8 @@ export interface NoleggioNormalizzato {
 }
 
 const RE: Array<[Famiglia, RegExp]> = [
+    // Costo di annullamento/estensione annullata: non e' un comportamento a rischio.
+    ['regolarizzazione', /annullament|cancellazion|disdett/i],
     ['furto', /\b(furto|rubat|appropriazion)/i],
     ['mancata_restituzione', /mancat\w* (restituzion|riconsegn)|non restituit|non riconsegnat/i],
     ['recupero_veicolo', /recupero (del )?veicol|carro attrezzi|rimozione/i],
@@ -86,15 +88,16 @@ const RE: Array<[Famiglia, RegExp]> = [
     ['fumo', /\bfum(o|at)|sigarett/i],
     ['animali', /\bcan[ei]\b|pelo|animal/i],
     ['carburante', /carburant|benzin|gasolio|rifornim|ricarica|serbatoio/i],
-    ['pulizia', /pulizi|lavaggi|sporc|igienizz|immondiz/i],
+    ['pulizia', /pulizi|lavaggi|sporc|ig(i)?enizz|immondiz/i],
     ['km', /\bkm\b|chilometr|sforo/i],
     ['ritardo', /ritard|riconsegna tardiv|oltre l'orario|extra ora/i],
     ['multa', /mult[ae]|sanzion|verbal|contravvenz|autovelox|ztl/i],
     ['chargeback', /chargeback|storno|disconosc/i],
     ['insoluto', /insolut|non pagat|mancato pagament/i],
     ['cauzione', /cauzion|preautorizz/i],
+    ['violazione_contratto', /perimetr|fuori (zona|area|territorio)|espatri|estero senza/i],
     ['documentazione', /document|patente/i],
-    ['danno', /dann|graffi|ammacc|urto|incident|rottur|rott[oa]|cerchi|paraurti|specchiett|parabrezz|cristall|carrozzer|fermo (tecnico|veicolo|macchina)|tappezzer|sedil|gomm|pneumatic|bomboletta|franchigi|distrutt/i],
+    ['danno', /dann|graffi|ammacc|urto|incident|rottur|rott[oa]|cerchi|paraurti|specchiett|parabrezz|cristall|carrozzer|fermo (tecnico|veicolo|macchina)|pattan|tappezzer|sedil|gomm|pneumatic|bomboletta|franchigi|distrutt/i],
 ]
 
 /** Famiglia di una voce DR7 dal suo nome. `predefinita` se nulla corrisponde. */
@@ -141,10 +144,18 @@ export function statoDaImporti(importo: number, pagato: number, statoDichiarato?
     return 'aperto'
 }
 
+/** dd/mm/yyyy (anche con ora) -> yyyy-mm-dd; ISO resta com'e'; altro -> null. */
+export function dataIso(v: unknown): string | null {
+    const t = String(v ?? '').trim()
+    if (!t) return null
+    const it = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/)
+    if (it) return `${it[3]}-${it[2].padStart(2, '0')}-${it[1].padStart(2, '0')}`
+    return Number.isFinite(Date.parse(t)) ? t : null
+}
+
 export function giorniTra(da: string | null | undefined, a: string | null | undefined): number | null {
-    if (!da || !a) return null
-    const x = Date.parse(da)
-    const y = Date.parse(a)
+    const x = Date.parse(dataIso(da) || '')
+    const y = Date.parse(dataIso(a) || '')
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null
     return Math.max(0, Math.round((y - x) / 86_400_000))
 }

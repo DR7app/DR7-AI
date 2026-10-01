@@ -25,7 +25,7 @@ import {
 import { cercaStoricoRete } from './utils/emtnRete'
 import { categoriaEMTN } from '../../src/utils/emtnMobilityRisk'
 import { calcolaEMTNScore } from '../../src/utils/emtnScore/motore'
-import type { StatoPagamentoEvento } from '../../src/utils/emtnScore/normalizza'
+import { classificaVoce, type StatoPagamentoEvento } from '../../src/utils/emtnScore/normalizza'
 import {
     eNoleggio, eventiDaEmtnEvents, eventiDaMulte, eventiDaPosizioni, eventiDaRete, eventiDaVociDr7,
     leggiOverride, noleggiNormalizzati, registraStorico, type EmtnEventRow, type MultaRow, type PosizioneRow,
@@ -362,7 +362,8 @@ export const handler: Handler = async (event) => {
                 bookingId: b.id,
                 vehicle: b.vehicle_name || b.vehicle_plate,
                 date: d.date || refDate,
-                label: String(d.label || 'Danno'),
+                // Alcune voci hanno solo `description` (es. "Penale - Sforo Km").
+                label: String(d.label || (d as { description?: string }).description || 'Danno'),
                 amount: total,
                 quantity: Number(d.quantity || 1),
                 paid,
@@ -380,7 +381,7 @@ export const handler: Handler = async (event) => {
                 bookingId: b.id,
                 vehicle: b.vehicle_name || b.vehicle_plate,
                 date: p.date || refDate,
-                label: String(p.label || 'Penale'),
+                label: String(p.label || (p as { description?: string }).description || 'Penale'),
                 amount: total,
                 quantity: Number(p.quantity || 1),
                 paid,
@@ -585,9 +586,14 @@ export const handler: Handler = async (event) => {
             multe.push(...((data || []) as MultaRow[]))
         }
     }
+    // Noleggio "non regolare" solo per fatti veri: km e carburante saldati
+    // sono uso del veicolo e non tolgono lo storico positivo.
+    const vociLievi = new Set(['km', 'carburante', 'regolarizzazione'])
+    const problema = (v: { label: string; stato: string }, tipo: 'danno' | 'penale') =>
+        v.stato !== 'pagato' || !vociLievi.has(classificaVoce(v.label, tipo))
     const conProblemi = new Set<string>([
-        ...bookings.filter(b => (b.booking_details?.danni || []).length > 0 || (b.booking_details?.penalties || []).length > 0).map(b => b.id),
-        ...conDanniInFattura,
+        ...dr7Damages.filter(v => problema(v, 'danno')).map(v => v.bookingId),
+        ...dr7Penalties.filter(v => problema(v, 'penale')).map(v => v.bookingId),
         ...multe.map(m => String(m.booking_id || '')),
     ])
     // Data del saldo ricavata in automatico quando la voce non la ha:
