@@ -124,7 +124,22 @@ describe('EMTN Score', () => {
         expect(r.trend).toBe('Deteriorating')
     })
 
+    it('un incidente = un evento: danno + fermo + pratica EMTN sulla stessa prenotazione', () => {
+        const bk = { bookingId: 'b1', data: mesiFa(1) }
+        const voci = [
+            evento({ ...bk, id: 'd', label: 'danni vari carrozzeria', importo: 8129.3, pagato: 8129.3 }),
+            evento({ ...bk, id: 'f', label: 'Fermo veicolo incidente/danni', importo: 4870.7, pagato: 4870.7 }),
+            evento({ ...bk, id: 'p', fonte: 'emtn_pratica', label: 'DANNO - ACCORDO TRANSATTIVO', importo: 13000, pagato: 13000 }),
+        ]
+        const r = score(voci, noleggi(3))
+        const solo = score([evento({ ...bk, importo: 13000, pagato: 13000 })], noleggi(3))
+        expect(r.dettaglio.eventiConsiderati).toBe(1)
+        expect(r.rischi.join(' ')).not.toContain('recidiva')
+        expect(r.score).toBe(solo.score)
+    })
+
     it('classifica le voci DR7', () => {
+        expect(classificaVoce('Fermo veicolo incidente/danni', 'penale')).toBe('danno')
         expect(classificaVoce('Penale - Carburante mancante', 'penale')).toBe('carburante')
         expect(classificaVoce('Penale per guidatore non citato nel contratto', 'penale')).toBe('guida_non_autorizzata')
         expect(classificaVoce('Danno prenotazione 88CDFF9D - distrutta macchina', 'danno')).toBe('danno')

@@ -386,10 +386,7 @@ export default function EMTNTab() {
                                     score={data.score}
                                     clientId={data.client.id}
                                     isDirezione={isDirezioneEMTN}
-                                    onAggiornato={() => {
-                                        if (data.client.codice_fiscale) void runSearch(data.client.codice_fiscale)
-                                        else if (modoEstero) void runSearch(null, datiEstero)
-                                    }}
+                                    onAggiornato={() => { void refresh() }}
                                 />
                                 {data.dr7History && (data.dr7History.damages.length + data.dr7History.penalties.length) > 0 && (
                                     <StoricoDr7Card history={data.dr7History} />
@@ -748,7 +745,7 @@ function ClienteHeaderCard({ client, riskBand }: { client: EMTNClient; riskBand:
                                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
                                 </svg>
-                                Codice fiscale verificato
+                                Identificato con codice fiscale
                             </span>
                         )}
                     </div>
@@ -763,7 +760,7 @@ function ClienteHeaderCard({ client, riskBand }: { client: EMTNClient; riskBand:
                         <Field label="Ultimo noleggio" value={formatDate(client.last_seen_at) || '—'} />
                         <Field label="Sesso" value={client.sex || '—'} />
                         <Field label="Indirizzo" value={client.address || '—'} />
-                        <Field label="Eventi registrati" value={String((client as unknown as { events?: number }).events ?? 0)} />
+                        <Field label="Eventi documentati" value={String((client as unknown as { events?: number }).events ?? 0)} />
                         <Field label="Nazionalità" value={client.nationality || '—'} />
                     </div>
                 </div>
@@ -1071,7 +1068,7 @@ function AlertSistema({ events, versione, onVai }: { events: RecentEvent[]; vers
     if (sospese > 0) alerts.push({ tone: 'warn', label: `${sospese} segnalazioni sospese`, vai: 'mie-segnalazioni' })
     if (rifiutate > 0) alerts.push({ tone: 'err', label: `${rifiutate} segnalazioni rifiutate`, vai: 'mie-segnalazioni' })
     if (legale > 0) alerts.push({ tone: 'err', label: `${legale} in revisione privacy/legale`, vai: 'mie-segnalazioni' })
-    if (approvati > 0) alerts.push({ tone: 'err', label: `${approvati} eventi approvati su questo cliente` })
+    if (approvati > 0) alerts.push({ tone: 'warn', label: `${approvati} pratiche pubblicate su questo cliente` })
 
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">

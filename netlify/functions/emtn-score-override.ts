@@ -51,28 +51,33 @@ export const handler: Handler = async (event) => {
         if (!clientId) return jsonResponse(400, { error: 'clientId mancante' }, origin)
         if (!TIPI.has(tipo)) return jsonResponse(400, { error: 'Tipo di intervento non valido' }, origin)
         if (motivo.length < 10) return jsonResponse(400, { error: 'Motivo obbligatorio (almeno 10 caratteri)' }, origin)
-        if (tipo !== 'flag_critico' && (valore == null || !Number.isFinite(valore))) return jsonResponse(400, { error: 'Valore obbligatorio' }, origin)
+        // Anche per il flag critico: il valore e' il tetto dello score (0 = azzerato).
+        if (valore == null || !Number.isFinite(valore)) return jsonResponse(400, { error: 'Valore obbligatorio (0-100)' }, origin)
         if (valore != null && (valore < 0 || valore > 100)) return jsonResponse(400, { error: 'Valore tra 0 e 100' }, origin)
         const scadeIl = typeof body.scadeIl === 'string' && body.scadeIl ? body.scadeIl : null
-        // Un solo intervento attivo per cliente: il precedente si revoca.
-        await sb.from('emtn_score_override')
-            .update({ attivo: false, revocato_il: new Date().toISOString(), revocato_da: operatorEmail })
-            .eq('client_id', clientId).eq('attivo', true)
+        // Prima si inserisce il nuovo, poi si revocano gli altri: se
+        // l'inserimento fallisce il precedente resta attivo.
         const { data, error } = await sb.from('emtn_score_override').insert({
-            client_id: clientId, tipo, valore: tipo === 'flag_critico' ? (valore ?? 0) : valore, motivo,
+            client_id: clientId, tipo, valore, motivo,
             operatore_id: user!.id, operatore_email: operatorEmail, scade_il: scadeIl,
         }).select('id').maybeSingle()
-        if (error) return jsonResponse(500, { error: error.message }, origin)
-        return jsonResponse(200, { ok: true, id: data?.id }, origin)
+        if (error || !data) return jsonResponse(500, { error: error?.message || 'Intervento non salvato' }, origin)
+        await sb.from('emtn_score_override')
+            .update({ attivo: false, revocato_il: new Date().toISOString(), revocato_da: operatorEmail })
+            .eq('client_id', clientId).eq('attivo', true).neq('id', data.id)
+        return jsonResponse(200, { ok: true, id: data.id }, origin)
     }
 
     if (body.azione === 'revoca') {
         const id = String(body.overrideId || '')
         if (!id) return jsonResponse(400, { error: 'overrideId mancante' }, origin)
-        const { error } = await sb.from('emtn_score_override')
+        // Solo un intervento ancora attivo: la prima revoca resta nella traccia.
+        const { data, error } = await sb.from('emtn_score_override')
             .update({ attivo: false, revocato_il: new Date().toISOString(), revocato_da: operatorEmail })
-            .eq('id', id)
+            .eq('id', id).eq('attivo', true)
+            .select('id')
         if (error) return jsonResponse(500, { error: error.message }, origin)
+        if (!data || data.length === 0) return jsonResponse(404, { error: 'Intervento non trovato o gia\' revocato' }, origin)
         return jsonResponse(200, { ok: true }, origin)
     }
 

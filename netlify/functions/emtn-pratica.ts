@@ -40,6 +40,28 @@ const dataIt = (v: unknown) => {
 }
 const euro = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+/** Elenco documenti per il browser: senza doppioni (stessa impronta sha256). */
+function elencoDocumenti(v: unknown): Array<{ path: string; nome: string; mime: string | null; size: number | null; origine: string | null; caricato_at: string | null }> {
+    const visti = new Set<string>()
+    const out: Array<{ path: string; nome: string; mime: string | null; size: number | null; origine: string | null; caricato_at: string | null }> = []
+    for (const d of (Array.isArray(v) ? v : []) as Array<Record<string, unknown>>) {
+        const path = String(d?.path || '')
+        if (!path) continue
+        const chiave = String(d.sha256 || path)
+        if (visti.has(chiave)) continue
+        visti.add(chiave)
+        out.push({
+            path,
+            nome: String(d.nome || path.split('/').pop() || 'documento'),
+            mime: d.mime ? String(d.mime) : null,
+            size: d.size != null ? Number(d.size) : null,
+            origine: d.origine ? String(d.origine) : null,
+            caricato_at: d.caricato_at ? String(d.caricato_at) : null,
+        })
+    }
+    return out
+}
+
 /** Quello che la rete vede di una posizione approvata: niente documenti, niente dati legali. */
 function versionePubblica(r: Pick<RisultatoAnalisi, 'titolo' | 'report' | 'eventi' | 'stato_posizione'>) {
     return {
@@ -302,9 +324,12 @@ export const handler: Handler = async (event) => {
     if (azione === 'posizioni') {
         const clientId = String(body.clientId || '')
         const { data } = await sb.from('emtn_posizioni')
-            .select('id, stato, titolo, report, eventi, pratica, esito_verifica, in_approvazione, pubblicata, pubblicato, decisione, nota_revisione, revisione_legale, inviata_at, approvata_at, updated_at, created_at')
+            .select('id, stato, titolo, report, eventi, pratica, esito_verifica, in_approvazione, pubblicata, pubblicato, decisione, nota_revisione, revisione_legale, inviata_at, approvata_at, updated_at, created_at, documenti')
             .eq('client_id', clientId).order('created_at', { ascending: false })
-        return jsonResponse(200, { posizioni: data || [] }, origin)
+        // 01/10/2026: i documenti della pratica si vedono e si aprono dalla
+        // scheda cliente (prima solo dalla coda approvazioni). Al browser va
+        // solo l'elenco; il file si apre con un link temporaneo (azione documento).
+        return jsonResponse(200, { posizioni: (data || []).map(p => ({ ...p, documenti: elencoDocumenti(p.documenti) })) }, origin)
     }
 
     // ── I miei eventi: tutte le posizioni dell'azienda ──────
@@ -313,7 +338,7 @@ export const handler: Handler = async (event) => {
     // Con il numero della coda approvazioni per la direzione (Alert sistema).
     if (azione === 'mie') {
         const { data, error } = await sb.from('emtn_posizioni')
-            .select('id, client_id, stato, titolo, report, eventi, esito_verifica, in_approvazione, pubblicata, decisione, nota_revisione, revisione_legale, inviata_at, inviata_da, approvata_at, approvata_da, updated_at, created_at, emtn_clients(codice_fiscale, nome, cognome)')
+            .select('id, client_id, stato, titolo, report, eventi, esito_verifica, in_approvazione, pubblicata, decisione, nota_revisione, revisione_legale, inviata_at, inviata_da, approvata_at, approvata_da, updated_at, created_at, documenti, emtn_clients(codice_fiscale, nome, cognome)')
             .order('updated_at', { ascending: false })
             .limit(500)
         if (error) return jsonResponse(500, { error: 'Eventi non disponibili' }, origin)
@@ -322,7 +347,7 @@ export const handler: Handler = async (event) => {
             const { count } = await sb.from('emtn_posizioni').select('id', { count: 'exact', head: true }).eq('in_approvazione', true)
             codaDirezione = count ?? 0
         }
-        return jsonResponse(200, { posizioni: data || [], codaDirezione }, origin)
+        return jsonResponse(200, { posizioni: (data || []).map(p => ({ ...p, documenti: elencoDocumenti(p.documenti) })), codaDirezione }, origin)
     }
 
     // ── risposta del cliente (fase 12) ──────────────────────
@@ -343,16 +368,33 @@ export const handler: Handler = async (event) => {
         const posizioneId = body.posizioneId ? String(body.posizioneId) : null
         const analisiId = body.analisiId ? String(body.analisiId) : null
         let ammesso = false
+        let nomeDoc: string | null = null
+        let clientIdDoc: string | null = null
         if (posizioneId) {
-            const { data } = await sb.from('emtn_posizioni').select('documenti, created_by').eq('id', posizioneId).maybeSingle()
-            const suo = data?.created_by === operatorId || await userHasRole(operatorEmail, 'direzione')
-            ammesso = !!data && suo && (data.documenti || []).some((d: { path: string }) => d.path === path)
+            // 01/10/2026 (Ophelie): ogni operatore vede tutte le pratiche
+            // dell'azienda, quindi anche i loro documenti. Ogni apertura resta
+            // nel log di accesso EMTN.
+            const { data } = await sb.from('emtn_posizioni').select('client_id, documenti').eq('id', posizioneId).maybeSingle()
+            const doc = (data?.documenti || []).find((d: { path: string }) => d.path === path) as { nome?: string } | undefined
+            ammesso = !!doc
+            nomeDoc = doc?.nome || null
+            clientIdDoc = data?.client_id || null
         } else if (analisiId) {
             const { data } = await sb.from('emtn_analisi').select('documenti, created_by').eq('id', analisiId).maybeSingle()
             ammesso = !!data && data.created_by === operatorId && (data.documenti || []).some((d: { path: string }) => d.path === path)
         }
         if (!ammesso) return jsonResponse(403, { error: 'Documento non accessibile' }, origin)
-        const { data: link } = await sb.storage.from('emtn-documents').createSignedUrl(path, 300)
+        // Nome del file dal server (mai quello mandato dal browser), ripulito
+        // dai caratteri che romperebbero il parametro del link.
+        const nomeFile = (nomeDoc || path.split('/').pop() || 'documento').replace(/[&#?%/\\"]/g, '_')
+        const { data: link } = await sb.storage.from('emtn-documents')
+            .createSignedUrl(path, 300, body.scarica ? { download: nomeFile } : undefined)
+        if (link?.signedUrl && posizioneId && clientIdDoc) {
+            await audit(sb, {
+                operatorId, operatorEmail, action: 'VIEW_REPORT', success: true, ip, userAgent: ua,
+                clientId: clientIdDoc, metadata: { documento: nomeFile, posizioneId, modo: body.scarica ? 'scarica' : 'apri' },
+            })
+        }
         return jsonResponse(200, { url: link?.signedUrl || null }, origin)
     }
 
@@ -370,7 +412,7 @@ export const handler: Handler = async (event) => {
         const { data: risposte } = ids.length
             ? await sb.from('emtn_posizioni_storico').select('posizione_id, nota, created_at').in('posizione_id', ids).eq('azione', 'risposta_cliente').order('created_at')
             : { data: [] as { posizione_id: string; nota: string; created_at: string }[] }
-        const coda = (data || []).map(p => ({ ...p, risposte_cliente: (risposte || []).filter(r => r.posizione_id === p.id) }))
+        const coda = (data || []).map(p => ({ ...p, documenti: elencoDocumenti(p.documenti), risposte_cliente: (risposte || []).filter(r => r.posizione_id === p.id) }))
         return jsonResponse(200, { coda }, origin)
     }
 

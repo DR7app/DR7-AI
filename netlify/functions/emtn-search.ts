@@ -528,7 +528,7 @@ export const handler: Handler = async (event) => {
     // sembrava sparita.
     const { data: posizioni } = await sb
         .from('emtn_posizioni')
-        .select('id, stato, titolo, eventi, in_approvazione, pubblicata, decisione, inviata_at, approvata_at, created_at')
+        .select('id, stato, titolo, eventi, in_approvazione, pubblicata, decisione, inviata_at, approvata_at, created_at, booking_id')
         .eq('client_id', client!.id)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -629,7 +629,7 @@ export const handler: Handler = async (event) => {
         ...eventiDaRete(storicoRete),
         ...eventiDaMulte(multe),
         ...eventiDaEmtnEvents((events || []) as EmtnEventRow[]),
-        ...eventiDaPosizioni((posizioni || []) as PosizioneRow[], [...dr7Damages, ...dr7Penalties].map(v => v.amount)),
+        ...eventiDaPosizioni((posizioni || []) as PosizioneRow[], [...dr7Damages, ...dr7Penalties].map(v => ({ bookingId: v.bookingId, amount: v.amount }))),
     ]
     const override = await leggiOverride(sb, client!.id)
     const emtnScore = calcolaEMTNScore({
@@ -674,7 +674,8 @@ export const handler: Handler = async (event) => {
         date_of_birth: (client as { data_nascita?: string | null }).data_nascita || ext?.data_nascita || (cf ? dobFromCF(cf) : null),
         sex: cf ? sexFromCF(cf) : null,
         nationality: estero ? nazionalitaE : 'IT',
-        events: sc.negative_events + sc.events_under_review,
+        // Stesso numero di "Eventi documentati" nella scheda EMTN Score.
+        events: sc.negative_events,
     }
 
     return jsonResponse(200, {

@@ -18,6 +18,7 @@ export interface EMTNScoreUI {
     confidence: number
     livello: 'Very Low' | 'Low' | 'Moderate' | 'High' | 'Critical'
     band: 'green' | 'yellow' | 'red'
+    level: 1 | 2 | 3
     trend: 'Improving' | 'Stable' | 'Deteriorating'
     scorePrecedente6Mesi: number | null
     profiloInCostruzione: boolean
@@ -26,7 +27,7 @@ export interface EMTNScoreUI {
     positivi: string[]
     rischi: string[]
     spiegazione: string
-    override: { tipo: string; valore: number | null; motivo: string; operatore: string | null; creato_il: string } | null
+    override: { id?: string; tipo: string; valore: number | null; motivo: string; operatore: string | null; creato_il: string } | null
     dettaglio: {
         noleggiConclusi: number
         noleggiRegolari: number
@@ -150,7 +151,7 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                 <div className="relative">
                     <Gauge score={score.score} stroke={t.stroke} />
                     <div className="absolute inset-0 grid place-items-center">
-                        <p className="text-xl font-bold text-theme-text-primary tabular-nums leading-none">{score.score}</p>
+                        <p className="text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">{score.level === 1 ? 'Liv. 1' : score.level === 2 ? 'Liv. 2' : 'Liv. 3'}</p>
                     </div>
                 </div>
                 <div className="flex-1 min-w-0 space-y-1">
@@ -158,14 +159,15 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                         {score.score}<span className="text-sm text-theme-text-muted font-medium">/100</span>
                     </p>
                     <p className="text-[11px] text-theme-text-secondary">
-                        Confidence <span className="font-semibold text-theme-text-primary tabular-nums">{score.confidence}%</span>
+                        Attendibilita' <span className="font-semibold text-theme-text-primary tabular-nums">{score.confidence}%</span>
                         {' · '}{TREND[score.trend]}
                         {score.scorePrecedente6Mesi != null && score.trend !== 'Stable' && (
                             <span className="text-theme-text-muted"> (6 mesi fa {score.scorePrecedente6Mesi})</span>
                         )}
                     </p>
                     <div className="h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
-                        <div className="h-full" style={{ width: `${score.confidence}%`, background: t.stroke }} />
+                        {/* Attendibilita' = quantita' di dati, non rischio: colore neutro. */}
+                        <div className="h-full bg-cyan-600 dark:bg-cyan-400" style={{ width: `${score.confidence}%` }} />
                     </div>
                 </div>
             </div>
@@ -254,7 +256,7 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                         <div key={i} className="rounded-lg border border-theme-border bg-theme-bg-secondary px-2.5 py-1.5">
                             <p className="text-[11px] text-theme-text-primary tabular-nums">
                                 {r.score_precedente != null ? `${r.score_precedente} → ` : ''}<span className="font-semibold">{r.score}</span>
-                                <span className="text-theme-text-muted"> · confidence {r.confidence}% · {dataOra(r.created_at)}</span>
+                                <span className="text-theme-text-muted"> · attendibilita' {r.confidence}% · {dataOra(r.created_at)}</span>
                             </p>
                             <p className="text-[10px] text-theme-text-muted">{r.causa} · {r.versione}</p>
                         </div>
@@ -270,7 +272,7 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                             {TIPI_OVERRIDE.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>
                         <input value={valore} onChange={e => setValore(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
-                            inputMode="numeric" placeholder="0-100"
+                            inputMode="numeric" placeholder={tipo === 'flag_critico' ? 'Tetto 0-100' : '0-100'}
                             className="w-20 rounded-md border border-theme-border bg-theme-bg-primary text-theme-text-primary text-xs px-2 py-1.5" />
                     </div>
                     <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
@@ -280,22 +282,14 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                     <div className="flex items-center justify-between gap-2">
                         <span />
                         <div className="flex gap-2">
-                            {score.override && (
+                            {score.override?.id && (
                                 <button type="button" disabled={salvando}
-                                    onClick={async () => {
-                                        const res = await authFetch('/.netlify/functions/emtn-score-override', {
-                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ azione: 'lista', clientId }),
-                                        })
-                                        const j = await res.json()
-                                        const attivo = (j.override || []).find((o: { attivo: boolean }) => o.attivo)
-                                        if (attivo) await invia({ azione: 'revoca', overrideId: attivo.id })
-                                    }}
+                                    onClick={() => invia({ azione: 'revoca', overrideId: score.override!.id })}
                                     className="px-3 py-1.5 rounded-md border border-theme-border text-xs text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-50">
                                     Revoca intervento
                                 </button>
                             )}
-                            <button type="button" disabled={salvando || motivo.trim().length < 10}
+                            <button type="button" disabled={salvando || motivo.trim().length < 10 || valore === '' || Number(valore) > 100}
                                 onClick={() => invia({ azione: 'crea', clientId, tipo, valore: valore === '' ? null : Number(valore), motivo: motivo.trim() })}
                                 className="px-3 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold disabled:opacity-50">
                                 {salvando ? 'Salvataggio...' : 'Applica'}

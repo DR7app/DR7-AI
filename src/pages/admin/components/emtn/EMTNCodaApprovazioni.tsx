@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
 import { TabellaControlli } from './EMTNPraticaModal'
+import EMTNDocumenti, { type DocumentoPratica } from './EMTNDocumenti'
 import {
     AVVISO_LEGALE, DECISIONI_EMTN, categoriaEMTN, etichettaStato,
     type ControlloGestionale, type DecisioneEMTN, type EventoEMTN,
@@ -24,7 +25,7 @@ interface PosizioneCoda {
     report: string
     eventi: EventoEMTN[]
     pratica: Record<string, string | null>
-    documenti: { path: string; nome: string; sha256?: string }[]
+    documenti: DocumentoPratica[]
     incongruenze: string[]
     esito_verifica: string | null
     controlli_gestionale: ControlloGestionale[]
@@ -86,12 +87,6 @@ function SchedaApprovazione({ p, onDeciso }: { p: PosizioneCoda; onDeciso: () =>
     const [invio, setInvio] = useState(false)
     const [errori, setErrori] = useState<string[]>([])
     const cliente = p.emtn_clients
-
-    async function apri(path: string) {
-        const r = await chiama<{ url?: string; error?: string }>({ azione: 'documento', posizioneId: p.id, path })
-        if (r.data.url) window.open(r.data.url, '_blank', 'noopener')
-        else toast.error(r.data.error || 'Documento non disponibile')
-    }
 
     async function decidi(decisione: DecisioneEMTN) {
         setErrori([]); setInvio(true)
@@ -179,11 +174,9 @@ function SchedaApprovazione({ p, onDeciso }: { p: PosizioneCoda; onDeciso: () =>
                 )}
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-                {p.documenti.map(d => (
-                    <button key={d.path} type="button" onClick={() => apri(d.path)} className="rounded-lg border border-theme-border px-2 py-1 text-[11px] text-theme-text-primary hover:bg-theme-bg-hover">{d.nome}</button>
-                ))}
-            </div>
+            {/* 01/10/2026: anteprima, apri e scarica come nella scheda cliente
+                (prima window.open dopo un await: bloccato dai browser). */}
+            <EMTNDocumenti posizioneId={p.id} documenti={p.documenti || []} />
 
             {errori.length > 0 && <ul className="text-[11px] text-red-600 dark:text-red-400 list-disc pl-5">{errori.map((e, i) => <li key={i}>{e}</li>)}</ul>}
             <textarea value={nota} onChange={e => setNota(e.target.value)} placeholder="Motivazione (obbligatoria per integrazione, sospensione, rifiuto e revisione legale)"

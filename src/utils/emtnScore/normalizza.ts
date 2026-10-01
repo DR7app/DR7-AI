@@ -94,7 +94,7 @@ const RE: Array<[Famiglia, RegExp]> = [
     ['insoluto', /insolut|non pagat|mancato pagament/i],
     ['cauzione', /cauzion|preautorizz/i],
     ['documentazione', /document|patente/i],
-    ['danno', /dann|graffi|ammacc|urto|incident|rottur|rott[oa]|cerchi|paraurti|specchiett|parabrezz|cristall|carrozzer|tappezzer|sedil|gomm|pneumatic|bomboletta|franchigi|distrutt/i],
+    ['danno', /dann|graffi|ammacc|urto|incident|rottur|rott[oa]|cerchi|paraurti|specchiett|parabrezz|cristall|carrozzer|fermo (tecnico|veicolo|macchina)|tappezzer|sedil|gomm|pneumatic|bomboletta|franchigi|distrutt/i],
 ]
 
 /** Famiglia di una voce DR7 dal suo nome. `predefinita` se nulla corrisponde. */

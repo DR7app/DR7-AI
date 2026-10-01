@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
 import { categoriaEMTN, etichettaStato, type EventoEMTN } from '../../../../utils/emtnMobilityRisk'
+import EMTNDocumenti, { type DocumentoPratica } from './EMTNDocumenti'
 
 interface Posizione {
     id: string
@@ -26,6 +27,7 @@ interface Posizione {
     inviata_at: string | null
     approvata_at: string | null
     updated_at: string
+    documenti?: DocumentoPratica[]
 }
 
 const data = (v: string | null) => v ? new Date(v).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '—'
@@ -99,6 +101,7 @@ export default function EMTNPosizioniCliente({ clientId, versione, onAggiorna }:
                                 </button>
                             )}
                             {p.report && aperte.has(p.id) && <p className="whitespace-pre-line text-xs text-theme-text-secondary mt-1">{p.report}</p>}
+                            <EMTNDocumenti posizioneId={p.id} documenti={p.documenti || []} />
                             <div className="flex flex-wrap gap-2 mt-2">
                                 <button type="button" onClick={() => onAggiorna(p.id)} className="px-2.5 py-1 rounded-lg border border-theme-border text-[11px] text-theme-text-primary hover:bg-theme-bg-hover">Aggiorna con nuovi documenti</button>
                                 <button type="button" onClick={() => setRispostaPer(rispostaPer === p.id ? null : p.id)} className="px-2.5 py-1 rounded-lg border border-theme-border text-[11px] text-theme-text-primary hover:bg-theme-bg-hover">Registra risposta del cliente</button>

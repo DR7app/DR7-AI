@@ -23,7 +23,7 @@
  */
 import { type EventoNormalizzato, type Famiglia, type NoleggioNormalizzato } from './normalizza'
 
-export const VERSIONE_ALGORITMO = 'emtn-score-1.1.0'
+export const VERSIONE_ALGORITMO = 'emtn-score-1.2.0'
 
 /* ---------- parametri v1 ---------- */
 
@@ -124,8 +124,72 @@ function emivitaMesi(g: number): number {
     return 12
 }
 
+/**
+ * 01/10/2026: un incidente = un evento. Le voci della stessa prenotazione e
+ * della stessa famiglia (danno + "fermo veicolo", la riga in fattura, la
+ * pratica EMTN con i suoi 7 codici e i suoi documenti) descrivono UN fatto:
+ * prima un solo danno da 13.000 EUR contava 3 volte con "recidiva" e il
+ * cliente scendeva a 13/100.
+ * Importo: si sommano le voci di una stessa fonte, tra fonti diverse si
+ * prende la maggiore (raccontano lo stesso fatto). Residuo: il piu' basso
+ * tra le fonti (la regolarizzazione piu' recente vince).
+ */
+export function raggruppaIncidenti(eventi: EventoNormalizzato[]): EventoNormalizzato[] {
+    const gruppi = new Map<string, EventoNormalizzato[]>()
+    for (const e of eventi) {
+        const k = e.bookingId ? `${e.bookingId}|${e.famiglia}` : e.id
+        gruppi.set(k, [...(gruppi.get(k) || []), e])
+    }
+    // id stabile anche con una sola voce: se domani se ne aggiunge una sulla
+    // stessa prenotazione, lo storico non vede un evento "nuovo".
+    return [...gruppi.entries()].map(([k, g]) => (g.length === 1
+        ? (g[0].bookingId ? { ...g[0], id: `incidente:${k}` } : g[0])
+        : unisciIncidente(k, g)))
+}
+
+function unisciIncidente(chiave: string, g: EventoNormalizzato[]): EventoNormalizzato {
+    const perFonte = new Map<string, { importo: number; residuo: number }>()
+    for (const e of g) {
+        const f = perFonte.get(e.fonte) || { importo: 0, residuo: 0 }
+        f.importo += e.importo
+        f.residuo += e.statoPagamento === 'pagato' ? 0 : e.residuo
+        perFonte.set(e.fonte, f)
+    }
+    const fonti = [...perFonte.values()].filter(f => f.importo > 0)
+    const importo = fonti.reduce((m, f) => Math.max(m, f.importo), 0)
+    const residuo = fonti.length ? Math.min(...fonti.map(f => f.residuo)) : 0
+    const tuttiPagati = g.every(e => e.statoPagamento === 'pagato' || e.statoPagamento === 'non_applicabile')
+    const statoPagamento: EventoNormalizzato['statoPagamento'] = importo <= 0
+        ? (g.some(e => e.statoPagamento === 'aperto') ? 'aperto' : tuttiPagati && g.some(e => e.statoPagamento === 'pagato') ? 'pagato' : 'non_applicabile')
+        : residuo <= 0.005 ? 'pagato' : residuo < importo - 0.005 ? 'parziale' : 'aperto'
+    const primo = (xs: Array<string | null>) => xs.filter(Boolean).sort()[0] || null
+    const giorni = g.map(e => e.giorniAlSaldo).filter((x): x is number => x != null)
+    const ordine = <T extends string>(valori: Array<T | null>, priorita: T[]): T | null => priorita.find(p => valori.includes(p)) ?? null
+    const principale = [...g].sort((a, b) => b.importo - a.importo)[0]
+    return {
+        ...principale,
+        id: `incidente:${chiave}`,
+        label: g.length > 1 ? `${principale.label} (${g.length} voci, un solo episodio)` : principale.label,
+        data: primo(g.map(e => e.data)),
+        importo,
+        residuo: statoPagamento === 'pagato' ? 0 : residuo,
+        pagato: Math.max(0, importo - residuo),
+        statoPagamento,
+        giorniAlSaldo: giorni.length ? Math.max(...giorni) : null,
+        verificato: g.some(e => e.verificato),
+        inRevisione: g.every(e => e.inRevisione),
+        dichiaratoDalCliente: g.some(e => e.dichiaratoDalCliente === false) ? false : g.some(e => e.dichiaratoDalCliente === true) ? true : null,
+        responsabilita: ordine(g.map(e => e.responsabilita), ['non_attribuibile', 'accertata', 'contestata']),
+        contestazione: ordine(g.map(e => e.contestazione), ['respinta', 'aperta', 'accolta']),
+        gravitaIndicata: ordine(g.map(e => e.gravitaIndicata), ['grave', 'media', 'lieve']),
+        prezzoGiornoVeicolo: g.reduce<number | null>((m, e) => (e.prezzoGiornoVeicolo != null && (m == null || e.prezzoGiornoVeicolo > m) ? e.prezzoGiornoVeicolo : m), null),
+        veicoloRestituito: g.some(e => e.veicoloRestituito),
+        accertato: g.some(e => e.accertato),
+    }
+}
+
 function contributiEventi(eventi: EventoNormalizzato[], oggi: Date): ContributoEvento[] {
-    const validi = eventi.filter(eventoConta)
+    const validi = raggruppaIncidenti(eventi.filter(eventoConta))
         .filter(e => !e.data || Date.parse(e.data) <= oggi.getTime())
         .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')))
     // Recidiva per INCIDENTE: piu' voci della stessa prenotazione (es. due
@@ -184,6 +248,7 @@ export type LivelloRischio = 'Very Low' | 'Low' | 'Moderate' | 'High' | 'Critica
 export type Trend = 'Improving' | 'Stable' | 'Deteriorating'
 
 export interface OverrideScore {
+    id?: string
     tipo: 'limite_massimo' | 'score_fisso' | 'flag_critico'
     valore: number | null
     motivo: string

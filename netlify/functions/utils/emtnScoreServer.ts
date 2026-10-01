@@ -98,7 +98,8 @@ export function eventiDaRete(rete: EventoReteRow[]): EventoNormalizzato[] {
         const { famiglia } = famigliaVoceInterna(r.voce || r.tipo, r.tipo)
         const stato: StatoPagamentoEvento = r.statoPagamento === 'paid' ? 'pagato' : r.statoPagamento === 'partial' ? 'parziale' : 'aperto'
         return {
-            id: `rete:${i}:${r.dataEvento || ''}`,
+            // id stabile (non la posizione nella lista): voce, data, importo.
+            id: `rete:${(r.voce || r.tipo).toLowerCase().trim()}:${r.dataEvento || ''}:${num(r.importo).toFixed(2)}:${i}`,
             fonte: 'rete', famiglia, label: r.voce || r.tipo, data: r.dataEvento,
             importo: num(r.importo), pagato: num(r.pagato), residuo: num(r.residuo), statoPagamento: stato,
             giorniAlSaldo: r.giorniAlSaldo, verificato: true, inRevisione: false, dichiaratoDalCliente: null,
@@ -159,16 +160,18 @@ export interface PosizioneRow {
     pubblicata?: boolean | null
     titolo?: string | null
     approvata_at?: string | null
+    booking_id?: string | null
     created_at: string
 }
 
 /**
  * Una pratica = un evento, con la famiglia piu' grave tra i suoi codici.
  * Pubblicata = verificata; in approvazione = in revisione (non pesa).
- * `importiInterni`: importi gia' contati dalle voci DR7, per non contare due
- * volte la stessa pendenza segnalata anche su EMTN.
+ * La pratica porta la prenotazione (booking_id): il motore la unisce alle
+ * voci DR7 dello stesso noleggio in un solo incidente (raggruppaIncidenti).
+ * Senza booking_id, una voce DR7 con lo stesso importo indica lo stesso fatto.
  */
-export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]): EventoNormalizzato[] {
+export function eventiDaPosizioni(rows: PosizioneRow[], vociInterne: Array<{ bookingId: string; amount: number }>): EventoNormalizzato[] {
     const out: EventoNormalizzato[] = []
     for (const p of rows) {
         if (!p.pubblicata && !p.in_approvazione) continue
@@ -185,11 +188,17 @@ export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]
         let contestazione: EventoNormalizzato['contestazione'] = null
         let dichiarato: boolean | null = null
         let responsabilita: EventoNormalizzato['responsabilita'] = null
+        // I codici di una pratica descrivono lo STESSO fatto da piu' lati
+        // (danno documentato, preventivo, accordo, regolarizzazione): gli
+        // importi non si sommano, vale il maggiore.
+        let residuoEsplicito: number | null = null
         for (const e of eventi) {
             const d = e.dati || {}
-            importo += num(d.importo_dovuto ?? d.importo_richiesto)
-            pagato += num(d.importo_pagato)
-            residuo += num(d.importo_residuo)
+            importo = Math.max(importo, num(d.importo_dovuto ?? d.importo_richiesto))
+            pagato = Math.max(pagato, num(d.importo_pagato))
+            if (d.importo_residuo != null && d.importo_residuo !== '') {
+                residuoEsplicito = residuoEsplicito == null ? num(d.importo_residuo) : Math.min(residuoEsplicito, num(d.importo_residuo))
+            }
             if (!data && typeof d.data_evento === 'string') data = d.data_evento
             if (!pagatoIl && typeof d.data_pagamento === 'string') pagatoIl = d.data_pagamento
             // Ricavati dall'analisi AI dei documenti e confermati dall'operatore.
@@ -206,12 +215,12 @@ export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]
             else if ((sc === 'APERTO' || [14, 15, 16, 17, 18, 36, 57].includes(Number(e.codice))) && !contestazione) contestazione = 'aperta'
         }
         const regolarizzata = stato === 'REGOLARIZZATO' || stato === 'CHIUSO' || codici.some(c => c === 24 || c === 26 || c === 58)
-        if (residuo <= 0 && importo > 0) residuo = Math.max(0, importo - pagato)
+        residuo = residuoEsplicito ?? Math.max(0, importo - pagato)
         const statoPagamento: StatoPagamentoEvento = regolarizzata ? 'pagato'
             : importo > 0 || residuo > 0 ? statoDaImporti(Math.max(importo, residuo), pagato) : 'non_applicabile'
-        // Gia' contata come voce DR7 (stesso importo): non si conta due volte.
-        if (['danno', 'insoluto', 'penale'].includes(famiglia) && importo > 0
-            && importiInterni.some(x => Math.abs(x - importo) < 1)) continue
+        const bookingId = p.booking_id
+            || (importo > 0 ? vociInterne.find(v => Math.abs(v.amount - importo) < 1)?.bookingId : null)
+            || null
         out.push({
             id: `pratica:${p.id}`, fonte: 'emtn_pratica', famiglia, label: p.titolo || famiglia,
             data: data || p.approvata_at || p.created_at,
@@ -220,7 +229,7 @@ export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]
             verificato: !!p.pubblicata, inRevisione: !p.pubblicata && !!p.in_approvazione,
             dichiaratoDalCliente: dichiarato, responsabilita, gravitaIndicata: null,
             contestazione: contestazione || (responsabilita === 'contestata' ? 'aperta' : null),
-            prezzoGiornoVeicolo: null, bookingId: null,
+            prezzoGiornoVeicolo: null, bookingId,
             veicoloRestituito: codici.includes(40),
         })
     }
@@ -325,9 +334,14 @@ export async function registraStorico(
         const prec = ultime?.[0] as (RigaStorico & { flag: unknown; fattori: { contributi?: Array<{ id: string }>; noleggiConclusi?: number }; override_id: string | null }) | undefined
         const flagOra = r.flag.map(f => f.codice).sort().join(',')
         const flagPrima = Array.isArray(prec?.flag) ? (prec!.flag as Array<{ codice: string }>).map(f => f.codice).sort().join(',') : ''
-        const cambiato = !prec || prec.score !== r.score || prec.confidence !== r.confidence || prec.livello !== r.livello
+        const cambiato = !prec || prec.score !== r.score || prec.score_calcolato !== r.scoreCalcolato || prec.confidence !== r.confidence || prec.livello !== r.livello
             || prec.versione !== r.versione || flagOra !== flagPrima || (prec.override_id || null) !== overrideId
-        if (!cambiato) return (ultime || []) as RigaStorico[]
+        // Alla scheda vanno solo i campi mostrati (non fattori/flag completi).
+        const perScheda = (righe: unknown[]): RigaStorico[] => righe.filter(Boolean).map(x => {
+            const { score_precedente, score, score_calcolato, confidence, livello, trend, causa, versione, created_at, operatore_email } = x as RigaStorico
+            return { score_precedente, score, score_calcolato, confidence, livello, trend, causa, versione, created_at, operatore_email }
+        })
+        if (!cambiato) return perScheda(ultime || [])
 
         // Causa: cosa e' cambiato rispetto al calcolo precedente.
         const cause: string[] = []
@@ -342,7 +356,7 @@ export async function registraStorico(
             if (tolti.length) cause.push(`${tolti.length} eventi non piu' considerati (regolarizzati/annullati)`)
             const nPrima = prec.fattori?.noleggiConclusi ?? null
             if (nPrima != null && r.dettaglio.noleggiConclusi > nPrima) cause.push(`${r.dettaglio.noleggiConclusi - nPrima} nuovi noleggi conclusi`)
-            if ((prec.override_id || null) !== overrideId) cause.push(overrideId ? 'Intervento manuale della direzione' : 'Intervento manuale revocato')
+            if ((prec.override_id || null) !== overrideId) cause.push(overrideId ? 'Intervento manuale della direzione' : 'Intervento manuale revocato o scaduto')
             if (flagOra !== flagPrima) cause.push('Flag critici cambiati')
             if (!cause.length) cause.push('Passare del tempo (attenuazione eventi / stato pagamenti)')
         }
@@ -364,7 +378,7 @@ export async function registraStorico(
         const { data: nuova } = await sb.from('emtn_score_storico').insert(riga)
             .select('score_precedente, score, score_calcolato, confidence, livello, trend, causa, versione, created_at, operatore_email')
             .maybeSingle()
-        return [nuova, ...(ultime || [])].filter(Boolean).slice(0, 10) as RigaStorico[]
+        return perScheda([nuova, ...(ultime || [])]).slice(0, 10)
     } catch {
         return []
     }

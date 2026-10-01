@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { authFetch } from '../../../../utils/authFetch'
 import { categoriaEMTN, etichettaStato, type EventoEMTN } from '../../../../utils/emtnMobilityRisk'
+import EMTNDocumenti, { type DocumentoPratica } from './EMTNDocumenti'
 
 export interface PosizioneMia {
     id: string
@@ -30,6 +31,7 @@ export interface PosizioneMia {
     approvata_da: string | null
     updated_at: string
     created_at: string
+    documenti?: DocumentoPratica[]
     emtn_clients: { codice_fiscale: string; nome: string | null; cognome: string | null } | null
 }
 
@@ -132,6 +134,7 @@ export default function EMTNMieiEventi({ onApri }: { onApri: (cf: string) => voi
                             {p.eventi.map(e => categoriaEMTN(e.codice)?.label).filter(Boolean).join(' · ') || 'Nessun evento'}
                         </p>
                         {p.nota_revisione && <p className="text-[11px] text-theme-text-secondary mt-1">Nota EMTN: {p.nota_revisione}</p>}
+                        <EMTNDocumenti posizioneId={p.id} documenti={p.documenti || []} />
                         {c?.codice_fiscale && (
                             <button type="button" onClick={() => onApri(c.codice_fiscale)}
                                 className="mt-2 px-2.5 py-1 rounded-lg border border-theme-border text-[11px] text-theme-text-primary hover:bg-theme-bg-hover">
