@@ -8,8 +8,10 @@
  * catalogo ed e' quello scritto nella colonna `detector` di system_alarms.
  */
 import type { Detector, ModuloAllarmi } from '../alarmDetectors'
+import { moduloDanniSinistri } from './danniSinistri'
 
 export const MODULI_ALLARMI: ModuloAllarmi[] = [
+    moduloDanniSinistri,
 ]
 
 export function detectorsDeiModuli(): Record<string, Detector> {
