@@ -1194,6 +1194,7 @@ export const handler: Handler = async (event) => {
         let subtotal = 0
         let vatAmount = 0
         let exemptAmount = 0
+        let lordoImponibile = 0
 
         items.forEach(item => {
             const itemTotal = item.unit_price * item.quantity
@@ -1201,9 +1202,19 @@ export const handler: Handler = async (event) => {
                 exemptAmount += itemTotal
             } else {
                 subtotal += itemTotal
-                vatAmount += itemTotal * (item.vat_rate / 100)
+                lordoImponibile += itemTotal * (1 + item.vat_rate / 100)
             }
         })
+
+        // 01/10/2026: IVA = totale - imponibile, mai imponibile x aliquota.
+        // Gli importi del gestionale sono LORDI: arrotondando imponibile e IVA
+        // ciascuno per conto suo la somma poteva differire di un centesimo
+        // dal pagato. Si arrotonda il lordo e l'imponibile, l'IVA e' la
+        // differenza (stessa regola delle altre fatture di questo file).
+        const centesimi = (n: number) => Math.round(n * 100) / 100
+        subtotal = centesimi(subtotal)
+        exemptAmount = centesimi(exemptAmount)
+        vatAmount = centesimi(centesimi(lordoImponibile) - subtotal)
 
         const total = subtotal + vatAmount + exemptAmount
 

@@ -1630,6 +1630,10 @@ const handler: Handler = async (event) => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        // 01/10/2026: senza notifyAdmin send-whatsapp-notification non
+                        // ha destinatario e salta l'invio in silenzio: l'avviso
+                        // "pagamento ricevuto" alla direzione non partiva mai.
+                        notifyAdmin: true,
                         templateKey: 'nexi_payment_received_admin',
                         templateVars: {
                             '{customer_name}': booking.customer_name || 'N/A',

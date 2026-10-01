@@ -42,7 +42,7 @@ const retryHandler: Handler = async () => {
         // minuti) interrogava di nuovo le stesse prenotazioni: quelle senza
         // contratto rispondevano 406 (~4.150 a settimana). La regola resta
         // IDENTICA a prima: si invia solo se la prenotazione ha esattamente UN
-        // contratto e quel contratto ha esattamente UNA richiesta di firma
+        // contratto e quel contratto ha almeno UNA richiesta di firma (vedi sotto)
         // 'signed' (con 0 o piu' righe `.single()`/`.maybeSingle()` davano
         // errore e la prenotazione veniva saltata: idem qui).
         const bookingIds = missedBookings.map(b => b.id)
@@ -107,7 +107,11 @@ const retryHandler: Handler = async () => {
                 continue
             }
 
-            if (firmePerContratto.get(contrattiBooking[0]) !== 1) {
+            // 01/10/2026: almeno UNA firma 'signed', non esattamente una. Due
+            // firme = conducente principale + secondo conducente: con la regola
+            // "esattamente una" 27 noleggi veri (aprile-settembre) non sono mai
+            // stati dichiarati a CARGOS. Deciso dalla direzione il 01/10.
+            if ((firmePerContratto.get(contrattiBooking[0]) || 0) < 1) {
                 skipped++
                 continue
             }
