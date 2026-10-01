@@ -1130,7 +1130,6 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         const ora = Date.now()
         const CHIAVE = 'alarm_events_suonati'
         let suonati = suonatiCatalogoRef.current
-        const primoGiro = suonati === null
         if (!suonati) {
             suonati = new Map<string, number>()
             try {
@@ -1148,8 +1147,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (!cfg || cfg.notifica_gestionale === false) continue
             const ultimo = suonati.get(e.id)
             if (ultimo === undefined) {
-                const recente = ora - new Date(e.triggered_at).getTime() < 3 * 60_000
-                if (primoGiro && !recente) { suonati.set(e.id, ora); continue }
+                // 01/10/2026: niente piu' "gia' visto" al primo giro. Chi apre
+                // il gestionale dopo che l'allarme e' scattato DEVE sentirlo:
+                // un allarme acceso e aperto suona almeno una volta su ogni
+                // postazione. Il tetto e' l'avviso unico qui sotto (un suono,
+                // un riepilogo), non il silenzio.
                 daSuonare.push(e)
                 continue
             }
