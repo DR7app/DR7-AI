@@ -37,24 +37,46 @@ const retryHandler: Handler = async () => {
             return { statusCode: 200, body: JSON.stringify({ sent: 0 }) }
         }
 
-        // Filter: only bookings with signed contracts
+        // 01/10/2026: contratti e firme letti UNA volta per giro, a blocchi,
+        // invece di una query `.single()` per prenotazione. Ogni giro (ogni 30
+        // minuti) interrogava di nuovo le stesse prenotazioni: quelle senza
+        // contratto rispondevano 406 (~4.150 a settimana). La regola resta
+        // IDENTICA a prima: si invia solo se la prenotazione ha esattamente UN
+        // contratto e quel contratto ha esattamente UNA richiesta di firma
+        // 'signed' (con 0 o piu' righe `.single()`/`.maybeSingle()` davano
+        // errore e la prenotazione veniva saltata: idem qui).
         const bookingIds = missedBookings.map(b => b.id)
-        const { data: signedContracts } = await supabase
-            .from('contracts')
-            .select('booking_id')
-            .in('booking_id', bookingIds)
-
-        const { data: signedRequests } = await supabase
-            .from('signature_requests')
-            .select('contract_id')
-            .eq('status', 'signed')
-
-        const signedContractBookingIds = new Set<string>()
-        if (signedContracts && signedRequests) {
-            const signedContractIds = new Set(signedRequests.map(sr => sr.contract_id))
-            for (const c of signedContracts) {
-                // Check if this contract has a signed signature request
-                // We need to cross-reference
+        const BLOCCO = 100
+        const contrattiPerPrenotazione = new Map<string, string[]>()
+        for (let i = 0; i < bookingIds.length; i += BLOCCO) {
+            const { data: righe, error: errContratti } = await supabase
+                .from('contracts')
+                .select('id, booking_id')
+                .in('booking_id', bookingIds.slice(i, i + BLOCCO))
+            if (errContratti) {
+                console.error('[cargos-retry-missed] Contracts query error:', errContratti)
+                return { statusCode: 500, body: JSON.stringify({ error: errContratti.message }) }
+            }
+            for (const c of righe || []) {
+                const lista = contrattiPerPrenotazione.get(c.booking_id) || []
+                lista.push(c.id)
+                contrattiPerPrenotazione.set(c.booking_id, lista)
+            }
+        }
+        const contractIds = Array.from(contrattiPerPrenotazione.values()).flat()
+        const firmePerContratto = new Map<string, number>()
+        for (let i = 0; i < contractIds.length; i += BLOCCO) {
+            const { data: firme, error: errFirme } = await supabase
+                .from('signature_requests')
+                .select('contract_id')
+                .eq('status', 'signed')
+                .in('contract_id', contractIds.slice(i, i + BLOCCO))
+            if (errFirme) {
+                console.error('[cargos-retry-missed] Signature query error:', errFirme)
+                return { statusCode: 500, body: JSON.stringify({ error: errFirme.message }) }
+            }
+            for (const f of firme || []) {
+                firmePerContratto.set(f.contract_id, (firmePerContratto.get(f.contract_id) || 0) + 1)
             }
         }
 
@@ -77,26 +99,15 @@ const retryHandler: Handler = async () => {
                 continue
             }
 
-            // Check if contract is signed
-            const { data: contract } = await supabase
-                .from('contracts')
-                .select('id')
-                .eq('booking_id', booking.id)
-                .single()
-
-            if (!contract) {
+            // Check if contract is signed (01/10/2026: dalle mappe caricate sopra,
+            // stessa regola "esattamente uno" delle vecchie .single()/.maybeSingle())
+            const contrattiBooking = contrattiPerPrenotazione.get(booking.id) || []
+            if (contrattiBooking.length !== 1) {
                 skipped++
                 continue
             }
 
-            const { data: sigReq } = await supabase
-                .from('signature_requests')
-                .select('status')
-                .eq('contract_id', contract.id)
-                .eq('status', 'signed')
-                .maybeSingle()
-
-            if (!sigReq) {
+            if (firmePerContratto.get(contrattiBooking[0]) !== 1) {
                 skipped++
                 continue
             }

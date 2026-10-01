@@ -228,7 +228,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
   // Load car wash services catalog
   useEffect(() => {
-    supabase.from('car_wash_services').select('*').eq('active', true).order('sort_order').then(({ data }) => {
+    // 01/10/2026: le colonne vere sono is_active e display_order ('active' e
+    // 'sort_order' non esistono: 400 e catalogo servizi vuoto).
+    supabase.from('car_wash_services').select('*').eq('is_active', true).order('display_order').then(({ data }) => {
       if (data) setCarWashServices(data)
     })
   }, [])

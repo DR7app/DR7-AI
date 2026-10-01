@@ -58,7 +58,7 @@ export const handler: Handler = async (event) => {
           console.log(`[post-booking-webhook] Contract generated for ${bookingId}`)
 
           const { data: contractRow } = await supabase
-            .from('contracts').select('id').eq('booking_id', bookingId).single()
+            .from('contracts').select('id').eq('booking_id', bookingId).maybeSingle() // 01/10/2026: maybeSingle, niente 406 se il contratto non c'e'
 
           if (contractRow) {
             await fetch(`${baseUrl}/.netlify/functions/signature-init`, {

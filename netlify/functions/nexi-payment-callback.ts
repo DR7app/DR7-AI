@@ -1582,7 +1582,8 @@ const handler: Handler = async (event) => {
                             .from('contracts')
                             .select('id')
                             .eq('booking_id', booking.id)
-                            .single();
+                            // 01/10/2026: maybeSingle, niente 406 se il contratto non c'e'
+                            .maybeSingle();
 
                         if (contractRow) {
                             // Send signing link to customer via WhatsApp

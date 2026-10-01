@@ -336,6 +336,16 @@ export function useLimitationOverride() {
     const entry = overrideMap.current.get(code)
     if (!entry) return
 
+    // 01/10/2026: gli id `bypass_*` sono sintetici (bypass silenzioso, gia'
+    // registrato in audit da logAdminAction): non esiste nessuna riga in
+    // limitation_overrides da consumare e l'id non e' un UUID, quindi l'update
+    // falliva sempre. Si salta solo la scrittura DB; il bypass resta identico.
+    if (entry.overrideId.startsWith('bypass_')) {
+      overrideMap.current.delete(code)
+      setOverrideCodes(new Set(overrideMap.current.keys()))
+      return
+    }
+
     try {
       await authFetch('/.netlify/functions/limitation-override-otp', {
         method: 'POST',
