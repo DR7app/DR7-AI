@@ -183,6 +183,8 @@ export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]
         let data: string | null = null
         let pagatoIl: string | null = null
         let contestazione: EventoNormalizzato['contestazione'] = null
+        let dichiarato: boolean | null = null
+        let responsabilita: EventoNormalizzato['responsabilita'] = null
         for (const e of eventi) {
             const d = e.dati || {}
             importo += num(d.importo_dovuto ?? d.importo_richiesto)
@@ -190,6 +192,14 @@ export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]
             residuo += num(d.importo_residuo)
             if (!data && typeof d.data_evento === 'string') data = d.data_evento
             if (!pagatoIl && typeof d.data_pagamento === 'string') pagatoIl = d.data_pagamento
+            // Ricavati dall'analisi AI dei documenti e confermati dall'operatore.
+            const com = String(d.comunicazione_cliente || '').toUpperCase()
+            if (com === 'SPONTANEA' && dichiarato == null) dichiarato = true
+            if (com === 'OMESSA') dichiarato = false
+            const resp = String(d.responsabilita || '').toUpperCase()
+            if (resp === 'NON_ATTRIBUIBILE') responsabilita = 'non_attribuibile'
+            else if (resp === 'ACCERTATA' && responsabilita !== 'non_attribuibile') responsabilita = 'accertata'
+            else if (resp === 'CONTESTATA' && !responsabilita) responsabilita = 'contestata'
             const sc = String(d.stato_contestazione || '').toUpperCase()
             if (sc === 'RESPINTO') contestazione = 'respinta'
             else if (sc === 'ACCOLTO' && contestazione !== 'respinta') contestazione = 'accolta'
@@ -208,7 +218,8 @@ export function eventiDaPosizioni(rows: PosizioneRow[], importiInterni: number[]
             importo, pagato, residuo: statoPagamento === 'pagato' ? 0 : residuo, statoPagamento,
             giorniAlSaldo: statoPagamento === 'pagato' ? giorniTra(data, pagatoIl) : null,
             verificato: !!p.pubblicata, inRevisione: !p.pubblicata && !!p.in_approvazione,
-            dichiaratoDalCliente: null, responsabilita: null, gravitaIndicata: null, contestazione,
+            dichiaratoDalCliente: dichiarato, responsabilita, gravitaIndicata: null,
+            contestazione: contestazione || (responsabilita === 'contestata' ? 'aperta' : null),
             prezzoGiornoVeicolo: null, bookingId: null,
             veicoloRestituito: codici.includes(40),
         })

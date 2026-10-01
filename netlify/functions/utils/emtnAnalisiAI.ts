@@ -66,6 +66,8 @@ Furto, truffa, appropriazione indebita, falsificazione, cliente denunciato, proc
 
 DATI DA ESTRARRE PER OGNI EVENTO (in "dati")
 ${campi}
+comunicazione_cliente: SPONTANEA solo se un documento mostra che il cliente ha comunicato l'evento di sua iniziativa (es. messaggio o verbale prima del controllo dell'operatore); SU_RICHIESTA se lo ha confermato solo dopo la contestazione dell'operatore; OMESSA solo se un documento dimostra che lo ha taciuto o negato a fronte di prove. Altrimenti null.
+responsabilita: ACCERTATA solo se i documenti attribuiscono l'evento al cliente (es. ammissione firmata, constatazione amichevole, perizia, sentenza); CONTESTATA se il cliente la contesta e non e' decisa; NON_ATTRIBUIBILE se risulta un responsabile diverso dal cliente (es. terzo identificato, guasto). Altrimenti null.
 Solo se presenti o ricavabili con certezza dai documenti. Se un dato non risulta, usa null (a schermo diventera' "${NON_RISULTA}"). Non inventare, non presumere, non completare dati mancanti con supposizioni. Il ritardo di riconsegna lo calcola il sistema dalle due date/ore: riportale esattamente.
 In "fonti" metti i nomi dei documenti da cui risulta l'evento.
 

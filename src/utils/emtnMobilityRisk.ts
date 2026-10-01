@@ -264,6 +264,9 @@ export const CAMPI_EVENTO: { chiave: string; label: string; tipo: 'testo' | 'dat
     { chiave: 'stato_accordo', label: "Stato dell'accordo", tipo: 'testo' },
     { chiave: 'clausola', label: 'Clausola contrattuale interessata', tipo: 'testo' },
     { chiave: 'stato_contestazione', label: 'Stato della contestazione', tipo: 'testo' },
+    // 01/10/2026: per l'EMTN Score (src/utils/emtnScore), ricavati dai documenti.
+    { chiave: 'comunicazione_cliente', label: "Comunicazione dell'evento da parte del cliente (SPONTANEA / SU_RICHIESTA / OMESSA)", tipo: 'testo' },
+    { chiave: 'responsabilita', label: 'Responsabilita\' (ACCERTATA / CONTESTATA / NON_ATTRIBUIBILE)', tipo: 'testo' },
 ]
 
 export type DatiEvento = Record<string, string | number | null>

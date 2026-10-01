@@ -23,7 +23,7 @@
  */
 import { type EventoNormalizzato, type Famiglia, type NoleggioNormalizzato } from './normalizza'
 
-export const VERSIONE_ALGORITMO = 'emtn-score-1.0.0'
+export const VERSIONE_ALGORITMO = 'emtn-score-1.1.0'
 
 /* ---------- parametri v1 ---------- */
 

@@ -226,7 +226,7 @@ export const handler: Handler = async (event) => {
     // poi normalizza in eventi.
     type DanniItem = {
         label?: string; total?: number; amount?: number; quantity?: number; paymentStatus?: string; date?: string; note?: string
-        discount?: number; amountPaid?: number; paidAt?: string | null
+        discount?: number; amountPaid?: number; paidAt?: string | null; payments?: Array<{ paidAt?: string | null }>
         // 01/10/2026: contesto per l'EMTN Score (facoltativi, null = non risulta)
         dichiaratoDalCliente?: boolean | null; responsabilita?: string | null; gravita?: string | null
     }
@@ -323,6 +323,12 @@ export const handler: Handler = async (event) => {
 
     const bookings = Array.from(collected.values()) as DR7Booking[]
     const dr7Damages: Array<{ bookingId: string; vehicle?: string | null; date?: string | null; label: string; amount: number; quantity: number; paid: boolean; note?: string; residuo: number; stato: StatoPagamentoEvento; contesto?: Pick<DanniItem, 'paidAt' | 'dichiaratoDalCliente' | 'responsabilita' | 'gravita'> }> = []
+    // 01/10/2026: data del saldo per l'EMTN Score (velocita' di pagamento):
+    // paidAt della voce, altrimenti l'ultimo pagamento registrato.
+    const ultimoPagamento = (it: DanniItem): string | null => {
+        const date = (it.payments || []).map(x => x?.paidAt).filter(Boolean) as string[]
+        return date.length ? date.sort().pop()! : null
+    }
     // 01/10/2026: importo = listino meno sconto (come Danni/Penali); un
     // pagamento parziale (amountPaid) lascia aperto solo il residuo.
     const voceDr7 = (it: DanniItem) => {
@@ -361,7 +367,7 @@ export const handler: Handler = async (event) => {
                 quantity: Number(d.quantity || 1),
                 paid,
                 note: d.note,
-                contesto: { paidAt: d.paidAt ?? null, dichiaratoDalCliente: d.dichiaratoDalCliente ?? null, responsabilita: d.responsabilita ?? null, gravita: d.gravita ?? null },
+                contesto: { paidAt: d.paidAt ?? ultimoPagamento(d), dichiaratoDalCliente: d.dichiaratoDalCliente ?? null, responsabilita: d.responsabilita ?? null, gravita: d.gravita ?? null },
             })
         }
         const penali = b.booking_details?.penalties || []
@@ -379,7 +385,7 @@ export const handler: Handler = async (event) => {
                 quantity: Number(p.quantity || 1),
                 paid,
                 note: p.note,
-                contesto: { paidAt: p.paidAt ?? null, dichiaratoDalCliente: p.dichiaratoDalCliente ?? null, responsabilita: p.responsabilita ?? null, gravita: p.gravita ?? null },
+                contesto: { paidAt: p.paidAt ?? ultimoPagamento(p), dichiaratoDalCliente: p.dichiaratoDalCliente ?? null, responsabilita: p.responsabilita ?? null, gravita: p.gravita ?? null },
             })
         }
     }
@@ -475,6 +481,8 @@ export const handler: Handler = async (event) => {
                     quantity: 1,
                     paid,
                     note: undefined as string | undefined,
+                    // La fattura di un danno/penale nasce all'incasso: la sua data e' la data del saldo.
+                    contesto: { paidAt: paid ? f.data_emissione : null },
                 }
                 if (f.booking_id) conDanniInFattura.add(f.booking_id)
                 if (tipo === 'danno') {
@@ -582,6 +590,39 @@ export const handler: Handler = async (event) => {
         ...conDanniInFattura,
         ...multe.map(m => String(m.booking_id || '')),
     ])
+    // Data del saldo ricavata in automatico quando la voce non la ha:
+    // 1) pagamento Nexi riuscito sulla stessa prenotazione con lo stesso
+    //    importo (+-1 EUR), non prima dell'evento; 2) fattura pagata della
+    //    prenotazione che contiene la voce (data di emissione).
+    {
+        const senzaData = [...dr7Damages, ...dr7Penalties].filter(v => v.stato === 'pagato' && !v.contesto?.paidAt && v.bookingId)
+        const ids = Array.from(new Set(senzaData.map(v => v.bookingId)))
+        type Tx = { booking_id: string; amount_cents: number | null; created_at: string }
+        type Ft = { booking_id: string; data_emissione: string | null; items: Array<{ description?: string }> | null }
+        const txs: Tx[] = []
+        const fts: Ft[] = []
+        for (let i = 0; i < ids.length; i += 100) {
+            const fetta = ids.slice(i, i + 100)
+            const [{ data: t }, { data: f }] = await Promise.all([
+                sb.from('nexi_transactions').select('booking_id, amount_cents, created_at').in('booking_id', fetta).in('status', ['completed', 'preauth_captured']),
+                sb.from('fatture').select('booking_id, data_emissione, items').in('booking_id', fetta).in('stato', ['paid', 'pagata']).neq('tipo_fattura', 'nota_di_credito'),
+            ])
+            txs.push(...((t || []) as Tx[]))
+            fts.push(...((f || []) as Ft[]))
+        }
+        for (const v of senzaData) {
+            const dal = v.date ? Date.parse(v.date) - 86_400_000 : 0
+            const tx = txs
+                .filter(t => t.booking_id === v.bookingId && Math.abs((Number(t.amount_cents) || 0) / 100 - v.amount) <= 1 && Date.parse(t.created_at) >= dal)
+                .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
+            const nome = v.label.toLowerCase().replace(/^(penale|danno)\s*-\s*/, '').trim()
+            const ft = fts
+                .filter(f => f.booking_id === v.bookingId && f.data_emissione && (f.items || []).some(it => nome.length >= 3 && String(it?.description || '').toLowerCase().includes(nome)))
+                .sort((a, b) => String(a.data_emissione).localeCompare(String(b.data_emissione)))[0]
+            const quando = tx?.created_at || ft?.data_emissione || null
+            if (quando) v.contesto = { ...(v.contesto || {}), paidAt: quando }
+        }
+    }
     const eventiScore = [
         ...eventiDaVociDr7(dr7Damages, 'danno', prezzoPerBooking),
         ...eventiDaVociDr7(dr7Penalties, 'penale', prezzoPerBooking),
