@@ -517,7 +517,8 @@ const payment_open: Detector = (cfg, ctx, arg) => {
             bookingId: b.id,
             vehicleId: b.vehicle_id,
             entita: etichetta(b, ritiroAt(b)),
-            dettaglio: `Pagati ${(Number(b.amount_paid) || 0).toFixed(2)} di ${(Number(b.price_total) || 0).toFixed(2)}`,
+            // 01/10/2026: price_total e amount_paid sono in CENTESIMI.
+            dettaglio: `Pagati € ${((Number(b.amount_paid) || 0) / 100).toFixed(2)} di € ${((Number(b.price_total) || 0) / 100).toFixed(2)}`,
         }))
 }
 
