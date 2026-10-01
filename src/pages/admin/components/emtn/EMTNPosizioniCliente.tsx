@@ -48,6 +48,13 @@ export default function EMTNPosizioniCliente({ clientId, versione, onAggiorna }:
     const [posizioni, setPosizioni] = useState<Posizione[]>([])
     const [rispostaPer, setRispostaPer] = useState<string | null>(null)
     const [testo, setTesto] = useState('')
+    // Il testo della posizione resta chiuso: si apre solo su richiesta.
+    const [aperte, setAperte] = useState<Set<string>>(new Set())
+    const apriChiudi = (id: string) => setAperte(prev => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id); else next.add(id)
+        return next
+    })
 
     async function carica() {
         const res = await authFetch('/.netlify/functions/emtn-pratica', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ azione: 'posizioni', clientId }) })
@@ -85,7 +92,13 @@ export default function EMTNPosizioniCliente({ clientId, versione, onAggiorna }:
                                 {p.eventi.map(e => categoriaEMTN(e.codice)?.label).filter(Boolean).join(' · ')} · inviata {data(p.inviata_at)}{p.approvata_at ? ` · approvata ${data(p.approvata_at)}` : ''}
                             </p>
                             {p.nota_revisione && <p className="text-[11px] text-theme-text-secondary mt-1">Nota EMTN: {p.nota_revisione}</p>}
-                            <p className="whitespace-pre-line text-xs text-theme-text-secondary mt-2">{p.report}</p>
+                            {p.report && (
+                                <button type="button" onClick={() => apriChiudi(p.id)} aria-expanded={aperte.has(p.id)}
+                                    className="mt-2 text-[11px] font-semibold text-theme-text-secondary hover:text-theme-text-primary">
+                                    {aperte.has(p.id) ? 'Nascondi messaggio' : 'Mostra messaggio'}
+                                </button>
+                            )}
+                            {p.report && aperte.has(p.id) && <p className="whitespace-pre-line text-xs text-theme-text-secondary mt-1">{p.report}</p>}
                             <div className="flex flex-wrap gap-2 mt-2">
                                 <button type="button" onClick={() => onAggiorna(p.id)} className="px-2.5 py-1 rounded-lg border border-theme-border text-[11px] text-theme-text-primary hover:bg-theme-bg-hover">Aggiorna con nuovi documenti</button>
                                 <button type="button" onClick={() => setRispostaPer(rispostaPer === p.id ? null : p.id)} className="px-2.5 py-1 rounded-lg border border-theme-border text-[11px] text-theme-text-primary hover:bg-theme-bg-hover">Registra risposta del cliente</button>
