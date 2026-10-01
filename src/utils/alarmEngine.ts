@@ -29,6 +29,7 @@ import {
     type DetectorContext,
 } from './alarmDetectors'
 import { PRIORITY_RANK, type AlarmPriority } from '../data/alarmCatalog'
+import { MODULI_ALLARMI, detectorsDeiModuli } from './allarmi'
 
 const GIORNO = 24 * 60 * 60 * 1000
 /** Finestra di lavoro: quello che e' successo ieri e quello che succede domani. */
@@ -183,7 +184,19 @@ export async function caricaContesto(now: Date): Promise<DetectorContext> {
         perVeicolo.set(k, arr)
     }
 
-    return { now, bookings, vehicles, cauzioni, firme, perVeicolo }
+    // 01/10/2026: i moduli per gruppo leggono le loro tabelle insieme. Un
+    // modulo che fallisce non ferma gli altri: i suoi allarmi tacciono e
+    // l'errore resta in console.
+    const extra: Record<string, unknown[]> = {}
+    const letture = await Promise.all(MODULI_ALLARMI.filter(m => m.carica).map(async m => {
+        try { return await m.carica!(now) } catch (e) {
+            console.warn(`[allarmi] dati del modulo ${m.nome} non caricati:`, e)
+            return {}
+        }
+    }))
+    for (const l of letture) Object.assign(extra, l)
+
+    return { now, bookings, vehicles, cauzioni, firme, perVeicolo, extra }
 }
 
 /**
@@ -353,7 +366,7 @@ export async function giroAllarmi(now = new Date()): Promise<EsitoGiro | null> {
         const cfgs = await caricaConfigurazioni()
         if (cfgs.length === 0) return { aperti: 0, nuovi: 0, richiusi: 0 }
         const [ctx, esclusi] = await Promise.all([contestoRecente(now), caricaEsclusioni()])
-        const risultati = eseguiRilevazioni(cfgs, ctx)
+        const risultati = eseguiRilevazioni(cfgs, ctx, detectorsDeiModuli())
             .filter(({ cfg, hit }) => !esclusi.has(chiave(cfg.id, hit)))
         const esito = await sincronizzaEventi(risultati, now)
         return { ...esito, configurazioni: new Map(cfgs.map(c => [c.id, c])) }

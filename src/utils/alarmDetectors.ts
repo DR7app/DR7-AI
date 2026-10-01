@@ -53,6 +53,24 @@ export interface DetectorContext {
     firme: Map<string, FirmaLite>
     /** Noleggi per veicolo, ordinati per ritiro: serve a sovrapposizioni e code. */
     perVeicolo: Map<string, BookingLite[]>
+    /**
+     * 01/10/2026: dati in piu' caricati dai moduli di `src/utils/allarmi/`
+     * (multe, sinistri, officina, lead...). Chiave = nome scelto dal modulo.
+     */
+    extra?: Record<string, unknown[]>
+}
+
+/**
+ * 01/10/2026: un gruppo di allarmi in un file suo (`src/utils/allarmi/`).
+ * `carica` legge UNA volta per giro le tabelle che servono al gruppo e le
+ * mette in `ctx.extra`; `detectors` sono le funzioni puntate dalla colonna
+ * `detector` di system_alarms. Cosi' i ~300 allarmi crescono per file
+ * separati e questo resta il registro dei controlli sulle prenotazioni.
+ */
+export interface ModuloAllarmi {
+    nome: string
+    detectors: Record<string, Detector>
+    carica?: (now: Date) => Promise<Record<string, unknown[]>>
 }
 
 export interface AlarmHit {
@@ -909,13 +927,14 @@ export const DETECTORS: Record<string, Detector> = {
 export function eseguiRilevazioni(
     cfgs: AlarmCfgLite[],
     ctx: DetectorContext,
+    detectorsModuli: Record<string, Detector> = {},
 ): { cfg: AlarmCfgLite; hit: AlarmHit }[] {
     const out: { cfg: AlarmCfgLite; hit: AlarmHit }[] = []
     for (const cfg of cfgs) {
         if (!cfg.is_enabled || !cfg.detector) continue
         if (cfg.detector.startsWith('legacy_')) continue
         const [chiave, arg] = cfg.detector.split(':')
-        const fn = DETECTORS[chiave]
+        const fn = DETECTORS[chiave] || detectorsModuli[chiave]
         if (!fn) continue
         let hits: AlarmHit[] = []
         try {
