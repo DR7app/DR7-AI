@@ -109,7 +109,7 @@ const scheduledHandler: Handler = async (event) => {
                     cognome
                 ),
                 vehicles!cauzioni_veicolo_id_fkey (
-                    name
+                    display_name
                 )
             `)
             .eq('scadenza_cauzione', today)
@@ -137,7 +137,9 @@ const scheduledHandler: Handler = async (event) => {
             cliente_nome: c.customers_extended
                 ? `${c.customers_extended.nome} ${c.customers_extended.cognome}`
                 : 'Cliente sconosciuto',
-            veicolo_nome: c.vehicles?.name || 'Veicolo sconosciuto'
+            // 01/10/2026: la colonna e' display_name; `name` non esiste e il cron
+            // falliva a ogni esecuzione (18/18 in una settimana).
+            veicolo_nome: c.vehicles?.display_name || 'Veicolo sconosciuto'
         }))
 
         // Send alarm email to admin

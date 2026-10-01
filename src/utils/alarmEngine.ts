@@ -64,18 +64,51 @@ function isColonnaMancante(err: { code?: string; message?: string } | null): boo
         /column .* does not exist|could not find the .* column/i.test(String(err.message || ''))
 }
 
+/**
+ * 01/10/2026: la riga del catalogo porta anche COME avvisare. Prima il motore
+ * leggeva solo la rilevazione: suono, "Gestionale" e "Ripeti se non risolto"
+ * scelti in Centralina Pro > Allarmi restavano scritti sotto ogni allarme ma
+ * nessuno li leggeva, e i 300 allarmi del catalogo non suonavano mai.
+ */
+export interface AlarmCfgMotore extends AlarmCfgLite {
+    label?: string | null
+    sound_key?: string | null
+    notifica_gestionale?: boolean | null
+    ripeti_finche_non_risolto?: boolean | null
+    ripeti_ogni_minuti?: number | null
+}
+
 /** Le righe del catalogo che oggi possono davvero suonare. */
-export async function caricaConfigurazioni(): Promise<AlarmCfgLite[]> {
+export async function caricaConfigurazioni(): Promise<AlarmCfgMotore[]> {
     const { data, error } = await supabase
         .from('system_alarms')
-        .select('id, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento')
+        .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti')
         .eq('is_enabled', true)
         .eq('stato_rilevamento', 'attivo')
     if (error) {
         if (isColonnaMancante(error)) throw new CatalogoNonInstallato()
         throw error
     }
-    return (data || []) as AlarmCfgLite[]
+    return (data || []) as AlarmCfgMotore[]
+}
+
+/**
+ * 01/10/2026: il giro torna a girare ogni minuto (un allarme "10 minuti prima"
+ * deve suonare 10 minuti prima, non quando qualcuno riapre la pagina). Le
+ * rilevazioni ripartono ogni minuto con l'ora vera, ma la finestra di duemila
+ * prenotazioni si rilegge solo ogni due minuti: e' quella la lettura pesante
+ * che il 29/08 aveva fatto togliere il polling.
+ */
+const CONTESTO_VALIDO_MS = 2 * 60 * 1000
+let contestoInCache: { letto: number; ctx: DetectorContext } | null = null
+
+async function contestoRecente(now: Date): Promise<DetectorContext> {
+    if (contestoInCache && now.getTime() - contestoInCache.letto < CONTESTO_VALIDO_MS) {
+        return { ...contestoInCache.ctx, now }
+    }
+    const ctx = await caricaContesto(now)
+    contestoInCache = { letto: now.getTime(), ctx }
+    return ctx
 }
 
 /**
@@ -162,6 +195,10 @@ export interface EsitoGiro {
     aperti: number
     nuovi: number
     richiusi: number
+    /** Occorrenze aperte dopo il giro (nuove comprese): servono per suonare. */
+    eventiAperti?: AlarmEventRow[]
+    /** Configurazione per id, per sapere suono e ripetizione di ogni evento. */
+    configurazioni?: Map<string, AlarmCfgMotore>
 }
 
 /**
@@ -216,8 +253,13 @@ export async function sincronizzaEventi(
 
     // Nuove occorrenze. `upsert` con ignoreDuplicates per non litigare con
     // l'indice unico se due schede aperte fanno il giro nello stesso istante.
+    let inseriti: AlarmEventRow[] = []
     if (daInserire.length > 0) {
-        await supabase.from('alarm_events').upsert(daInserire, { ignoreDuplicates: true })
+        const { data: righe } = await supabase
+            .from('alarm_events')
+            .upsert(daInserire, { ignoreDuplicates: true })
+            .select('*')
+        inseriti = (righe || []) as AlarmEventRow[]
     }
 
     // Ripetizioni: UNA richiesta per tutte le occorrenze ancora aperte.
@@ -249,15 +291,19 @@ export async function sincronizzaEventi(
     const daChiudere = aperti.filter(e => e.stato === 'aperto' && !visti.has(
         chiave(e.alarm_id, { bookingId: e.booking_id || undefined, vehicleId: e.vehicle_id || undefined, entita: '' }),
     ))
-    if (daChiudere.length > 0) {
-        await supabase
+    // 01/10/2026: a blocchi di 200. Una sola `.in()` con centinaia di UUID
+    // supera la lunghezza della query string, PostgREST risponde 400 e non si
+    // chiude niente (trovato sulla demo il 01/09, vale anche qui).
+    for (let i = 0; i < daChiudere.length; i += 200) {
+        const { error: errChiusura } = await supabase
             .from('alarm_events')
             .update({
                 stato: 'risolto',
                 risolto_at: now.toISOString(),
                 risolto_da_nome: 'Sistema — condizione rientrata',
             })
-            .in('id', daChiudere.map(e => e.id))
+            .in('id', daChiudere.slice(i, i + 200).map(e => e.id))
+        if (errChiusura) console.warn('[allarmi] chiusura automatica fallita:', errChiusura)
     }
 
     // I posticipi scaduti tornano aperti: e' il senso di "posticipa".
@@ -267,7 +313,12 @@ export async function sincronizzaEventi(
         .eq('stato', 'posticipato')
         .lte('posticipato_a', now.toISOString())
 
-    return { aperti: visti.size, nuovi: daInserire.length, richiusi: daChiudere.length }
+    const chiusi = new Set(daChiudere.map(e => e.id))
+    const eventiAperti = [
+        ...aperti.filter(e => e.stato === 'aperto' && !chiusi.has(e.id)),
+        ...inseriti.filter(e => e.stato === 'aperto'),
+    ]
+    return { aperti: visti.size, nuovi: daInserire.length, richiusi: daChiudere.length, eventiAperti }
 }
 
 /**
@@ -290,10 +341,11 @@ export async function giroAllarmi(now = new Date()): Promise<EsitoGiro | null> {
     try {
         const cfgs = await caricaConfigurazioni()
         if (cfgs.length === 0) return { aperti: 0, nuovi: 0, richiusi: 0 }
-        const [ctx, esclusi] = await Promise.all([caricaContesto(now), caricaEsclusioni()])
+        const [ctx, esclusi] = await Promise.all([contestoRecente(now), caricaEsclusioni()])
         const risultati = eseguiRilevazioni(cfgs, ctx)
             .filter(({ cfg, hit }) => !esclusi.has(chiave(cfg.id, hit)))
-        return await sincronizzaEventi(risultati, now)
+        const esito = await sincronizzaEventi(risultati, now)
+        return { ...esito, configurazioni: new Map(cfgs.map(c => [c.id, c])) }
     } catch (e) {
         if (e instanceof CatalogoNonInstallato) return null
         console.error('[allarmi] giro fallito:', e)

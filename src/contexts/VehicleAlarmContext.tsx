@@ -4,7 +4,8 @@ import { leggiRigaAdmin } from '../utils/rigaAdmin'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
 import { AlarmSoundPlayer, type AlarmSoundKey } from '../utils/alarmSounds'
-import { giroAllarmi } from '../utils/alarmEngine'
+import { giroAllarmi, type EsitoGiro } from '../utils/alarmEngine'
+import { PRIORITY_RANK } from '../data/alarmCatalog'
 
 interface AlarmBooking {
     bookingId: string
@@ -215,7 +216,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             .on('postgres_changes', { event: '*', schema: 'public', table: 'system_alarms' }, async () => {
                 const { data } = await supabase
                     .from('system_alarms')
-                    .select('id, is_enabled, threshold_value, threshold_unit, message_key')
+                    .select('id, is_enabled, threshold_value, threshold_unit, message_key, sound_key')
                 if (!cancelled) apply(data as AlarmConfigRow[] | null)
             })
             .subscribe()
@@ -1109,6 +1110,77 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
+    // 01/10/2026: i ~300 allarmi del catalogo finivano solo nel pannello
+    // Centralina Pro > Allarmi > Aperti, senza suono ne' avviso, anche se sotto
+    // ogni allarme c'e' scritto suono, "Gestionale" e "Ripeti se non risolto".
+    // Ora suonano con il suono scelto e si ripetono ogni N minuti finche' sono
+    // aperti, se la riga lo chiede.
+    //
+    // La memoria di "gia' suonato" e' di questa scheda (localStorage), non del
+    // database: ogni operatore collegato deve sentirlo. Al primo giro della
+    // sessione le occorrenze gia' aperte da tempo si segnano come note senza
+    // suonare - sono nel pannello - altrimenti all'apertura partirebbero tutte
+    // insieme. Restano soggette alla ripetizione.
+    const suonatiCatalogoRef = useRef<Map<string, number> | null>(null)
+    const catalogoPlayerRef = useRef<AlarmSoundPlayer | null>(null)
+    const avvisaCatalogo = (esito: EsitoGiro) => {
+        const eventi = esito.eventiAperti || []
+        const cfgs = esito.configurazioni
+        if (!cfgs) return
+        const ora = Date.now()
+        const CHIAVE = 'alarm_events_suonati'
+        let suonati = suonatiCatalogoRef.current
+        const primoGiro = suonati === null
+        if (!suonati) {
+            suonati = new Map<string, number>()
+            try {
+                const salvati = JSON.parse(localStorage.getItem(CHIAVE) || '{}') as Record<string, number>
+                for (const [id, ts] of Object.entries(salvati)) if (typeof ts === 'number') suonati.set(id, ts)
+            } catch { /* storage bloccato: si riparte da zero */ }
+            suonatiCatalogoRef.current = suonati
+        }
+        const apertiOra = new Set(eventi.map(e => e.id))
+        for (const id of Array.from(suonati.keys())) if (!apertiOra.has(id)) suonati.delete(id)
+
+        const daSuonare: typeof eventi = []
+        for (const e of eventi) {
+            const cfg = cfgs.get(e.alarm_id)
+            if (!cfg || cfg.notifica_gestionale === false) continue
+            const ultimo = suonati.get(e.id)
+            if (ultimo === undefined) {
+                const recente = ora - new Date(e.triggered_at).getTime() < 3 * 60_000
+                if (primoGiro && !recente) { suonati.set(e.id, ora); continue }
+                daSuonare.push(e)
+                continue
+            }
+            const ogni = Number(cfg.ripeti_ogni_minuti || 0)
+            if (cfg.ripeti_finche_non_risolto && ogni > 0 && ora - ultimo >= ogni * 60_000) daSuonare.push(e)
+        }
+        for (const e of daSuonare) suonati.set(e.id, ora)
+        try { localStorage.setItem(CHIAVE, JSON.stringify(Object.fromEntries(suonati))) } catch { /* ignore */ }
+        if (daSuonare.length === 0) return
+
+        daSuonare.sort((a, b) => (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0))
+        const primo = daSuonare[0]
+        const righe = daSuonare.slice(0, 3).map(e => {
+            const label = cfgs.get(e.alarm_id)?.label || e.alarm_id
+            return e.entita ? `${label} - ${e.entita}` : label
+        })
+        if (daSuonare.length > 3) righe.push(`e altri ${daSuonare.length - 3}`)
+        toast(`Allarmi:\n${righe.join('\n')}\n(Centralina Pro > Allarmi > Aperti)`, { duration: 15_000 })
+
+        // Il suono e' quello dell'allarme piu' grave. Lettore separato da
+        // quello del popup storico: suonare qui non deve zittire un rientro
+        // in ritardo che sta gia' suonando.
+        if (audioEnabledRef.current) {
+            try {
+                if (!catalogoPlayerRef.current) catalogoPlayerRef.current = new AlarmSoundPlayer()
+                const suono = (cfgs.get(primo.alarm_id)?.sound_key || 'classic') as AlarmSoundKey
+                catalogoPlayerRef.current.play(suono, false, 0.8)
+            } catch { /* resta l'avviso visivo */ }
+        }
+    }
+
     // Poll every 60 seconds — only when authenticated and tab is visible.
     // Skippato totalmente se l'admin ha hide:allarmi (collaboratori).
     // alarmsDisabledForUser === null significa "ancora da verificare":
@@ -1131,7 +1203,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 // resta ai 13 storici, il resto si vede nel pannello Allarmi.
                 // Se la migration non e' ancora passata, giroAllarmi torna null
                 // senza rumore e il gestionale continua come prima.
-                await giroAllarmi()
+                const esito = await giroAllarmi()
+                if (esito) avvisaCatalogo(esito)
             } finally {
                 isRunning = false
             }
@@ -1157,7 +1230,16 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         // contendeva la rete con i dati che l'operatore sta guardando. Un paio
         // di secondi dopo cambia nulla per gli allarmi e libera l'apertura.
         const avvio = window.setTimeout(runChecks, 2000)
-        return () => window.clearTimeout(avvio)
+        // 01/10/2026 - il controllo torna OGNI MINUTO. Con un giro solo
+        // all'apertura, "Riconsegna tra 10 minuti" suonava solo se qualcuno
+        // apriva la pagina proprio in quei 10 minuti: dal 19/09 nessun popup
+        // sonoro, con 50 ritiri e 54 riconsegne nella settimana. L'anticipo
+        // scritto sotto ogni allarme in Centralina Pro e' una promessa: il
+        // minuto e' la sua unita', quindi si controlla ogni minuto. La parte
+        // pesante (la finestra di prenotazioni del catalogo) si rilegge solo
+        // ogni due minuti, vedi contestoRecente in alarmEngine.
+        const ogniMinuto = window.setInterval(runChecks, 60_000)
+        return () => { window.clearTimeout(avvio); window.clearInterval(ogniMinuto) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, alarmsDisabledForUser])
 

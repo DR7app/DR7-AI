@@ -119,7 +119,7 @@ function operation(patch: any = {}) {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-09-25T12:00:00Z'))
-  sim.tables = { admins: [{ id: 'a1', email: 'reviewer@example.invalid', permissions: ['role:direzione'], archived_at: null }] }
+  sim.tables = { admins: [{ id: 'a1', user_id: 'audit-user', email: 'reviewer@example.invalid', permissions: ['role:direzione'], archived_at: null }] }
   sim.errors = {}; sim.queries = []; sim.seq = 0
   svuotaCacheFunzioni()
   sim.user = { id: 'audit-user', email: 'reviewer@example.invalid' }
