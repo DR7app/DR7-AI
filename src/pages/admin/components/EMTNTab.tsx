@@ -17,6 +17,7 @@ import { ScheletroLista } from '../../../components/Scheletro'
 import EMTNPraticaModal from './emtn/EMTNPraticaModal'
 import EMTNCodaApprovazioni from './emtn/EMTNCodaApprovazioni'
 import EMTNPosizioniCliente from './emtn/EMTNPosizioniCliente'
+import EMTNScoreCard, { type EMTNScoreUI } from './emtn/EMTNScoreCard'
 import EMTNMieiEventi, { caricaMieiEventi, type MieiEventiRisposta } from './emtn/EMTNMieiEventi'
 import { EMTN_CATEGORIE, type EMTNVoce } from './emtn/emtnCategorie'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -159,6 +160,7 @@ interface SearchResponse {
     riskBand: 'green' | 'yellow' | 'red'
     riskScore?: number
     riskLevel?: number
+    score?: EMTNScoreUI
     message: string
     reportUnlocked: boolean
     recentEvents: RecentEvent[]
@@ -380,13 +382,14 @@ export default function EMTNTab() {
                     <aside className="xl:col-span-4 space-y-3">
                         {data ? (
                             <>
-                                <MobilityTrustStatus
-                                    client={data.client}
-                                    stats={data.stats}
-                                    riskBand={data.riskBand}
-                                    riskScore={data.riskScore}
-                                    riskLevel={data.riskLevel}
-                                    dr7History={data.dr7History}
+                                <EMTNScoreCard
+                                    score={data.score}
+                                    clientId={data.client.id}
+                                    isDirezione={isDirezioneEMTN}
+                                    onAggiornato={() => {
+                                        if (data.client.codice_fiscale) void runSearch(data.client.codice_fiscale)
+                                        else if (modoEstero) void runSearch(null, datiEstero)
+                                    }}
                                 />
                                 {data.dr7History && (data.dr7History.damages.length + data.dr7History.penalties.length) > 0 && (
                                     <StoricoDr7Card history={data.dr7History} />
@@ -739,12 +742,15 @@ function ClienteHeaderCard({ client, riskBand }: { client: EMTNClient; riskBand:
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                         <h3 className="text-base font-bold text-theme-text-primary truncate">{fullName}</h3>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-[10px] font-semibold">
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            Cliente verificato
-                        </span>
+                        {/* 01/10/2026: era sempre visibile; ora solo se il cliente e' identificato con codice fiscale. */}
+                        {client.codice_fiscale && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-[10px] font-semibold">
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                Codice fiscale verificato
+                            </span>
+                        )}
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-[11px]">
                         {client.codice_fiscale
@@ -754,7 +760,7 @@ function ClienteHeaderCard({ client, riskBand }: { client: EMTNClient; riskBand:
                         <Field label="Cliente nel network da" value={formatDate(client.customer_since) || '—'} />
                         <Field label="Data di nascita" value={formatDate(client.date_of_birth) || '—'} />
                         <Field label="Telefono" value={client.phone || '—'} />
-                        <Field label="Ultimo controllo" value={formatDate(client.last_seen_at) || formatDate(new Date().toISOString())} />
+                        <Field label="Ultimo noleggio" value={formatDate(client.last_seen_at) || '—'} />
                         <Field label="Sesso" value={client.sex || '—'} />
                         <Field label="Indirizzo" value={client.address || '—'} />
                         <Field label="Eventi registrati" value={String((client as unknown as { events?: number }).events ?? 0)} />
@@ -765,9 +771,6 @@ function ClienteHeaderCard({ client, riskBand }: { client: EMTNClient; riskBand:
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${tone.bg} ${tone.text} border ${tone.border} text-[10px] font-semibold uppercase tracking-wider`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${tone.text === 'text-emerald-500' ? 'bg-emerald-500' : tone.text === 'text-amber-500' ? 'bg-amber-500' : 'bg-red-500'}`}/>
                         {tone.label}
-                    </span>
-                    <span className="text-[10px] text-theme-text-muted tabular-nums">
-                        {formatDate(new Date().toISOString())}
                     </span>
                 </div>
             </div>
@@ -799,34 +802,6 @@ function MobilityRiskReportDisponibile() {
             </div>
             <p className="text-xs text-theme-text-primary">Tutti i dati EMTN del cliente sono consultabili. Ogni consultazione viene registrata nel log di accesso.</p>
         </section>
-    )
-}
-
-function ScoreGauge({ score, stroke }: { score: number; stroke: string }) {
-    const r = 42
-    const c = 2 * Math.PI * r
-    const pct = Math.max(0, Math.min(100, score))
-    const dash = (pct / 100) * c
-    return (
-        <div className="relative w-28 h-28">
-            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" className="text-theme-bg-tertiary" strokeWidth={8}/>
-                <circle
-                    cx="50" cy="50" r={r}
-                    fill="none"
-                    stroke={stroke}
-                    strokeWidth={8}
-                    strokeLinecap="round"
-                    strokeDasharray={`${dash} ${c}`}
-                />
-            </svg>
-            <div className="absolute inset-0 grid place-items-center">
-                <div className="text-center">
-                    <p className="text-2xl font-bold text-theme-text-primary tabular-nums leading-none">{Math.round(score)}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-theme-text-muted mt-0.5">/100</p>
-                </div>
-            </div>
-        </div>
     )
 }
 
@@ -918,108 +893,6 @@ function statusTone(status: string): string {
     if (s.includes('REJECT') || s.includes('FAIL')) return 'border-red-500/40 text-red-500 bg-red-500/10'
     if (s.includes('REVIEW') || s.includes('PEND')) return 'border-amber-500/40 text-amber-500 bg-amber-500/10'
     return 'border-theme-border text-theme-text-muted bg-theme-bg-tertiary'
-}
-
-/* ---------- Sidebar: Mobility Trust Status ---------- */
-
-function MobilityTrustStatus({ client, stats, riskBand, riskScore, riskLevel, dr7History }: {
-    client: EMTNClient
-    stats: EMTNStats | null
-    riskBand: 'green' | 'yellow' | 'red'
-    riskScore?: number
-    riskLevel?: number
-    dr7History?: DR7History
-}) {
-    const level = typeof riskLevel === 'number' ? riskLevel : (riskBand === 'green' ? 1 : riskBand === 'yellow' ? 2 : 3)
-    const tone = riskBand === 'green'
-        ? { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-500', stroke: '#10b981', label: 'Storico positivo', riskLabel: 'Rischio basso' }
-        : riskBand === 'yellow'
-            ? { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-500', stroke: '#f59e0b', label: 'Da monitorare', riskLabel: 'Rischio medio' }
-            : { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-500', stroke: '#ef4444', label: 'Allerta attiva', riskLabel: 'Rischio alto' }
-    const totalRentals = (stats?.total_rentals as number) ?? dr7History?.totalBookings ?? 0
-    const recent = (stats?.recent_rentals as number) ?? 0
-    const negative = (stats?.negative_events as number) ?? 0
-    const review = (stats?.events_under_review as number) ?? 0
-    const score = typeof riskScore === 'number' ? riskScore : (riskBand === 'green' ? 85 : riskBand === 'yellow' ? 60 : 30)
-
-    return (
-        <section className={`rounded-2xl border ${tone.border} ${tone.bg} p-4 space-y-3`}>
-            <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Mobility Trust Status</h3>
-                <span className={`text-[10px] font-semibold ${tone.text}`}>{tone.label}</span>
-            </div>
-            <div className="flex items-center gap-3">
-                <span className={`w-12 h-12 grid place-items-center rounded-full ${tone.text} bg-theme-bg-secondary border ${tone.border}`}>
-                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z"/>
-                    </svg>
-                </span>
-                <div>
-                    <p className="text-xl font-bold text-theme-text-primary leading-none">Livello {level}</p>
-                    <p className={`text-xs ${tone.text} mt-1`}>{tone.label}</p>
-                </div>
-            </div>
-            <p className="text-[11px] text-theme-text-muted">
-                Affidabilità calcolata sul comportamento storico, eventi segnalati e indicatori di rischio AI.
-            </p>
-            <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{totalRentals}</p>
-                    <p className="text-[10px] text-theme-text-muted">Noleggi registrati</p>
-                </div>
-                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{recent}</p>
-                    <p className="text-[10px] text-theme-text-muted">Recenti</p>
-                </div>
-                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{negative}</p>
-                    <p className="text-[10px] text-theme-text-muted">Eventi negativi</p>
-                </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{review}</p>
-                    <p className="text-[10px] text-theme-text-muted">In revisione</p>
-                </div>
-                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{Math.round(score * (totalRentals || 1) / 35)}</p>
-                    <p className="text-[10px] text-theme-text-muted">Score noleggi</p>
-                </div>
-                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-[10px] font-bold text-theme-text-primary tabular-nums">
-                        {formatDate(dr7History?.lastBookingDate) || formatDate(client.last_seen_at) || '—'}
-                    </p>
-                    <p className="text-[10px] text-theme-text-muted">Ultima attività</p>
-                </div>
-            </div>
-            <div className="pt-3 border-t border-theme-border space-y-2">
-                <div className="flex items-center justify-between">
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Mobility Risk Score AI</h4>
-                    <span className={`text-[10px] font-semibold ${tone.text}`}>{tone.riskLabel}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <ScoreGauge score={score} stroke={tone.stroke} />
-                    <div className="flex-1">
-                        <p className={`text-3xl font-bold tabular-nums leading-none ${tone.text}`}>
-                            {Math.round(score)}<span className="text-base text-theme-text-muted font-medium">/100</span>
-                        </p>
-                        <p className="text-[11px] text-theme-text-muted mt-1">
-                            Aggiornato il {formatDate(new Date().toISOString())}
-                        </p>
-                        <div className="mt-2 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
-                            <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, score))}%`, background: tone.stroke }}/>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div className="pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
-                <span className="text-theme-text-muted">Cliente fidelizzato da</span>
-                <span className="text-theme-text-primary font-medium tabular-nums">
-                    {formatDate(client.customer_since) || formatDate(client.created_at) || '—'}
-                </span>
-            </div>
-        </section>
-    )
 }
 
 /* ---------- Sidebar: Attivita\' recenti ---------- */
@@ -1180,7 +1053,9 @@ function AlertSistema({ events, versione, onVai }: { events: RecentEvent[]; vers
     const sospese = pos.filter(p => !p.in_approvazione && p.decisione === 'sospendi').length
     const rifiutate = pos.filter(p => !p.in_approvazione && p.decisione === 'rifiuta').length
     const legale = pos.filter(p => p.revisione_legale && p.in_approvazione).length
-    const rejected = events.filter(e => /REJECT|FAIL/i.test(e.status)).length
+    // 01/10/2026: contava le segnalazioni RIFIUTATE come "eventi negativi":
+    // un rifiuto della direzione e' a favore del cliente. Contano le approvate.
+    const approvati = events.filter(e => /APPROVED/i.test(e.status)).length
 
     type Tono = 'ok' | 'warn' | 'err' | 'info'
     const alerts: Array<{ tone: Tono; label: string; vai?: EMTNView }> = []
@@ -1196,7 +1071,7 @@ function AlertSistema({ events, versione, onVai }: { events: RecentEvent[]; vers
     if (sospese > 0) alerts.push({ tone: 'warn', label: `${sospese} segnalazioni sospese`, vai: 'mie-segnalazioni' })
     if (rifiutate > 0) alerts.push({ tone: 'err', label: `${rifiutate} segnalazioni rifiutate`, vai: 'mie-segnalazioni' })
     if (legale > 0) alerts.push({ tone: 'err', label: `${legale} in revisione privacy/legale`, vai: 'mie-segnalazioni' })
-    if (rejected > 0) alerts.push({ tone: 'err', label: `${rejected} eventi negativi recenti su questo cliente` })
+    if (approvati > 0) alerts.push({ tone: 'err', label: `${approvati} eventi approvati su questo cliente` })
 
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">

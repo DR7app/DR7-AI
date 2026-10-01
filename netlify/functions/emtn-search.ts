@@ -24,6 +24,12 @@ import {
 } from './utils/emtn'
 import { cercaStoricoRete } from './utils/emtnRete'
 import { categoriaEMTN } from '../../src/utils/emtnMobilityRisk'
+import { calcolaEMTNScore } from '../../src/utils/emtnScore/motore'
+import type { StatoPagamentoEvento } from '../../src/utils/emtnScore/normalizza'
+import {
+    eNoleggio, eventiDaEmtnEvents, eventiDaMulte, eventiDaPosizioni, eventiDaRete, eventiDaVociDr7,
+    leggiOverride, noleggiNormalizzati, registraStorico, type EmtnEventRow, type MultaRow, type PosizioneRow,
+} from './utils/emtnScoreServer'
 
 export const handler: Handler = async (event) => {
     const origin = event.headers.origin || event.headers.Origin
@@ -218,7 +224,12 @@ export const handler: Handler = async (event) => {
     // Questo permette di vedere subito il record DR7 senza dover
     // segnalare nulla su EMTN: e' la verita' interna che il network
     // poi normalizza in eventi.
-    type DanniItem = { label?: string; total?: number; amount?: number; quantity?: number; paymentStatus?: string; date?: string; note?: string }
+    type DanniItem = {
+        label?: string; total?: number; amount?: number; quantity?: number; paymentStatus?: string; date?: string; note?: string
+        discount?: number; amountPaid?: number; paidAt?: string | null
+        // 01/10/2026: contesto per l'EMTN Score (facoltativi, null = non risulta)
+        dichiaratoDalCliente?: boolean | null; responsabilita?: string | null; gravita?: string | null
+    }
     type PenaliItem = DanniItem
     interface DR7Booking {
         id: string
@@ -228,6 +239,9 @@ export const handler: Handler = async (event) => {
         vehicle_plate?: string | null
         status?: string | null
         payment_status?: string | null
+        service_type?: string | null
+        dropoff_date?: string | null
+        vehicle_id?: string | null
         // NB: la chiave JSON usata da DR7 e\' `penalties` (inglese), non `penali`.
         booking_details?: { danni?: DanniItem[]; penalties?: PenaliItem[] } | null
     }
@@ -253,7 +267,8 @@ export const handler: Handler = async (event) => {
         : await sb
             .from('customers_extended')
             .select('id, user_id, email')
-            .eq('codice_fiscale', cf)
+            // 01/10/2026: un CF salvato in minuscolo non trovava la scheda.
+            .ilike('codice_fiscale', cf)
     const profili = (profileMatches || []) as { id: string | null; user_id: string | null; email: string | null }[]
     const matchedUserIds = Array.from(new Set(
         profili.flatMap(p => [p.id, p.user_id]).filter(Boolean) as string[]
@@ -273,7 +288,7 @@ export const handler: Handler = async (event) => {
     }
 
     const collected = new Map<string, RawBooking>()
-    const COLONNE_BOOKING = 'id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id, customer_email'
+    const COLONNE_BOOKING = 'id, pickup_date, dropoff_date, appointment_date, vehicle_name, vehicle_plate, vehicle_id, status, payment_status, booking_details, user_id, customer_email, service_type'
     const filtri: string[] = []
     if (matchedUserIds.length > 0) {
         const lista = matchedUserIds.join(',')
@@ -307,7 +322,20 @@ export const handler: Handler = async (event) => {
     }
 
     const bookings = Array.from(collected.values()) as DR7Booking[]
-    const dr7Damages: Array<{ bookingId: string; vehicle?: string | null; date?: string | null; label: string; amount: number; quantity: number; paid: boolean; note?: string }> = []
+    const dr7Damages: Array<{ bookingId: string; vehicle?: string | null; date?: string | null; label: string; amount: number; quantity: number; paid: boolean; note?: string; residuo: number; stato: StatoPagamentoEvento; contesto?: Pick<DanniItem, 'paidAt' | 'dichiaratoDalCliente' | 'responsabilita' | 'gravita'> }> = []
+    // 01/10/2026: importo = listino meno sconto (come Danni/Penali); un
+    // pagamento parziale (amountPaid) lascia aperto solo il residuo.
+    const voceDr7 = (it: DanniItem) => {
+        const lordo = it.total != null ? Number(it.total) || 0 : (Number(it.amount) || 0) * (Number(it.quantity) || 1)
+        const total = Math.max(0, Math.round((lordo - (Number(it.discount) || 0)) * 100) / 100)
+        const ps = String(it.paymentStatus || '').toLowerCase()
+        const versato = Number(it.amountPaid) || 0
+        const stato: StatoPagamentoEvento = ps === 'paid' || (versato > 0 && versato >= total - 0.005) ? 'pagato'
+            : versato > 0 || ps === 'partial' ? 'parziale'
+            : 'aperto'
+        const residuo = stato === 'pagato' ? 0 : Math.max(0, Math.round((total - versato) * 100) / 100)
+        return { total, stato, residuo, paid: stato === 'pagato' }
+    }
     const dr7Penalties: typeof dr7Damages = []
     let unpaidDamageTotal = 0
     let unpaidPenaltyTotal = 0
@@ -320,10 +348,11 @@ export const handler: Handler = async (event) => {
         if (refDate && (!firstBookingDate || refDate < firstBookingDate)) firstBookingDate = refDate
         const danni = b.booking_details?.danni || []
         for (const d of danni) {
-            const total = Number(d.total ?? (Number(d.amount || 0) * Number(d.quantity || 1)))
-            const paid = String(d.paymentStatus || '').toLowerCase() === 'paid'
-            if (!paid) unpaidDamageTotal += total
+            const { total, stato, residuo, paid } = voceDr7(d)
+            unpaidDamageTotal += residuo
             dr7Damages.push({
+                residuo,
+                stato,
                 bookingId: b.id,
                 vehicle: b.vehicle_name || b.vehicle_plate,
                 date: d.date || refDate,
@@ -332,14 +361,16 @@ export const handler: Handler = async (event) => {
                 quantity: Number(d.quantity || 1),
                 paid,
                 note: d.note,
+                contesto: { paidAt: d.paidAt ?? null, dichiaratoDalCliente: d.dichiaratoDalCliente ?? null, responsabilita: d.responsabilita ?? null, gravita: d.gravita ?? null },
             })
         }
         const penali = b.booking_details?.penalties || []
         for (const p of penali) {
-            const total = Number(p.total ?? (Number(p.amount || 0) * Number(p.quantity || 1)))
-            const paid = String(p.paymentStatus || '').toLowerCase() === 'paid'
-            if (!paid) unpaidPenaltyTotal += total
+            const { total, stato, residuo, paid } = voceDr7(p)
+            unpaidPenaltyTotal += residuo
             dr7Penalties.push({
+                residuo,
+                stato,
                 bookingId: b.id,
                 vehicle: b.vehicle_name || b.vehicle_plate,
                 date: p.date || refDate,
@@ -348,6 +379,7 @@ export const handler: Handler = async (event) => {
                 quantity: Number(p.quantity || 1),
                 paid,
                 note: p.note,
+                contesto: { paidAt: p.paidAt ?? null, dichiaratoDalCliente: p.dichiaratoDalCliente ?? null, responsabilita: p.responsabilita ?? null, gravita: p.gravita ?? null },
             })
         }
     }
@@ -431,7 +463,10 @@ export const handler: Handler = async (event) => {
                 const pagato = it.amountPaid != null ? Number(it.amountPaid) * (1 - quota) : (fatturaPagata ? total : 0)
                 const ps = String(it.paymentStatus || '').toLowerCase()
                 const paid = ps === 'paid' || (ps !== 'pending' && ps !== 'partial' && pagato >= total - 0.005)
+                const residuoRiga = paid ? 0 : Math.max(0, Math.round((total - pagato) * 100) / 100)
                 const voce = {
+                    residuo: residuoRiga,
+                    stato: (paid ? 'pagato' : pagato > 0.005 ? 'parziale' : 'aperto') as StatoPagamentoEvento,
                     bookingId: f.booking_id || '',
                     vehicle: bk ? (bk.vehicle_name || bk.vehicle_plate) : null,
                     date: refDate,
@@ -453,32 +488,15 @@ export const handler: Handler = async (event) => {
         }
     }
 
-    const totalRentals = bookings.length
-    const regularRentals = bookings.filter(b => {
+    // 01/10/2026: contano solo i noleggi veri (niente lavaggi, meccanica,
+    // annullati, veicoli TEST): prima gonfiavano il bonus dello score.
+    const noleggiVeri = bookings.filter(eNoleggio)
+    const totalRentals = noleggiVeri.length
+    const regularRentals = noleggiVeri.filter(b => {
         const danni = b.booking_details?.danni || []
         const penali = b.booking_details?.penalties || []
         return danni.length === 0 && penali.length === 0 && !conDanniInFattura.has(b.id)
     }).length
-
-    // Sync emtn_stats_cache: cosi' il prossimo lookup parte gia' caldo
-    // anche da chi non passa per emtn-search (es. /emtn-report).
-    await sb.from('emtn_stats_cache').upsert({
-        client_id: client!.id,
-        total_rentals: totalRentals,
-        regular_rentals: regularRentals,
-        negative_events: dr7Damages.filter(d => !d.paid).length + dr7Penalties.filter(p => !p.paid).length,
-        events_under_review: 0, // popolato dal trigger sui veri emtn_events
-        last_activity_date: lastBookingDate,
-        updated_at: new Date().toISOString(),
-    }, { onConflict: 'client_id' })
-
-    // Eventi EMTN gia' aperti dal trigger (UNDER_REVIEW etc.) sono
-    // un campo a parte; qui popoliamo solo i contatori derivati da DR7.
-    const { data: stats } = await sb
-        .from('emtn_stats_cache')
-        .select('*')
-        .eq('client_id', client!.id)
-        .maybeSingle()
 
     // 22/09/2026 (direzione): niente OTP, il report e' sempre sbloccato.
     const unlocked = true
@@ -487,7 +505,7 @@ export const handler: Handler = async (event) => {
         .select('*')
         .eq('client_id', client!.id)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(100)
     // '*' perche' `categorie` (migrazione 20260928) puo' mancare su un
     // database non aggiornato; al browser vanno solo questi campi.
     const recentEvents: unknown[] = (events || []).map((e: Record<string, unknown>) => ({
@@ -502,10 +520,10 @@ export const handler: Handler = async (event) => {
     // sembrava sparita.
     const { data: posizioni } = await sb
         .from('emtn_posizioni')
-        .select('id, titolo, eventi, in_approvazione, pubblicata, decisione, inviata_at, approvata_at, created_at')
+        .select('id, stato, titolo, eventi, in_approvazione, pubblicata, decisione, inviata_at, approvata_at, created_at')
         .eq('client_id', client!.id)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(100)
     for (const p of posizioni || []) {
         const status = p.in_approvazione ? 'UNDER_REVIEW'
             : p.pubblicata ? 'APPROVED'
@@ -528,43 +546,79 @@ export const handler: Handler = async (event) => {
         clientId: client!.id, metadata: { unlocked, estero },
     })
 
-    // Risk band derivata da:
-    //  - eventi EMTN approvati / under review (network-wide), OPPURE
-    //  - cronologia DR7 interna (danni/penali NON pagati).
-    // Se il cliente DR7 non ha pendenze e neanche eventi network, e'
-    // green. Una sola pendenza non saldata -> yellow. Pendenze rilevanti
-    // (>= 1000 EUR) o evento approvato nel network -> red.
-    const sc = stats || { total_rentals: 0, regular_rentals: 0, negative_events: 0, events_under_review: 0 }
     // 28/09/2026: storico della rete EMTN (copie vendute): solo per codice
     // fiscale, anonimo. Un residuo non saldato altrove pesa come uno interno.
     const storicoRete = estero ? [] : await cercaStoricoRete(sb, cf)
     const reteResiduo = storicoRete.reduce((t, e) => t + (e.statoPagamento === 'paid' ? 0 : e.residuo), 0)
-    const dr7Unpaid = unpaidDamageTotal + unpaidPenaltyTotal + reteResiduo
-    const band: 'green' | 'yellow' | 'red' =
-        sc.negative_events > 0 || dr7Unpaid >= 1000 ? 'red'
-        : sc.events_under_review > 0 || dr7Unpaid > 0 ? 'yellow'
-        : 'green'
+
+    // ── EMTN Score (01/10/2026, direzione) ──────────────────
+    // Non piu' un contatore di penalita': tutte le fonti diventano eventi
+    // normalizzati e il motore (src/utils/emtnScore/motore.ts) pesa
+    // gravita', comportamento, tempo, recidiva e storico positivo.
+    // Prezzo giornaliero del veicolo = proxy del valore affidato.
+    const prezzoPerBooking = new Map<string, number | null>()
+    {
+        const vehicleIds = Array.from(new Set(bookings.map(b => b.vehicle_id).filter(Boolean))) as string[]
+        const prezzi = new Map<string, number>()
+        for (let i = 0; i < vehicleIds.length; i += 100) {
+            const { data } = await sb.from('vehicles').select('id, price_resident_daily').in('id', vehicleIds.slice(i, i + 100))
+            for (const v of (data || []) as { id: string; price_resident_daily: number | null }[]) {
+                if (Number(v.price_resident_daily) > 0) prezzi.set(v.id, Number(v.price_resident_daily))
+            }
+        }
+        for (const b of bookings) prezzoPerBooking.set(b.id, b.vehicle_id ? prezzi.get(b.vehicle_id) ?? null : null)
+    }
+    // Multe rinotificate al conducente (multe_pec_log): violazioni documentate.
+    const multe: MultaRow[] = []
+    {
+        const ids = bookings.map(b => b.id)
+        for (let i = 0; i < ids.length; i += 100) {
+            const { data } = await sb.from('multe_pec_log').select('id, booking_id, data_infrazione, importo').in('booking_id', ids.slice(i, i + 100))
+            multe.push(...((data || []) as MultaRow[]))
+        }
+    }
+    const conProblemi = new Set<string>([
+        ...bookings.filter(b => (b.booking_details?.danni || []).length > 0 || (b.booking_details?.penalties || []).length > 0).map(b => b.id),
+        ...conDanniInFattura,
+        ...multe.map(m => String(m.booking_id || '')),
+    ])
+    const eventiScore = [
+        ...eventiDaVociDr7(dr7Damages, 'danno', prezzoPerBooking),
+        ...eventiDaVociDr7(dr7Penalties, 'penale', prezzoPerBooking),
+        ...eventiDaRete(storicoRete),
+        ...eventiDaMulte(multe),
+        ...eventiDaEmtnEvents((events || []) as EmtnEventRow[]),
+        ...eventiDaPosizioni((posizioni || []) as PosizioneRow[], [...dr7Damages, ...dr7Penalties].map(v => v.amount)),
+    ]
+    const override = await leggiOverride(sb, client!.id)
+    const emtnScore = calcolaEMTNScore({
+        eventi: eventiScore,
+        noleggi: noleggiNormalizzati(bookings, conProblemi, prezzoPerBooking),
+        identificato: !estero && !!ext,
+        override,
+    })
+    const storicoScore = await registraStorico(sb, client!.id, emtnScore, override?.id ?? null, operatorEmail ?? null)
+
+    const band = emtnScore.band
+    const riskScore = emtnScore.score
+    const riskLevel = emtnScore.level
     const message =
         band === 'green' ? 'Prenotazione confermata.'
         : band === 'yellow' ? 'La prenotazione e\' in verifica. Ti contatteremo a breve.'
         : 'La richiesta e\' in revisione amministrativa.'
 
-    // Risk score numerico 0-100 derivato dalla cronologia.
-    // Penalita\': ogni danno/penale mai avuto, anche gia' pagato (6 pt cad,
-    // max 30), eventi negativi non saldati (8 pt cad), eventi under_review
-    // (4 pt cad), pendenze danni/penali (1 pt ogni 50 EUR, max 25). Bonus
-    // storico: +1 pt ogni 5 noleggi regolari (max 10). Floor 5, cap 100.
-    // 01/10/2026: un danno pagato contava zero e il cliente restava a
-    // 100/100. Chi ha anche un solo evento non torna mai sopra 90.
-    const eventiStorici = dr7Damages.length + dr7Penalties.length + storicoRete.length
-    const storicoPenalty = Math.min(30, eventiStorici * 6)
-    const negPenalty = sc.negative_events * 8
-    const reviewPenalty = sc.events_under_review * 4
-    const unpaidPenalty = Math.min(25, Math.floor(dr7Unpaid / 50))
-    const regularBonus = Math.min(10, Math.floor(sc.regular_rentals / 5))
-    const tetto = eventiStorici > 0 || sc.events_under_review > 0 ? 90 : 100
-    const riskScore = Math.max(5, Math.min(tetto, 100 - storicoPenalty - negPenalty - reviewPenalty - unpaidPenalty + regularBonus))
-    const riskLevel = band === 'green' ? 1 : band === 'yellow' ? 2 : 3
+    // emtn_stats_cache (letto da /emtn-report): contatori veri, non piu'
+    // events_under_review = 0 in dura (il trigger non e' installato).
+    const sc = {
+        client_id: client!.id,
+        total_rentals: totalRentals,
+        regular_rentals: regularRentals,
+        negative_events: emtnScore.dettaglio.eventiConsiderati,
+        events_under_review: emtnScore.dettaglio.eventiInRevisione,
+        last_activity_date: lastBookingDate,
+        updated_at: new Date().toISOString(),
+    }
+    await sb.from('emtn_stats_cache').upsert(sc, { onConflict: 'client_id' })
 
     // Cliente arricchito: union dei campi emtn_clients + customers_extended
     // + derivati da bookings. Il frontend (EMTNClient) li legge tutti.
@@ -591,6 +645,7 @@ export const handler: Handler = async (event) => {
         message,
         reportUnlocked: unlocked,
         recentEvents,
+        score: { ...emtnScore, storico: storicoScore },
         dr7History: {
             // Visibile sempre all'admin DR7: e' la cronologia interna
             // della tua azienda, niente OTP serve qui.
