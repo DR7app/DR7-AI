@@ -110,6 +110,11 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
             const rows = ((data || []) as any[])
                 .filter(t => t.is_enabled !== false && String(t.message_body || '').trim())
                 .filter(t => !String(t.message_key || '').startsWith('pro_wrapper_'))
+                // 01/10/2026: solo i template di Messaggi di Sistema Pro. Le righe
+                // storiche (signature_request_link, signature_otp_whatsapp...) sono
+                // alias di routing, non partono mai col loro testo: in elenco
+                // sembravano doppioni dei pro_* con lo stesso nome.
+                .filter(t => String(t.message_key || '').startsWith('pro_'))
             setTemplates(rows.map(t => ({ key: String(t.message_key), label: String(t.label || t.message_key) })))
         })()
     }, [isOpen, embedded])
