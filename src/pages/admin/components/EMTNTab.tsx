@@ -17,6 +17,7 @@ import { ScheletroLista } from '../../../components/Scheletro'
 import EMTNPraticaModal from './emtn/EMTNPraticaModal'
 import EMTNCodaApprovazioni from './emtn/EMTNCodaApprovazioni'
 import EMTNPosizioniCliente from './emtn/EMTNPosizioniCliente'
+import EMTNMieiEventi, { caricaMieiEventi, type MieiEventiRisposta } from './emtn/EMTNMieiEventi'
 import { EMTN_CATEGORIE, type EMTNVoce } from './emtn/emtnCategorie'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { authFetch } from '../../../utils/authFetch'
@@ -394,11 +395,14 @@ export default function EMTNTab() {
                                     <ReteEmtnCard eventi={data.rete.eventi} residuo={data.rete.residuo} />
                                 )}
                                 <AttivitaRecenti events={data.recentEvents} dr7History={data.dr7History} />
-                                <AlertSistema events={data.recentEvents} />
+                                <AlertSistema events={data.recentEvents} versione={versionePosizioni} onVai={setActiveView} />
                                 <InformazioniLegali />
                             </>
                         ) : (
-                            <SidebarPlaceholder />
+                            <>
+                                <SidebarPlaceholder />
+                                <AlertSistema events={[]} versione={versionePosizioni} onVai={setActiveView} />
+                            </>
                         )}
                     </aside>
                 </div>
@@ -414,7 +418,12 @@ export default function EMTNTab() {
                 <SegnalazioneView onApri={apriPratica} searching={searching} error={error} />
             )}
 
-            {activeView !== 'ricerca' && activeView !== 'approvazioni' && activeView !== 'segnalazione' && (
+            {/* 01/10/2026: prima era un segnaposto, le pratiche inviate non si vedevano. */}
+            {activeView === 'mie-segnalazioni' && (
+                <EMTNMieiEventi onApri={(cf) => { setModoEstero(false); setCfInput(cf); setActiveView('ricerca'); runSearch(cf) }} />
+            )}
+
+            {activeView !== 'ricerca' && activeView !== 'approvazioni' && activeView !== 'segnalazione' && activeView !== 'mie-segnalazioni' && (
                 <PlaceholderView label={TABS.find(t => t.key === activeView)?.label || ''} />
             )}
 
@@ -1150,48 +1159,89 @@ function ReteEmtnCard({ eventi, residuo }: { eventi: EventoRete[]; residuo: numb
 
 /* ---------- Sidebar: Alert sistema ---------- */
 
-function AlertSistema({ events }: { events: RecentEvent[] }) {
-    const reviewing = events.filter(e => /REVIEW|PEND/i.test(e.status)).length
+// 01/10/2026: prima le righe erano scritte a mano ("Tutti i documenti
+// verificati", "Aggiornamento score in corso") e "Vedi tutti" non faceva
+// nulla. Ora legge le pratiche EMTN vere dell'operatore (e la coda della
+// direzione) e ogni riga porta alla sezione giusta.
+function AlertSistema({ events, versione, onVai }: { events: RecentEvent[]; versione: number; onVai: (v: EMTNView) => void }) {
+    const [mie, setMie] = useState<MieiEventiRisposta | null>(null)
+    const [errore, setErrore] = useState(false)
+    useEffect(() => {
+        let vivo = true
+        caricaMieiEventi()
+            .then(r => { if (vivo) { setMie(r); setErrore(false) } })
+            .catch(() => { if (vivo) setErrore(true) })
+        return () => { vivo = false }
+    }, [versione])
+
+    const pos = mie?.posizioni || []
+    const inCoda = pos.filter(p => p.in_approvazione).length
+    const integrazione = pos.filter(p => !p.in_approvazione && p.decisione === 'integrazione').length
+    const sospese = pos.filter(p => !p.in_approvazione && p.decisione === 'sospendi').length
+    const rifiutate = pos.filter(p => !p.in_approvazione && p.decisione === 'rifiuta').length
+    const legale = pos.filter(p => p.revisione_legale && p.in_approvazione).length
     const rejected = events.filter(e => /REJECT|FAIL/i.test(e.status)).length
-    const alerts = [
-        {
-            tone: reviewing > 0 ? 'warn' : 'ok' as 'warn' | 'ok',
-            label: reviewing > 0 ? `${reviewing} segnalazioni in revisione` : 'Nessuna revisione attiva',
-        },
-        {
-            tone: rejected > 0 ? 'err' : 'ok' as 'err' | 'ok',
-            label: rejected > 0 ? `${rejected} eventi negativi recenti` : 'Nessun evento negativo recente',
-        },
-        { tone: 'ok' as const, label: 'Tutti i documenti verificati' },
-        { tone: 'info' as const, label: 'Aggiornamento score in corso' },
-    ]
+
+    type Tono = 'ok' | 'warn' | 'err' | 'info'
+    const alerts: Array<{ tone: Tono; label: string; vai?: EMTNView }> = []
+    if (mie?.codaDirezione != null) {
+        alerts.push(mie.codaDirezione > 0
+            ? { tone: 'warn', label: `${mie.codaDirezione} segnalazioni da approvare`, vai: 'approvazioni' }
+            : { tone: 'ok', label: 'Nessuna segnalazione da approvare' })
+    }
+    alerts.push(inCoda > 0
+        ? { tone: 'info', label: `${inCoda} tue segnalazioni in attesa di approvazione`, vai: 'mie-segnalazioni' }
+        : { tone: 'ok', label: 'Nessuna tua segnalazione in attesa' })
+    if (integrazione > 0) alerts.push({ tone: 'warn', label: `${integrazione} integrazioni richieste dalla direzione`, vai: 'mie-segnalazioni' })
+    if (sospese > 0) alerts.push({ tone: 'warn', label: `${sospese} segnalazioni sospese`, vai: 'mie-segnalazioni' })
+    if (rifiutate > 0) alerts.push({ tone: 'err', label: `${rifiutate} segnalazioni rifiutate`, vai: 'mie-segnalazioni' })
+    if (legale > 0) alerts.push({ tone: 'err', label: `${legale} in revisione privacy/legale`, vai: 'mie-segnalazioni' })
+    if (rejected > 0) alerts.push({ tone: 'err', label: `${rejected} eventi negativi recenti su questo cliente` })
+
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Alert sistema</h3>
-                <button type="button" className="text-[10px] text-theme-text-muted hover:text-theme-text-primary">Vedi tutti</button>
+                <button type="button" onClick={() => onVai('mie-segnalazioni')} className="text-[10px] text-theme-text-muted hover:text-theme-text-primary">Vedi tutti</button>
             </div>
-            <ul className="space-y-2">
-                {alerts.map((a, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs text-theme-text-primary">
-                        <span className={
-                            'w-4 h-4 grid place-items-center rounded-full shrink-0 ' +
-                            (a.tone === 'ok' ? 'bg-emerald-500/15 text-emerald-500'
-                                : a.tone === 'warn' ? 'bg-amber-500/15 text-amber-500'
-                                : a.tone === 'err' ? 'bg-red-500/15 text-red-500'
-                                : 'bg-blue-500/15 text-blue-400')
-                        }>
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                                {a.tone === 'err'
-                                    ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                                    : <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
-                                }
-                            </svg>
-                        </span>
-                        <span className="truncate">{a.label}</span>
-                    </li>
-                ))}
-            </ul>
+            {!mie && !errore && <p className="text-xs text-theme-text-muted">Caricamento…</p>}
+            {errore && <p className="text-xs text-theme-text-muted">Alert non disponibili</p>}
+            {mie && (
+                <ul className="space-y-1">
+                    {alerts.map((a, i) => {
+                        const contenuto = (
+                            <>
+                                <span className={
+                                    'w-4 h-4 grid place-items-center rounded-full shrink-0 ' +
+                                    (a.tone === 'ok' ? 'bg-emerald-500/15 text-emerald-500'
+                                        : a.tone === 'warn' ? 'bg-amber-500/15 text-amber-500'
+                                        : a.tone === 'err' ? 'bg-red-500/15 text-red-500'
+                                        : 'bg-blue-500/15 text-blue-400')
+                                }>
+                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                        {a.tone === 'err'
+                                            ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                            : a.tone === 'ok'
+                                                ? <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                                                : <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01"/>
+                                        }
+                                    </svg>
+                                </span>
+                                <span className="truncate">{a.label}</span>
+                            </>
+                        )
+                        return (
+                            <li key={i}>
+                                {a.vai ? (
+                                    <button type="button" onClick={() => onVai(a.vai!)} className="w-full flex items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs text-theme-text-primary hover:bg-theme-bg-hover">{contenuto}</button>
+                                ) : (
+                                    <div className="flex items-center gap-2 px-1 py-0.5 text-xs text-theme-text-primary">{contenuto}</div>
+                                )}
+                            </li>
+                        )
+                    })}
+                </ul>
+            )}
         </section>
     )
 }

@@ -12,6 +12,7 @@
  *   decisione       { posizioneId, decisione, nota?, risultato? }  (solo direzione)
  *                   approva | integrazione | rettifica | sospendi | rifiuta | legale
  *   posizioni       { clientId }                 posizioni del cliente
+ *   mie             {}                           posizioni dell'operatore (I miei eventi) + coda direzione
  *   risposta_cliente{ posizioneId, testo }       risposta/contestazione del cliente: riapre la verifica
  *   documento       { posizioneId|analisiId, path }  link temporaneo a un documento (area protetta)
  *
@@ -304,6 +305,26 @@ export const handler: Handler = async (event) => {
             .select('id, stato, titolo, report, eventi, pratica, esito_verifica, in_approvazione, pubblicata, pubblicato, decisione, nota_revisione, revisione_legale, inviata_at, approvata_at, updated_at, created_at')
             .eq('client_id', clientId).order('created_at', { ascending: false })
         return jsonResponse(200, { posizioni: data || [] }, origin)
+    }
+
+    // ── I miei eventi: posizioni aperte o inviate dall'operatore ──
+    // Con il numero della coda approvazioni per la direzione (Alert sistema).
+    if (azione === 'mie') {
+        const filtro = operatorEmail
+            ? `created_by.eq.${operatorId},inviata_da.eq."${operatorEmail}"`
+            : `created_by.eq.${operatorId}`
+        const { data, error } = await sb.from('emtn_posizioni')
+            .select('id, client_id, stato, titolo, report, eventi, esito_verifica, in_approvazione, pubblicata, decisione, nota_revisione, revisione_legale, inviata_at, approvata_at, updated_at, created_at, emtn_clients(codice_fiscale, nome, cognome)')
+            .or(filtro)
+            .order('updated_at', { ascending: false })
+            .limit(500)
+        if (error) return jsonResponse(500, { error: 'Eventi non disponibili' }, origin)
+        let codaDirezione: number | null = null
+        if (await userHasRole(operatorEmail, 'direzione')) {
+            const { count } = await sb.from('emtn_posizioni').select('id', { count: 'exact', head: true }).eq('in_approvazione', true)
+            codaDirezione = count ?? 0
+        }
+        return jsonResponse(200, { posizioni: data || [], codaDirezione }, origin)
     }
 
     // ── risposta del cliente (fase 12) ──────────────────────
