@@ -23,6 +23,7 @@ import {
     normalizeCF,
 } from './utils/emtn'
 import { cercaStoricoRete } from './utils/emtnRete'
+import { categoriaEMTN } from '../../src/utils/emtnMobilityRisk'
 
 export const handler: Handler = async (event) => {
     const origin = event.headers.origin || event.headers.Origin
@@ -494,6 +495,33 @@ export const handler: Handler = async (event) => {
         occurred_at: e.occurred_at, created_at: e.created_at,
         categorie: Array.isArray(e.categorie) && e.categorie.length > 0 ? e.categorie : [e.type],
     }))
+
+    // 01/10/2026: le pratiche del nuovo flusso (emtn_posizioni) non
+    // comparivano in "Stato segnalazione" ne' in "Attivita' recenti":
+    // si leggevano solo i vecchi emtn_events. Una pratica approvata
+    // sembrava sparita.
+    const { data: posizioni } = await sb
+        .from('emtn_posizioni')
+        .select('id, titolo, eventi, in_approvazione, pubblicata, decisione, inviata_at, approvata_at, created_at')
+        .eq('client_id', client!.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+    for (const p of posizioni || []) {
+        const status = p.in_approvazione ? 'UNDER_REVIEW'
+            : p.pubblicata ? 'APPROVED'
+            : p.decisione === 'rifiuta' ? 'REJECTED'
+            : p.decisione === 'integrazione' ? 'PENDING_INTEGRATION'
+            : p.decisione === 'sospendi' ? 'SUSPENDED'
+            : 'DRAFT'
+        const codici = ((p.eventi || []) as Array<{ codice: number }>).map(e => e.codice)
+        recentEvents.push({
+            id: p.id, type: 'POSIZIONE', status, headline: p.titolo || 'Segnalazione EMTN',
+            occurred_at: p.approvata_at || p.inviata_at || p.created_at,
+            created_at: p.inviata_at || p.created_at,
+            categorie: codici.length ? codici.map(c => categoriaEMTN(c)?.label || String(c)) : ['Segnalazione EMTN'],
+        })
+    }
+    recentEvents.sort((x, y) => String((y as { created_at: string }).created_at).localeCompare(String((x as { created_at: string }).created_at)))
 
     await audit(sb, {
         operatorId, operatorEmail, action: 'SEARCH', success: true, ip, userAgent: ua,

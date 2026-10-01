@@ -307,14 +307,16 @@ export const handler: Handler = async (event) => {
         return jsonResponse(200, { posizioni: data || [] }, origin)
     }
 
-    // ── I miei eventi: posizioni aperte o inviate dall'operatore ──
+    // ── I miei eventi: posizioni aperte, inviate o decise dall'operatore ──
     // Con il numero della coda approvazioni per la direzione (Alert sistema).
     if (azione === 'mie') {
+        // Anche quelle che l'operatore ha approvato o deciso (direzione):
+        // chi approva deve ritrovarle qui, non solo chi le ha inviate.
         const filtro = operatorEmail
-            ? `created_by.eq.${operatorId},inviata_da.eq."${operatorEmail}"`
+            ? `created_by.eq.${operatorId},inviata_da.eq."${operatorEmail}",approvata_da.eq."${operatorEmail}",decisione_da.eq."${operatorEmail}"`
             : `created_by.eq.${operatorId}`
         const { data, error } = await sb.from('emtn_posizioni')
-            .select('id, client_id, stato, titolo, report, eventi, esito_verifica, in_approvazione, pubblicata, decisione, nota_revisione, revisione_legale, inviata_at, approvata_at, updated_at, created_at, emtn_clients(codice_fiscale, nome, cognome)')
+            .select('id, client_id, stato, titolo, report, eventi, esito_verifica, in_approvazione, pubblicata, decisione, nota_revisione, revisione_legale, inviata_at, inviata_da, approvata_at, approvata_da, updated_at, created_at, emtn_clients(codice_fiscale, nome, cognome)')
             .or(filtro)
             .order('updated_at', { ascending: false })
             .limit(500)

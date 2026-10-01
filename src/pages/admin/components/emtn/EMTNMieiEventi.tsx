@@ -1,7 +1,7 @@
 /**
  * EMTN — I MIEI EVENTI (01/10/2026).
  *
- * Le posizioni aperte o inviate dall'operatore collegato, in ogni fase:
+ * Le posizioni aperte, inviate o approvate/decise dall'operatore collegato, in ogni fase:
  * in coda approvazione, integrazione richiesta, pubblicate, rifiutate.
  * Prima era un segnaposto: la pratica finiva in "Da approvare" ma qui
  * non si vedeva nulla. "Apri" carica il cliente nella Ricerca, dove si
@@ -25,7 +25,9 @@ export interface PosizioneMia {
     nota_revisione: string | null
     revisione_legale: boolean
     inviata_at: string | null
+    inviata_da: string | null
     approvata_at: string | null
+    approvata_da: string | null
     updated_at: string
     created_at: string
     emtn_clients: { codice_fiscale: string; nome: string | null; cognome: string | null } | null
@@ -117,7 +119,7 @@ export default function EMTNMieiEventi({ onApri }: { onApri: (cf: string) => voi
                             <div className="min-w-0">
                                 <p className="text-sm font-semibold text-theme-text-primary">{p.titolo || 'Senza titolo'}</p>
                                 <p className="text-[11px] text-theme-text-muted">
-                                    {c ? `${c.nome || ''} ${c.cognome || ''}`.trim() || '—' : '—'} · {c?.codice_fiscale || '—'} · inviata {dataOra(p.inviata_at)}{p.approvata_at ? ` · approvata ${dataOra(p.approvata_at)}` : ''}
+                                    {c ? `${c.nome || ''} ${c.cognome || ''}`.trim() || '—' : '—'} · {c?.codice_fiscale || '—'} · inviata da {p.inviata_da || '—'} il {dataOra(p.inviata_at)}{p.approvata_at ? ` · approvata da ${p.approvata_da || '—'} il ${dataOra(p.approvata_at)}` : ''}
                                 </p>
                             </div>
                             <div className="flex flex-wrap gap-1.5 text-[10px] font-semibold">
