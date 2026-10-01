@@ -2562,6 +2562,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_conferma_da_saldare',        label: 'Conferma Prenotazione Da Saldare', description: 'Quando admin spunta "Conferma Prenotazione" su un booking ancora da saldare (riusato anche per i pagamenti ricevuti — estensione/danni/top-up — finche\' non avranno slot dedicati)' },
       { key: 'pro_conferma_contratto_firmato', label: 'Conferma Contratto Firmato',    description: 'Conferma dopo firma contratto' },
       { key: 'pro_conferma_preventivo',        label: 'Conferma Preventivo Inviato',   description: 'Conferma invio preventivo al cliente' },
+      { key: 'pro_preventivo_lavaggio',        label: 'Preventivo Lavaggio',           description: 'WhatsApp al cliente dal tab Preventivi Lavaggio — token: {nome}, {servizio}, {data}, {ora}, {durata}, {totale}, {veicolo}, {targa}, {note}' },
     ],
   },
   {

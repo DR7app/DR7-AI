@@ -512,7 +512,9 @@ export default function PreventiviLavaggioView() {
    * Prima il pulsante apriva solo wa.me: si apriva la chat, il messaggio lo
    * scriveva l'operatore, e il preventivo restava "bozza" come se non fosse
    * mai partito. Adesso, come su Terra: il testo arriva dal template Pro
-   * "Conferma Preventivo Inviato" (pro_conferma_preventivo), l'invio passa da
+   * "Preventivo Lavaggio" (pro_preventivo_lavaggio — 01/10/2026: prima
+   * pro_conferma_preventivo, riusato come "Richiesta Recensione": il cliente
+   * riceveva la richiesta di recensione), l'invio passa da
    * Green API (send-whatsapp-notification) e il preventivo diventa 'inviato'
    * con la data dell'invio. Nessun testo scritto nel codice: se il template
    * manca o e' spento non si inventa un messaggio, si dice quale template
@@ -535,7 +537,7 @@ export default function PreventiviLavaggioView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: tel,
-          templateKey: 'pro_conferma_preventivo',
+          templateKey: 'pro_preventivo_lavaggio',
           // Il servizio serve al guard "Tipo servizio" del template: un
           // template limitato al Noleggio non deve partire per un lavaggio.
           booking: { service_type: 'car_wash' },
@@ -558,8 +560,8 @@ export default function PreventiviLavaggioView() {
       if (!risposta.ok) throw new Error(esito?.message || 'Invio non riuscito')
       if (esito?.skipped) {
         toast.error(esito.reason === 'service_type_mismatch'
-          ? 'Il template "Conferma Preventivo Inviato" e\' limitato a un altro tipo di servizio: mettilo su Lavaggio & Meccanica (o Tutti) in Messaggi di Sistema Pro.'
-          : 'Template "Conferma Preventivo Inviato" mancante o disattivato in Messaggi di Sistema Pro.', { duration: 10000 })
+          ? 'Il template "Preventivo Lavaggio" e\' limitato a un altro tipo di servizio: mettilo su Lavaggio & Meccanica (o Tutti) in Messaggi di Sistema Pro.'
+          : 'Template "Preventivo Lavaggio" mancante o disattivato in Messaggi di Sistema Pro.', { duration: 10000 })
         return
       }
       // Traccia dell'invio, come su Terra. `whatsapp_sent_at` arriva con la
@@ -981,7 +983,7 @@ export default function PreventiviLavaggioView() {
             <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`}
               mostraAnteprima={false} placeholder="Numero WhatsApp" value={waTel} onChange={setWaTel} />
             <p className="text-xs text-theme-text-muted">
-              Il testo e' quello del template "Conferma Preventivo Inviato" in Messaggi di Sistema Pro.
+              Il testo e' quello del template "Preventivo Lavaggio" in Messaggi di Sistema Pro.
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setWaPer(null)} disabled={waInvio} className={BTN_GHOST}>Annulla</button>
