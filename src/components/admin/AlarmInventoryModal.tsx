@@ -33,6 +33,22 @@ import {
 import { supabase } from '../../supabaseClient'
 import toast from 'react-hot-toast'
 
+/**
+ * Variabili che il messaggio di un allarme sa riempire: dati della
+ * prenotazione aggiunti da send-whatsapp-notification e nome passato da
+ * alarm-send-message. Se uno dei due cambia, va aggiornato anche qui.
+ */
+const VARIABILI_DA_ALLARME = [
+    'nome', 'customer_name', 'cliente', 'custName', 'full_name', 'fullName',
+    'customer_email', 'customer_phone', 'booking_id', 'booking_ref', 'bookingRef',
+    'ref', 'reference', 'codice', 'vehicle_name', 'plate', 'targa',
+    'service_name', 'servizio', 'autista',
+]
+
+function segnapostiDi(testo: string): string[] {
+    return Array.from(testo.matchAll(/\{+([^{}]+)\}+/g)).map(m => m[1].trim())
+}
+
 interface Destinatario { nome?: string; telefono?: string; email?: string }
 
 interface AlarmRow {
@@ -102,10 +118,17 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
             setLoading(false)
         })()
         ;(async () => {
-            const { data } = await supabase
-                .from('system_messages')
-                .select('message_key, label, is_enabled, message_body')
-                .order('label', { ascending: true })
+            const [{ data }, { data: varsCustom }] = await Promise.all([
+                supabase
+                    .from('system_messages')
+                    .select('message_key, label, is_enabled, message_body')
+                    .order('label', { ascending: true }),
+                supabase.from('system_message_variables').select('key, is_enabled'),
+            ])
+            const riempibili = new Set(VARIABILI_DA_ALLARME)
+            for (const v of (varsCustom || []) as { key: string | null; is_enabled: boolean | null }[]) {
+                if (v.is_enabled !== false && v.key) riempibili.add(String(v.key).replace(/[{}]/g, '').trim())
+            }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const rows = ((data || []) as any[])
                 .filter(t => t.is_enabled !== false && String(t.message_body || '').trim())
@@ -115,6 +138,11 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                 // alias di routing, non partono mai col loro testo: in elenco
                 // sembravano doppioni dei pro_* con lo stesso nome.
                 .filter(t => String(t.message_key || '').startsWith('pro_'))
+                // 01/10/2026: solo i messaggi che possono partire DA UN ALLARME.
+                // Un {segnaposto} che l'allarme non sa riempire (codice OTP, link
+                // di firma o di pagamento, date, importi) blocca l'invio: in
+                // elenco sembrava scelto e il cliente non riceveva niente.
+                .filter(t => segnapostiDi(String(t.message_body || '')).every(k => riempibili.has(k)))
             setTemplates(rows.map(t => ({ key: String(t.message_key), label: String(t.label || t.message_key) })))
         })()
     }, [isOpen, embedded])
@@ -378,7 +406,7 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                         const aperto = cercando || gruppiAperti.has(g.key)
                         const accesiNelGruppo = items.filter(a => a.is_enabled).length
                         return (
-                            <section key={g.key} className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 overflow-hidden">
+                            <section key={g.key} className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30">
                                 <div className="flex items-center gap-3 px-4 py-3">
                                     <button
                                         type="button"
@@ -417,7 +445,7 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                 </div>
 
                                 {aperto && (
-                                    <ul className="border-t border-theme-border divide-y divide-theme-border/60">
+                                    <ul className="border-t border-theme-border divide-y divide-theme-border/60 rounded-b-xl">
                                         {items.map(row => {
                                             const dirty = isDirty(row)
                                             const saving = savingId === row.id

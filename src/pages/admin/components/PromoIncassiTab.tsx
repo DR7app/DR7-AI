@@ -8,7 +8,7 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 /**
  * Promo Incassi.
  *
- * Body del messaggio: vive in Messaggi di Sistema Pro → "PROMO INCASSI".
+ * Body del messaggio: vive in Messaggi di Sistema Pro → "Maxi Promo — Lun-Gio".
  * Variabili: {vehicle}, {coefficiente}, {incasso_attuale}, {soglia},
  *            {month}, {year}, {year_month}.
  *
@@ -130,7 +130,7 @@ export default function PromoIncassiTab() {
             toast.error('Inserisci un numero di telefono di test')
             return
         }
-        if (!confirm(`Inviare PROMO INCASSI al numero ${phone.trim()}?\n\nIl messaggio verrà letto da Messaggi di Sistema Pro (template PROMO INCASSI).`)) return
+        if (!confirm(`Inviare PROMO INCASSI al numero ${phone.trim()}?\n\nIl messaggio verrà letto da Messaggi di Sistema Pro (template "Maxi Promo — Lun-Gio").`)) return
 
         setLoading(true)
         setLastResult(null)
@@ -178,7 +178,7 @@ export default function PromoIncassiTab() {
                     Quando un veicolo raggiunge il coefficiente soglia (default <span className="text-dr7-gold font-medium">0.8</span>) del proprio
                     obiettivo mensile, parte automaticamente la promo. Il body del messaggio si gestisce in&nbsp;
                     <span className="text-dr7-gold font-medium">Messaggi di Sistema Pro</span> →
-                    template <span className="text-dr7-gold font-medium">PROMO INCASSI</span>.
+                    template <span className="text-dr7-gold font-medium">Maxi Promo — Lun-Gio</span>.
                     Variabili supportate:&nbsp;
                     <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{vehicle}'}</code>,&nbsp;
                     <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{coefficiente}'}</code>,&nbsp;

@@ -4051,8 +4051,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         return
       }
       const newDetails = { ...(booking.booking_details || {}), auto_pronta_sent_at: new Date().toISOString() }
-      await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
+      // 01/10/2026: si aggiorna anche la riga in elenco. Prima solo il
+      // dettaglio aperto: la riga restava col bottone attivo e un secondo
+      // clic rimandava lo stesso WhatsApp al cliente.
+      const { error: errSegna } = await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
       setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
+      setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, booking_details: newDetails } as Booking : b)))
+      if (errSegna) toast.error('Messaggio inviato, ma non registrato sulla prenotazione: ' + errSegna.message, { duration: 10000 })
       toast.success(`WhatsApp Pronta inviato a ${sent} guidatore/i${failed ? ` (${failed} falliti)` : ''}`, { id: toastId })
       logAdminAction('auto_pronta_sent', 'booking', booking.id, buildBookingContext(booking))
     } catch (err: unknown) {
@@ -4109,8 +4114,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         return
       }
       const newDetails = { ...(booking.booking_details || {}), foto_pre_consegna_inviata_at: new Date().toISOString() }
-      await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
+      // 01/10/2026: si aggiorna anche la riga in elenco. Prima solo il
+      // dettaglio aperto: la riga restava col bottone attivo e un secondo
+      // clic rimandava lo stesso WhatsApp al cliente.
+      const { error: errSegna } = await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
       setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
+      setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, booking_details: newDetails } as Booking : b)))
+      if (errSegna) toast.error('Messaggio inviato, ma non registrato sulla prenotazione: ' + errSegna.message, { duration: 10000 })
       toast.success('Check-in digitale inviato al cliente', { id: toastId })
       logAdminAction('foto_pre_consegna_inviata', 'booking', booking.id, buildBookingContext(booking))
     } catch (err: unknown) {

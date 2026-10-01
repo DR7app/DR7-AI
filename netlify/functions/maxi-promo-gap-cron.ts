@@ -15,7 +15,7 @@
  * The recipient phone, the body of the message, and the template key
  * resolution all live OUTSIDE this code:
  *   - Phone   → env var MAXI_PROMO_PILOT_PHONE
- *   - Body    → Messaggi di Sistema Pro row "MAXI PROMO GAP 1GG"
+ *   - Body    → Messaggi di Sistema Pro row "Maxi Promo — Giorno Libero"
  *   - Mapping → utils/messageTemplates.ts (LABEL_FALLBACKS)
  *
  * Nothing is hardcoded.

@@ -7,7 +7,7 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 /**
  * Maxi Promo Gap Marketing — dashboard.
  *
- * Body del messaggio: vive in Messaggi di Sistema Pro → "MAXI PROMO GAP 1GG".
+ * Body del messaggio: vive in Messaggi di Sistema Pro → "Maxi Promo — Giorno Libero".
  * Variabili: {vehicle_specs}, {date_gap}, {date_gap_long}, {date_gap_short}.
  * Trigger cron: ogni 10 min, parte se Roma >= 18:00 OR booking creato negli
  * ultimi 20 min sul veicolo con gap. Dedup per (veicolo, gap_date, dest).
@@ -463,7 +463,7 @@ Prenota ora — 1 giorno di esperienza in DR7.`}
                             </p>
                         </div>
                         <p className="text-[10px] text-theme-text-muted mt-2">
-                            Body modificabile in <span className="text-dr7-gold">Messaggi di Sistema Pro → MAXI PROMO GAP 1GG</span>
+                            Body modificabile in <span className="text-dr7-gold">Messaggi di Sistema Pro → Maxi Promo — Giorno Libero</span>
                         </p>
                     </div>
 
