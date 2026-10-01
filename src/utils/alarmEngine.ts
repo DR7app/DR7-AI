@@ -142,7 +142,7 @@ export async function caricaContesto(now: Date): Promise<DetectorContext> {
             .range(0, 999),
         supabase
             .from('cauzioni')
-            .select('id, veicolo_id, riferimento_contratto_id, importo, stato, stato_restituzione, scadenza_cauzione, data_restituzione')
+            .select('id, veicolo_id, riferimento_contratto_id, importo, stato, stato_restituzione, scadenza_cauzione, data_restituzione, metodo, data_incasso')
             .range(0, 999),
     ])
 

@@ -206,6 +206,23 @@ function etichettaVeicolo(v: VehicleLite): string {
     return `${v.display_name || 'Veicolo'}${v.plate ? ` (${v.plate})` : ''}`
 }
 
+/**
+ * 01/10/2026: importo della cauzione richiesta, in euro.
+ * `security_deposit_amount` in produzione vale sempre 0 (misurato: nessun
+ * noleggio degli ultimi 120 giorni lo usa) e `primo()` prende lo 0 come
+ * valore valido: la cauzione vera sta in `deposit_amount` o in
+ * `booking_details.deposit`. Leggendo solo le colonne, "cauzione mancante"
+ * non suonava mai. Vince il primo importo maggiore di zero.
+ */
+export function importoCauzioneRichiesto(b: BookingLite): number {
+    const d = (b.booking_details || {}) as Record<string, unknown>
+    for (const v of [b.deposit_amount, b.security_deposit_amount, d.deposit, d.deposit_amount]) {
+        const n = Number(v)
+        if (Number.isFinite(n) && n > 0) return n
+    }
+    return 0
+}
+
 /** Legge un campo cercando tutti gli alias che il DB si porta dietro. */
 function primo(obj: Record<string, unknown> | null | undefined, chiavi: string[]): unknown {
     if (!obj) return undefined
@@ -567,7 +584,7 @@ const deposit_uncollected: Detector = (cfg, ctx) => {
     return ctx.bookings
         .filter(b => {
             if (!isNoleggio(b) || !isViva(b)) return false
-            const importo = Number(primo(b, ['security_deposit_amount', 'deposit_amount']) || 0)
+            const importo = importoCauzioneRichiesto(b)
             if (importo <= 0) return false
             if (String(b.security_deposit_status || '').toLowerCase() === 'collected') return false
             if (perContratto.has(String(b.id))) return false
@@ -577,7 +594,7 @@ const deposit_uncollected: Detector = (cfg, ctx) => {
             bookingId: b.id,
             vehicleId: b.vehicle_id,
             entita: etichetta(b, ritiroAt(b)),
-            dettaglio: `Cauzione prevista ${Number(primo(b, ['security_deposit_amount', 'deposit_amount']) || 0).toFixed(2)}`,
+            dettaglio: `Cauzione prevista ${importoCauzioneRichiesto(b).toFixed(2)}`,
         }))
 }
 
@@ -606,7 +623,16 @@ const deposit_return_due: Detector = (cfg, ctx, arg) => {
 const deposit_action_due: Detector = (_cfg, ctx, arg) => {
     return ctx.cauzioni
         .filter(c => {
-            if (arg === 'restituire') return String(c.stato_restituzione || '') === 'DA_RESTITUIRE'
+            // 01/10/2026: `mark_cauzione_restituita` porta lo stato a Restituita
+            // ma lascia stato_restituzione a DA_RESTITUIRE: 33 cauzioni gia'
+            // restituite risultavano "da restituire". Conta solo una cauzione
+            // ancora aperta e con i soldi davvero presi (incassata o
+            // pre-autorizzata), la stessa regola del promemoria nel cron.
+            if (arg === 'restituire') {
+                if (String(c.stato_restituzione || '') !== 'DA_RESTITUIRE') return false
+                if (['Restituita', 'Sbloccata', 'Bloccata', 'Danno'].includes(String(c.stato || ''))) return false
+                return !!c.data_incasso || String(c.metodo || '') === 'preautorizzazione'
+            }
             if (arg === 'sbloccare') return String(c.stato || '') === 'Bloccata'
             return false
         })
@@ -787,7 +813,7 @@ const booking_missing: Detector = (cfg, ctx, arg) => {
         const mancanze: string[] = []
         const senzaPagamento = !isPagato(b) && (Number(b.price_total) || 0) > 0
         const senzaContratto = !b.contract_url && !ctx.firme.get(b.id)
-        const importoCauzione = Number(primo(b, ['security_deposit_amount', 'deposit_amount']) || 0)
+        const importoCauzione = importoCauzioneRichiesto(b)
         const senzaCauzione = importoCauzione > 0 && !cauzioniPerBooking.has(String(b.id))
         const senzaDocumenti = !primo(b, ['idCardImage', 'driverIdImage']) || !primo(b, ['driverLicenseImage', 'license_file_url'])
         if (senzaPagamento) mancanze.push('pagamento')
