@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateFatturaXML, controllaIdentificativoCliente } from './xml-utils'
+import { generateFatturaXML, controllaIdentificativoCliente } from '../xml-utils'
 
 const base = {
   numero_fattura: 'DR7-2026-9999',

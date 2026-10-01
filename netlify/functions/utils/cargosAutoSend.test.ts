@@ -39,14 +39,14 @@ vi.mock('@supabase/supabase-js', () => ({
     }),
   }),
 }))
-vi.mock('./utils/systemControl', () => ({
+vi.mock('./systemControl', () => ({
   registraEvento: vi.fn(), accodaOperazione: vi.fn(), chiudiOperazione: vi.fn(), segnaChiamata: vi.fn(), funzioneFerma: vi.fn(),
 }))
 
 // Il risolutore vive a livello di modulo (cache fra invocazioni): un modulo nuovo per test.
 async function carica() {
   vi.resetModules()
-  return (await import('./cargos-auto-send')).luoghiPerInvio
+  return (await import('../cargos-auto-send')).luoghiPerInvio
 }
 
 beforeEach(() => { db.guasto = false; db.letture = 0 })
