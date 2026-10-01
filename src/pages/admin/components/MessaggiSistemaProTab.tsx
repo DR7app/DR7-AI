@@ -2587,6 +2587,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_promemoria_checkin',       label: 'Promemoria Check-in',       description: 'Promemoria check-in lavaggio / meccanica' },
       { key: 'pro_promemoria_checkout',      label: 'Promemoria Check-out',      description: 'Promemoria check-out lavaggio / meccanica' },
       { key: 'pro_promemoria_firma',         label: 'Promemoria Firma',          description: 'Promemoria firma contratto pendente' },
+      { key: 'pro_promemoria_firma_prima_ritiro', label: 'Promemoria Firma prima del Ritiro', description: 'Al cliente dall\'allarme "Contratto non firmato 30 minuti dal ritiro" (var: {nome}, {vehicle_name})' },
       { key: 'pro_promemoria_pagamento',     label: 'Promemoria Pagamento',      description: 'Promemoria pagamento da saldare' },
       { key: 'pro_promemoria_appuntamento',  label: 'Promemoria Appuntamento',   description: 'Promemoria generico appuntamento' },
       { key: 'pro_allerta_meteo',            label: 'Allerta Meteo',             description: 'Messaggio di avviso meteo inviato ai clienti con un noleggio in corso' },
