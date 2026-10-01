@@ -3379,7 +3379,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
    * comprese. Se manca qualcosa la casella resta bianca.
    */
   const CAMPI_CONTRATTO_PERSONA = [
-    'nome', 'cognome', 'codice_fiscale', 'sesso',
+    'nome', 'cognome', 'sesso',
     'indirizzo', 'citta_residenza', 'provincia_residenza', 'codice_postale',
     'data_nascita', 'luogo_nascita',
     'telefono',
@@ -3497,7 +3497,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
     // Persona Fisica specific
     if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) {
-      if (!customer.codice_fiscale) missing.push('codice_fiscale')
+      // 01/10/2026: il CF ferma solo la fattura, non il contratto. I clienti
+      // stranieri non ce l'hanno e il contratto non partiva (cliente al banco).
+      if (forInvoice && !customer.codice_fiscale) missing.push('codice_fiscale')
       if (!customer.nome) missing.push('nome')
       if (!customer.cognome) missing.push('cognome')
       // 2026-07-17 FIX: per la FATTURA servono SOLO CF + anagrafica base +

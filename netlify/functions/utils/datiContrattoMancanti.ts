@@ -15,6 +15,10 @@
  * casella che puo' restare vuota. Stessa regola nel gestionale, dove sono
  * usciti anche numero e tipo del documento d'identita': non li chiede nessun
  * form, quindi erano vuoti su tutte le schede.
+ *
+ * 01/10/2026: fuori anche il codice fiscale. I clienti stranieri non ce
+ * l'hanno e il contratto restava bloccato con il cliente al banco. Il CF
+ * resta obbligatorio solo per la fattura.
  */
 
 export type ClienteContratto = Record<string, unknown> | null | undefined
@@ -63,7 +67,6 @@ export function datiContrattoMancanti(cliente: ClienteContratto): string[] {
 
     if (!pieno(c.nome)) mancanti.push('nome')
     if (!pieno(c.cognome)) mancanti.push('cognome')
-    if (!pieno(c.codice_fiscale)) mancanti.push('codice_fiscale')
     if (!pieno(c.sesso) && !pieno(c.metadata?.sesso)) mancanti.push('sesso')
     if (!pieno(c.indirizzo)) mancanti.push('indirizzo')
     if (!pieno(c.citta_residenza) && !pieno(c.citta)) mancanti.push('citta_residenza')
