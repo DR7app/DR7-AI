@@ -90,6 +90,14 @@ export function luoghiRecordCargos(r: RisolutoreLuoghi, c: Dati, bd: Dati): Luog
     if (personaFisica) errori.push('Luogo di nascita mancante')
   } else {
     nascita = risolvi('Luogo di nascita', s.nascita, { provincia: s.provNascita, alla: dataDaTesto(s.dataNascita) }, personaFisica)
+    // 01/10/2026: "Italia" come luogo di nascita non e' un luogo, e' lo
+    // stato. Chi nasce in Italia nasce in un comune e CARGOS vuole quel
+    // codice: mandare 100000100 sarebbe un dato sbagliato. Si chiede il comune.
+    // Gli stati esteri ("Francia", "España") restano validi.
+    if (nascita && nascita === r.codice('ITALIA', { soloStati: true })) {
+      nascita = ''
+      if (personaFisica) errori.push(`Luogo di nascita: "${s.nascita}" e lo stato, serve il comune di nascita`)
+    }
   }
 
   // 26 — cittadinanza. Se non e' scritta: italiana solo quando il codice

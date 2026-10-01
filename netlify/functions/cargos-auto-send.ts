@@ -2,6 +2,8 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { registraEvento, accodaOperazione, chiudiOperazione, segnaChiamata, funzioneFerma } from './utils/systemControl'
+import { RisolutoreLuoghi, creaCercaSupabase, type ClienteSupabaseMinimo } from '../../src/utils/luoghiCargos'
+import { luoghiRecordCargos, testiLuoghiCliente, type LuoghiRecordCargos } from '../../src/utils/cargosLuoghiRecord'
 
 /**
  * CARGOS Auto-Send — called after contract is signed
@@ -33,19 +35,38 @@ const FIELD_SIZES = [
     50, 30, 10, 9, 9, 5, 20, 9, 20, 9, 20
 ]
 
-const ISTAT_CODES: Record<string, string> = {
-    'CAGLIARI': '420092009', 'SASSARI': '420090064', 'NUORO': '420091051',
-    'ORISTANO': '420092555', 'QUARTU SANT\'ELENA': '420092051', 'OLBIA': '420090047',
-    'ALGHERO': '420090003', 'CARBONIA': '420092012', 'IGLESIAS': '420092033',
-    'SELARGIUS': '420092068', 'MONSERRATO': '420092109',
-    'ROMA': '412058091', 'MILANO': '403015146', 'TORINO': '401001272',
-    'NAPOLI': '415063049', 'FIRENZE': '409048017', 'BOLOGNA': '408037006',
-    'PALERMO': '419082053', 'GENOVA': '407010025', 'BARI': '416072006',
-    'CATANIA': '419087015', 'VENEZIA': '405027042',
-    'ITALIA': '100000100', 'ITALY': '100000100',
-    'FRANCIA': '100000215', 'FRANCE': '100000215',
-    'GERMANIA': '100000216', 'GERMANY': '100000216',
+// 01/10/2026: niente piu' elenco di ~30 comuni scritto a mano (ISTAT_CODES).
+// Lanusei, Quartucciu, Ghilarza, Siris, Maracalagonis, San Gavino Monreale,
+// "España"... venivano rifiutati con "luogo di nascita non riconosciuto" e 57
+// comunicazioni erano ferme in coda. I codici vengono ora dalla Tabella 1
+// ufficiale CARGOS (cargos_luoghi / cargos_luoghi_nomi), con la stessa regola
+// della tab Cargos (src/utils/luoghiCargos.ts + cargosLuoghiRecord.ts).
+// Se la tabella non risponde si torna all'elenco storico (LUOGHI_STORICI):
+// mai peggio di prima. Nome non trovato o ambiguo = la riga non parte.
+const risolutoreLuoghi = new RisolutoreLuoghi(
+    // cast: il client tipizzato contro l'interfaccia minima manda tsc in ricorsione (TS2589)
+    creaCercaSupabase(supabase as unknown as ClienteSupabaseMinimo),
+    msg => console.warn('[cargos-auto-send]', msg),
+)
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * 01/10/2026: tutti i campi "luogo" del record e i blocchi relativi.
+ * `errori` = la riga NON deve partire (mai un codice inventato, ne' vuoto dove
+ * CARGOS lo pretende). Esportata per i test.
+ */
+export async function luoghiPerInvio(c: any, bd: any): Promise<LuoghiRecordCargos> {
+    await risolutoreLuoghi.precarica(testiLuoghiCliente(c, bd))
+    const luoghi = luoghiRecordCargos(risolutoreLuoghi, c, bd)
+    // Il luogo di rilascio del documento (campo 31) e' obbligatorio per
+    // CARGOS: vuoto = record rifiutato ("DOCIDE_LUOGORIL_COD - Obbligatorio").
+    // Meglio fermarsi qui con un messaggio chiaro che bruciare una chiamata.
+    if (!luoghi.rilascioDocumento && !luoghi.errori.length) {
+        luoghi.errori.push('luogo di rilascio del documento non riconosciuto (indica il luogo di rilascio o un comune di residenza valido)')
+    }
+    return luoghi
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // CARGOS TIPO_PAGAMENTO codes (from reference table 0)
 // 0=Carta di Credito, 1=Contanti, 2=Carta di Debito, 3=Bonifico, 4=RID, 9=Altro
@@ -141,24 +162,6 @@ function guessVehicleBrand(name: string): string {
 function guessVehicleModel(name: string): string {
     const parts = name.split(' ')
     return parts.length > 1 ? parts.slice(1).join(' ') : name
-}
-
-// 2026-08-20 (richiesta direzione): NIENTE ripiego silenzioso su Cagliari.
-// Questa e' una dichiarazione alla Polizia di Stato: un luogo di nascita
-// inventato e' un'informazione FALSA trasmessa a un'autorita'. Se il comune
-// non c'e' o non e' in tabella, la riga non parte e si chiede il dato.
-function lookupIstatCode(cityName: string): string | null {
-    if (!cityName) return null
-    const upper = cityName.toUpperCase().trim()
-    return ISTAT_CODES[upper] || null
-}
-
-/** Codice per il record: se il comune non e' noto si lascia VUOTO.
- *  Un campo vuoto dice "non lo so"; il vecchio ripiego su Cagliari diceva una
- *  cosa precisa e sbagliata. Il luogo di NASCITA non passa mai di qui: e'
- *  bloccante a monte (vedi validazione), perche' e' identita' della persona. */
-function istatOrEmpty(cityName: string | null | undefined): string {
-    return lookupIstatCode(cityName || '') || ''
 }
 
 /**
@@ -406,11 +409,10 @@ async function inviaCargos(
         if (!surname) missing.push('cognome/denominazione')
         if (!isAzienda && !licenseNumber) missing.push('patente')
         if (!isAzienda && !docNumber) missing.push('documento')
-        if (!isAzienda) {
-            const luogo = c?.luogo_nascita || bd.customer?.birthPlace || ''
-            if (!luogo) missing.push('luogo di nascita')
-            else if (!lookupIstatCode(luogo)) missing.push(`luogo di nascita non riconosciuto ("${luogo}")`)
-        }
+        // 2026-08-20 (direzione): mai un luogo inventato verso la Polizia di Stato.
+        // 01/10/2026: luoghi dalla tabella ufficiale CARGOS (vedi luoghiPerInvio).
+        const luoghi = await luoghiPerInvio(c, bd)
+        missing.push(...luoghi.errori)
         if (missing.length > 0) {
             await avvisa(
                 'dati cliente mancanti',
@@ -464,26 +466,26 @@ async function inviaCargos(
                 const bd2 = c?.data_nascita || bd.customer?.birthDate || ''
                 return bd2 ? formatDateOnlyCargos(bd2) : ''
             })(),
-            /* 25 */ istatOrEmpty(c?.luogo_nascita || bd.customer?.birthPlace || ''),
-            /* 26 */ istatOrEmpty(c?.nazionalita || 'ITALIA'),
-            /* 27 */ istatOrEmpty(c?.citta || ''),
-            /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
+            /* 25 */ luoghi.nascita,
+            /* 26 */ luoghi.cittadinanza,
+            /* 27 */ luoghi.residenza,
+            /* 28 */ sanitizeCargos(luoghi.indirizzo),
             /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || 'CI'] || 'IDENT',
             /* 30 */ docNumber,
-            /* 31 */ istatOrEmpty(c?.citta || ''),
+            /* 31 */ luoghi.rilascioDocumento,
             /* 32 */ licenseNumber,
-            /* 33 */ istatOrEmpty(c?.patente_rilasciata_da || c?.citta || ''),
+            /* 33 */ luoghi.rilascioPatente,
             /* 34 */ c?.telefono || booking.customer_phone || '',
             /* 35 */ driver2?.cognome || driver2?.surname || '',
             /* 36 */ driver2?.nome || driver2?.name || '',
             /* 37 */ formatDateOnlyCargos(driver2?.data_nascita || driver2?.birthDate || ''),
-            /* 38 */ istatOrEmpty(driver2?.luogo_nascita || driver2?.birthPlace || ''),
-            /* 39 */ istatOrEmpty(driver2?.nazionalita || ''),
+            /* 38 */ luoghi.nascita2,
+            /* 39 */ luoghi.cittadinanza2,
             /* 40 */ '',
             /* 41 */ '',
             /* 42 */ '',
             /* 43 */ driver2?.numero_patente || driver2?.patente_numero || driver2?.licenseNumber || '',
-            /* 44 */ istatOrEmpty(driver2?.luogo_nascita || ''),
+            /* 44 */ luoghi.patente2,
             /* 45 */ driver2?.telefono || driver2?.phone || '',
         ]
 
