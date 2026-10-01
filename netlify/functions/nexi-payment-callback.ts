@@ -11,6 +11,8 @@ import { applyTokenizedCardUpdate } from './utils/nexiCards';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 import { inviaRichiestaIbanCauzione } from './utils/richiestaIbanCauzione';
 import { funzioneFerma } from './utils/systemControl';
+import { decidiPagamentoTardivo, TOLLERANZA_SCADENZA_MS, type EsitoPagamentoTardivo } from './utils/pagamentoTardivo';
+import { sostituisciLinkInAttesa } from './utils/linkInAttesa';
 
 // Interruttore System Control: WhatsApp spento = avviso admin saltato, il
 // pagamento resta registrato e tutto il resto prosegue.
@@ -104,6 +106,63 @@ async function notificaCauzioneIncassataViaLink(cauzione: {
 
     const esito = await inviaRichiestaIbanCauzione(supabase, cauzione.id);
     console.log(`[nexi-payment-callback] Cauzione ${cauzione.id}: Richiesta IBAN -> ${esito}`);
+}
+
+/**
+ * 01/10/2026: allarme staff per un pagamento Nexi incassato ma NON applicato
+ * (link scaduto o sostituito su prenotazione annullata / gia' saldata).
+ *
+ * Riusa i canali che esistono gia', nessun template nuovo:
+ *   1. `alarm_events` con la voce di catalogo `pag_pagamento_verificare`
+ *      ("Pagamento da verificare"): compare nel pannello Allarmi aperti di
+ *      tutti gli operatori, con la nota che spiega cosa fare;
+ *   2. il WhatsApp admin `nexi_payment_received_admin` (stesso del pagamento
+ *      normale): avvisa che sono entrati soldi su quella prenotazione.
+ * Best-effort: un errore qui non deve far ritentare Nexi all'infinito.
+ */
+const ALLARME_PAGAMENTO_DA_VERIFICARE = 'pag_pagamento_verificare';
+
+async function allarmePagamentoTardivo(p: {
+    bookingId: string | null; orderId: string; importoEur: number;
+    cliente: string; veicolo: string; nota: string;
+}): Promise<void> {
+    const importo = p.importoEur.toFixed(2);
+    const ref = p.bookingId ? `DR7-${p.bookingId.substring(0, 8).toUpperCase()}` : 'senza prenotazione';
+    try {
+        const { error } = await supabase.from('alarm_events').insert({
+            alarm_id: ALLARME_PAGAMENTO_DA_VERIFICARE,
+            booking_id: p.bookingId,
+            entita: `${p.cliente}${p.veicolo ? ' — ' + p.veicolo : ''} — €${importo} — ordine Nexi ${p.orderId}`,
+            priority: 'urgente',
+            stato: 'aperto',
+            triggered_at: new Date().toISOString(),
+            nota: `${p.nota} (ordine ${p.orderId}, ${ref})`,
+        });
+        // 23505 = c'e' gia' un allarme aperto per questa prenotazione: basta quello.
+        if (error && error.code !== '23505') {
+            console.error('[nexi-payment-callback] Allarme pagamento tardivo non creato:', error.message);
+        }
+    } catch (e) {
+        console.error('[nexi-payment-callback] Allarme pagamento tardivo fallito:', e);
+    }
+    try {
+        await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                notifyAdmin: true,
+                templateKey: 'nexi_payment_received_admin',
+                templateVars: {
+                    '{customer_name}': p.cliente,
+                    '{amount}': importo,
+                    '{booking_id}': ref,
+                    '{vehicle_name}': p.veicolo || 'N/A',
+                },
+            }),
+        });
+    } catch (e) {
+        console.warn('[nexi-payment-callback] WhatsApp admin pagamento tardivo fallito (non bloccante):', e);
+    }
 }
 
 async function fetchNexiOperationDetails(operationId: string): Promise<any> {
@@ -270,38 +329,91 @@ const handler: Handler = async (event) => {
         }
 
         // Idempotency: if transaction already processed, return success without re-processing
-        if (transaction.status === 'completed' || transaction.status === 'failed') {
+        // 01/10/2026: anche 'expired_late_payment' e' finale (allarme gia'
+        // aperto, decide lo staff): una ri-notifica Nexi non deve rimandare
+        // il WhatsApp admin ne' rivalutare il pagamento.
+        if (transaction.status === 'completed' || transaction.status === 'failed' || transaction.status === 'expired_late_payment') {
             console.log(`[nexi-payment-callback] Transaction ${orderId} already processed (status: ${transaction.status}). Skipping.`);
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_processed: true, status: transaction.status }) };
         }
 
         // ─── EXPIRY VALIDATION ────────────────────────────────────────
-        // Reject late payments: if payment_link_expires_at has passed, the booking
-        // was already expired. Log it but don't confirm as paid.
+        // 01/10/2026: prima ogni pagamento oltre 1h05 dalla creazione del link
+        // veniva SCARTATO (`expired_late_payment`): Nexi aveva gia' addebitato
+        // la carta, la prenotazione restava non pagata e nessuno rimborsava
+        // (8 casi reali). Il link su Nexi resta pagabile fino al giorno dopo
+        // (Nexi accetta solo una DATA di scadenza), quindi il pagamento tardivo
+        // capita. Ora: denaro confermato da Nexi = si registra, marcato
+        // `pagamento_tardivo`. Si ferma SOLO se la prenotazione e' annullata o
+        // gia' saldata per altra via: allora resta `expired_late_payment` e
+        // si apre l'allarme staff. Mai rimborsi automatici da qui.
+        // La regola dell'1h resta per la UI e per la rigenerazione del link.
         const expiresAtStr = transaction.metadata?.payment_link_expires_at || transaction.metadata?.link_expires_at;
-        if (isSuccess && expiresAtStr) {
-            const expiresAt = new Date(expiresAtStr);
-            const now = new Date();
-            // Grace period: 5 minutes after expiry to handle Nexi processing delays
-            const graceMs = 5 * 60 * 1000;
-            if (now.getTime() > expiresAt.getTime() + graceMs) {
-                console.warn(`[nexi-payment-callback] LATE PAYMENT REJECTED — order ${orderId} expired at ${expiresAtStr}, callback received at ${now.toISOString()} (${Math.round((now.getTime() - expiresAt.getTime()) / 1000)}s late)`);
-                // Update transaction as expired (don't mark completed)
+        let esitoTardivo: EsitoPagamentoTardivo = { tipo: 'nei_tempi' };
+        // Link sostituito da uno piu' recente ma pagato lo stesso: va
+        // controllato anche dentro l'ora (il debito puo' essere gia' saldato).
+        const linkSostituito = transaction.status === 'superseded';
+        if (isSuccess && (expiresAtStr || linkSostituito)) {
+            const adesso = new Date();
+            const scopoTardivo = transaction.metadata?.payment_purpose
+                || (transaction.description?.toLowerCase().startsWith('danni') ? 'danni' : null)
+                || (transaction.description?.toLowerCase().startsWith('penali') ? 'penali' : null)
+                || 'booking';
+            let prenotazioneTardivo: any = null;
+            const scaduto = !!expiresAtStr && adesso.getTime() > new Date(expiresAtStr).getTime() + TOLLERANZA_SCADENZA_MS;
+            if ((scaduto || linkSostituito) && transaction.booking_id) {
+                const { data } = await supabase
+                    .from('bookings')
+                    .select('id, customer_name, vehicle_name, status, payment_status, payment_method, price_total, amount_paid, booking_details')
+                    .eq('id', transaction.booking_id)
+                    .maybeSingle();
+                prenotazioneTardivo = data;
+            }
+            esitoTardivo = decidiPagamentoTardivo({
+                pagatoSuNexi: isSuccess,
+                scadenzaLink: expiresAtStr,
+                adesso,
+                scopo: scopoTardivo,
+                haPrenotazione: !!transaction.booking_id,
+                prenotazione: prenotazioneTardivo,
+                linkSostituito,
+            });
+
+            if (esitoTardivo.tipo === 'blocca') {
+                console.warn(`[nexi-payment-callback] PAGAMENTO TARDIVO NON APPLICATO — order ${orderId} (${esitoTardivo.motivo}, ${esitoTardivo.secondiRitardo}s dopo la scadenza ${expiresAtStr})`);
+                // Transazione NON completata: la prenotazione non si tocca.
                 await supabase.from('nexi_transactions').update({
                     status: 'expired_late_payment',
+                    transaction_id: transactionId || operationId || null,
                     metadata: {
                         ...(transaction.metadata || {}),
                         callback_result: result,
-                        late_payment_at: now.toISOString(),
+                        result_code: resultCode,
+                        authorization_code: authorizationCode,
+                        operation_id: operationId,
+                        late_payment_at: adesso.toISOString(),
                         expired_at: expiresAtStr,
-                        seconds_late: Math.round((now.getTime() - expiresAt.getTime()) / 1000),
+                        seconds_late: esitoTardivo.secondiRitardo,
+                        pagamento_tardivo: true,
+                        pagamento_tardivo_motivo: esitoTardivo.motivo,
+                        pagamento_tardivo_nota: esitoTardivo.nota,
+                        rimborso_manuale_da_valutare: true,
                     },
-                    updated_at: now.toISOString()
+                    updated_at: adesso.toISOString()
                 }).eq('id', transaction.id);
-                // Note: Nexi already charged the card. We need to refund.
-                // For now, flag it for manual review. Auto-refund can be added later.
-                console.warn(`[nexi-payment-callback] ⚠️ MANUAL REFUND NEEDED for order ${orderId} — customer paid after link expired`);
-                return { statusCode: 200, headers, body: JSON.stringify({ status: 'expired', message: 'Payment received after link expiry — flagged for refund' }) };
+
+                await allarmePagamentoTardivo({
+                    bookingId: transaction.booking_id,
+                    orderId,
+                    importoEur: transaction.amount_cents / 100,
+                    cliente: prenotazioneTardivo?.customer_name || transaction.metadata?.customer_name || transaction.customer_email || 'N/A',
+                    veicolo: prenotazioneTardivo?.vehicle_name || '',
+                    nota: esitoTardivo.nota,
+                });
+                return { statusCode: 200, headers, body: JSON.stringify({ status: 'expired_late_payment', motivo: esitoTardivo.motivo, message: 'Pagamento tardivo non applicato — allarme staff aperto' }) };
+            }
+            if (esitoTardivo.tipo === 'accetta_tardivo') {
+                console.warn(`[nexi-payment-callback] PAGAMENTO TARDIVO ACCETTATO — order ${orderId}, ${esitoTardivo.secondiRitardo}s dopo la scadenza ${expiresAtStr}`);
             }
         }
 
@@ -329,7 +441,14 @@ const handler: Handler = async (event) => {
                 operation_id: operationId,
                 contract_id: contractId,
                 payment_circuit: paymentCircuit,
-                payment_instrument: paymentInstrument
+                payment_instrument: paymentInstrument,
+                // 01/10/2026: pagato dopo la scadenza del link ma accettato.
+                ...(esitoTardivo.tipo === 'accetta_tardivo' ? {
+                    pagamento_tardivo: true,
+                    pagamento_tardivo_nota: esitoTardivo.nota,
+                    seconds_late: esitoTardivo.secondiRitardo,
+                    expired_at: expiresAtStr,
+                } : {}),
             },
             updated_at: new Date().toISOString()
         }).eq('id', transaction.id);
@@ -379,7 +498,10 @@ const handler: Handler = async (event) => {
                 .from('nexi_transactions')
                 .select('created_at')
                 .eq('booking_id', transaction.booking_id)
-                .eq('payment_purpose', paymentPurpose || 'booking')
+                // 01/10/2026: payment_purpose NON e' una colonna, sta in metadata.
+                // Con .eq('payment_purpose') la query andava in errore e la
+                // finestra di 1h partiva sempre da QUESTA transazione.
+                .eq('metadata->>payment_purpose', paymentPurpose || 'booking')
                 .order('created_at', { ascending: true })
                 .limit(1)
                 .maybeSingle();
@@ -755,6 +877,11 @@ const handler: Handler = async (event) => {
                         }
                     }).eq('id', booking.id);
                     console.log(`[nexi-payment-callback] Extension marked as paid in booking_details`);
+                    // 01/10/2026: estensione pagata = gli altri link estensione in attesa sono superati.
+                    await sostituisciLinkInAttesa(supabase, {
+                        bookingId: booking.id, scopi: ['extension'], escludiId: transaction.id,
+                        sostituitoDa: orderId, motivo: 'estensione pagata via Nexi',
+                    });
                 }
 
                 // 2026-05-30: SECONDA PRENOTAZIONE collegata (estensione con
@@ -979,6 +1106,14 @@ const handler: Handler = async (event) => {
                         ],
                     }
                 }).eq('id', booking.id);
+
+                // 01/10/2026: saldo completo = i link prenotazione/saldo ancora in attesa sono superati.
+                if (fullyPaid) {
+                    await sostituisciLinkInAttesa(supabase, {
+                        bookingId: booking.id, scopi: ['booking', 'booking_topup'], escludiId: transaction.id,
+                        sostituitoDa: orderId, motivo: 'prenotazione saldata via Nexi',
+                    });
+                }
 
                 // 2026-05-30: AUTO-SALDO prenotazioni FIGLIE collegate (estensione
                 // con cambio auto). Il link "Saldo completo" copre il saldo del
@@ -1275,6 +1410,12 @@ const handler: Handler = async (event) => {
                         nexi_contract_id: contractId,
                         nexi_paid_at: paidAt,
                         paymentStatus: 'paid',
+                        // 01/10/2026: pagato dopo la scadenza del link (accettato).
+                        ...(esitoTardivo.tipo === 'accetta_tardivo' ? {
+                            pagamento_tardivo: true,
+                            pagamento_tardivo_order_id: orderId,
+                            pagamento_tardivo_nota: esitoTardivo.nota,
+                        } : {}),
                     }
                 })
                 .eq('id', booking.id)
@@ -1285,6 +1426,13 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] Booking ${booking.id} — conditional update matched 0 rows (already paid by another webhook)`);
                     return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
                 }
+
+                // 01/10/2026: prenotazione pagata = gli altri link "booking"
+                // ancora in attesa non servono piu'.
+                await sostituisciLinkInAttesa(supabase, {
+                    bookingId: booking.id, scopi: ['booking'], escludiId: transaction.id,
+                    sostituitoDa: orderId, motivo: 'prenotazione pagata via Nexi',
+                });
 
                 console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid${wasExpired ? ' (recovered from expired)' : ''}`);
 

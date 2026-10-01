@@ -58,7 +58,7 @@ interface NexiTransaction {
     created_at: string
     order_id: string
     amount_cents: number
-    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'pending_preauth' | 'preauth_captured' | 'preauth_voided' | 'preauth_pending_link' | 'preauth_pending_refresh_confirm' | 'preauth_refresh_failed' | 'preauth_wrongly_charged' | 'preauth_wrongly_charged_refunded' | 'orphan_removed'
+    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'pending_preauth' | 'preauth_captured' | 'preauth_voided' | 'preauth_pending_link' | 'preauth_pending_refresh_confirm' | 'preauth_refresh_failed' | 'preauth_wrongly_charged' | 'preauth_wrongly_charged_refunded' | 'orphan_removed' | 'superseded' | 'expired_late_payment'
     description: string
     customer_email: string
     contract_id?: string
@@ -1438,6 +1438,9 @@ export default function NexiTab() {
             preauth_wrongly_charged: 'bg-red-900/50 text-red-300 border-red-700/50',
             preauth_wrongly_charged_refunded: 'bg-orange-900/50 text-orange-300 border-orange-700/50',
             orphan_removed: 'bg-theme-bg-tertiary/30 text-theme-text-muted border-theme-border/30',
+            // 01/10/2026: link sostituito da uno nuovo / pagamento tardivo non applicato
+            superseded: 'bg-theme-bg-tertiary/30 text-theme-text-muted border-theme-border/30',
+            expired_late_payment: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/50 dark:text-red-300 dark:border-red-700/50',
         }
         const labels: Record<string, string> = {
             completed: 'Completato',
@@ -1454,6 +1457,8 @@ export default function NexiTab() {
             preauth_wrongly_charged: 'ERRORE - Addebitato (no refund)',
             preauth_wrongly_charged_refunded: 'Refund effettuato (era addebito)',
             orphan_removed: 'Riferimento rimosso',
+            superseded: 'Sostituito da nuovo link',
+            expired_late_payment: 'Incassato - da verificare',
         }
         const style = styles[status] || styles.pending
         const label = labels[status] || status

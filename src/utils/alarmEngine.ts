@@ -186,6 +186,13 @@ export async function caricaContesto(now: Date): Promise<DetectorContext> {
     return { now, bookings, vehicles, cauzioni, firme, perVeicolo }
 }
 
+/**
+ * Voci del catalogo che apre una Netlify function, non un detector del giro:
+ * il giro non le chiude mai da solo. Tenere allineato con
+ * netlify/functions/nexi-payment-callback.ts (ALLARME_PAGAMENTO_DA_VERIFICARE).
+ */
+export const ALLARMI_APERTI_DAL_SERVER = new Set<string>(['pag_pagamento_verificare'])
+
 /** Chiave di identita' di un'occorrenza: allarme + cosa riguarda. */
 function chiave(alarmId: string, hit: AlarmHit): string {
     return `${alarmId}|${hit.bookingId || ''}|${hit.bookingId ? '' : (hit.vehicleId || '')}`
@@ -288,7 +295,11 @@ export async function sincronizzaEventi(
     }
 
     // Chiusura automatica: la condizione non c'e' piu'.
-    const daChiudere = aperti.filter(e => e.stato === 'aperto' && !visti.has(
+    // 01/10/2026: tranne gli allarmi aperti dal SERVER (es. pagamento Nexi
+    // incassato ma non applicato): nessun detector li rivede, quindi senza
+    // questa esclusione il giro successivo li chiudeva da solo come
+    // "condizione rientrata" e nessuno li vedeva. Si chiudono solo a mano.
+    const daChiudere = aperti.filter(e => e.stato === 'aperto' && !ALLARMI_APERTI_DAL_SERVER.has(e.alarm_id) && !visti.has(
         chiave(e.alarm_id, { bookingId: e.booking_id || undefined, vehicleId: e.vehicle_id || undefined, entita: '' }),
     ))
     // 01/10/2026: a blocchi di 200. Una sola `.in()` con centinaia di UUID

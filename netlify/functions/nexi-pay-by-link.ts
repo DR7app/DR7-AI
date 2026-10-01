@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
 import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
 import { funzioneFerma } from './utils/systemControl'
+import { sostituisciLinkInAttesa } from './utils/linkInAttesa'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -21,6 +22,9 @@ const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
  * - Nexi riceve la sola DATA di scadenza (yyyy-MM-dd), in paymentSession
  * - Rentora stores payment_link_sent_at and payment_link_expires_at (UTC ISO)
  * - The cancel job + callback both validate against payment_link_expires_at
+ * - 01/10/2026: su Nexi il link resta pagabile fino al giorno dopo. Il callback
+ *   NON scarta piu' i pagamenti tardivi: li registra, oppure (prenotazione
+ *   annullata / gia' saldata) apre un allarme staff — utils/pagamentoTardivo.ts
  */
 
 const handler: Handler = async (event) => {
@@ -232,6 +236,26 @@ const handler: Handler = async (event) => {
             });
 
         if (dbError) console.error('[nexi-pay-by-link] DB error:', dbError);
+
+        // 01/10/2026: nuovo link = i link precedenti della STESSA prenotazione
+        // e dello STESSO scopo ancora `pending` diventano 'superseded'. Solo se
+        // il nuovo e' stato salvato: altrimenti non resterebbe nessun link
+        // valido in attesa. Il vecchio resta pagabile su Nexi: se il cliente
+        // lo paga, il callback lo controlla (pagamentoTardivo.ts).
+        if (bookingId && !dbError) {
+            const { data: nuovo } = await supabase
+                .from('nexi_transactions')
+                .select('id')
+                .eq('order_id', orderId)
+                .maybeSingle();
+            await sostituisciLinkInAttesa(supabase, {
+                bookingId,
+                scopi: [paymentPurpose || 'booking'],
+                escludiId: nuovo?.id || null,
+                sostituitoDa: orderId,
+                motivo: 'nuovo link generato',
+            });
+        }
 
         // Note: the caller (ReservationsTab / PenaltyModal / DanniModal) writes
         // booking_details with the payment link + pending penali/danni entries
