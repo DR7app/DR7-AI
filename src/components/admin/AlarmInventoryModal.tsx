@@ -156,6 +156,11 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
         setSavingId(null)
         if (error) { toast.error('Toggle fallito: ' + error.message); return }
         setAlarms(prev => prev.map(a => (a.id === row.id ? { ...a, is_enabled: next } : a)))
+        // 01/10/2026: accendere un allarme senza rilevazione non deve sembrare
+        // un allarme attivo. Lo si dice subito, non solo con un'etichetta grigia.
+        if (next && row.stato_rilevamento !== 'attivo') {
+            toast.error(`"${row.label}" e' acceso ma NON puo' ancora suonare: manca la rilevazione.`, { duration: 8000 })
+        }
     }
 
     /** Accendi/spegni tutto un gruppo in un colpo solo. */
@@ -435,8 +440,8 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                                 {muto && (
                                                                     <>
                                                                         <span>·</span>
-                                                                        <span className="px-1.5 py-0.5 rounded-full border border-theme-border text-theme-text-muted">
-                                                                            in attesa di rilevazione
+                                                                        <span className="px-1.5 py-0.5 rounded-full border border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 font-semibold">
+                                                                            Non suona: rilevazione mancante
                                                                         </span>
                                                                     </>
                                                                 )}
