@@ -51,6 +51,20 @@ function ctx(bookings: BookingLite[], extra?: Record<string, unknown[]>, firme =
     return { now: ORA, bookings, vehicles: [], cauzioni: [], firme, perVeicolo, extra }
 }
 
+describe('op_pickup_photos_missing', () => {
+    it('suona se il ritiro e entro la soglia e le foto non sono state inviate', () => {
+        expect(D.op_pickup_photos_missing(cfg(), ctx([noleggio()]))).toHaveLength(1)
+    })
+    it('tace se le foto sono state inviate, il ritiro e fuori soglia o il noleggio e gia in corso', () => {
+        expect(D.op_pickup_photos_missing(cfg(), ctx([noleggio({ booking_details: { foto_pre_consegna_inviata_at: iso(-10 * MIN) } })]))).toHaveLength(0)
+        expect(D.op_pickup_photos_missing(cfg(), ctx([noleggio({ pickup_date: iso(3 * ORE) })]))).toHaveLength(0)
+        expect(D.op_pickup_photos_missing(cfg(), ctx([noleggio({ status: 'active' })]))).toHaveLength(0)
+    })
+    it('non riguarda i lavaggi', () => {
+        expect(D.op_pickup_photos_missing(cfg(), ctx([lavaggio()]))).toHaveLength(0)
+    })
+})
+
 describe('op_pickup_not_ready', () => {
     it('suona se il ritiro e entro la soglia e Pronta non e stata inviata', () => {
         expect(D.op_pickup_not_ready(cfg(), ctx([noleggio()]))).toHaveLength(1)

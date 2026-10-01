@@ -11,8 +11,14 @@
  * cliente. Farlo lato client avrebbe voluto dire due query e due permessi di
  * lettura in piu' nel pannello.
  *
- * Input:  { alarmId, entityId, templateKey }
+ * Input:  { alarmId, entityId, templateKey, eventId? }
  * Output: { sent: true, phone } oppure un motivo esplicito.
+ *
+ * 01/10/2026: con `eventId` (invio automatico dal motore allarmi) l'occorrenza
+ * si "prenota" prima di spedire: alarm_events.messaggio_cliente_at passa da
+ * NULL a adesso in una sola UPDATE. Chi arriva secondo trova la riga gia'
+ * presa e non spedisce: un messaggio per occorrenza, qualunque numero di
+ * schede aperte. L'esito resta scritto in messaggio_cliente_esito.
  */
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
@@ -44,7 +50,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { alarmId, entityId, templateKey } = JSON.parse(event.body || '{}')
+        const { alarmId, entityId, templateKey, eventId } = JSON.parse(event.body || '{}')
         if (!entityId || !templateKey) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'entityId e templateKey sono obbligatori' }) }
         }
@@ -52,6 +58,26 @@ export const handler: Handler = async (event) => {
         const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
             auth: { autoRefreshToken: false, persistSession: false },
         })
+
+        if (eventId) {
+            const { data: presa, error: errPresa } = await sb
+                .from('alarm_events')
+                .update({ messaggio_cliente_at: new Date().toISOString() })
+                .eq('id', eventId)
+                .is('messaggio_cliente_at', null)
+                .select('id')
+            if (errPresa || !presa || presa.length === 0) {
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({ sent: false, reason: 'already_sent', message: 'Messaggio gia\' inviato per questo allarme' }),
+                }
+            }
+        }
+        const segnaEsito = async (esito: string) => {
+            if (!eventId) return
+            await sb.from('alarm_events').update({ messaggio_cliente_esito: esito }).eq('id', eventId)
+        }
 
         let phone = ''
         let nome = ''
@@ -100,6 +126,7 @@ export const handler: Handler = async (event) => {
         }
 
         if (!phone.replace(/\D/g, '')) {
+            await segnaEsito('no_phone')
             return {
                 statusCode: 200,
                 headers,
@@ -122,6 +149,7 @@ export const handler: Handler = async (event) => {
         })
         const out = await res.json().catch(() => ({}))
         if (!res.ok || out?.skipped) {
+            await segnaEsito(out?.reason || 'send_failed')
             return {
                 statusCode: 200,
                 headers,
@@ -135,6 +163,7 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        await segnaEsito('inviato')
         return { statusCode: 200, headers, body: JSON.stringify({ sent: true, phone }) }
     } catch (err) {
         console.error('[alarm-send-message]', err)

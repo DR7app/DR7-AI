@@ -2626,6 +2626,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_documento_fattura',   label: 'Invio Fattura PDF',    description: 'Messaggio che accompagna il PDF della fattura' },
       { key: 'pro_documento_penale',    label: 'Invio Penale PDF',     description: 'Messaggio che accompagna il PDF della penale' },
       { key: 'pro_documento_ricevuta',  label: 'Invio Ricevuta',       description: 'Messaggio che accompagna la ricevuta di pagamento' },
+      { key: 'pro_checkin_digitale',    label: 'Check-in Digitale (Foto inviate)', description: 'WhatsApp al cliente quando si preme "Foto inviata" sulla prenotazione: foto e video del mezzo gia\' mandati prima della consegna' },
     ],
   },
   {

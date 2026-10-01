@@ -58,6 +58,7 @@ interface AlarmRow {
     destinatari: Destinatario[] | null
     sort_order: number
     message_key: string | null
+    messaggio_cliente_auto?: boolean | null
     sound_key?: string | null
 }
 
@@ -626,19 +627,26 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                                 <>
                                                                     <span className="text-theme-text-muted">Messaggio al cliente</span>
                                                                     <div>
-                                                                        <select
+                                                                        <SceltaMessaggio
                                                                             value={String(valueOf(row, 'message_key') || '')}
-                                                                            onChange={e => setField(row.id, 'message_key', e.target.value || null)}
-                                                                            className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
-                                                                        >
-                                                                            <option value="">— nessuno, non mostrare il pulsante —</option>
-                                                                            {templates.map(t => (
-                                                                                <option key={t.key} value={t.key}>{t.label}</option>
-                                                                            ))}
-                                                                        </select>
+                                                                            templates={templates}
+                                                                            onChange={v => setField(row.id, 'message_key', v || null)}
+                                                                        />
+                                                                        {valueOf(row, 'message_key') && (
+                                                                            <label className="mt-2 flex items-center gap-1.5 cursor-pointer">
+                                                                                <Switch
+                                                                                    small
+                                                                                    on={!!valueOf(row, 'messaggio_cliente_auto')}
+                                                                                    onClick={() => setField(row.id, 'messaggio_cliente_auto', !valueOf(row, 'messaggio_cliente_auto'))}
+                                                                                />
+                                                                                <span className="text-theme-text-secondary">Invia automaticamente quando suona</span>
+                                                                            </label>
+                                                                        )}
                                                                         <p className="mt-1 text-[10px] text-theme-text-muted">
-                                                                            Quando l&apos;allarme suona, l&apos;operatore vede &quot;Avvisa il cliente&quot; e parte
-                                                                            questo messaggio. Il testo si scrive in Messaggi di Sistema Pro.
+                                                                            {valueOf(row, 'messaggio_cliente_auto')
+                                                                                ? 'Quando l\'allarme si apre su una prenotazione, il cliente riceve questo messaggio su WhatsApp (una volta per allarme). Voi ricevete l\'allarme come sempre.'
+                                                                                : 'Quando l\'allarme suona, l\'operatore vede "Avvisa il cliente" e parte questo messaggio.'}
+                                                                            {' '}Il testo si scrive in Messaggi di Sistema Pro.
                                                                         </p>
                                                                     </div>
                                                                 </>
@@ -704,6 +712,68 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
             <div className="relative w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-theme-bg-primary border border-theme-border rounded-2xl shadow-2xl">
                 {corpo}
             </div>
+        </div>
+    )
+}
+
+/**
+ * Scelta del messaggio al cliente con ricerca: i template di Messaggi di
+ * Sistema Pro sono centinaia, una tendina semplice era impossibile da usare.
+ * Si cerca per nome o per chiave.
+ */
+function SceltaMessaggio({ value, templates, onChange }: {
+    value: string
+    templates: { key: string; label: string }[]
+    onChange: (key: string) => void
+}) {
+    const [aperto, setAperto] = useState(false)
+    const [testo, setTesto] = useState('')
+    const scelto = templates.find(t => t.key === value)
+    const q = testo.trim().toLowerCase()
+    const trovati = q
+        ? templates.filter(t => t.label.toLowerCase().includes(q) || t.key.toLowerCase().includes(q))
+        : templates
+    return (
+        <div className="relative">
+            <input
+                type="text"
+                value={aperto ? testo : (scelto ? scelto.label : (value || ''))}
+                onFocus={() => { setTesto(''); setAperto(true) }}
+                onBlur={() => setTimeout(() => setAperto(false), 150)}
+                onChange={e => setTesto(e.target.value)}
+                placeholder="Cerca un messaggio in Messaggi di Sistema Pro..."
+                className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+            />
+            {value && !scelto && !aperto && (
+                <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    Messaggio non trovato, spento o vuoto in Messaggi di Sistema Pro: non parte niente.
+                </p>
+            )}
+            {aperto && (
+                <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded border border-theme-border bg-theme-bg-primary shadow-lg">
+                    <button
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); onChange(''); setAperto(false) }}
+                        className="block w-full text-left px-2 py-1.5 text-theme-text-muted hover:bg-theme-bg-secondary"
+                    >
+                        — nessuno, non mostrare il pulsante —
+                    </button>
+                    {trovati.slice(0, 100).map(t => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); onChange(t.key); setAperto(false) }}
+                            className={`block w-full text-left px-2 py-1.5 hover:bg-theme-bg-secondary ${t.key === value ? 'text-dr7-gold font-semibold' : 'text-theme-text-primary'}`}
+                        >
+                            {t.label}
+                            <span className="ml-2 text-[10px] text-theme-text-muted">{t.key}</span>
+                        </button>
+                    ))}
+                    {trovati.length === 0 && (
+                        <p className="px-2 py-1.5 text-theme-text-muted">Nessun messaggio trovato</p>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

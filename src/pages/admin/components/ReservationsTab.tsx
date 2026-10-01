@@ -1004,6 +1004,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [generatingContract, setGeneratingContract] = useState(false)
   const [autoProntaSending, setAutoProntaSending] = useState(false)
   const autoProntaLockRef = useRef<Set<string>>(new Set())
+  const [fotoInviataSending, setFotoInviataSending] = useState(false)
+  const fotoInviataLockRef = useRef<Set<string>>(new Set())
   // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
@@ -4058,6 +4060,64 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     } finally {
       autoProntaLockRef.current.delete(booking.id)
       setAutoProntaSending(false)
+    }
+  }
+
+  // "Foto inviata" (01/10/2026): foto e video del mezzo partono dal telefono
+  // dell'operatore (troppo pesanti per il gestionale). Il bottone registra che
+  // sono stati mandati (booking_details.foto_pre_consegna_inviata_at, letto
+  // dall'allarme "Foto pre-consegna mancanti") e manda al cliente il template
+  // Pro dell'evento "Foto inviata" (rental_foto_inviata -> pro_checkin_digitale).
+  async function handleFotoInviata(booking: Booking) {
+    if (fotoInviataLockRef.current.has(booking.id) || fotoInviataSending) return
+    if (booking.booking_details?.foto_pre_consegna_inviata_at) { toast('Foto già segnate come inviate'); return }
+    fotoInviataLockRef.current.add(booking.id)
+    setFotoInviataSending(true)
+    const toastId = toast.loading('Invio messaggio check-in digitale...')
+    try {
+      const phone = await risolviTelefonoCliente(booking).catch(() => null)
+      if (!phone) {
+        toast.error('Nessun numero cliente — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { id: toastId, duration: 8000 })
+        return
+      }
+      const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
+      const nome = String(booking.customer_name || '').trim().split(/\s+/)[0] || 'Cliente'
+      const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: String(phone),
+          templateKey: 'rental_foto_inviata',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          booking: { service_type: (booking as any).service_type || 'car_rental' },
+          templateVars: {
+            customer_name: nome, nome,
+            booking_id: bookingRef, booking_ref: bookingRef,
+            vehicle_name: booking.vehicle_name || '',
+            vehicle_plate: booking.vehicle_plate || '', targa: booking.vehicle_plate || '',
+          },
+          skipHeader: true,
+        }),
+      }).catch(() => null)
+      const waResult = waResp ? await waResp.json().catch(() => ({})) : {}
+      if (waResult?.skipped) {
+        toast.error('Messaggio non inviato: template "Check-in Digitale (Foto inviate)" mancante o spento in Messaggi di Sistema Pro > Documenti.', { id: toastId, duration: 12000 })
+        return
+      }
+      if (!waResp || !waResp.ok) {
+        toast.error('Invio WhatsApp fallito', { id: toastId })
+        return
+      }
+      const newDetails = { ...(booking.booking_details || {}), foto_pre_consegna_inviata_at: new Date().toISOString() }
+      await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
+      setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
+      toast.success('Check-in digitale inviato al cliente', { id: toastId })
+      logAdminAction('foto_pre_consegna_inviata', 'booking', booking.id, buildBookingContext(booking))
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
+    } finally {
+      fotoInviataLockRef.current.delete(booking.id)
+      setFotoInviataSending(false)
     }
   }
 
@@ -12383,6 +12443,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       const svcMd = String((booking as any).service_type || '').toLowerCase()
                       const showAutoProntaMd = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svcMd)
                       const autoProntaDoneMd = !!booking.booking_details?.auto_pronta_sent_at
+                      const fotoInviataDoneMd = !!booking.booking_details?.foto_pre_consegna_inviata_at
+                      const isUscitaMd = booking.service_type === USCITA_SERVICE_TYPE
                       return (
                         <div className="flex items-center gap-2">
                           {showAutoProntaMd && (
@@ -12397,6 +12459,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               }`}
                             >
                               {autoProntaDoneMd ? '✓ Pronta' : 'Pronta'}
+                            </button>
+                          )}
+                          {showAutoProntaMd && !isUscitaMd && (
+                            <button
+                              onClick={() => handleFotoInviata(booking)}
+                              disabled={fotoInviataSending || fotoInviataDoneMd}
+                              title="Foto e video del mezzo mandati al cliente: invia il messaggio Check-in Digitale"
+                              className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                fotoInviataDoneMd
+                                  ? 'bg-sky-600/20 text-sky-700 dark:text-sky-400 cursor-default'
+                                  : 'bg-sky-600 hover:bg-sky-700 text-white'
+                              }`}
+                            >
+                              {fotoInviataDoneMd ? 'Foto inviate' : 'Foto inviata'}
                             </button>
                           )}
                           <GestisciMenu sections={sections} size="md" />
@@ -12640,6 +12716,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             const svc = String((booking as any).service_type || '').toLowerCase()
                             const showAutoPronta = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svc)
                             const autoProntaDone = !!booking.booking_details?.auto_pronta_sent_at
+                            const fotoInviataDone = !!booking.booking_details?.foto_pre_consegna_inviata_at
+                            const isUscitaRow = booking.service_type === USCITA_SERVICE_TYPE
                             return (
                               <div className="flex items-center justify-end gap-1.5">
                                 {showAutoPronta && (
@@ -12654,6 +12732,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                                     }`}
                                   >
                                     {autoProntaDone ? '✓ Pronta' : 'Pronta'}
+                                  </button>
+                                )}
+                                {showAutoPronta && !isUscitaRow && (
+                                  <button
+                                    onClick={() => handleFotoInviata(booking)}
+                                    disabled={fotoInviataSending || fotoInviataDone}
+                                    title="Foto e video del mezzo mandati al cliente: invia il messaggio Check-in Digitale"
+                                    className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                      fotoInviataDone
+                                        ? 'bg-sky-600/20 text-sky-700 dark:text-sky-400 cursor-default'
+                                        : 'bg-sky-600 hover:bg-sky-700 text-white'
+                                    }`}
+                                  >
+                                    {fotoInviataDone ? 'Foto inviate' : 'Foto inviata'}
                                   </button>
                                 )}
                                 <GestisciMenu sections={sections} size="sm" />
@@ -13146,6 +13238,22 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       }`}
                     >
                       {selectedBooking.booking_details?.auto_pronta_sent_at ? '✓ Pronta inviata' : autoProntaSending ? 'Invio…' : 'Pronta'}
+                    </button>
+                  )}
+                  {selectedBooking.status !== 'cancelled'
+                    && selectedBooking.service_type !== USCITA_SERVICE_TYPE
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    && !['car_wash', 'mechanical'].includes(String((selectedBooking as any).service_type || '').toLowerCase()) && (
+                    <button
+                      onClick={() => handleFotoInviata(selectedBooking)}
+                      disabled={fotoInviataSending || !!selectedBooking.booking_details?.foto_pre_consegna_inviata_at}
+                      className={`flex-1 px-4 py-3 rounded-full transition-colors font-medium disabled:opacity-60 ${
+                        selectedBooking.booking_details?.foto_pre_consegna_inviata_at
+                          ? 'bg-sky-600/20 text-sky-600 dark:text-sky-400 cursor-default'
+                          : 'bg-sky-600 hover:bg-sky-700 text-white'
+                      }`}
+                    >
+                      {selectedBooking.booking_details?.foto_pre_consegna_inviata_at ? 'Foto inviate' : fotoInviataSending ? 'Invio…' : 'Foto inviata'}
                     </button>
                   )}
                   {/* Pre-Auth Cauzione disabled — Nexi capture not reliable via API */}

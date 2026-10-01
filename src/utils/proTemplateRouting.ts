@@ -25,6 +25,9 @@ export const OLD_TO_PRO: Record<string, string> = {
   tour_new_customer: 'pro_conferma_tour',
   // Pronta Noleggio (admin clicca "Pronta" su prenotazione/calendario)
   rental_auto_pronta: 'pro_auto_pronta_noleggio',
+  // Foto inviata (01/10/2026): l'operatore manda foto e video del mezzo dal
+  // proprio telefono e preme "Foto inviata" sulla prenotazione.
+  rental_foto_inviata: 'pro_checkin_digitale',
   deposit_return_iban: 'pro_richiesta_iban',
 
   // Lavaggio — customer + admin get the same template
@@ -157,6 +160,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   rental_modified: 'Alla modifica della prenotazione noleggio',
   tour_new_customer: 'ARIA/MARE: alla creazione della prenotazione TOUR (al cliente) — dopo pagamento o spunta Conferma Prenotazione',
   rental_auto_pronta: 'NOLEGGIO: Pronta — mezzo pronto al ritiro (admin clicca "Pronta" su prenotazione o calendario)',
+  rental_foto_inviata: 'NOLEGGIO: Foto inviata — foto/video del mezzo mandati al cliente prima della consegna (admin clicca "Foto inviata" sulla prenotazione)',
   deposit_return_iban: 'Quando si chiede l\'IBAN per il rimborso cauzione',
 
   // Lavaggio
@@ -1391,6 +1395,10 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
   pro_marketing_invio_codice_sconto: [
     ['invio', 'codice', 'sconto'],
     ['codice', 'sconto', 'cliente'],
+  ],
+  pro_checkin_digitale: [
+    ['check', 'in', 'digitale'],
+    ['foto', 'inviat'],
   ],
   pro_marketing_compleanno: [
     ['compleanno'],

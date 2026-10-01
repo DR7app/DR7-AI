@@ -10,8 +10,12 @@
  *     il contratto ricondotto in signature_requests);
  *   - rifirma = booking_details.contratto_rifirma_richiesta (Salva con voce su
  *     "rifirma", la abbassa signature-complete);
- *   - conferma della direzione = booking_details.manually_confirmed.
- * Km, carburante, foto, video, chiavi, accessori, check-list, operatore del
+ *   - conferma della direzione = booking_details.manually_confirmed;
+ *   - foto pre-consegna = booking_details.foto_pre_consegna_inviata_at
+ *     (bottone "Foto inviata" su Prenotazioni, 01/10/2026: le foto partono
+ *     dal telefono dell'operatore, il gestionale registra solo che sono
+ *     state mandate).
+ * Km, carburante, video, chiavi, accessori, check-list, operatore del
  * lavaggio e stato "iniziato/completato" del lavaggio NON esistono nei dati:
  * quelle voci restano "in attesa" e non sono qui.
  *
@@ -110,6 +114,25 @@ const op_pickup_not_ready: Detector = (cfg, ctx) => {
             vehicleId: b.vehicle_id,
             entita: etichetta(b, ritiroAt(b)),
             dettaglio: 'Veicolo non segnato come Pronta',
+        }))
+}
+
+/**
+ * Ritiro entro la soglia e nessuno ha premuto "Foto inviata"
+ * (booking_details.foto_pre_consegna_inviata_at): il cliente non ha ancora
+ * ricevuto la documentazione fotografica del mezzo.
+ */
+const op_pickup_photos_missing: Detector = (cfg, ctx) => {
+    const ms = sogliaMs(cfg)
+    return ctx.bookings
+        .filter(b => isNoleggio(b) && !isUscita(b) && isViva(b) && !inCorso(b)
+            && entroPrima(ritiroAt(b), ctx.now, ms)
+            && !dettagli(b).foto_pre_consegna_inviata_at)
+        .map(b => ({
+            bookingId: b.id,
+            vehicleId: b.vehicle_id,
+            entita: etichetta(b, ritiroAt(b)),
+            dettaglio: 'Foto pre-consegna non inviate al cliente',
         }))
 }
 
@@ -555,6 +578,7 @@ async function carica(now: Date): Promise<Record<string, unknown[]>> {
 
 export const DETECTORS_OPERATIVO: Record<string, Detector> = {
     op_pickup_not_ready,
+    op_pickup_photos_missing,
     op_pickup_offsite_todo,
     op_return_ext_unpaid,
     op_return_ext_unformalized,

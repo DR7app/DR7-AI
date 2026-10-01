@@ -30,6 +30,7 @@ import {
 } from './alarmDetectors'
 import { PRIORITY_RANK, type AlarmPriority } from '../data/alarmCatalog'
 import { MODULI_ALLARMI, detectorsDeiModuli } from './allarmi'
+import { authFetch } from './authFetch'
 
 const GIORNO = 24 * 60 * 60 * 1000
 /** Finestra di lavoro: quello che e' successo ieri e quello che succede domani. */
@@ -219,6 +220,8 @@ export interface EsitoGiro {
     eventiAperti?: AlarmEventRow[]
     /** Configurazione per id, per sapere suono e ripetizione di ogni evento. */
     configurazioni?: Map<string, AlarmCfgMotore>
+    /** Occorrenze aperte da QUESTA scheda in questo giro (upsert senza doppioni). */
+    nuoviEventi?: AlarmEventRow[]
 }
 
 /**
@@ -342,7 +345,49 @@ export async function sincronizzaEventi(
         ...aperti.filter(e => e.stato === 'aperto' && !chiusi.has(e.id)),
         ...inseriti.filter(e => e.stato === 'aperto'),
     ]
-    return { aperti: visti.size, nuovi: daInserire.length, richiusi: daChiudere.length, eventiAperti }
+    return { aperti: visti.size, nuovi: daInserire.length, richiusi: daChiudere.length, eventiAperti, nuoviEventi: inseriti }
+}
+
+/**
+ * Messaggio al cliente collegato all'allarme (01/10/2026, direzione): quando
+ * un allarme si apre su una prenotazione e in Centralina Pro > Allarmi ha un
+ * messaggio scelto con "Invia automaticamente" acceso, il cliente lo riceve.
+ *
+ * Solo per le occorrenze NUOVE di questo giro: l'upsert con ignoreDuplicates
+ * restituisce la riga a una sola scheda, e alarm-send-message la "prenota"
+ * su alarm_events.messaggio_cliente_at — un messaggio per occorrenza, anche
+ * con dieci operatori collegati. Le occorrenze gia' aperte prima di accendere
+ * l'invio non ricevono niente: accendere non deve scatenare un invio di massa.
+ *
+ * Configurazione letta a parte: se la migration non e' ancora passata la
+ * lettura fallisce e si salta l'invio, gli allarmi continuano a suonare.
+ */
+async function inviaMessaggiCliente(nuovi: AlarmEventRow[]): Promise<void> {
+    const conPratica = nuovi.filter(e => e.booking_id)
+    if (conPratica.length === 0) return
+    const ids = Array.from(new Set(conPratica.map(e => e.alarm_id)))
+    const { data, error } = await supabase
+        .from('system_alarms')
+        .select('id, message_key, messaggio_cliente_auto')
+        .in('id', ids)
+    if (error || !data) return
+    const messaggi = new Map<string, string>()
+    for (const r of data as { id: string; message_key: string | null; messaggio_cliente_auto: boolean | null }[]) {
+        if (r.messaggio_cliente_auto && r.message_key) messaggi.set(r.id, r.message_key)
+    }
+    for (const e of conPratica) {
+        const templateKey = messaggi.get(e.alarm_id)
+        if (!templateKey) continue
+        try {
+            await authFetch('/.netlify/functions/alarm-send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ alarmId: e.alarm_id, entityId: e.booking_id, templateKey, eventId: e.id }),
+            })
+        } catch (err) {
+            console.warn('[allarmi] messaggio al cliente non inviato:', err)
+        }
+    }
 }
 
 /**
@@ -369,6 +414,9 @@ export async function giroAllarmi(now = new Date()): Promise<EsitoGiro | null> {
         const risultati = eseguiRilevazioni(cfgs, ctx, detectorsDeiModuli())
             .filter(({ cfg, hit }) => !esclusi.has(chiave(cfg.id, hit)))
         const esito = await sincronizzaEventi(risultati, now)
+        if (esito.nuoviEventi?.length) {
+            void inviaMessaggiCliente(esito.nuoviEventi).catch(err => console.warn('[allarmi] messaggi cliente:', err))
+        }
         return { ...esito, configurazioni: new Map(cfgs.map(c => [c.id, c])) }
     } catch (e) {
         if (e instanceof CatalogoNonInstallato) return null
