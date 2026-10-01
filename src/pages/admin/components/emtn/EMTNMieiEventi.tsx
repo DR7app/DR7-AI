@@ -1,7 +1,7 @@
 /**
  * EMTN — I MIEI EVENTI (01/10/2026).
  *
- * Le posizioni aperte, inviate o approvate/decise dall'operatore collegato, in ogni fase:
+ * Tutte le posizioni EMTN dell'azienda, visibili a ogni operatore, in ogni fase:
  * in coda approvazione, integrazione richiesta, pubblicate, rifiutate.
  * Prima era un segnaposto: la pratica finiva in "Da approvare" ma qui
  * non si vedeva nulla. "Apri" carica il cliente nella Ricerca, dove si
@@ -107,7 +107,7 @@ export default function EMTNMieiEventi({ onApri }: { onApri: (cf: string) => voi
             </div>
             {visibili.length === 0 && (
                 <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-6 text-sm text-theme-text-muted">
-                    {dati.posizioni.length === 0 ? 'Non hai ancora inviato segnalazioni EMTN.' : 'Nessuna segnalazione in questo filtro.'}
+                    {dati.posizioni.length === 0 ? 'Nessuna segnalazione EMTN inviata.' : 'Nessuna segnalazione in questo filtro.'}
                 </div>
             )}
             {visibili.map(p => {

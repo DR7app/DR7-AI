@@ -1161,7 +1161,7 @@ function ReteEmtnCard({ eventi, residuo }: { eventi: EventoRete[]; residuo: numb
 
 // 01/10/2026: prima le righe erano scritte a mano ("Tutti i documenti
 // verificati", "Aggiornamento score in corso") e "Vedi tutti" non faceva
-// nulla. Ora legge le pratiche EMTN vere dell'operatore (e la coda della
+// nulla. Ora legge le pratiche EMTN vere dell'azienda (e la coda della
 // direzione) e ogni riga porta alla sezione giusta.
 function AlertSistema({ events, versione, onVai }: { events: RecentEvent[]; versione: number; onVai: (v: EMTNView) => void }) {
     const [mie, setMie] = useState<MieiEventiRisposta | null>(null)
@@ -1190,8 +1190,8 @@ function AlertSistema({ events, versione, onVai }: { events: RecentEvent[]; vers
             : { tone: 'ok', label: 'Nessuna segnalazione da approvare' })
     }
     alerts.push(inCoda > 0
-        ? { tone: 'info', label: `${inCoda} tue segnalazioni in attesa di approvazione`, vai: 'mie-segnalazioni' }
-        : { tone: 'ok', label: 'Nessuna tua segnalazione in attesa' })
+        ? { tone: 'info', label: `${inCoda} segnalazioni in attesa di approvazione`, vai: 'mie-segnalazioni' }
+        : { tone: 'ok', label: 'Nessuna segnalazione in attesa' })
     if (integrazione > 0) alerts.push({ tone: 'warn', label: `${integrazione} integrazioni richieste dalla direzione`, vai: 'mie-segnalazioni' })
     if (sospese > 0) alerts.push({ tone: 'warn', label: `${sospese} segnalazioni sospese`, vai: 'mie-segnalazioni' })
     if (rifiutate > 0) alerts.push({ tone: 'err', label: `${rifiutate} segnalazioni rifiutate`, vai: 'mie-segnalazioni' })
