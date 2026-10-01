@@ -21,3 +21,8 @@ ON CONFLICT (message_key) DO NOTHING;
 UPDATE system_alarms SET message_key = 'pro_promemoria_firma_prima_ritiro'
  WHERE id = 'con_contratto_non_firmato_30_minuti_dal_ritiro'
    AND message_key = 'signature_otp_whatsapp';
+
+-- 01/10/2026 (direzione): in Centralina Pro > Allarmi c'e' una sola scelta.
+-- Messaggio scelto = parte al cliente quando l'allarme suona.
+UPDATE system_alarms SET messaggio_cliente_auto = true
+ WHERE coalesce(message_key, '') <> '' AND messaggio_cliente_auto = false;
