@@ -625,7 +625,7 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                             {/* Messaggio al cliente — solo dove un cliente esiste. */}
                                                             {row.category === 'booking' && (
                                                                 <>
-                                                                    <span className="text-theme-text-muted">Messaggio al cliente</span>
+                                                                    <span className="text-theme-text-muted self-start pt-1.5">Messaggio al cliente</span>
                                                                     <div>
                                                                         <SceltaMessaggio
                                                                             value={String(valueOf(row, 'message_key') || '')}
@@ -643,9 +643,14 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                                             </label>
                                                                         )}
                                                                         <p className="mt-1 text-[10px] text-theme-text-muted">
+                                                                            {/* 01/10/2026: il bottone "Avvisa il cliente" esiste solo nel popup
+                                                                                degli allarmi storici (legacy_*); per il catalogo senza invio
+                                                                                automatico il messaggio non parte. */}
                                                                             {valueOf(row, 'messaggio_cliente_auto')
                                                                                 ? 'Quando l\'allarme si apre su una prenotazione, il cliente riceve questo messaggio su WhatsApp (una volta per allarme). Voi ricevete l\'allarme come sempre.'
-                                                                                : 'Quando l\'allarme suona, l\'operatore vede "Avvisa il cliente" e parte questo messaggio.'}
+                                                                                : String(row.detector || '').startsWith('legacy_')
+                                                                                    ? 'Quando l\'allarme suona, l\'operatore vede "Avvisa il cliente" e parte questo messaggio.'
+                                                                                    : 'Invio automatico spento: il messaggio non parte. Accendilo per farlo arrivare al cliente quando l\'allarme suona.'}
                                                                             {' '}Il testo si scrive in Messaggi di Sistema Pro.
                                                                         </p>
                                                                     </div>
@@ -735,15 +740,22 @@ function SceltaMessaggio({ value, templates, onChange }: {
         : templates
     return (
         <div className="relative">
+            <svg className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+            </svg>
             <input
                 type="text"
                 value={aperto ? testo : (scelto ? scelto.label : (value || ''))}
                 onFocus={() => { setTesto(''); setAperto(true) }}
                 onBlur={() => setTimeout(() => setAperto(false), 150)}
                 onChange={e => setTesto(e.target.value)}
-                placeholder="Cerca un messaggio in Messaggi di Sistema Pro..."
-                className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                placeholder={scelto ? `${scelto.label} — scrivi per cercarne un altro` : 'Cerca un messaggio in Messaggi di Sistema Pro...'}
+                title="Clicca e scrivi per cercare un messaggio di Messaggi di Sistema Pro"
+                className="w-full pl-7 pr-7 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary focus:border-dr7-gold focus:outline-none"
             />
+            <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
             {value && !scelto && !aperto && (
                 <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
                     Messaggio non trovato, spento o vuoto in Messaggi di Sistema Pro: non parte niente.
