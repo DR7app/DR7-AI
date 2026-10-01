@@ -522,14 +522,20 @@ export const handler: Handler = async (event) => {
         : 'La richiesta e\' in revisione amministrativa.'
 
     // Risk score numerico 0-100 derivato dalla cronologia.
-    // Penalita\': eventi negativi (8 pt cad), eventi under_review (4 pt cad),
-    // pendenze danni/penali (1 pt ogni 50 EUR, max 25). Bonus storico:
-    // +1 pt ogni 5 noleggi regolari (max 10). Floor 5, cap 100.
+    // Penalita\': ogni danno/penale mai avuto, anche gia' pagato (6 pt cad,
+    // max 30), eventi negativi non saldati (8 pt cad), eventi under_review
+    // (4 pt cad), pendenze danni/penali (1 pt ogni 50 EUR, max 25). Bonus
+    // storico: +1 pt ogni 5 noleggi regolari (max 10). Floor 5, cap 100.
+    // 01/10/2026: un danno pagato contava zero e il cliente restava a
+    // 100/100. Chi ha anche un solo evento non torna mai sopra 90.
+    const eventiStorici = dr7Damages.length + dr7Penalties.length + storicoRete.length
+    const storicoPenalty = Math.min(30, eventiStorici * 6)
     const negPenalty = sc.negative_events * 8
     const reviewPenalty = sc.events_under_review * 4
     const unpaidPenalty = Math.min(25, Math.floor(dr7Unpaid / 50))
     const regularBonus = Math.min(10, Math.floor(sc.regular_rentals / 5))
-    const riskScore = Math.max(5, Math.min(100, 100 - negPenalty - reviewPenalty - unpaidPenalty + regularBonus))
+    const tetto = eventiStorici > 0 || sc.events_under_review > 0 ? 90 : 100
+    const riskScore = Math.max(5, Math.min(tetto, 100 - storicoPenalty - negPenalty - reviewPenalty - unpaidPenalty + regularBonus))
     const riskLevel = band === 'green' ? 1 : band === 'yellow' ? 2 : 3
 
     // Cliente arricchito: union dei campi emtn_clients + customers_extended
