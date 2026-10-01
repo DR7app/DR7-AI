@@ -625,35 +625,41 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                             {/* Messaggio al cliente — solo dove un cliente esiste. */}
                                                             {row.category === 'booking' && (
                                                                 <>
-                                                                    <span className="text-theme-text-muted self-start pt-1.5">Messaggio al cliente</span>
-                                                                    <div>
-                                                                        <SceltaMessaggio
-                                                                            value={String(valueOf(row, 'message_key') || '')}
-                                                                            templates={templates}
-                                                                            onChange={v => setField(row.id, 'message_key', v || null)}
-                                                                        />
-                                                                        {valueOf(row, 'message_key') && (
-                                                                            <label className="mt-2 flex items-center gap-1.5 cursor-pointer">
+                                                                    <span className="text-theme-text-muted">Messaggio al cliente</span>
+                                                                    <SceltaMessaggio
+                                                                        value={String(valueOf(row, 'message_key') || '')}
+                                                                        templates={templates}
+                                                                        onChange={v => setField(row.id, 'message_key', v || null)}
+                                                                    />
+
+                                                                    {valueOf(row, 'message_key') && (
+                                                                        <>
+                                                                            <span className="text-theme-text-muted">Invio automatico</span>
+                                                                            <label className="flex items-center gap-1.5 cursor-pointer">
                                                                                 <Switch
                                                                                     small
                                                                                     on={!!valueOf(row, 'messaggio_cliente_auto')}
                                                                                     onClick={() => setField(row.id, 'messaggio_cliente_auto', !valueOf(row, 'messaggio_cliente_auto'))}
                                                                                 />
-                                                                                <span className="text-theme-text-secondary">Invia automaticamente quando suona</span>
+                                                                                <span className="text-theme-text-secondary">Invia al cliente quando suona</span>
                                                                             </label>
-                                                                        )}
-                                                                        <p className="mt-1 text-[10px] text-theme-text-muted">
-                                                                            {/* 01/10/2026: il bottone "Avvisa il cliente" esiste solo nel popup
-                                                                                degli allarmi storici (legacy_*); per il catalogo senza invio
-                                                                                automatico il messaggio non parte. */}
-                                                                            {valueOf(row, 'messaggio_cliente_auto')
+                                                                        </>
+                                                                    )}
+
+                                                                    <span className="hidden sm:block" />
+                                                                    <p className="-mt-1 text-[10px] text-theme-text-muted">
+                                                                        {/* 01/10/2026: il bottone "Avvisa il cliente" esiste solo nel popup
+                                                                            degli allarmi storici (legacy_*); per il catalogo senza invio
+                                                                            automatico il messaggio non parte. */}
+                                                                        {!valueOf(row, 'message_key')
+                                                                            ? 'Nessun messaggio scelto: il cliente non riceve niente.'
+                                                                            : valueOf(row, 'messaggio_cliente_auto')
                                                                                 ? 'Quando l\'allarme si apre su una prenotazione, il cliente riceve questo messaggio su WhatsApp (una volta per allarme). Voi ricevete l\'allarme come sempre.'
                                                                                 : String(row.detector || '').startsWith('legacy_')
                                                                                     ? 'Quando l\'allarme suona, l\'operatore vede "Avvisa il cliente" e parte questo messaggio.'
                                                                                     : 'Invio automatico spento: il messaggio non parte. Accendilo per farlo arrivare al cliente quando l\'allarme suona.'}
-                                                                            {' '}Il testo si scrive in Messaggi di Sistema Pro.
-                                                                        </p>
-                                                                    </div>
+                                                                        {' '}Il testo si scrive in Messaggi di Sistema Pro.
+                                                                    </p>
                                                                 </>
                                                             )}
 
