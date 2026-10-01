@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { authFetch } from '../utils/authFetch'
 import { supabase } from '../supabaseClient'
 import { fetchAllRows } from '../utils/fetchAllRows'
+import { isColonnaMancante } from '../utils/colonnaMancante'
 import {
   clientStatusColor,
   loadClientStatusConfig,
@@ -132,6 +133,12 @@ interface RawCustomer {
   status_cliente: RawStatus
 }
 
+// 01/10/2026: colonne sempre presenti in produzione. `status_cliente` si
+// aggiunge solo se il database ce l'ha (vedi load()).
+const COLONNE_BASE = 'id, user_id, email, telefono, status'
+// null = non ancora verificato, false = colonna assente in questo database.
+let statusClienteDisponibile: boolean | null = null
+
 export function ClientStatusProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [byCustomerId, setByCustomerId] = useState<Map<string, ClientStatusInfo>>(new Map())
@@ -157,10 +164,31 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       //
       // La lista DR7 Club parte INSIEME ai clienti invece che dopo: sono due
       // letture indipendenti, non c'e' motivo di sommarle.
-      const customersPromise = fetchAllRows<RawCustomer>((from, to) => supabase
+      //
+      // 01/10/2026: in produzione la colonna `status_cliente` NON esiste (lo
+      // status sta solo in `status`: blacklist/member/elite/...). Chiederla
+      // nella select faceva fallire TUTTA la lettura (400, colonna
+      // inesistente) e i badge cliente restavano vuoti ovunque dal 01/09.
+      // Ora si prova con `status_cliente` e, se il database risponde
+      // "colonna mancante", si rilegge senza: i badge funzionano con lo
+      // schema di oggi e si riaccendono da soli se la colonna verra' aggiunta.
+      // Il risultato "colonna assente" resta in memoria per la sessione, cosi'
+      // i ricaricamenti successivi non ripetono la richiesta destinata a fallire.
+      const leggiClienti = (colonne: string) => fetchAllRows<RawCustomer>((from, to) => supabase
         .from('customers_extended')
-        .select('id, user_id, email, telefono, status, status_cliente')
-        .range(from, to))
+        .select(colonne)
+        .range(from, to) as unknown as PromiseLike<{ data: RawCustomer[] | null; error: unknown }>)
+      const customersPromise = (async () => {
+        if (statusClienteDisponibile !== false) {
+          const res = await leggiClienti(`${COLONNE_BASE}, status_cliente`)
+          if (!isColonnaMancante(res.error)) {
+            if (!res.error) statusClienteDisponibile = true
+            return res
+          }
+          statusClienteDisponibile = false
+        }
+        return leggiClienti(COLONNE_BASE)
+      })()
 
       const clubPromise = authFetch('/.netlify/functions/list-club-members').catch(() => null)
 
