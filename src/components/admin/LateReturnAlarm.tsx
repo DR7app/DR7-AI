@@ -57,8 +57,24 @@ const LateReturnAlarm: React.FC = () => {
         const checkLateBookings = async () => {
             try {
                 const now = new Date();
+                // 01/10/2026: la sirena segue la riga "Riconsegna in Ritardo"
+                // (return_after) di Centralina Pro > Allarmi: spenta = non
+                // suona, e il ritardo scelto li' sostituisce i 10 minuti fissi.
+                // Prima la riga diceva 30 minuti e la sirena partiva a 10.
+                // Se la lettura fallisce si resta sul comportamento storico.
+                let minLate = MIN_LATE_MINUTES;
+                const { data: cfg } = await supabase
+                    .from('system_alarms')
+                    .select('is_enabled, threshold_value, threshold_unit')
+                    .eq('id', 'return_after')
+                    .maybeSingle();
+                if (cfg) {
+                    if (cfg.is_enabled === false) { setLateBookings([]); return; }
+                    const v = Number(cfg.threshold_value);
+                    if (cfg.threshold_unit === 'minutes_after' && Number.isFinite(v) && v >= 0) minLate = v;
+                }
                 const maxLateCutoff = new Date(now.getTime() - MAX_LATE_MINUTES * 60 * 1000);
-                const minLateCutoff = new Date(now.getTime() - MIN_LATE_MINUTES * 60 * 1000);
+                const minLateCutoff = new Date(now.getTime() - minLate * 60 * 1000);
 
                 // Only ring for ACTIVE rentals whose dropoff_date falls in the
                 // [now - MAX_LATE_MINUTES, now - MIN_LATE_MINUTES] window.
@@ -92,7 +108,7 @@ const LateReturnAlarm: React.FC = () => {
                     const dropoffTime = new Date(booking.dropoff_date);
                     const minutesLate = Math.floor((now.getTime() - dropoffTime.getTime()) / (60 * 1000));
                     // Safety: enforce the window client-side too (in case of TZ weirdness).
-                    if (minutesLate < MIN_LATE_MINUTES || minutesLate > MAX_LATE_MINUTES) return;
+                    if (minutesLate < minLate || minutesLate > MAX_LATE_MINUTES) return;
                     late.push({
                         id: booking.id,
                         vehicle_name: booking.vehicle_name,
