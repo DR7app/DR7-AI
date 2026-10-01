@@ -11,6 +11,7 @@ import { hasApprovedOverride } from './utils/verifyOverride'
 import { loadBusinessConfig } from './utils/businessConfig'
 import { isFatturaPrincipale, isUscitaSdi, TIPO_ESTENSIONE } from './utils/fatturaTipi'
 import { funzioneFerma } from './utils/systemControl'
+import { classificaRispostaGreenApi, classificaEccezioneGreenApi, leggiCorpo, rigaLogWhatsapp, type EsitoGreenApi } from './utils/esitoGreenApi'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -230,6 +231,28 @@ async function rilasciaInvioWhatsappFattura(invoiceId: string): Promise<void> {
         await supabase.from('fatture').update({ pdf_whatsapp_inviato_at: null }).eq('id', invoiceId)
     } catch {
         // Il rilascio e' un di piu': se fallisce si perde solo un rinvio.
+    }
+}
+
+/**
+ * 01/10/2026: l'invio del PDF fattura su WhatsApp non lasciava traccia in
+ * sent_messages_log (ne' riuscito ne' fallito). Stessa riga di
+ * send-whatsapp-notification; non lancia mai.
+ */
+async function registraLogPdfFattura(
+    invoice: { numero_fattura?: string | null; customer_name?: string | null },
+    telefono: string,
+    caption: string,
+    esito: EsitoGreenApi,
+): Promise<void> {
+    try {
+        const testo = [`Fattura ${invoice.numero_fattura || ''} (PDF)`.trim(), caption].filter(Boolean).join('\n\n')
+        const { error } = await supabase.from('sent_messages_log').insert(rigaLogWhatsapp({
+            nome: invoice.customer_name, telefono, testo, etichetta: 'Fattura PDF', esito,
+        }))
+        if (error) console.error('[Invoice] Log invio PDF non riuscito:', error.message)
+    } catch (e: any) {
+        console.error('[Invoice] Log invio PDF non riuscito:', e?.message)
     }
 }
 
@@ -1424,22 +1447,29 @@ export const handler: Handler = async (event) => {
                         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
                         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
-                        const waResponse = await fetch(greenApiUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                chatId: `${cleanPhone}@c.us`,
-                                urlFile: pdfUrl,
-                                fileName: `Fattura_${invoice.numero_fattura}.pdf`,
-                                caption: (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                        const caption = (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                        let waEsito: EsitoGreenApi
+                        try {
+                            const waResponse = await fetch(greenApiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    chatId: `${cleanPhone}@c.us`,
+                                    urlFile: pdfUrl,
+                                    fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                                    caption
+                                })
                             })
-                        })
+                            waEsito = classificaRispostaGreenApi(waResponse.status, leggiCorpo(await waResponse.text()))
+                        } catch (fetchErr: unknown) {
+                            waEsito = classificaEccezioneGreenApi(fetchErr)
+                        }
+                        await registraLogPdfFattura(invoice, cleanPhone, caption, waEsito)
 
-                        const waResult = await waResponse.json()
-                        if (waResponse.ok && !waResult.error) {
-                            console.log('[Invoice] Fattura PDF sent via WhatsApp:', waResult.idMessage)
+                        if (waEsito.tipo === 'inviato') {
+                            console.log('[Invoice] Fattura PDF sent via WhatsApp:', waEsito.idMessage)
                         } else {
-                            console.error('[Invoice] WhatsApp send failed:', waResult)
+                            console.error('[Invoice] WhatsApp send failed:', waEsito.motivo)
                             await rilasciaInvioWhatsappFattura(invoice.id)
                         }
                     } catch (waErr: any) {
@@ -2232,22 +2262,29 @@ async function sendWalletFatturaPdfAndWhatsApp(
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
-        const waResponse = await fetch(greenApiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chatId: `${cleanPhone}@c.us`,
-                urlFile: publicUrl,
-                fileName: `Fattura_${invoice.numero_fattura}.pdf`,
-                caption: (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+        const caption = (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+        let waEsito: EsitoGreenApi
+        try {
+            const waResponse = await fetch(greenApiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chatId: `${cleanPhone}@c.us`,
+                    urlFile: publicUrl,
+                    fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                    caption
+                })
             })
-        })
+            waEsito = classificaRispostaGreenApi(waResponse.status, leggiCorpo(await waResponse.text()))
+        } catch (fetchErr: unknown) {
+            waEsito = classificaEccezioneGreenApi(fetchErr)
+        }
+        await registraLogPdfFattura(invoice, cleanPhone, caption, waEsito)
 
-        const waResult = await waResponse.json()
-        if (waResponse.ok && !waResult.error) {
-            console.log('[Wallet Fattura PDF] Sent via WhatsApp:', waResult.idMessage)
+        if (waEsito.tipo === 'inviato') {
+            console.log('[Wallet Fattura PDF] Sent via WhatsApp:', waEsito.idMessage)
         } else {
-            console.error('[Wallet Fattura PDF] WhatsApp send failed:', waResult)
+            console.error('[Wallet Fattura PDF] WhatsApp send failed:', waEsito.motivo)
             await rilasciaInvioWhatsappFattura(invoice.id)
         }
         return publicUrl

@@ -6366,8 +6366,8 @@ export default function MessaggiSistemaProTab() {
                             <details key={log.id} className="border border-theme-border rounded-lg overflow-hidden">
                                 <summary className="p-3 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600/20 text-green-400">
-                                            {log.status === 'sent' ? 'Inviato' : log.status}
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${log.status === 'failed' ? 'bg-red-600/15 text-red-700 dark:text-red-400' : 'bg-green-600/20 text-green-400'}`}>
+                                            {log.status === 'sent' ? 'Inviato' : log.status === 'failed' ? 'Non inviato' : log.status}
                                         </span>
                                         {log.template_label && (
                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">

@@ -6,7 +6,8 @@ import { langFromPhone, translateText } from './utils/i18n';
 // System Control: un messaggio non partito diventa un'operazione ripetibile
 // dal pannello. `automatica: false` di proposito — un ritentativo automatico
 // rischierebbe di mandare due volte lo stesso messaggio al cliente.
-import { registraEvento, accodaOperazione, segnaChiamata, funzioneFerma, businessDaServiceType } from './utils/systemControl';
+import { registraEvento, accodaOperazione, segnaChiamata, funzioneFerma, businessDaServiceType, chiudiOperazione, impronta, sanifica } from './utils/systemControl';
+import { classificaRispostaGreenApi, classificaEccezioneGreenApi, leggiCorpo, reinvioAutomaticoSicuro, reinvioScaduto, rigaLogWhatsapp, REINVIO_SCADE_ORE, type EsitoGreenApi } from './utils/esitoGreenApi';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -97,6 +98,19 @@ const handler: Handler = async (event) => {
   }
 
   const body = JSON.parse(event.body || '{}');
+  // 01/10/2026: ripresa dal System Control. Il payload in coda e' sanificato
+  // (max 60 chiavi per oggetto, campi "sensibili" mascherati): la riga
+  // bookings ne ha piu' di 100, quindi la prenotazione si rilegge dal
+  // database. I campi del chiamante restano, quelli veri hanno la precedenza.
+  if (body?.systemControlRetry === true && body?.booking?.id && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+    try {
+      const { data: fresca } = await createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        .from('bookings').select('*').eq('id', body.booking.id).maybeSingle();
+      if (fresca) body.booking = { ...body.booking, ...fresca };
+    } catch (e) {
+      console.warn('[send-whatsapp] rilettura prenotazione per la ripresa non riuscita:', e);
+    }
+  }
   const { booking, type, customPhone, skipHeader, templateKey, templateVars } = body;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
@@ -1029,43 +1043,129 @@ const handler: Handler = async (event) => {
     };
   }
 
+  // 01/10/2026: dati comuni a log e coda, calcolati PRIMA dell'invio cosi'
+  // anche un fallimento lascia traccia in sent_messages_log (prima si
+  // registrava solo il successo: il guasto Green API del 30/09 era invisibile).
+  const logCustomerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
+  const logTemplateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
+  const scriviLog = async (esitoLog: EsitoGreenApi, inCoda = false): Promise<void> => {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+    try {
+      const { error: logErr } = await createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        .from('sent_messages_log')
+        .insert(rigaLogWhatsapp({ nome: logCustomerName, telefono: targetPhone, testo: wrappedMessage, etichetta: logTemplateLabel, esito: esitoLog, inCoda }));
+      if (logErr) console.error('Log failed:', logErr.message);
+    } catch (e: unknown) {
+      console.error('Log failed:', e);
+    }
+  };
+
+  // Chiave di idempotenza: quella della ripresa System Control se c'e',
+  // altrimenti destinatario + giorno + impronta della richiesta. Due richieste
+  // identiche nello stesso giorno = una sola operazione in coda.
+  const isRitentativo = body?.systemControlRetry === true && typeof body?.idempotencyKey === 'string' && !!body.idempotencyKey;
+  const payloadRichiesta: Record<string, unknown> = { ...(body || {}) };
+  delete payloadRichiesta.idempotencyKey;
+  delete payloadRichiesta.systemControlRetry;
+  const primoTentativoAt = payloadRichiesta._waPrimoTentativoAt;
+  delete payloadRichiesta._waPrimoTentativoAt;
+  const chiaveWa: string = isRitentativo
+    ? String(body.idempotencyKey)
+    : `wa:${targetPhone}:${new Date().toISOString().slice(0, 10)}:${impronta([JSON.stringify(payloadRichiesta)])}`;
+
+  // Ripresa di un messaggio rimasto in coda troppo a lungo: non parte piu'
+  // (un promemoria di ieri non serve). Risposta "skipped" = operazione annullata.
+  if (isRitentativo && reinvioScaduto(primoTentativoAt)) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: false, skipped: true, reason: 'reinvio_scaduto', message: `Messaggio in coda da oltre ${REINVIO_SCADE_ORE} ore: non inviato.` }),
+    };
+  }
+
   try {
     // Send via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
-    const response = await fetch(greenApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chatId: `${targetPhone}@c.us`,
-        message: wrappedMessage,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || result.error) {
-      console.error('Green API error:', result);
-      throw new Error(result.error || 'Green API error');
+    let esito: EsitoGreenApi;
+    try {
+      const response = await fetch(greenApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chatId: `${targetPhone}@c.us`,
+          message: wrappedMessage,
+        }),
+      });
+      esito = classificaRispostaGreenApi(response.status, leggiCorpo(await response.text()));
+    } catch (fetchErr: unknown) {
+      esito = classificaEccezioneGreenApi(fetchErr);
     }
 
-    console.log('✅ WhatsApp notification sent via Green API:', result.idMessage);
+    if (esito.tipo !== 'inviato') {
+      console.error('Green API error:', esito.motivo);
+      // Istanza non autorizzata/bloccata/quota: il messaggio sicuramente non
+      // e' partito, quindi riparte da solo quando l'istanza torna. Ogni altro
+      // errore resta da riprendere a mano (potrebbe essere partito).
+      const payloadCoda: Record<string, unknown> = {
+        ...payloadRichiesta,
+        _waPrimoTentativoAt: typeof primoTentativoAt === 'string' ? primoTentativoAt : new Date().toISOString(),
+      };
+      const automatica = reinvioAutomaticoSicuro(esito, payloadCoda, sanifica(payloadCoda));
+      await scriviLog(esito, automatica);
+      try {
+        await segnaChiamata('green_api', false, { errore: esito.motivo, status: esito.status });
+        const gruppo = await registraEvento({
+          messaggio: `Messaggio WhatsApp non inviato: ${esito.motivo}`,
+          categoria: 'notifiche', modulo: 'Messaggi', funzione: 'send-whatsapp-notification',
+          integrazione: 'green_api', severita: 'medio',
+          contesto: { destinatario: targetPhone, tipo: body?.type || null, esito: esito.tipo },
+        });
+        await accodaOperazione({
+          tipo: 'messaggio_whatsapp',
+          chiaveIdempotenza: chiaveWa,
+          descrizione: `Messaggio WhatsApp a ${targetPhone}${body?.type ? ` (${body.type})` : ''}`,
+          integrazione: 'green_api', entitaTipo: 'messaggio', entitaId: targetPhone,
+          endpoint: 'send-whatsapp-notification',
+          payload: payloadCoda,
+          errore: esito.motivo,
+          gruppoId: gruppo.gruppoId, automatica,
+        });
+      } catch (scErr) {
+        console.warn('[send-whatsapp] System Control non raggiungibile:', scErr);
+      }
 
-    // Log to sent_messages_log — fire and forget, never blocks the response
-    if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-      const fullMessage = wrappedMessage;
-      const customerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
-      const templateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
-      // Fire and forget, never blocks the response. Promise.resolve(...) dà un
-      // vero Promise (con .catch) attorno al thenable del query builder Supabase.
-      Promise.resolve(
-        createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-          .from('sent_messages_log')
-          .insert({ customer_name: customerName, customer_phone: targetPhone, message_text: fullMessage, template_label: templateLabel, status: 'sent' })
-      ).catch((e: unknown) => console.error('Log failed:', e));
+      // Ripresa dal worker con l'istanza ancora giu': risposta "sospesa"
+      // (reason '<chiave>_off', vedi interpretaRisposta), cosi' l'operazione
+      // torna in coda senza consumare un tentativo.
+      if (isRitentativo && esito.tipo === 'istanza_non_disponibile') {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ success: false, skipped: true, reason: 'green_api_istanza_off', message: `Istanza WhatsApp non disponibile (${esito.motivo}).` }),
+        };
+      }
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: 'Error sending WhatsApp notification',
+          error: esito.motivo,
+          queued: true,
+          autoRetry: automatica,
+        }),
+      };
     }
+
+    console.log('✅ WhatsApp notification sent via Green API:', esito.idMessage);
+
+    // Log to sent_messages_log (scriviLog non lancia mai)
+    await scriviLog(esito);
+    // Salute dell'integrazione: un invio riuscito azzera i fallimenti di fila,
+    // cosi' dopo il ritorno dell'istanza il pannello non resta "in errore".
+    await segnaChiamata('green_api', true);
+    // La stessa richiesta era in coda (es. rifatta a mano dopo il guasto)?
+    // La si chiude, cosi' il worker non la rimanda una seconda volta.
+    await chiudiOperazione(chiaveWa, isRitentativo ? 'System Control' : 'invio diretto');
 
     // ── Optional email channel ──
     // If the template has send_email=true in Messaggi di Sistema Pro and
@@ -1109,13 +1209,16 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({
         message: 'WhatsApp notification sent via Green API',
         success: true,
-        messageId: result.idMessage
+        messageId: esito.idMessage
       }),
     };
   } catch (error: any) {
     console.error('Error sending WhatsApp notification:', error);
 
     // ── System Control ──────────────────────────────────────────────────
+    // 01/10/2026: gli errori di Green API sono gestiti sopra (log + coda).
+    // Qui arriva solo un errore imprevisto: non si sa se il messaggio e'
+    // partito, quindi resta 'automatica: false' (lo rilancia una persona).
     try {
       await segnaChiamata('green_api', false, { errore: String(error?.message || error) });
       const gruppo = await registraEvento({
@@ -1126,11 +1229,11 @@ const handler: Handler = async (event) => {
       });
       await accodaOperazione({
         tipo: 'messaggio_whatsapp',
-        chiaveIdempotenza: `wa:${targetPhone}:${new Date().toISOString().slice(0, 13)}:${String(body?.type || 'manuale')}`,
+        chiaveIdempotenza: chiaveWa,
         descrizione: `Messaggio WhatsApp a ${targetPhone}${body?.type ? ` (${body.type})` : ''}`,
         integrazione: 'green_api', entitaTipo: 'messaggio', entitaId: targetPhone,
         endpoint: 'send-whatsapp-notification',
-        payload: JSON.parse(event.body || '{}'),
+        payload: payloadRichiesta,
         errore: String(error?.message || error),
         gruppoId: gruppo.gruppoId, automatica: false,
       });
