@@ -3,6 +3,9 @@
  * Compliant with FatturaPA 1.2 specification
  */
 
+import { validaCodiceFiscale, validaPartitaIva } from '../../src/utils/codiceFiscaleValido'
+import { togliCivicoDoppio } from './utils/indirizzoCliente'
+
 interface InvoiceData {
   numero_fattura: string
   data_emissione: string
@@ -71,7 +74,10 @@ function parseAddress(address: string): AddressParts {
   if (!capMatch || capMatch.index === undefined) throw incompleto('il CAP')
   const cap = capMatch[1]
 
-  const street = raw.slice(0, capMatch.index).replace(/[,;\s]+$/, '').trim()
+  // 01/10/2026: "Via Dante Alighieri, N. 56 56" — il civico scritto dentro
+  // la via e ripetuto dal campo numero_civico. Rete di sicurezza anche per le
+  // righe gia' salvate cosi' (la composizione e' corretta in indirizzoCliente).
+  const street = togliCivicoDoppio(raw.slice(0, capMatch.index).replace(/[,;\s]+$/, '').trim())
   if (!street) throw incompleto('la via')
 
   let rest = raw.slice(capMatch.index + cap.length).replace(/^[,;\s]+/, '').trim()
@@ -128,6 +134,32 @@ function formatAmount(amount: number): string {
 }
 
 /**
+ * Controlla l'identificativo che finira' nell'XML del cessionario: la P.IVA
+ * se c'e' (e' quella che si trasmette), altrimenti il codice fiscale.
+ * Solleva un errore in italiano, pronto da mostrare all'operatore.
+ */
+export function controllaIdentificativoCliente(customerVAT: string, customerFiscalCode: string, companyVAT = '04104640927'): void {
+  const prefisso = 'Fattura non inviata allo SDI: '
+  if (customerVAT) {
+    const esito = validaPartitaIva(customerVAT)
+    if (!esito.valido) throw new Error(prefisso + esito.motivo + ' Correggi l\'anagrafica del cliente e reinvia.')
+    // Errore SDI 00471 gia' visto in produzione (DR7-2026-1442/1451/1570):
+    // la P.IVA del cliente era quella di DR7, cedente = cessionario.
+    if (esito.codice === companyVAT) {
+      throw new Error(prefisso + `la partita IVA del cliente (${esito.codice}) e' quella di DR7: lo SDI scarta una fattura intestata a se stessi (errore 00471). Togli la P.IVA dall'anagrafica del cliente o inserisci quella giusta e reinvia.`)
+    }
+    return
+  }
+  if (customerFiscalCode) {
+    const esito = validaCodiceFiscale(customerFiscalCode)
+    if (!esito.valido) throw new Error(prefisso + esito.motivo)
+    if (esito.codice === companyVAT) {
+      throw new Error(prefisso + `il codice fiscale del cliente (${esito.codice}) e' quello di DR7: lo SDI scarta una fattura intestata a se stessi (errore 00471). Correggi l'anagrafica del cliente e reinvia.`)
+    }
+  }
+}
+
+/**
  * Generate FatturaPA 1.2 compliant XML for Aruba SDI
  */
 export function generateFatturaXML(invoice: InvoiceData): string {
@@ -152,8 +184,9 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   const progressivoInvio = (rawNum + rndSuffix).substring(0, 10)
 
   // Customer details
-  const customerVAT = (invoice.customer_vat || '').toUpperCase().trim()
-  const customerFiscalCode = (invoice.customer_tax_code || '').toUpperCase().trim()
+  // 01/10/2026: spazi interni tolti — "RSS MRA ..." non e' un CF per lo SDI.
+  const customerVAT = (invoice.customer_vat || '').toUpperCase().replace(/\s+/g, '')
+  const customerFiscalCode = (invoice.customer_tax_code || '').toUpperCase().replace(/\s+/g, '')
   const customerName = escapeXml(invoice.customer_name)
 
   // CodiceDestinatario: use customer's SDI code or default 0000000
@@ -236,6 +269,16 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   if (!customerVAT && !customerFiscalCode) {
     throw new Error('XML generation failed: customer has no CodiceFiscale or PartitaIVA')
   }
+
+  // 01/10/2026: l'identificativo del cliente si controlla PRIMA di costruire
+  // l'XML. DR7-2026-2102 (CF LRASFN01E25Z138I, controllo giusto J) e le
+  // fatture Saia (SIAVLR91E18B354A, giusto G) sono partite verso Aruba con un
+  // CF sbagliato e lo SDI le ha scartate. Qui l'errore si solleva: tutti i
+  // chiamanti (generate-invoice-from-booking, send-invoice-to-sdi,
+  // generate-penalty-invoice, wallet/club/prevendita) lo prendono, lasciano la
+  // fattura in 'draft' e salvano il motivo su sdi_response.auto_send_error,
+  // che il tab Fatture mostra sotto il badge. Nessun upload ad Aruba.
+  controllaIdentificativoCliente(customerVAT, customerFiscalCode, companyVAT)
 
   // Identificazione cliente per FatturaPA — regola semplice e corretta:
   //   - Se il cliente ha P.IVA (societa' o professionista) -> usa solo P.IVA

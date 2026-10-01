@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions'
-import { componiIndirizzo } from './utils/indirizzoCliente'
+import { componiIndirizzo, viaConCivico } from './utils/indirizzoCliente'
 import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
@@ -662,9 +662,9 @@ export const handler: Handler = async (event) => {
             const prov = usaAnagrafica ? (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim() : ''
 
             if (street) {
-                let streetAddress = street
-                if (num) streetAddress += ` ${num}`
-                addressParts.push(streetAddress)
+                // 01/10/2026: il civico non si accoda se la via lo contiene gia'
+                // ("Via Dante Alighieri, N. 56" + 56 usciva "N. 56 56").
+                addressParts.push(viaConCivico(street, num))
             }
 
             if (city || zip) {
@@ -690,7 +690,7 @@ export const handler: Handler = async (event) => {
             const bCity = bookingCustomer.cittaResidenza || bookingCustomer.citta || bookingCustomer.city || ''
             const bProv = (bookingCustomer.provinciaResidenza || bookingCustomer.provincia || '').toUpperCase().trim()
             const parts: string[] = []
-            if (bStreet) parts.push(bNum ? `${bStreet} ${bNum}` : bStreet)
+            if (bStreet) parts.push(viaConCivico(bStreet, bNum)) // 01/10/2026: niente civico doppio
             if (bCity || bZip) {
                 let line = ''
                 if (bZip) line += bZip
@@ -1245,7 +1245,10 @@ export const handler: Handler = async (event) => {
         const invoiceData = {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
-            importo_totale: total,
+            // 01/10/2026: centesimi. La somma delle righe in virgola mobile
+            // finiva in colonna come 865.6200000000001 e la nota di credito la
+            // ricopiava tale e quale.
+            importo_totale: Math.round(total * 100) / 100,
             stato: includePenalties ? 'paid' :
                 (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
@@ -1373,6 +1376,13 @@ export const handler: Handler = async (event) => {
             console.log('[Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
         } else if (invoice.customer_tax_code || invoice.customer_vat) {
             try {
+                // 01/10/2026: "c'e' un CF" non basta piu'. generateFatturaXML
+                // controlla CF (carattere di controllo, omocodia) o P.IVA
+                // (checksum) PRIMA di produrre l'XML e solleva un errore in
+                // italiano: si finisce nel catch qui sotto, la fattura resta
+                // 'draft' col motivo in sdi_response.auto_send_error e ad
+                // Aruba non parte niente (DR7-2026-2102 era partita col CF
+                // LRASFN01E25Z138I, controllo giusto J, ed e' stata scartata).
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
                 const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)

@@ -76,6 +76,19 @@ export const handler: Handler = async (event) => {
         const notaNumber = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
         const today = new Date().toISOString().split('T')[0]
 
+        // 01/10/2026: importi arrotondati ai centesimi. La nota copiava i
+        // numeri dell'originale cosi' com'erano e importo_totale (numeric senza
+        // scala) finiva salvato come 865.6200000000001 (DR7-2026-2007) o
+        // 440.00000000000006 (DR7-2026-2084). L'IVA resta totale - imponibile
+        // - esente, mai imponibile x aliquota.
+        const centesimi = (v: unknown) => Math.round((Number(v) || 0) * 100) / 100
+        const ndcTotale = centesimi(original.importo_totale)
+        const ndcImponibile = centesimi(original.subtotal)
+        const ndcEsente = centesimi(original.exempt_amount)
+        const ndcIva = original.vat_amount == null
+            ? original.vat_amount
+            : centesimi(ndcTotale - ndcImponibile - ndcEsente)
+
         // Create the nota di credito record
         const notaRecord = {
             numero_fattura: notaNumber,
@@ -89,10 +102,10 @@ export const handler: Handler = async (event) => {
             customer_sdi_code: original.customer_sdi_code,
             customer_pec: original.customer_pec,
             items: original.items,
-            subtotal: original.subtotal,
-            vat_amount: original.vat_amount,
-            exempt_amount: original.exempt_amount,
-            importo_totale: original.importo_totale,
+            subtotal: original.subtotal == null ? original.subtotal : ndcImponibile,
+            vat_amount: ndcIva,
+            exempt_amount: original.exempt_amount == null ? original.exempt_amount : ndcEsente,
+            importo_totale: original.importo_totale == null ? original.importo_totale : ndcTotale,
             stato: 'paid',
             booking_id: original.booking_id,
             tipo_fattura: 'nota_di_credito',

@@ -1,3 +1,5 @@
+import { validaCodiceFiscale } from './codiceFiscaleValido'
+
 /**
  * Italian Codice Fiscale calculator
  * Generates CF from: cognome, nome, data_nascita, sesso, luogo_nascita
@@ -479,12 +481,12 @@ const CITY_TO_PROVINCIA: Record<string, string> = {
  * Validate the check digit (last character) of a Codice Fiscale.
  */
 export function validateCheckDigit(cf: string): boolean {
+  // 01/10/2026: stessa regola del server (codiceFiscaleValido.ts), che ora
+  // blocca l'invio allo SDI. Accetta anche i CF omocodici, che il vecchio
+  // formato rifiutava pur essendo validi.
   const code = cf.toUpperCase().replace(/\s/g, '')
   if (code.length !== 16) return false
-  // Validate basic format
-  if (!/^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/.test(code)) return false
-  const expected = computeCheckChar(code.substring(0, 15))
-  return code[15] === expected
+  return validaCodiceFiscale(code).valido
 }
 
 /**

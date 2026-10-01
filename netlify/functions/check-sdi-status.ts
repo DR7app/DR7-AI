@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { checkArubaStatus } from './aruba-utils'
+import { conMotivoScarto } from './utils/motivoScartoSdi'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -65,12 +66,18 @@ export const handler: Handler = async (event) => {
             sdiStatus = 'sent'
         }
 
+        // 01/10/2026: Aruba dice "Scartata" ma statusDescription e' vuota
+        // (DR7-2026-2102, Saia 1908-1913). Il client Aruba del repo non sa
+        // scaricare la notifica di scarto: si salva un motivo esplicito, con
+        // la causa probabile se CF/P.IVA non passano il controllo.
+        const rispostaConMotivo = conMotivoScarto(remoteInvoice, invoice)
+
         // Update DB
         await supabase
             .from('fatture')
             .update({
                 sdi_status: sdiStatus,
-                sdi_response: remoteInvoice
+                sdi_response: rispostaConMotivo
             })
             .eq('id', invoiceId)
 
@@ -78,7 +85,9 @@ export const handler: Handler = async (event) => {
         await supabase.from('invoice_status_logs').insert({
             invoice_id: invoiceId,
             status: sdiStatus,
-            message: `Aruba Status: ${remoteStatus}`,
+            message: rispostaConMotivo.motivo_scarto
+                ? `Aruba Status: ${remoteStatus} - ${rispostaConMotivo.motivo_scarto}`
+                : `Aruba Status: ${remoteStatus}`,
             raw_response: remoteInvoice
         })
 
@@ -87,6 +96,7 @@ export const handler: Handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 status: sdiStatus,
+                motivo_scarto: rispostaConMotivo.motivo_scarto || null,
                 details: remoteInvoice
             })
         }

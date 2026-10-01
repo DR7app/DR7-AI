@@ -24,6 +24,43 @@ type Riga = Record<string, any> | null | undefined
 
 const s = (v: any) => String(v ?? '').trim()
 
+/**
+ * 01/10/2026 — civico ripetuto. La fattura DR7-2026-2102 e' uscita con
+ * "Via Dante Alighieri, N. 56 56": il cliente aveva scritto il numero dentro
+ * la via ("Via Dante Alighieri, N. 56") e il campo numero_civico (56) veniva
+ * accodato di nuovo. Il civico si aggiunge solo se la via NON finisce gia'
+ * con quel numero (anche nella forma "n. 56", "n° 56", ", 56").
+ * Si guarda solo la CODA della via: "Via 4 Novembre" + civico 4 resta
+ * "Via 4 Novembre 4".
+ */
+const normCivico = (v: string) => v.toUpperCase().replace(/\s+/g, '')
+
+export function viaFinisceConCivico(via: string, civico: string): boolean {
+    const c = normCivico(s(civico)).replace(/^(N\.?|N°|NR\.?|NUM\.?)/, '')
+    if (!c) return false
+    const coda = s(via).match(/(?:^|[\s,])(?:N\.?|N°|NR\.?|NUM\.?)?\s*(\d+\s*(?:[\/-]?\s*[A-Za-z0-9]{1,3})?)\s*$/i)
+    return !!coda && normCivico(coda[1]) === c
+}
+
+/** "Via Roma" + "12" -> "Via Roma 12"; "Via Roma, N. 12" + "12" -> "Via Roma, N. 12". */
+export function viaConCivico(via: string, civico: string): string {
+    const v = s(via)
+    const c = s(civico)
+    if (!c) return v
+    if (!v) return c
+    return viaFinisceConCivico(v, c) ? v : `${v} ${c}`
+}
+
+/**
+ * Rete di sicurezza per gli indirizzi GIA' composti male (righe salvate prima
+ * della correzione): "Via Dante Alighieri, N. 56 56" -> "Via Dante Alighieri, N. 56".
+ * Tocca solo un numero ripetuto identico in coda.
+ */
+export function togliCivicoDoppio(via: string): string {
+    // Il numero deve iniziare dopo uno spazio/virgola/punto: "Via 156 56" resta com'e'.
+    return s(via).replace(/(^|[\s,.°])(\d+(?:\s*[\/-]\s*[A-Za-z0-9]{1,3})?)(?:\s*,)?\s+\2\s*$/i, '$1$2')
+}
+
 export function componiIndirizzo(parti: {
     via?: string
     civico?: string
@@ -39,7 +76,7 @@ export function componiIndirizzo(parti: {
     const citta = s(parti.citta)
     const provincia = s(parti.provincia).toUpperCase()
 
-    const pezzi: string[] = [civico ? `${via} ${civico}` : via]
+    const pezzi: string[] = [viaConCivico(via, civico)]
 
     let riga2 = ''
     if (cap) riga2 += cap

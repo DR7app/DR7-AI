@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
+import { viaConCivico } from './utils/indirizzoCliente'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
 import { loadBusinessConfig } from './utils/businessConfig'
@@ -181,9 +182,8 @@ export const handler: Handler = async (event) => {
             const prov = (customerData.provincia_residenza || customerData.province || '').toUpperCase().trim()
 
             if (street) {
-                let streetAddress = street
-                if (num) streetAddress += ` ${num}`
-                addressParts.push(streetAddress)
+                // 01/10/2026: niente civico doppio ("Via X, N. 56" + 56).
+                addressParts.push(viaConCivico(street, num))
             }
 
             if (city || zip) {

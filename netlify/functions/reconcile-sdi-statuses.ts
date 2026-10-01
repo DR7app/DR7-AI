@@ -15,6 +15,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { searchOutgoingInvoices } from './aruba-utils'
+import { motivoScarto } from './utils/motivoScartoSdi'
 
 const supabase = createClient(
     process.env.VITE_SUPABASE_URL!,
@@ -28,6 +29,8 @@ interface ArubaOutgoing {
     invoiceStatus?: string
     docNumber?: string
     invoiceNumber?: string
+    statusDescription?: string
+    invoices?: { status?: string; statusDescription?: string }[]
 }
 
 function mapStatus(remote: string): 'accepted' | 'rejected' | 'error' | 'sent' | null {
@@ -50,7 +53,7 @@ function mapStatus(remote: string): 'accepted' | 'rejected' | 'error' | 'sent' |
 export const handler: Handler = async () => {
     const PAGE_SIZE = 100
     const MAX_PAGES = 10 // 1000 fatture cap per invocazione
-    const updates = new Map<string, { from: string | null; to: string; remoteStatus: string }>()
+    const updates = new Map<string, { from: string | null; to: string; remoteStatus: string; motivo?: string | null }>()
     const unknown: { numero: string; remoteStatus: string }[] = []
     let pagesFetched = 0
     let totalRemote = 0
@@ -60,10 +63,10 @@ export const handler: Handler = async () => {
         // Build filename → fattura row index from our DB.
         const { data: localRows, error: localErr } = await supabase
             .from('fatture')
-            .select('id, numero_fattura, xml_filename, aruba_upload_filename, sdi_status')
+            .select('id, numero_fattura, xml_filename, aruba_upload_filename, sdi_status, customer_tax_code, customer_vat')
             .or('xml_filename.not.is.null,aruba_upload_filename.not.is.null')
         if (localErr) throw new Error('DB load: ' + localErr.message)
-        const byFilename = new Map<string, { id: string; numero_fattura: string; sdi_status: string | null }>()
+        const byFilename = new Map<string, { id: string; numero_fattura: string; sdi_status: string | null; customer_tax_code?: string | null; customer_vat?: string | null }>()
         for (const r of localRows || []) {
             if (r.aruba_upload_filename) byFilename.set(r.aruba_upload_filename, r)
             if (r.xml_filename) byFilename.set(r.xml_filename, r)
@@ -89,7 +92,15 @@ export const handler: Handler = async () => {
                     continue
                 }
                 if (mapped !== local.sdi_status) {
-                    updates.set(local.id, { from: local.sdi_status, to: mapped, remoteStatus })
+                    // 01/10/2026: per gli scarti si porta dietro il motivo (la
+                    // descrizione Aruba, o il segnaposto se e' vuota).
+                    const motivo = mapped === 'rejected'
+                        ? motivoScarto({
+                            status: remoteStatus,
+                            statusDescription: inv.invoices?.[0]?.statusDescription || inv.statusDescription || '',
+                        }, local)
+                        : null
+                    updates.set(local.id, { from: local.sdi_status, to: mapped, remoteStatus, motivo })
                 }
             }
 
@@ -99,10 +110,17 @@ export const handler: Handler = async () => {
 
         // Apply updates in batches, resetting sdi_notification_seen for any
         // new transition into rejected/error so the dashboard badge fires.
-        for (const [id, { to }] of updates) {
+        for (const [id, { to, motivo }] of updates) {
             const update: Record<string, unknown> = { sdi_status: to }
             // Notifica solo per scarti SDI veri, non per errori pipeline.
             if (to === 'rejected') update.sdi_notification_seen = false
+            // 01/10/2026: motivo dello scarto aggiunto a sdi_response senza
+            // perdere quello che c'era (id Aruba, filename, ...).
+            if (to === 'rejected' && motivo) {
+                const { data: riga } = await supabase.from('fatture').select('sdi_response').eq('id', id).maybeSingle()
+                const precedente = riga?.sdi_response && typeof riga.sdi_response === 'object' ? riga.sdi_response : {}
+                update.sdi_response = { ...precedente, motivo_scarto: motivo }
+            }
             const { error } = await supabase.from('fatture').update(update).eq('id', id)
             if (error) console.warn('[reconcile-sdi] update failed', id, error.message)
         }

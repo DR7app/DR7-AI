@@ -36,6 +36,10 @@ interface Invoice {
   sdi_notification_seen?: boolean
   // Solo il motivo, estratto da sdi_response lato database: vedi loadInvoices.
   sdi_auto_send_error?: string | null
+  // 01/10/2026: perche' lo SDI l'ha scartata (vedi motivoScartoSdi.ts) e la
+  // descrizione Aruba grezza, quando c'e'.
+  sdi_motivo_scarto?: string | null
+  sdi_status_description?: string | null
   // Nota di credito
   tipo_fattura?: string
   // Servono a riconoscere le fatture in doppio: che documento e' (una
@@ -733,6 +737,8 @@ export default function FatturaTab() {
     'sdi_status', 'sdi_notification_seen', 'tipo_fattura',
     'extension_index', 'aruba_invoice_id', 'created_at',
     'sdi_auto_send_error:sdi_response->>auto_send_error',
+    'sdi_motivo_scarto:sdi_response->>motivo_scarto',
+    'sdi_status_description:sdi_response->invoices->0->>statusDescription',
   ].join(',')
 
   async function loadInvoices() {
@@ -1582,7 +1588,11 @@ export default function FatturaTab() {
                   // reinvio, e questa fattura non e' mai uscita.
                   const sdiBlockReason = (sdiStatus === 'draft' || sdiStatus === 'error')
                     ? String(invoice.sdi_auto_send_error || '').trim()
-                    : ''
+                    // 01/10/2026: anche la scartata dice perche'. Prima si
+                    // leggeva solo "Scartata" e il motivo andava cercato su Aruba.
+                    : (sdiStatus === 'rejected' || sdiStatus === 'scartata')
+                      ? String(invoice.sdi_motivo_scarto || invoice.sdi_status_description || '').trim()
+                      : ''
                   const scartataLocale = sdiStatus === 'draft' && !!sdiBlockReason
                   const sdiLabel = scartataLocale ? 'Scartata (dati mancanti)'
                     : !sdiStatus ? '—'

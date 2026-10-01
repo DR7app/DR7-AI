@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { indirizzoUtilizzabile, cercaIndirizzoAltrove, riparaIndirizzo } from './utils/indirizzoCliente'
+import { indirizzoUtilizzabile, cercaIndirizzoAltrove, riparaIndirizzo, viaConCivico } from './utils/indirizzoCliente'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
 // System Control: la fattura non trasmessa diventa un'operazione visibile e
@@ -186,7 +186,8 @@ export const handler: Handler = async (event) => {
                     const prov = usaAnagrafica ? (customerData.provincia_residenza || customerData.provincia || '').toUpperCase().trim() : ''
 
                     const addressParts: string[] = []
-                    if (street) addressParts.push(num ? `${street} ${num}` : street)
+                    // 01/10/2026: niente civico doppio ("N. 56 56").
+                    if (street) addressParts.push(viaConCivico(street, num))
                     if (city || zip) {
                         let cityLine = ''
                         if (zip) cityLine += zip

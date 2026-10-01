@@ -13,6 +13,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { checkArubaStatus } from './aruba-utils'
+import { conMotivoScarto } from './utils/motivoScartoSdi'
 
 const supabase = createClient(
     process.env.VITE_SUPABASE_URL!,
@@ -46,7 +47,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 export async function pollAllPendingSdi(): Promise<PollResult> {
     const { data: pendingInvoices, error: fetchError } = await supabase
         .from('fatture')
-        .select('id, xml_filename, aruba_upload_filename, sdi_status, numero_fattura, sdi_sent_at')
+        .select('id, xml_filename, aruba_upload_filename, sdi_status, numero_fattura, sdi_sent_at, customer_tax_code, customer_vat')
         // Oldest sdi_sent_at first → we don't leave ancient sending invoices
         // perpetually behind newer ones each invocation.
         .in('sdi_status', ['sending', 'sent'])
@@ -131,9 +132,11 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
                 // (rejected/scartata): l'utente vuole essere notificato solo
                 // di scarti SDI veri, non di errori di pipeline ('error').
                 const needsAttention = sdiStatus === 'rejected' || sdiStatus === 'scartata'
+                // 01/10/2026: scarto con statusDescription vuota -> motivo
+                // esplicito (o causa probabile) in sdi_response.motivo_scarto.
                 const update: Record<string, unknown> = {
                     sdi_status: sdiStatus,
-                    sdi_response: remoteInvoice,
+                    sdi_response: conMotivoScarto(remoteInvoice, invoice),
                 }
                 if (needsAttention) update.sdi_notification_seen = false
                 await supabase
