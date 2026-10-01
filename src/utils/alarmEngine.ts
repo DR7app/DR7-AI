@@ -123,19 +123,35 @@ export async function caricaContesto(now: Date): Promise<DetectorContext> {
     const da = new Date(now.getTime() - GIORNI_INDIETRO * GIORNO).toISOString()
     const a = new Date(now.getTime() + GIORNI_AVANTI * GIORNO).toISOString()
 
+    // 01/10/2026: le prenotazioni a pagine da 1000. PostgREST ne restituisce
+    // al massimo 1000 per richiesta: con `.range(0, 1999)` in ordine di ritiro
+    // le PROSSIME (quelle per cui suonano gli allarmi) sarebbero state le prime
+    // a sparire oltre quella soglia.
+    const leggiPrenotazioni = async (): Promise<{ data: BookingLite[]; error: unknown }> => {
+        const tutte: BookingLite[] = []
+        for (let da0 = 0; da0 < 5000; da0 += 1000) {
+            const { data, error } = await supabase
+                .from('bookings')
+                .select('*')
+                .neq('status', 'cancelled')
+                .neq('status', 'annullata')
+                .or(
+                    `and(pickup_date.lte.${a},dropoff_date.gte.${da}),` +
+                    `and(pickup_date.gte.${da},pickup_date.lte.${a}),` +
+                    `and(appointment_date.gte.${da},appointment_date.lte.${a})`,
+                )
+                .order('pickup_date', { ascending: true })
+                .order('id', { ascending: true })
+                .range(da0, da0 + 999)
+            if (error) return { data: [], error }
+            tutte.push(...((data || []) as BookingLite[]))
+            if (!data || data.length < 1000) break
+        }
+        return { data: tutte, error: null }
+    }
+
     const [bookingsRes, vehiclesRes, cauzioniRes] = await Promise.all([
-        supabase
-            .from('bookings')
-            .select('*')
-            .neq('status', 'cancelled')
-            .neq('status', 'annullata')
-            .or(
-                `and(pickup_date.lte.${a},dropoff_date.gte.${da}),` +
-                `and(pickup_date.gte.${da},pickup_date.lte.${a}),` +
-                `and(appointment_date.gte.${da},appointment_date.lte.${a})`,
-            )
-            .order('pickup_date', { ascending: true })
-            .range(0, 1999),
+        leggiPrenotazioni(),
         supabase
             .from('vehicles')
             .select('id, display_name, plate, status, current_km, updated_at, insurance_expiry, tax_expiry, inspection_expiry, leasing_expiry')
@@ -147,7 +163,13 @@ export async function caricaContesto(now: Date): Promise<DetectorContext> {
             .range(0, 999),
     ])
 
-    const bookings = (bookingsRes.data || []) as BookingLite[]
+    // 01/10/2026: una lettura fallita (rete, timeout) NON e' "nessuna
+    // prenotazione". Prima diventava una lista vuota: il giro chiudeva tutte
+    // le occorrenze aperte come "condizione rientrata" e il minuto dopo le
+    // riapriva facendole risuonare. Ora il giro si ferma e riprova al prossimo.
+    if (bookingsRes.error) throw bookingsRes.error
+    if (vehiclesRes.error) throw vehiclesRes.error
+    const bookings = bookingsRes.data
     const vehicles = vehiclesRes.data || []
     // Le cauzioni passano dalla RLS: se l'operatore non le vede, le rilevazioni
     // sulle cauzioni semplicemente non scattano — meglio che far esplodere il
@@ -276,13 +298,25 @@ export async function sincronizzaEventi(
 
     // Nuove occorrenze. `upsert` con ignoreDuplicates per non litigare con
     // l'indice unico se due schede aperte fanno il giro nello stesso istante.
-    let inseriti: AlarmEventRow[] = []
+    // 01/10/2026: una riga alla volta. L'upsert di gruppo senza onConflict
+    // diventava ON CONFLICT (id) e lasciava attivi gli indici unici parziali:
+    // se un'altra scheda aveva gia' aperto UNA delle occorrenze, il 23505
+    // respingeva l'intero lotto e questa scheda non suonava per nessuna.
+    // Per riga: 23505 = gia' aperta da un'altra postazione, si va avanti.
+    const inseriti: AlarmEventRow[] = []
     if (daInserire.length > 0) {
-        const { data: righe } = await supabase
+        const esiti = await Promise.all(daInserire.map(riga => supabase
             .from('alarm_events')
-            .upsert(daInserire, { ignoreDuplicates: true })
+            .insert(riga)
             .select('*')
-        inseriti = (righe || []) as AlarmEventRow[]
+            .maybeSingle()))
+        for (const { data: riga, error: errIns } of esiti) {
+            if (errIns) {
+                if ((errIns as { code?: string }).code !== '23505') console.warn('[allarmi] apertura occorrenza fallita:', errIns)
+                continue
+            }
+            if (riga) inseriti.push(riga as AlarmEventRow)
+        }
     }
 
     // Ripetizioni: UNA richiesta per tutte le occorrenze ancora aperte.

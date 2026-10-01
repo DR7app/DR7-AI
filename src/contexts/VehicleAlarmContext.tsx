@@ -186,9 +186,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // all'avvio — qui si riusa invece di richiederla.
             const { riga } = await leggiRigaAdmin(session.user.id)
             if (cancelled) return
-            const perms = (riga as { permissions?: unknown } | null)?.permissions
-            const list = Array.isArray(perms) ? perms.map(String) : []
-            setAlarmsDisabledForUser(list.includes('hide:allarmi'))
+            // 01/10/2026: `hide:allarmi` NASCONDE la voce Allarmi, non spegne
+            // gli allarmi. Dal 20/05 spegneva tutto il motore (niente giro,
+            // niente suono, niente "Attiva Allarmi") e la direzione, che aveva
+            // la casella per nascondere la sottoscheda, non sentiva nulla:
+            // "je l'avais laisse dans Centralina Pro Allarmi subtab uniquement".
+            // Si aspetta comunque la riga admin prima di partire (race del 20/05).
+            void riga
+            setAlarmsDisabledForUser(false)
         })()
         return () => { cancelled = true }
     }, [session])
@@ -1192,10 +1197,15 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         if (alarmsDisabledForUser !== false) return
 
         let isRunning = false
+        let avviatoAlle = 0
 
         const runChecks = async () => {
-            if (isRunning) return
+            // 01/10/2026: un giro rimasto appeso (richiesta senza risposta, es.
+            // al risveglio del portatile) bloccava tutti i giri successivi per
+            // sempre. Oltre 90 secondi lo si considera perso e si riparte.
+            if (isRunning && Date.now() - avviatoAlle < 90_000) return
             isRunning = true
+            avviatoAlle = Date.now()
             try {
                 await Promise.all([checkAlarms(), checkFleetMaintenanceAlarms(), checkCauzioneScadenzaAlarms()])
                 // 2026-08-21: il catalogo (19 gruppi) gira accanto ai controlli

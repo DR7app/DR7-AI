@@ -9,6 +9,7 @@ import { BrandSedeProvider } from './contexts/BrandSedeContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
+import AudioAllarmiSpento from './components/admin/AudioAllarmiSpento'
 import lazyWithRetry from './utils/lazyWithRetry'
 
 const Login = lazyWithRetry(() => import('./pages/Login'))
@@ -74,6 +75,7 @@ function App() {
                       <VehicleAlarmProvider>
                         <AlarmNotification />
                         <LateReturnAlarm />
+                        <AudioAllarmiSpento />
                         <AdminDashboard />
                       </VehicleAlarmProvider>
                     </ClientStatusProvider>

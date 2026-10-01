@@ -1468,9 +1468,11 @@ export default function AdminDashboard() {
                     {/* 2026-08-18: "Attiva Allarmi" spostato qui dalla sidebar.
                         L'audio del browser richiede un click dell'utente, quindi
                         serve un comando raggiungibile ovunque, non solo dentro
-                        Centralina Pro > Allarmi. Nascosto ai collaboratori e a
-                        chi ha `hide:allarmi`, come prima. */}
-                    {!isCollaboratore && !isHidden('allarmi') && (
+                        Centralina Pro > Allarmi. Nascosto ai collaboratori.
+                        01/10/2026: NON piu' nascosto da `hide:allarmi`, che
+                        nasconde solo la voce di menu: chi aveva la casella non
+                        poteva attivare l'audio e non sentiva nessun allarme. */}
+                    {!isCollaboratore && (
                       <>
                         {!alarmState.audioEnabled ? (
                           <button
