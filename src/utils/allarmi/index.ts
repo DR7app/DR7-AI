@@ -9,9 +9,11 @@
  */
 import type { Detector, ModuloAllarmi } from '../alarmDetectors'
 import { moduloDanniSinistri } from './danniSinistri'
+import { moduloManutenzione } from './manutenzione'
 
 export const MODULI_ALLARMI: ModuloAllarmi[] = [
     moduloDanniSinistri,
+    moduloManutenzione,
 ]
 
 export function detectorsDeiModuli(): Record<string, Detector> {
