@@ -9,6 +9,7 @@ import { getInsuranceOptions } from '../../../utils/configLookup'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import PromozioniView from './PromozioniView'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 /**
  * PREVENDITE DR7 — 14/09/2026
@@ -716,28 +717,26 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   // ─── Derivati ──────────────────────────────────────────────────────────────
 
   const flottaFiltrata = useMemo(() => {
-    const q = ricercaVeicolo.trim().toLowerCase()
-    if (!q) return flotta.slice(0, 40)
+    if (!ricercaVeicolo.trim()) return flotta.slice(0, 40)
     return flotta.filter(v =>
-      (v.display_name || '').toLowerCase().includes(q) || (v.plate || '').toLowerCase().includes(q)
+      corrispondeRicerca(ricercaVeicolo, [v.display_name, v.plate])
     ).slice(0, 40)
   }, [flotta, ricercaVeicolo])
 
   const vendutiFiltrati = useMemo(() => {
-    const q = ricercaVenduti.trim().toLowerCase()
     return venduti.filter(pc => {
       if (filtroVenduti !== 'tutte' && statoReale(pc) !== filtroVenduti) return false
-      if (!q) return true
-      return [pc.customer_nome, pc.customer_email, pc.customer_telefono, pc.nome]
-        .some(v => (v || '').toLowerCase().includes(q))
+      return corrispondeRicerca(ricercaVenduti, [
+        pc.customer_nome, pc.customer_email, pc.customer_telefono, pc.nome,
+        ...(pc.veicoli || []).flatMap(v => [v.nome, v.targa]),
+      ])
     })
   }, [venduti, filtroVenduti, ricercaVenduti])
 
   const clientiFiltrati = useMemo(() => {
-    const q = ricercaCliente.trim().toLowerCase()
-    if (!q) return clienti.slice(0, 30)
+    if (!ricercaCliente.trim()) return clienti.slice(0, 30)
     return clienti.filter(c =>
-      [c.nome, c.cognome, c.denominazione, c.email, c.telefono].some(v => (v || '').toLowerCase().includes(q))
+      corrispondeRicerca(ricercaCliente, [c.nome, c.cognome, c.denominazione, c.email, c.telefono])
     ).slice(0, 30)
   }, [clienti, ricercaCliente])
 
@@ -926,7 +925,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
             <BarraRicerca
               variante="compatta"
               className="flex-1 min-w-[220px]"
-              placeholder="Cerca cliente, email o prevendita..."
+              placeholder="Cerca cliente, telefono, email, prevendita o targa..."
               value={ricercaVenduti}
               onChange={setRicercaVenduti}
             />

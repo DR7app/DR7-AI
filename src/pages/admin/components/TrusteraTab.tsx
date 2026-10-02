@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { ScheletroPagina } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -131,8 +132,10 @@ function DocumentiSubTab() {
   }, [showCustomerDropdown])
 
   // 02/10/2026: barra di ricerca come nelle altre tab. La lista mostra solo
-  // le ultime 100 richieste, quindi la ricerca va sul database (nome,
-  // email, telefono, nome documento) e non solo sulle righe gia' caricate.
+  // le ultime 100 richieste; quando si cerca si leggono TUTTE (sono poco piu'
+  // di mille) e si filtrano con la regola comune di utils/ricerca: nome in
+  // qualunque ordine, email, telefono con o senza +39 e spazi, nome documento,
+  // numero contratto, veicolo e targa della prenotazione collegata.
   const [ricerca, setRicerca] = useState('')
   const ricercaRef = useRef('')
   const primoCaricamentoRef = useRef(true)
@@ -148,31 +151,48 @@ function DocumentiSubTab() {
     return () => clearTimeout(t)
   }, [ricerca])
 
+  const COLONNE_RICHIESTE = 'id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at'
+
+  async function cercaRichieste(testo: string): Promise<{ data: SignatureRequest[] | null; error: unknown }> {
+    // PostgREST restituisce al massimo 1000 righe per volta: si legge a pagine.
+    const trovate: SignatureRequest[] = []
+    for (let da = 0; ; da += 1000) {
+      const { data, error } = await supabase
+        .from('signature_requests')
+        .select(`${COLONNE_RICHIESTE}, ricerca_contratto:contracts(contract_number, customer_name, customer_phone, customer_tax_code, vehicle_name), ricerca_prenotazione:bookings(vehicle_plate, vehicle_name, customer_name, customer_phone)`)
+        .order('created_at', { ascending: false })
+        .range(da, da + 999)
+      if (error) return { data: null, error }
+      const righe = (data || []) as unknown as Array<SignatureRequest & {
+        ricerca_contratto: Record<string, string | null> | null
+        ricerca_prenotazione: Record<string, string | null> | null
+      }>
+      for (const { ricerca_contratto: c, ricerca_prenotazione: b, ...r } of righe) {
+        const campi = [
+          r.signer_name, r.signer_email, r.signer_phone, r.document_name,
+          c?.contract_number, c?.customer_name, c?.customer_phone, c?.customer_tax_code, c?.vehicle_name,
+          b?.vehicle_plate, b?.vehicle_name, b?.customer_name, b?.customer_phone,
+        ]
+        if (corrispondeRicerca(testo, campi)) trovate.push(r as SignatureRequest)
+      }
+      if (righe.length < 1000) break
+    }
+    return { data: trovate.slice(0, 100), error: null }
+  }
+
   async function loadRequests(opzioni: { silenzioso?: boolean } = {}) {
     // Senza silenzioso la pagina torna allo scheletro e il campo di ricerca
     // perderebbe il focus a ogni lettera.
     if (!opzioni.silenzioso) setLoading(true)
     try {
-      let query = supabase
-        .from('signature_requests')
-        .select('id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at')
-        .order('created_at', { ascending: false })
-        .limit(100)
-
-      // Virgole e parentesi spezzano il filtro .or() di PostgREST.
-      const testo = ricercaRef.current.trim().replace(/[,()%*\\]/g, ' ').trim()
-      if (testo.length >= 2) {
-        const filtri = [
-          `signer_name.ilike.%${testo}%`,
-          `signer_email.ilike.%${testo}%`,
-          `document_name.ilike.%${testo}%`,
-        ]
-        const cifre = testo.replace(/\D/g, '')
-        if (cifre.length >= 3) filtri.push(`signer_phone.ilike.%${cifre}%`)
-        query = query.or(filtri.join(','))
-      }
-
-      const { data, error } = await query
+      const testo = ricercaRef.current.trim()
+      const { data, error } = testo.length >= 2
+        ? await cercaRichieste(testo)
+        : await supabase
+          .from('signature_requests')
+          .select(COLONNE_RICHIESTE)
+          .order('created_at', { ascending: false })
+          .limit(100)
 
       if (error) throw error
       const reqs = (data || []) as SignatureRequest[]
@@ -871,7 +891,7 @@ function DocumentiSubTab() {
       <BarraRicerca
         value={ricerca}
         onChange={setRicerca}
-        placeholder="Cerca per firmatario, email, telefono o nome documento..."
+        placeholder="Cerca per nome, telefono, email, documento, n. contratto o targa..."
       />
 
       {/* Requests List */}
@@ -1187,12 +1207,7 @@ function MarketingConsentSubTab() {
     if (filter === 'unknown' && c.marketing_consent !== null) return false
 
     // Search
-    if (search.length >= 2) {
-      const q = search.toLowerCase()
-      const name = (c.denominazione || [c.nome, c.cognome].filter(Boolean).join(' ')).toLowerCase()
-      const email = (c.email || '').toLowerCase()
-      if (!name.includes(q) && !email.includes(q)) return false
-    }
+    if (search.trim().length >= 2 && !corrispondeRicerca(search, [c.denominazione, c.nome, c.cognome, c.email, c.telefono])) return false
 
     return true
   })
@@ -1238,7 +1253,7 @@ function MarketingConsentSubTab() {
       <BarraRicerca
         value={search}
         onChange={setSearch}
-        placeholder="Cerca per nome o email..."
+        placeholder="Cerca per nome, email o telefono..."
       />
 
       {/* Table */}

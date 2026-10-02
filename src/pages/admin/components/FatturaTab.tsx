@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroPagina } from '../../../components/Scheletro'
@@ -424,15 +425,10 @@ export default function FatturaTab() {
   const filteredInvoices = useMemo(() => {
     return invoices.filter(invoice => {
       if (filterCliente !== 'all' && invoice.customer_name !== filterCliente) return false
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        const matchesText = (
-          invoice.customer_name.toLowerCase().includes(query) ||
-          invoice.numero_fattura.toLowerCase().includes(query) ||
-          (invoice.customer_email && invoice.customer_email.toLowerCase().includes(query))
-        )
-        if (!matchesText) return false
-      }
+      if (searchQuery && !corrispondeRicerca(searchQuery, [
+        invoice.customer_name, invoice.numero_fattura, invoice.customer_email,
+        invoice.customer_tax_code, invoice.booking_id,
+      ])) return false
       if (filterSdi !== 'all') {
         const status = invoice.sdi_status || 'draft'
         if (filterSdi === 'rejected') {
@@ -1444,7 +1440,7 @@ export default function FatturaTab() {
       {/* Search Bar */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
         <BarraRicerca
-          placeholder="Cerca per cliente, numero fattura o email..."
+          placeholder="Cerca per cliente, numero fattura, email o CF/P.IVA..."
           value={searchQuery}
           onChange={setSearchQuery}
         />

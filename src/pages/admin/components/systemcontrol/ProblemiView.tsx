@@ -8,6 +8,7 @@ import type { GruppoProblema, Diagnosi, Operazione, Severita } from '../../../..
 import { BadgeSeverita, BadgeClasse, Scheda, Vuoto, Bottone, Conferma } from './ui'
 import { dataOra, quandoRelativo } from './formato'
 import BarraRicerca from '../../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../../utils/ricerca'
 
 const SEVERITA: Severita[] = ['critico', 'alto', 'medio', 'basso', 'informativo']
 
@@ -28,9 +29,14 @@ export default function ProblemiView({ idIniziale, onApertoCambiato }: {
     try {
       const q: Record<string, string> = { stato: filtroStato, severita: filtroSeverita }
       if (filtroClasse) q.classe = filtroClasse
-      if (cerca.trim()) q.cerca = cerca.trim()
+      // 02/10/2026: al server va la parola piu' lunga (senza i caratteri che
+      // rompono il filtro PostgREST), tutte le parole si filtrano qui con la
+      // regola comune: "fattura errore" trova "Errore invio fattura".
+      const parole = cerca.replace(/[,()%*\\]/g, ' ').trim().split(/\s+/).filter(Boolean)
+      const parolaServer = parole.reduce((a, b) => (b.length > a.length ? b : a), '')
+      if (parolaServer) q.cerca = parolaServer
       const res = await systemControl.problemi(q)
-      setGruppi(res.gruppi || [])
+      setGruppi((res.gruppi || []).filter(g => corrispondeRicerca(cerca, [g.titolo, g.messaggio_tecnico])))
     } catch (e) {
       toast.error((e as Error).message)
     } finally {

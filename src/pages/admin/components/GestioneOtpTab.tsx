@@ -24,6 +24,7 @@ import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator,
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface OtpRow {
     id: string
@@ -312,12 +313,7 @@ export default function GestioneOtpTab() {
             if (filter === 'active' && !r.is_required) return false
             if (filter === 'inactive' && r.is_required) return false
             if (!q) return true
-            return (
-                r.label.toLowerCase().includes(q) ||
-                r.id.toLowerCase().includes(q) ||
-                (r.used_in || '').toLowerCase().includes(q) ||
-                (r.reason || '').toLowerCase().includes(q)
-            )
+            return corrispondeRicerca(q, [r.label, r.id, r.used_in, r.reason])
         })
     }, [rows, search, filter])
 
@@ -1564,9 +1560,7 @@ function StoricoOtpSection() {
         const status = classifyStatus(r)
         if (filterStatus !== 'all' && status !== filterStatus) return false
         if (search.trim()) {
-            const q = search.toLowerCase()
-            const haystack = `${r.limitation_code || ''} ${r.action_context || ''} ${r.otp_code || ''}`.toLowerCase()
-            if (!haystack.includes(q)) return false
+            if (!corrispondeRicerca(search, [r.limitation_code, r.action_context, r.otp_code])) return false
         }
         return true
     })

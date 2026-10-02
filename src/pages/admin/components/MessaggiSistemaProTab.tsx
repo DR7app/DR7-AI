@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca, cifreTelefono } from '../../../utils/ricerca'
 
 interface SystemMessage {
     id: string
@@ -3841,25 +3842,29 @@ export default function MessaggiSistemaProTab() {
         setSearching(true)
         setShowResults(true)
         try {
-            const q = query.toLowerCase()
-            const { data: byName } = await supabase
+            // 02/10/2026: ricerca per nome, cognome, email o telefono. Piu' parole
+            // = ognuna deve comparire ("rossi mario" trova Mario Rossi): un .or()
+            // per parola, PostgREST li mette in AND.
+            const parole = query.replace(/[,()%*\\]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 5)
+            let qNome = supabase
                 .from('customers_extended')
-                .select('id, nome, cognome, telefono, email')
-                .or(`nome.ilike.%${q}%,cognome.ilike.%${q}%`)
-                .limit(20)
+                .select('id, nome, cognome, telefono, email, ragione_sociale, denominazione')
+            for (const p of parole) qNome = qNome.or(`nome.ilike.%${p}%,cognome.ilike.%${p}%,email.ilike.%${p}%,ragione_sociale.ilike.%${p}%,denominazione.ilike.%${p}%`)
+            const { data: byName } = parole.length ? await qNome.limit(20) : { data: [] }
 
-            const cleanQ = query.replace(/[\s\-+()]/g, '')
-            const { data: byPhone } = await supabase
+            const cleanQ = cifreTelefono(query)
+            const { data: byPhone } = cleanQ.length >= 3 ? await supabase
                 .from('customers_extended')
                 .select('id, nome, cognome, telefono, email')
                 .ilike('telefono', `%${cleanQ}%`)
-                .limit(10)
+                .limit(10) : { data: [] }
 
             const merged = new Map<string, CustomerResult>()
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const process = (items: any[] | null) => {
                 items?.forEach(c => {
-                    if (c.telefono && !merged.has(c.id)) {
+                    if (c.telefono && !merged.has(c.id)
+                        && corrispondeRicerca(query, [c.nome, c.cognome, c.email, c.telefono, c.ragione_sociale, c.denominazione])) {
                         merged.set(c.id, {
                             id: c.id,
                             nome: c.nome || '',
@@ -4046,10 +4051,7 @@ export default function MessaggiSistemaProTab() {
     const q = searchQuery.trim().toLowerCase()
     const filteredTemplates = q
         ? sortedTemplates.filter(t =>
-            (t.label || '').toLowerCase().includes(q) ||
-            (t.description || '').toLowerCase().includes(q) ||
-            (t.message_body || '').toLowerCase().includes(q) ||
-            (t.message_key || '').toLowerCase().includes(q)
+            corrispondeRicerca(q, [t.label, t.description, t.message_body, t.message_key])
           )
         : sortedTemplates
 
@@ -4158,9 +4160,7 @@ export default function MessaggiSistemaProTab() {
                             const q = customVarSearch.trim().toLowerCase()
                             const visibleVars = q
                                 ? customVarsList.filter(v =>
-                                    v.key.toLowerCase().includes(q)
-                                    || (v.value || '').toLowerCase().includes(q)
-                                    || (v.description || '').toLowerCase().includes(q))
+                                    corrispondeRicerca(q, [v.key, v.value, v.description]))
                                 : customVarsList
                             return customVarsList.length === 0 ? (
                             <div className="text-center py-6 text-theme-text-muted text-sm">
@@ -5622,8 +5622,8 @@ export default function MessaggiSistemaProTab() {
                                                             const knownKeys = group.keys.filter(k => {
                                                                 if (!EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT]) return false
                                                                 if (!q) return true
-                                                                const label = String(EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT] || '').toLowerCase()
-                                                                return label.includes(q) || k.toLowerCase().includes(q)
+                                                                const label = String(EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT] || '')
+                                                                return corrispondeRicerca(q, [label, k])
                                                             })
                                                             if (knownKeys.length === 0) return null
                                                             const assignedInGroup = knownKeys.filter(k => (template.handled_events || []).includes(k)).length
@@ -6250,7 +6250,7 @@ export default function MessaggiSistemaProTab() {
                                 value={customerSearch}
                                 onChange={e => searchCustomers(e.target.value)}
                                 onFocus={() => { if (customerResults.length > 0) setShowResults(true) }}
-                                placeholder="Cerca per nome o telefono..."
+                                placeholder="Cerca per nome, telefono o email..."
                                 className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                             />
                             {searching && (

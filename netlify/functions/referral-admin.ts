@@ -461,7 +461,7 @@ const handler: Handler = async (event) => {
 
         const { data: profiles, error: profErr } = await supabase
           .from('customers_extended')
-          .select('user_id, nome, cognome, email, referral_code, created_at')
+          .select('user_id, nome, cognome, email, telefono, referral_code, created_at')
           .in('user_id', referrerIds);
 
         if (profErr) {
@@ -472,6 +472,8 @@ const handler: Handler = async (event) => {
           user_id: p.user_id,
           name: `${p.nome || ''} ${p.cognome || ''}`.trim() || '(senza nome)',
           email: p.email || null,
+          // Solo per la barra di ricerca della tab Partecipanti (per telefono).
+          telefono: p.telefono || null,
           referral_code: p.referral_code || null,
           created_at: p.created_at || null,
         })).sort((a, b) => a.name.localeCompare(b.name));

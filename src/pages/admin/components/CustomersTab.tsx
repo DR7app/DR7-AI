@@ -24,6 +24,7 @@ import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface Customer {
   id: string
@@ -286,24 +287,23 @@ export default function CustomersTab() {
       })
     }
 
-    // 2. Apply search filter (split query into words so "Mario Rossi" matches "Mario Giuseppe Rossi")
+    // 2. Apply search filter: regola unica utils/ricerca (parole in qualunque
+    // ordine, accenti, telefono per sole cifre con/senza +39).
     if (searchQuery) {
-      const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-      result = result.filter((customer) => {
-        const fullName = (customer.full_name || `${customer.nome || ''} ${customer.cognome || ''}`.trim()).toLowerCase()
-        const fields = [
-          fullName,
-          customer.email?.toLowerCase() || '',
-          customer.phone?.toLowerCase() || '',
-          customer.nome?.toLowerCase() || '',
-          customer.cognome?.toLowerCase() || '',
-          customer.ragione_sociale?.toLowerCase() || '',
-          customer.denominazione?.toLowerCase() || '',
-          customer.telefono?.toLowerCase() || ''
-        ].join(' ')
-
-        return words.every(word => fields.includes(word))
-      })
+      result = result.filter((customer) => corrispondeRicerca(searchQuery, [
+        customer.full_name,
+        customer.nome,
+        customer.cognome,
+        customer.ragione_sociale,
+        customer.denominazione,
+        customer.email,
+        customer.pec,
+        customer.phone,
+        customer.telefono,
+        customer.codice_fiscale,
+        customer.partita_iva,
+        customer.codice_fiscale_pa,
+      ]))
     }
 
     // Update total count
@@ -3055,7 +3055,7 @@ export default function CustomersTab() {
         <BarraRicerca
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="Cerca cliente per nome, email o telefono..."
+          placeholder="Cerca per nome, telefono, email, codice fiscale o P.IVA..."
         />
 
         {/* 2026-06-01: filtro periodo Da/A su data registrazione cliente */}

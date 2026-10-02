@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../../../supabaseClient'
+import { corrispondeRicerca } from '../../../../utils/ricerca'
 import type { Scadenza, NewScadenzaForm } from './scadenzeConfig'
 import { CATEGORIES, CATEGORY_KEYS } from './scadenzeConfig'
 
@@ -551,13 +552,8 @@ export function useScadenze() {
 
   const filterBySearch = useCallback((items: Scadenza[]): Scadenza[] => {
     if (!scadenzaSearch.trim()) return items
-    const q = scadenzaSearch.trim().toLowerCase().replace(/\s/g, '')
-    return items.filter(s => {
-      const ref = (s.reference_name || '').toLowerCase().replace(/\s/g, '')
-      const desc = (s.description || '').toLowerCase().replace(/\s/g, '')
-      const itemType = (s.item_type || '').toLowerCase().replace(/\s/g, '')
-      return ref.includes(q) || desc.includes(q) || itemType.includes(q)
-    })
+    // 02/10/2026: regola comune (utils/ricerca): accenti, targhe con o senza spazi, piu' parole.
+    return items.filter(s => corrispondeRicerca(scadenzaSearch, [s.reference_name, s.description, s.item_type, s.category]))
   }, [scadenzaSearch])
 
   // Compute stats for panoramica and sidebar badges

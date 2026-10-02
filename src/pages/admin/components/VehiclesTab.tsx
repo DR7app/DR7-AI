@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroPagina } from '../../../components/Scheletro'
@@ -723,14 +724,9 @@ export default function VehiclesTab() {
 
   // Separate vehicles by category
   const searchFilter = (v: Vehicle) => {
-    if (!plateSearch.trim()) return true
-    const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
-    const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-    // Guard display_name: any vehicle with a null/undefined display_name was
-    // throwing TypeError here, which propagated up and made the whole filter
-    // function appear broken (empty list, "search doesn't find anything").
-    const name = (v.display_name || '').toLowerCase()
-    return plate.includes(q) || name.includes(q)
+    // Regola unica utils/ricerca: tollera campi null (un display_name
+    // mancante faceva sembrare rotta tutta la ricerca), targhe con spazi.
+    return corrispondeRicerca(plateSearch, [v.plate, v.display_name, v.category])
   }
 
   // Centralina Pro e\' la sola fonte di verita\' per le categorie. Per ogni

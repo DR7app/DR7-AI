@@ -11,6 +11,7 @@ import MoneyInput from '../../../components/MoneyInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import { useAutorizzazioneWallet } from '../../../hooks/useAutorizzazioneWallet'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface CustomerResult {
   id: string
@@ -618,13 +619,9 @@ export default function CustomerWalletTab() {
   const recurringTop = [...recurringEntries].sort((a, b) => b.amountEur - a.amountEur).slice(0, 3)
 
   // Filter and sort
-  const filtered = allWalletCustomers.filter(c => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    return (c.full_name?.toLowerCase().includes(q)) ||
-           (c.email?.toLowerCase().includes(q)) ||
-           (c.phone?.includes(q))
-  })
+  const filtered = allWalletCustomers.filter(c =>
+    corrispondeRicerca(searchQuery, [c.full_name, c.email, c.phone])
+  )
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'balance') {

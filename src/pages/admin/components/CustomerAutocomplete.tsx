@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import ClientCardInfoModal from './ClientCardInfoModal'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface Customer {
     id: string
@@ -9,6 +10,14 @@ interface Customer {
     phone: string | null
     scadenza_patente?: string | null
     user_id?: string | null
+    // Facoltativi: se la scheda passata li contiene, sono cercabili.
+    nome?: string | null
+    cognome?: string | null
+    denominazione?: string | null
+    ragione_sociale?: string | null
+    codice_fiscale?: string | null
+    partita_iva?: string | null
+    telefono?: string | null
 }
 
 interface CustomerAutocompleteProps {
@@ -58,18 +67,23 @@ export default function CustomerAutocomplete({
         })
     })()
 
-    const filteredCustomers = deduped.filter(customer => {
-        if (!searchQuery.trim()) return true
-        const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-        // `full_name` puo' arrivare nullo dalle righe legacy: senza il fallback
-        // la digitazione faceva crashare il form (lista cliente vuota).
-        const name = (customer.full_name || '').toLowerCase()
-        const email = customer.email?.toLowerCase() || ''
-        const phone = customer.phone || ''
-        return words.every(word =>
-            name.includes(word) || email.includes(word) || phone.includes(word)
-        )
-    })
+    // 02/10/2026: stessa regola di tutte le barre (utils/ricerca): accenti e
+    // maiuscole non contano, parole in qualunque ordine, telefono per sole
+    // cifre con o senza +39, codici senza spazi. Oltre a nome/email/telefono
+    // si cercano anche nome, cognome, ragione sociale, CF e P.IVA quando la
+    // scheda passata li contiene.
+    const filteredCustomers = deduped.filter(customer => corrispondeRicerca(searchQuery, [
+        customer.full_name,
+        customer.email,
+        customer.phone,
+        customer.telefono,
+        customer.nome,
+        customer.cognome,
+        customer.denominazione,
+        customer.ragione_sociale,
+        customer.codice_fiscale,
+        customer.partita_iva,
+    ]))
 
     // Update search query when customer is selected
     // CRITICAL FIX: Always sync search query with selected customer name

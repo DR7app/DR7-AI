@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import Paginazione from './Paginazione'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1101,14 +1102,7 @@ export default function ReviewManagementTab() {
       if (categoryFilter === 'FAILED' && c.send_status !== 'FAILED') return false
       if (categoryFilter === 'EXCLUDED' && c.eligibility_status !== 'EXCLUDED') return false
 
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase()
-        const matchesSearch =
-          (c.customer_name || '').toLowerCase().includes(term) ||
-          (c.customer_email || '').toLowerCase().includes(term) ||
-          (c.customer_phone || '').toLowerCase().includes(term)
-        if (!matchesSearch) return false
-      }
+      if (!corrispondeRicerca(searchTerm, [c.customer_name, c.customer_email, c.customer_phone, c.source_record_id])) return false
       return true
     })
   }, [candidates, searchTerm, categoryFilter])

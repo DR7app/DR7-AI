@@ -5,6 +5,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 /**
  * PROMOZIONI PRENOTABILI — 26/09/2026
@@ -190,8 +191,7 @@ export default function PromozioniView({ apriNuovaRichiesta, onRichiestaGestita 
   }, [apriNuovaRichiesta, onRichiestaGestita])
 
   const flottaFiltrata = useMemo(() => {
-    const q = ricercaVeicolo.trim().toLowerCase()
-    return flotta.filter(v => !q || v.display_name.toLowerCase().includes(q) || (v.plate || '').toLowerCase().includes(q))
+    return flotta.filter(v => corrispondeRicerca(ricercaVeicolo, [v.display_name, v.plate]))
   }, [flotta, ricercaVeicolo])
 
   function apriNuova() {

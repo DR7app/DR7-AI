@@ -69,7 +69,13 @@ interface Guarantor {
 }
 interface ServiceDef { id: string; name: string; price: number; unit: string; is_active?: boolean }
 
-interface CustomerLite { id: string; full_name: string; email: string | null; phone: string | null; user_id?: string | null }
+interface CustomerLite {
+  id: string; full_name: string; email: string | null; phone: string | null; user_id?: string | null
+  // 02/10/2026: solo per la ricerca nel CustomerAutocomplete (nome e cognome in
+  // qualunque ordine, ragione sociale, CF, P.IVA).
+  nome?: string | null; cognome?: string | null; denominazione?: string | null; ragione_sociale?: string | null
+  codice_fiscale?: string | null; partita_iva?: string | null
+}
 
 const PAY_STATUS_OPTIONS = [
   { value: 'pending', label: 'Da Saldare' },
@@ -206,6 +212,12 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
           email: g('email') || null,
           phone: g('telefono') || g('phone') || null,
           user_id: g('user_id') || null,
+          nome: g('nome') || null,
+          cognome: g('cognome') || null,
+          denominazione: g('denominazione') || null,
+          ragione_sociale: g('ragione_sociale') || null,
+          codice_fiscale: g('codice_fiscale') || null,
+          partita_iva: g('partita_iva') || null,
         }
       }).filter(c => c.full_name || c.email || c.phone)
       setCustomers(list)

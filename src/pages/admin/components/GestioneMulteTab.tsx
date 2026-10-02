@@ -9,6 +9,7 @@ import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, BUSINESSES, type Busines
 import { businessRowForServiceType } from '../../../utils/businessConfigClient'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 /**
  * 2026-08-24 (direzione): "Multe" e' nel menu di ogni business. Lo storico
@@ -117,12 +118,16 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
     async function searchRubrica(q: string) {
         setRubricaQuery(q)
         if (q.trim().length < 2) { setRubricaResults([]); return }
-        const { data } = await supabase
+        // 02/10/2026: ogni parola deve comparire in denominazione, comune,
+        // provincia o PEC ("polizia olbia"); un .or() per parola = AND.
+        const parole = q.replace(/[,()%*\\]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 5)
+        if (parole.length === 0) { setRubricaResults([]); return }
+        let query = supabase
             .from('enti_notificatori')
             .select('id, denominazione, comune, provincia, pec, tipo_ente')
             .eq('attivo', true)
-            .or(`denominazione.ilike.%${q}%,comune.ilike.%${q}%`)
-            .limit(15)
+        for (const p of parole) query = query.or(`denominazione.ilike.%${p}%,comune.ilike.%${p}%,provincia.ilike.%${p}%,pec.ilike.%${p}%`)
+        const { data } = await query.limit(15)
         setRubricaResults(data || [])
     }
 
@@ -275,15 +280,20 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
             const res = await fetch('/.netlify/functions/process-multa', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                // 02/10/2026: il server restituisce i noleggi dei giorni della
+                // multa (max 200) e il testo si filtra qui con la regola comune:
+                // targa con o senza spazi, nome e cognome in qualunque ordine.
                 body: JSON.stringify({
                     action: 'cercaNoleggi',
                     data_infrazione: multaData?.data_infrazione || '',
-                    cerca: testo,
+                    cerca: '',
                 }),
             })
             const data = await res.json()
-            setNoleggiCandidati(data.noleggi || [])
-            if ((data.noleggi || []).length === 0) toast('Nessun noleggio in quei giorni con questa ricerca')
+            const noleggi = ((data.noleggi || []) as NoleggioCandidato[]).filter(n =>
+                corrispondeRicerca(testo, [n.vehicle_plate, n.vehicle_name, n.customer_name, n.customer_email]))
+            setNoleggiCandidati(noleggi)
+            if (noleggi.length === 0) toast('Nessun noleggio in quei giorni con questa ricerca')
         } catch (err: unknown) {
             toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
         } finally {

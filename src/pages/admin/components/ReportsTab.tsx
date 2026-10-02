@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useReportSpese } from '../../../hooks/useReportSpese'
 import ReportSpesePanel from './ReportSpesePanel'
@@ -945,10 +946,12 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
         // Hide retired vehicles with zero activity in this month
         if (v.status === 'retired' && v.rentedDays === 0 && v.totalRevenue === 0) return false
         if (!plateSearch.trim()) return true
-        const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
-        const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-        const name = (v.label || '').toLowerCase()
-        return plate.includes(q) || name.includes(q)
+        // Anche i clienti e i codici delle prenotazioni del periodo: "rossi"
+        // trova l'auto che ha noleggiato.
+        return corrispondeRicerca(plateSearch, [
+          v.plate, v.label, v.category,
+          ...(v.bookings || []).flatMap(b => [b.customer_name, b.booking_id]),
+        ])
       })
     : []
 
@@ -2053,7 +2056,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             <BarraRicerca
               variante="compatta"
               className="w-full max-w-xs"
-              placeholder="Cerca per targa o nome..."
+              placeholder="Cerca per targa, veicolo o cliente..."
               value={plateSearch}
               onChange={setPlateSearch}
             />

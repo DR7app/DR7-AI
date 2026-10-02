@@ -28,6 +28,7 @@ import {
   type UscitaServizioExtra,
 } from '../../../utils/uscitaStraordinaria'
 import MoneyInput from '../../../components/MoneyInput'
+import { cifreTelefono, compattaTesto } from '../../../utils/ricerca'
 import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 
 interface VehicleLite {
@@ -98,7 +99,27 @@ function BookingLinkPicker({ value, onChange, business }: { value: string | null
     if (term.length < 2) { setResults([]); return }
     let cancel = false
     const t = setTimeout(async () => {
-      const safe = term.replace(/[%,()]/g, ' ')
+      // 02/10/2026: ricerca come le altre barre (utils/ricerca). Ogni parola
+      // e' un filtro a se' (AND fra le parole, OR fra i campi): "rossi mario"
+      // trova "Mario Rossi". Cerca anche email e telefono del cliente; il
+      // telefono per sole cifre (con o senza +39) e la targa senza spazi,
+      // con un jolly fra un carattere e l'altro ("3471234567" trova
+      // "+39 347 123 4567", "ab123cd" trova "AB 123 CD").
+      const safe = term.replace(/[%,()*\\"']/g, ' ').replace(/\s+/g, ' ').trim()
+      const soloTelefono = /^[\d\s+().-]+$/.test(term) && cifreTelefono(term).length >= 6
+      const parole = soloTelefono ? [cifreTelefono(term)] : safe.split(' ').filter(Boolean)
+      const condizioniParola = (parola: string): string => {
+        const campi = ['customer_name', 'customer_email', 'customer_phone', 'vehicle_name', 'vehicle_plate']
+        const condizioni = campi.map(c => `${c}.ilike.*${parola}*`)
+        const cifre = cifreTelefono(parola)
+        if (cifre.length >= 6) condizioni.push(`customer_phone.ilike.*${cifre.split('').join('*')}*`)
+        const compatta = compattaTesto(parola)
+        if (compatta.length >= 4 && /[a-z]/.test(compatta) && /\d/.test(compatta)) {
+          condizioni.push(`vehicle_plate.ilike.*${compatta.split('').join('*')}*`)
+        }
+        return condizioni.join(',')
+      }
+      if (parole.length === 0) { setResults([]); return }
       // Cerca fra TUTTE le prenotazioni (non solo le future): l'operatore deve
       // poter collegare qualunque booking. Ordinate dalla piu' recente.
       // 2026-07-12: collega SOLO a prenotazioni NOLEGGIO CAR reali. Includiamo
@@ -114,8 +135,8 @@ function BookingLinkPicker({ value, onChange, business }: { value: string | null
       q = business === 'rental'
         ? q.or('service_type.is.null,service_type.eq.rental,service_type.eq.car_rental')
         : q.eq('service_type', business)
+      for (const parola of parole) q = q.or(condizioniParola(parola))
       const { data } = await q
-        .or(`customer_name.ilike.%${safe}%,vehicle_name.ilike.%${safe}%,vehicle_plate.ilike.%${safe}%`)
         .order('pickup_date', { ascending: false })
         .limit(10)
       if (!cancel) { setResults(data || []); setOpen(true) }
@@ -159,7 +180,7 @@ function BookingLinkPicker({ value, onChange, business }: { value: string | null
       <input
         value={q}
         onChange={e => setQ(e.target.value)}
-        placeholder="Cerca per cliente, veicolo o targa…"
+        placeholder="Cerca per cliente, telefono, email, veicolo o targa…"
         className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
       />
       {open && results.length > 0 && (

@@ -33,6 +33,7 @@ import {
 import { supabase } from '../../supabaseClient'
 import toast from 'react-hot-toast'
 import BarraRicerca from './BarraRicerca'
+import { corrispondeRicerca } from '../../utils/ricerca'
 
 /**
  * Variabili che il messaggio di un allarme sa riempire: dati della
@@ -216,9 +217,8 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
     }
 
     const filtrati = useMemo(() => {
-        const q = ricerca.trim().toLowerCase()
         return alarms.filter(a => {
-            if (q && !(`${a.label} ${a.id} ${a.reparto || ''}`.toLowerCase().includes(q))) return false
+            if (!corrispondeRicerca(ricerca, [a.label, a.id, a.reparto])) return false
             if (filtro === 'accesi' && !a.is_enabled) return false
             if (filtro === 'spenti' && a.is_enabled) return false
             if (filtro === 'attivi' && a.stato_rilevamento !== 'attivo') return false
@@ -750,9 +750,8 @@ function SceltaMessaggio({ value, templates, onChange }: {
     const [aperto, setAperto] = useState(false)
     const [testo, setTesto] = useState('')
     const scelto = templates.find(t => t.key === value)
-    const q = testo.trim().toLowerCase()
-    const trovati = q
-        ? templates.filter(t => t.label.toLowerCase().includes(q) || t.key.toLowerCase().includes(q))
+    const trovati = testo.trim()
+        ? templates.filter(t => corrispondeRicerca(testo, [t.label, t.key]))
         : templates
     return (
         <div className="relative">

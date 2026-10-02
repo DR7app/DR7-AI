@@ -48,6 +48,7 @@ import {
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import Miniatura from '../../../components/Miniatura'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { cifreTelefono, compattaTesto } from '../../../utils/ricerca'
 
 // ─── Time slots ─────────────────────────────────────────────────────────────
 //
@@ -1809,6 +1810,26 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     return testo.toLowerCase().replace(/[,()*%\\"']/g, ' ').split(/\s+/).filter(Boolean)
   }
 
+  /**
+   * Le condizioni OR di una parola. Oltre al testo cosi' com'e':
+   *  - telefono: le sole cifre (senza +39/0039), con un jolly fra una cifra e
+   *    l'altra, cosi' "3471234567" trova anche "+39 347 123 4567";
+   *  - targa: lettere e cifre con un jolly fra l'una e l'altra, cosi'
+   *    "ab123cd" trova anche "AB 123 CD" o "AB-123-CD".
+   */
+  function condizioniParola(parola: string): string[] {
+    const condizioni = CAMPI_RICERCA.map(c => `${c}.ilike.*${parola}*`)
+    const cifre = cifreTelefono(parola)
+    if (cifre.length >= 6) {
+      condizioni.push(`customer_phone.ilike.*${cifre.split('').join('*')}*`)
+    }
+    const compatta = compattaTesto(parola)
+    if (compatta.length >= 4 && /[a-z]/.test(compatta) && /\d/.test(compatta)) {
+      condizioni.push(`vehicle_plate.ilike.*${compatta.split('').join('*')}*`)
+    }
+    return condizioni
+  }
+
   /** Mezzanotte di Roma, in UTC: il filtro e' su `created_at`, salvato in UTC. */
   function inizioGiornoRoma(giorno: string): string {
     return romeIsoFromParts(giorno, '00:00')
@@ -1864,7 +1885,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // Ricerca multi-parola: OGNI parola deve comparire in almeno un campo.
     // Filtri ripetuti si sommano in AND, quindi una `or(...)` per parola.
     for (const parola of parole(f.cerca)) {
-      query = query.or(CAMPI_RICERCA.map(c => `${c}.ilike.*${parola}*`).join(','))
+      query = query.or(condizioniParola(parola).join(','))
     }
     // `id` come secondo criterio: senza un ordine univoco due righe con lo
     // stesso valore possono scambiarsi fra una pagina e l'altra, e una riga

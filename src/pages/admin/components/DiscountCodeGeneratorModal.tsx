@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface CustomerOption {
     id: string
@@ -109,15 +110,9 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
         c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.email || c.telefono || 'Cliente'
 
     const filteredCustomers = useMemo(() => {
-        const q = customerSearch.trim().toLowerCase()
-        if (!q) return customers.slice(0, 20)
+        if (!customerSearch.trim()) return customers.slice(0, 20)
         return customers
-            .filter(c => {
-                const name = customerName(c).toLowerCase()
-                const email = (c.email || '').toLowerCase()
-                const phone = (c.telefono || '').toLowerCase()
-                return name.includes(q) || email.includes(q) || phone.includes(q)
-            })
+            .filter(c => corrispondeRicerca(customerSearch, [c.denominazione, c.nome, c.cognome, c.email, c.telefono]))
             .slice(0, 20)
     }, [customers, customerSearch])
 

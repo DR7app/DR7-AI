@@ -6,6 +6,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { sanitizeMoney, parseMoney } from '../../../utils/money'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -89,6 +90,8 @@ interface CustomerGroup {
   penaliTotal: number
   danniTotal: number
   mostRecentBookingId: string | null
+  // 02/10/2026: telefoni e targhe delle prenotazioni del cliente, solo per la ricerca.
+  ricercaExtra?: string[]
 }
 
 function formatCurrency(amount: number): string {
@@ -175,7 +178,7 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
       for (let page = 0; page < 30; page++) {
         const { data: batch, error: bErrPage } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_email, vehicle_name, pickup_date, booking_details, booked_at, service_type, vehicle_type')
+          .select('id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, pickup_date, booking_details, booked_at, service_type, vehicle_type')
           .order('pickup_date', { ascending: false })
           .range(page * 1000, page * 1000 + 999)
         if (bErrPage) throw bErrPage
@@ -299,6 +302,12 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
         // Also track the most recent booking per customer even without penalties
         const g = map.get(normalizeKey(b.customer_name || ''))
         if (g && !g.mostRecentBookingId) g.mostRecentBookingId = b.id
+        if (g) {
+          const extra = g.ricercaExtra || (g.ricercaExtra = [])
+          for (const v of [b.customer_phone, b.vehicle_plate]) {
+            if (v && !extra.includes(v)) extra.push(v)
+          }
+        }
       }
 
       // 3b. Scan fatture for invoiced penalty/damage items
@@ -515,11 +524,12 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
       })
     }
     if (!search.trim()) return list
-    const q = search.trim().toLowerCase()
-    return list.filter(c =>
-      c.customerName.toLowerCase().includes(q) ||
-      c.customerEmail.toLowerCase().includes(q)
-    )
+    return list.filter(c => corrispondeRicerca(search, [
+      c.customerName,
+      c.customerEmail,
+      ...(c.ricercaExtra || []),
+      ...[...(c.penaliItems || []), ...(c.danniItems || [])].flatMap(it => [it.bookingLabel, it.label, it.fatturaNumero]),
+    ]))
   }, [customers, search, dateRange])
 
   // ── Grand totals ───────────────────────────────────────────────────────────
@@ -1034,7 +1044,7 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           <BarraRicerca
             value={search}
             onChange={setSearch}
-            placeholder="Cerca cliente..."
+            placeholder="Cerca cliente, telefono, email, targa o fattura..."
           />
 
           {/* 2026-06-01: filtro periodo Da/A su date item (penali/danni) */}

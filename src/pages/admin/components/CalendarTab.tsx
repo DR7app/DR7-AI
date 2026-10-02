@@ -159,6 +159,7 @@ interface Booking {
 // detect collaboratori (nessun accesso a `reservations`).
 import { useAdminRole as useAdminRoleInternal } from '../../../hooks/useAdminRole'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 /**
  * 2026-08-14 (roadmap #11) — `serviceType` rende questo calendario utilizzabile
@@ -801,15 +802,24 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
         })
       })
     }
-    if (!searchQuery) return rows
-    const q = searchQuery.toLowerCase()
+    if (!searchQuery.trim()) return rows
+    // 02/10/2026: regola unica utils/ricerca. Il veicolo resta trovabile da
+    // solo; in piu' ogni prenotazione si cerca per cliente (nome, email,
+    // telefono) insieme al suo veicolo, cosi' "rossi ferrari" trova la riga.
     return rows.filter(row => {
-      const vehicleMatch = row.vehicle.display_name.toLowerCase().includes(q) ||
-        (row.vehicle.plate || '').toLowerCase().includes(q)
-      const bookingMatch = row.events.some(e =>
-        e.booking.customer_name.toLowerCase().includes(q)
-      )
-      return vehicleMatch || bookingMatch
+      const campiVeicolo = [row.vehicle.display_name, row.vehicle.plate]
+      if (corrispondeRicerca(searchQuery, campiVeicolo)) return true
+      return row.events.some(e => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const b = e.booking as any
+        return corrispondeRicerca(searchQuery, [
+          ...campiVeicolo,
+          b.customer_name, b.booking_details?.customer?.fullName,
+          b.customer_email, b.booking_details?.customer?.email,
+          b.customer_phone, b.booking_details?.customer?.phone,
+          b.vehicle_plate,
+        ])
+      })
     })
   }, [processedRows, searchQuery, dateRange])
 

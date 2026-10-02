@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useEffect } from 'react'
 import { ScheletroPagina, ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
@@ -806,11 +807,7 @@ export default function FleetInventory() {
                         // status filter
                         if (statusFilter !== 'all' && vehicleStatus(v) !== statusFilter) return false
                         // text search
-                        if (!plateSearch.trim()) return true
-                        const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
-                        const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-                        const name = (v.display_name || '').toLowerCase()
-                        return plate.includes(q) || name.includes(q)
+                        return corrispondeRicerca(plateSearch, [v.plate, v.display_name, v.category])
                     }).map(vehicle => {
                     const inv = vehicle.inventory
                     const oilQty = inv?.oil_quantity || 0

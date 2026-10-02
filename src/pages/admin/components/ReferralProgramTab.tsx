@@ -3,6 +3,7 @@ import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 type ActiveSection = 'overview' | 'participants'
 
@@ -23,6 +24,7 @@ interface SiteReferrer {
   user_id: string
   name: string
   email: string | null
+  telefono?: string | null
   referral_code: string | null
   created_at: string | null
 }
@@ -86,15 +88,9 @@ export default function ReferralProgramTab() {
     }
   }
 
-  const filteredReferrers = referrers.filter((r) => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return (
-      r.name.toLowerCase().includes(q) ||
-      (r.email && r.email.toLowerCase().includes(q)) ||
-      (r.referral_code && r.referral_code.toLowerCase().includes(q))
-    )
-  })
+  const filteredReferrers = referrers.filter((r) =>
+    corrispondeRicerca(searchQuery, [r.name, r.email, r.telefono, r.referral_code])
+  )
 
   return (
     <div className="space-y-6">
@@ -196,7 +192,7 @@ export default function ReferralProgramTab() {
           <BarraRicerca
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Cerca per nome, email, codice..."
+            placeholder="Cerca per nome, telefono, email o codice..."
           />
 
           {referrersLoading ? (

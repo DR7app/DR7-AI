@@ -4,6 +4,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 /**
  * RICARICA WALLET — Marketing > Wallet (16/09/2026)
@@ -39,6 +40,7 @@ interface ClienteWallet {
   user_id: string
   nome: string
   email: string | null
+  telefono?: string | null
   saldo: number
 }
 
@@ -78,7 +80,7 @@ export default function RicaricaWalletTab() {
       // scheda (iscritti al sito senza profilo compilato).
       const [{ data: schede }, { data: saldi }] = await Promise.all([
         supabase.from('customers_extended')
-          .select('user_id, nome, cognome, email')
+          .select('user_id, nome, cognome, email, telefono')
           .not('user_id', 'is', null),
         supabase.from('user_credit_balance').select('user_id, balance'),
       ])
@@ -93,6 +95,7 @@ export default function RicaricaWalletTab() {
           user_id: uid,
           nome: nome || (s as { email?: string }).email || 'Senza nome',
           email: (s as { email?: string }).email || null,
+          telefono: (s as { telefono?: string }).telefono || null,
           saldo: 0,
         })
       }
@@ -137,10 +140,9 @@ export default function RicaricaWalletTab() {
   }, [lotti])
 
   const visibili = useMemo(() => {
-    const q = ricerca.trim().toLowerCase()
-    if (!q) return clienti.slice(0, 300)
+    if (!ricerca.trim()) return clienti.slice(0, 300)
     return clienti
-      .filter(c => c.nome.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))
+      .filter(c => corrispondeRicerca(ricerca, [c.nome, c.email, c.telefono]))
       .slice(0, 300)
   }, [clienti, ricerca])
 
@@ -282,7 +284,7 @@ export default function RicaricaWalletTab() {
               className="flex-1 min-w-0"
               value={ricerca}
               onChange={setRicerca}
-              placeholder="Cerca cliente per nome o email..."
+              placeholder="Cerca cliente per nome, email o telefono..."
             />
             <button
               onClick={() => setSelezione(new Set())}

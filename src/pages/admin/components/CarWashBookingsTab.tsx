@@ -41,6 +41,7 @@ import SeatPlanPicker from './SeatPlanPicker'
 import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
 import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -475,22 +476,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
    * regole di selezione sono identiche a prima.
    */
   const lavaggiVisibili = useMemo(() => {
-    const norm = (x: string) => x.replace(/[\s\-\+\(\)]/g, '')
-    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
+    const cercaAttiva = bookingSearchQuery.trim() !== ''
     return bookings.filter(booking => {
       if (!bookingPassesDate(booking)) return false
-      if (words.length === 0) return true
-      const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
-      const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-      const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
-      const vehicleName = (booking.vehicle_name || '').toLowerCase()
-      const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-      const bookingId = String(booking.id || '').toLowerCase()
+      if (!cercaAttiva) return true
+      const bd = booking.booking_details || {}
+      const cust = bd.customer || {}
+      const bookingId = String(booking.id || '')
       const bookingCode = bookingId.substring(0, 8)
-      // Normalise the SAME way the query is normalised — strip spaces,
-      // hyphens, plus, parentheses so "DR7-2A37CACB" matches "dr72a37cacb".
-      const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-      return words.every(word => searchText.includes(word))
+      // 02/10/2026: regola unica utils/ricerca. "DR7-2A37CACB" trova ancora
+      // "dr72a37cacb" (trattini e spazi non contano), telefono per cifre.
+      return corrispondeRicerca(bookingSearchQuery, [
+        booking.customer_name, cust.fullName,
+        booking.customer_email, cust.email,
+        booking.customer_phone, cust.phone,
+        booking.vehicle_name, booking.vehicle_plate,
+        // la targa del lavaggio sta anche dentro booking_details (vedi elenco targhe)
+        bd.vehicle_plate, bd.targa, bd.plate, bd.vehicle?.plate, bd.vehicle?.targa,
+        bd.vehicleMakeModel, bd.vehicle?.makeModel,
+        bookingId, `dr7${bookingCode}`,
+      ])
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookings, bookingSearchQuery, bookingDateRange.from, bookingDateRange.to])
@@ -3853,14 +3858,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       })
                       .filter(Boolean) as { plate: string; customerName: string; makeModel: string; lastDate: string }[]
 
-                    const q = existingPlatesSearch.toLowerCase().trim()
-                    const filtered = q
-                      ? uniqueByPlate.filter(v =>
-                          v.plate.toLowerCase().includes(q) ||
-                          v.customerName.toLowerCase().includes(q) ||
-                          v.makeModel.toLowerCase().includes(q)
-                        )
-                      : uniqueByPlate
+                    const q = existingPlatesSearch.trim()
+                    const filtered = uniqueByPlate.filter(v =>
+                      corrispondeRicerca(existingPlatesSearch, [v.plate, v.customerName, v.makeModel])
+                    )
 
                     return (
                       <div className="absolute left-0 right-0 mt-1 z-20 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-lg max-h-72 overflow-hidden flex flex-col">

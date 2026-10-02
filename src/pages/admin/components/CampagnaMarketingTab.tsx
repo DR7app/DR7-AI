@@ -11,6 +11,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -769,15 +770,9 @@ export default function CampagnaMarketingTab() {
 
     const excludedCount = customers.length - eligible.length
 
-    const filtered = eligible.filter(c => {
-        if (!searchQuery) return true
-        const q = searchQuery.toLowerCase()
-        return (
-            c.full_name.toLowerCase().includes(q) ||
-            c.email?.toLowerCase().includes(q) ||
-            c.phone?.toLowerCase().includes(q)
-        )
-    })
+    const filtered = eligible.filter(c =>
+        corrispondeRicerca(searchQuery, [c.full_name, c.nome, c.cognome, c.email, c.phone])
+    )
     const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
     const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
 

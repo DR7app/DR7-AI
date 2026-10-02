@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useEffect, useMemo } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
@@ -256,14 +257,10 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
 
     // Lista filtrata
     const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase().replace(/\s/g, '')
         return vehicles.filter(v => {
             if (filterCategory !== 'all' && v.category !== filterCategory) return false
             if (filterStatus !== 'all' && v.status !== filterStatus) return false
-            if (!q) return true
-            const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-            const name = (v.display_name || '').toLowerCase()
-            return plate.includes(q) || name.includes(q)
+            return corrispondeRicerca(search, [v.plate, v.display_name, v.chassis_number, v.category])
         })
     }, [vehicles, search, filterCategory, filterStatus])
 

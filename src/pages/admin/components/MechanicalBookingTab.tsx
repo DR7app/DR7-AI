@@ -13,6 +13,7 @@ import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface Customer {
   id: string
@@ -296,7 +297,7 @@ export default function MechanicalBookingTab() {
         <BarraRicerca
           value={bookingSearchQuery}
           onChange={setBookingSearchQuery}
-          placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
+          placeholder="Cerca per codice, nome, email, telefono, targa, veicolo o servizio..."
         />
         {/* 2026-06-01: filtro periodo per appointment_date */}
         <DateRangeFilter value={bookingDateRange} onChange={setBookingDateRange} />
@@ -355,23 +356,23 @@ export default function MechanicalBookingTab() {
             {bookings.filter(booking => {
               // 2026-06-01: filtro periodo Da/A prima della ricerca testuale.
               if (!bookingPassesDate(booking)) return false
-              // Search filter — normalise BOTH the query AND the haystack the
-              // same way (strip spaces, hyphens, plus, parentheses) so users
-              // typing "DR7-2A37CACB" match the stored "dr72a37cacb" form.
-              if (!bookingSearchQuery) return true
-              const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-              const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
-              const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
-              const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-              const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
+              // 02/10/2026: regola unica utils/ricerca. "DR7-2A37CACB" trova ancora
+              // "dr72a37cacb" (trattini e spazi non contano), telefono per cifre.
+              if (!bookingSearchQuery.trim()) return true
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const anyBooking = booking as any
-              const vehicleName = String(anyBooking.vehicle_name || '').toLowerCase()
-              const vehiclePlate = String(anyBooking.vehicle_plate || '').toLowerCase()
-              const bookingId = String(booking.id || '').toLowerCase()
+              const bookingId = String(booking.id || '')
               const bookingCode = bookingId.substring(0, 8)
-              const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-              return words.every(word => searchText.includes(word))
+              return corrispondeRicerca(bookingSearchQuery, [
+                booking.customer_name, booking.booking_details?.customer?.fullName,
+                booking.customer_email, booking.booking_details?.customer?.email,
+                booking.customer_phone, booking.booking_details?.customer?.phone,
+                anyBooking.vehicle_name, anyBooking.vehicle_plate,
+                // colonna "Veicolo" della tabella (marca/modello/targa scritti a mano)
+                booking.booking_details?.vehicleInfo,
+                booking.service_name,
+                bookingId, `dr7${bookingCode}`,
+              ])
             }).map(booking => (
               <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50">
                 <td className="px-4 py-3 text-sm text-theme-text-primary">

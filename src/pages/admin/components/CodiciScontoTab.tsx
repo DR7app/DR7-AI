@@ -11,6 +11,7 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // Static accent palette mirrored on the screenshot — keeps each panel
 // visually distinct without inventing data.
@@ -387,16 +388,10 @@ export default function CodiciScontoTab() {
     }
 
     const filteredSendCustomers = (() => {
-        const q = sendCustomerSearch.trim().toLowerCase()
         const list = sendCustomers
-        if (!q) return list.slice(0, 20)
+        if (!sendCustomerSearch.trim()) return list.slice(0, 20)
         return list
-            .filter(c => {
-                const name = (c.denominazione || `${c.nome || ''} ${c.cognome || ''}`).toLowerCase()
-                return name.includes(q)
-                    || (c.email || '').toLowerCase().includes(q)
-                    || (c.telefono || '').toLowerCase().includes(q)
-            })
+            .filter(c => corrispondeRicerca(sendCustomerSearch, [c.denominazione, c.nome, c.cognome, c.email, c.telefono]))
             .slice(0, 20)
     })()
 
@@ -421,17 +416,9 @@ export default function CodiciScontoTab() {
 
     const filteredDiscountCodes = discountCodes.filter(code => {
         if (discountCodeFilter !== 'all' && code.status !== discountCodeFilter) return false
-        if (discountCodeSearch) {
-            const q = discountCodeSearch.toLowerCase()
-            return (
-                code.code.toLowerCase().includes(q) ||
-                code.message?.toLowerCase().includes(q) ||
-                code.code_type.toLowerCase().includes(q) ||
-                code.customer_email?.toLowerCase().includes(q) ||
-                code.customer_phone?.toLowerCase().includes(q)
-            )
-        }
-        return true
+        return corrispondeRicerca(discountCodeSearch, [
+            code.code, code.message, code.code_type, code.customer_email, code.customer_phone,
+        ])
     })
 
     // Panoramica metrics derived from real loaded data.
@@ -578,7 +565,7 @@ export default function CodiciScontoTab() {
                 <BarraRicerca
                     variante="compatta"
                     className="flex-1 min-w-[200px]"
-                    placeholder="Cerca codice..."
+                    placeholder="Cerca codice, email o telefono..."
                     value={discountCodeSearch}
                     onChange={setDiscountCodeSearch}
                 />

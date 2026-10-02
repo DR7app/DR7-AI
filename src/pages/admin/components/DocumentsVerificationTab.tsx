@@ -5,6 +5,17 @@ import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
+
+/** Cosa si puo' cercare di un documento: il cliente e il tipo di documento. */
+function campiRicercaDocumento(d: UserDocument): unknown[] {
+  const u = d.user
+  return [
+    u?.full_name, u?.email, u?.telefono, u?.codice_fiscale,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (u as any)?.nome, (u as any)?.cognome, d.document_type,
+  ]
+}
 
 interface UserDocument {
   id: string
@@ -93,17 +104,9 @@ export default function DocumentsVerificationTab() {
   // console. This way we sign just what the user is actually looking at.
   // (filteredDocuments is computed below; we recompute it here for the deps.)
   const visibleForSign = (() => {
-    const ql = search.trim().toLowerCase()
     return documents.filter(d => {
       if (filterStatus !== 'all' && d.status !== filterStatus) return false
-      if (!ql) return true
-      const u = d.user
-      const haystack = [
-        u?.full_name, u?.email, u?.telefono, u?.codice_fiscale,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (u as any)?.nome, (u as any)?.cognome, d.document_type
-      ].filter(Boolean).join(' ').toLowerCase()
-      return haystack.includes(ql)
+      return corrispondeRicerca(search, campiRicercaDocumento(d))
     })
   })()
   // Cap at 100 — if user scrolls past that, we'd extend (TODO).
@@ -464,21 +467,9 @@ export default function DocumentsVerificationTab() {
     )
   }
 
-  const q = search.trim().toLowerCase()
   const filteredDocuments = documents.filter(d => {
     if (filterStatus !== 'all' && d.status !== filterStatus) return false
-    if (!q) return true
-    const u = d.user
-    const haystack = [
-      u?.full_name, u?.email, u?.telefono, u?.codice_fiscale,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (u as any)?.nome, (u as any)?.cognome,
-      d.document_type
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(q)
+    return corrispondeRicerca(search, campiRicercaDocumento(d))
   })
 
   // Group documents by user

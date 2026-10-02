@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
 import SelettoreCategorieEMTN, { type OpzioneCategoria } from './SelettoreCategorieEMTN'
 import BarraRicerca from '../../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../../utils/ricerca'
 import {
     AREE_EMTN, CATEGORIE_EMTN, CAMPI_EVENTO, CAMPI_PRATICA, STATI_EMTN, TIPI_DOCUMENTO, NON_RISULTA, AVVISO_LEGALE,
     categoriaEMTN, etichettaStato, normalizzaRisultato, motiviRevisioneManuale,
@@ -273,16 +274,15 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                 {noleggi && noleggi.length > 0 && (
                                     <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                                         {[...noleggi].filter(n => {
-                                            const q = cercaNoleggio.trim().toLowerCase()
+                                            const q = cercaNoleggio.trim()
                                             if (!q || n.id === noleggioScelto) return true
-                                            const testo = [
+                                            return corrispondeRicerca(q, [
                                                 n.veicolo, n.targa, n.contratto, giorno(n.ritiro), giorno(n.riconsegna), `DR7-${n.id.slice(0, 8)}`,
                                                 n.ritiro ? new Date(n.ritiro).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', month: 'long', year: 'numeric' }) : '',
                                                 n.insoluto > 0 ? 'insoluto da saldare' : '',
                                                 ...n.danni.map(v => v.label), ...n.penali.map(v => v.label),
                                                 n.danni.length ? 'danno' : '', n.penali.length ? 'penale' : '', n.non_pagato > 0 ? 'non pagato' : '',
-                                            ].filter(Boolean).join(' ').toLowerCase()
-                                            return q.split(/\s+/).every(p => testo.includes(p))
+                                            ])
                                         }).sort((a, b) => Number(b.danni.length + b.penali.length > 0) - Number(a.danni.length + a.penali.length > 0)).map(n => {
                                             const scelto = n.id === noleggioScelto
                                             const voci = [...n.danni.map(v => ({ ...v, tipo: 'Danno' })), ...n.penali.map(v => ({ ...v, tipo: 'Penale' }))]

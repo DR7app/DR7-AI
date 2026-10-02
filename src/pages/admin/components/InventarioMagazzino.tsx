@@ -8,6 +8,7 @@
 // 20260721_inventario_magazzino.sql + _seed.sql.
 // =============================================================================
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
@@ -224,16 +225,19 @@ export default function InventarioMagazzino({ business }: { business?: Business 
   }, [ordini, articoloById, biz])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim()
     return articoli.filter(a => {
       // Scope business: la tab di un business mostra solo i suoi articoli;
       // il Magazzino Generale li mostra tutti.
       if (biz && (a.business || null) !== biz) return false
       if (soloSottoScorta && semaforo(a) !== 'rosso') return false
       if (!q) return true
-      return a.nome.toLowerCase().includes(q) || a.codice.toLowerCase().includes(q) || (a.note || '').toLowerCase().includes(q)
+      const forn = a.fornitore_id ? fornitoreById.get(a.fornitore_id) : undefined
+      return corrispondeRicerca(q, [
+        a.nome, a.codice, a.note, a.categoria_codice, a.amazon_asin, forn?.nome,
+      ])
     })
-  }, [articoli, search, soloSottoScorta, biz])
+  }, [articoli, search, soloSottoScorta, biz, fornitoreById])
 
   // Categorie visibili nella tab: quelle trasversali piu' quelle di questo
   // business. Se la colonna `business_scope` non esiste ancora (migration non
@@ -830,7 +834,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
           variante="compatta"
           className="flex-1 min-w-[200px]"
           value={search} onChange={setSearch}
-          placeholder="Cerca articolo, codice, note..."
+          placeholder="Cerca articolo, codice, fornitore, note..."
         />
         <button
           onClick={() => setSoloSottoScorta(v => !v)}

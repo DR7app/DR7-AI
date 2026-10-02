@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { authFetch } from '../../../utils/authFetch'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // Classe input condivisa (identica a NoleggioServiceTab INPUT_CLS).
 const INPUT_CLS = 'px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm w-full placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold'
@@ -7,7 +8,12 @@ const INPUT_CLS = 'px-3 py-2 bg-theme-bg-tertiary border border-theme-border rou
 // Selettore cliente dai Lead (tabella `customers`): cerca per nome/telefono/
 // email e richiama onPick(nome, telefono). Usato in Prenotazioni, Preventivi e
 // nel form Lavaggi/Meccanica (Prime Wash).
-export interface Lead { id: string; name: string; phone: string; email: string }
+export interface Lead {
+  id: string; name: string; phone: string; email: string
+  // 02/10/2026: solo per la ricerca (nome/cognome separati, ragione sociale,
+  // CF, P.IVA, altri numeri). Non cambiano cio' che onPick restituisce.
+  cercabili?: string[]
+}
 // Stessa sorgente della tab Clienti: customers_extended via /.netlify/functions/
 // list-customers (service role, bypassa RLS, paginato = TUTTI i clienti). Niente
 // query diretta su `customers` (mostrava solo un sottoinsieme).
@@ -20,14 +26,16 @@ export async function fetchLeads(): Promise<Lead[]> {
       const g = (k: string) => (c[k] == null ? '' : String(c[k])).trim()
       const name = g('full_name') || `${g('nome') || g('first_name')} ${g('cognome') || g('last_name')}`.trim() || g('ragione_sociale') || g('denominazione')
       const phone = g('telefono') || g('phone') || g('mobile') || g('cellulare')
-      return { id: g('id') || g('user_id') || `lead-${i}`, name, phone, email: g('email') }
+      const cercabili = ['nome', 'cognome', 'first_name', 'last_name', 'ragione_sociale', 'denominazione',
+        'codice_fiscale', 'partita_iva', 'telefono', 'phone', 'mobile', 'cellulare'].map(g).filter(Boolean)
+      return { id: g('id') || g('user_id') || `lead-${i}`, name, phone, email: g('email'), cercabili }
     }).filter(l => l.name || l.phone || l.email)
   } catch {
     return []
   }
 }
 
-export function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead', placeholder = 'Cerca un cliente per nome, telefono o email…', onQueryChange }: { onPick: (name: string, phone: string, id?: string) => void; initialQuery?: string; label?: string; placeholder?: string; onQueryChange?: (q: string) => void }) {
+export function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead', placeholder = 'Cerca un cliente per nome, telefono, email, CF o P.IVA…', onQueryChange }: { onPick: (name: string, phone: string, id?: string) => void; initialQuery?: string; label?: string; placeholder?: string; onQueryChange?: (q: string) => void }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [query, setQuery] = useState(initialQuery)
   const [open, setOpen] = useState(false)
@@ -38,13 +46,10 @@ export function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona clien
     return () => { cancelled = true }
   }, [])
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return leads.slice(0, 8)
-    return leads.filter(l =>
-      l.name.toLowerCase().includes(q) ||
-      l.phone.toLowerCase().includes(q) ||
-      l.email.toLowerCase().includes(q)
-    ).slice(0, 8)
+    // 02/10/2026: stessa regola di tutte le barre (utils/ricerca): parole in
+    // qualunque ordine, accenti ignorati, telefono con o senza +39 e spazi.
+    if (!query.trim()) return leads.slice(0, 8)
+    return leads.filter(l => corrispondeRicerca(query, [l.name, l.phone, l.email, ...(l.cercabili || [])])).slice(0, 8)
   }, [leads, query])
   return (
     <div className="relative">

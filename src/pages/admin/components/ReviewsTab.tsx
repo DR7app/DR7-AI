@@ -6,6 +6,7 @@ import Button from './Button'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface CompletedBooking {
     id: string
@@ -18,6 +19,8 @@ interface CompletedBooking {
     status: string
     price_total: number
     review_sent_at: string | null
+    /** Solo per la ricerca (targa del mezzo). */
+    vehicle_plate?: string | null
 }
 
 export default function ReviewsTab() {
@@ -89,7 +92,8 @@ export default function ReviewsTab() {
                             end_date: endDateStr,
                             status: b.status,
                             price_total: b.price_total,
-                            review_sent_at: b.review_sent_at || null
+                            review_sent_at: b.review_sent_at || null,
+                            vehicle_plate: b.vehicle_plate || null,
                         })
                     }
                 }
@@ -186,8 +190,7 @@ export default function ReviewsTab() {
     }
 
     const filteredBookings = bookings.filter(b =>
-        b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (b.customer_email && b.customer_email.toLowerCase().includes(searchTerm.toLowerCase()))
+        corrispondeRicerca(searchTerm, [b.customer_name, b.customer_email, b.customer_phone, b.service_name, b.vehicle_plate])
     )
 
     const handleSelectAll = () => {
@@ -468,7 +471,7 @@ export default function ReviewsTab() {
             <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border flex gap-4">
                 <BarraRicerca
                     className="w-full max-w-md"
-                    placeholder="Cerca cliente o email..."
+                    placeholder="Cerca per nome, telefono, email, veicolo o targa..."
                     value={searchTerm}
                     onChange={setSearchTerm}
                 />

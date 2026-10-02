@@ -9,6 +9,7 @@ import { supabase } from '../../../supabaseClient'
 import { toBusiness, usaCatalogoDedicato, BUSINESS_LABELS, BUSINESS_ASSET_LABELS, type Business } from '../../../utils/businessScope'
 import { useTheme } from '../../../contexts/ThemeContext'
 import Miniatura from '../../../components/Miniatura'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 type VehicleStatus = 'online' | 'offline' | 'moving' | 'idle' | 'alarm' | 'blocked'
 type MobileView = 'veicoli' | 'mappa' | 'dettaglio'
@@ -411,9 +412,9 @@ export default function GpsKeylessTab({ business = 'rental' }: { business?: Busi
   const selected = useMemo(() => vehicles.find(v => v.id === selectedId) || null, [vehicles, selectedId])
 
   const filteredVehicles = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return vehicles
-    return vehicles.filter(v => v.plate.toLowerCase().includes(q) || v.model.toLowerCase().includes(q))
+    // 02/10/2026: regola comune: targa con o senza spazi ("ab123cd" trova "AB 123 CD").
+    if (!search.trim()) return vehicles
+    return vehicles.filter(v => corrispondeRicerca(search, [v.plate, v.model, v.last_position?.address]))
   }, [vehicles, search])
 
   const kpis = useMemo(() => {

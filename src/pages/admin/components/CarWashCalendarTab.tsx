@@ -25,6 +25,7 @@ import SeatPlanPicker from './SeatPlanPicker'
 import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
 import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -629,11 +630,19 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       })
     }
     if (!searchQuery.trim()) return list
-    const q = searchQuery.toLowerCase()
+    // 02/10/2026: regola unica utils/ricerca (nome in qualunque ordine,
+    // telefono per cifre con/senza +39, targa senza spazi).
     return list.filter(evt => {
-      const customerName = evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || ''
-      return customerName.toLowerCase().includes(q) ||
-        evt.booking.service_name.toLowerCase().includes(q)
+      const b = evt.booking
+      const bd = b.booking_details || {}
+      return corrispondeRicerca(searchQuery, [
+        b.customer_name, bd.customer?.fullName,
+        b.customer_email, bd.customer?.email,
+        b.customer_phone, bd.customer?.phone,
+        b.service_name,
+        b.vehicle_name, b.vehicle_plate,
+        bd.vehicle_plate, bd.targa, bd.plate, bd.vehicle?.plate, bd.vehicle?.targa,
+      ])
     })
   }, [calendarEvents, searchQuery, dateRange])
 

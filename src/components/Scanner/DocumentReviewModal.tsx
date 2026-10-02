@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import toast from 'react-hot-toast';
 import BarraRicerca from '../admin/BarraRicerca';
+import { cifreTelefono } from '../../utils/ricerca';
 
 interface DocumentReviewModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,8 +39,17 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
 
     async function searchCustomers(query: string) {
         let q = supabase.from('customers_extended').select('id, nome, cognome, email').limit(10);
-        if (query) {
-            q = q.or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,email.ilike.%${query}%`);
+        // 02/10/2026: ogni parola deve comparire in uno dei campi (un .or() per
+        // parola, PostgREST li mette in AND): "rossi mario" trova Mario Rossi.
+        // Si cerca anche per telefono (anche per sole cifre, +39 tolto),
+        // codice fiscale, P.IVA e ragione sociale.
+        const parole = query.replace(/[,()%*\\]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 5);
+        for (const p of parole) {
+            const condizioni = ['nome', 'cognome', 'email', 'telefono', 'codice_fiscale', 'partita_iva', 'ragione_sociale', 'denominazione']
+                .map(c => `${c}.ilike.%${p}%`);
+            const cifre = cifreTelefono(p);
+            if (cifre.length >= 3 && cifre !== p) condizioni.push(`telefono.ilike.%${cifre}%`);
+            q = q.or(condizioni.join(','));
         }
         const { data } = await q;
         if (data) setCustomers(data);
@@ -164,7 +174,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                     <BarraRicerca
                                         variante="compatta"
                                         className="w-full mb-2"
-                                        placeholder="Cerca cliente..."
+                                        placeholder="Cerca per nome, telefono, email o CF..."
                                         value={searchQuery}
                                         onChange={(testo) => {
                                             setSearchQuery(testo);

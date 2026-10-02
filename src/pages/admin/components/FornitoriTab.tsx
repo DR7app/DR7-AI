@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useEffect, useState, useMemo } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
@@ -181,13 +182,10 @@ export default function FornitoriTab() {
     const [sortKey, setSortKey] = useState<SortKey>('nome')
 
     const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase()
-        let base = q
-            ? fornitori.filter(f =>
-                f.nome.toLowerCase().includes(q) ||
-                (f.piva || '').toLowerCase().includes(q) ||
-                (f.categoria_merce || '').toLowerCase().includes(q)
-            )
+        let base = search.trim()
+            ? fornitori.filter(f => corrispondeRicerca(search, [
+                f.nome, f.piva, f.categoria_merce, f.referente, f.telefono, f.email, f.citta,
+            ]))
             : fornitori
         if (categoryFilter === '__none__') {
             base = base.filter(f => !f.categoria_merce)
@@ -485,7 +483,7 @@ export default function FornitoriTab() {
                 <BarraRicerca
                     variante="compatta"
                     className="flex-1 min-w-[240px]"
-                    placeholder="Cerca per nome, P.IVA o categoria…"
+                    placeholder="Cerca per nome, P.IVA, categoria, referente, telefono o email…"
                     value={search}
                     onChange={setSearch}
                 />

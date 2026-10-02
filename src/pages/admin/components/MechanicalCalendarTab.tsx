@@ -8,6 +8,7 @@ import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface MechanicalBooking {
   id: string
@@ -200,11 +201,19 @@ export default function MechanicalCalendarTab() {
   const matchingBookings = useMemo(() => {
     if (!searchQuery.trim()) return []
 
-    const query = searchQuery.toLowerCase()
+    // 02/10/2026: regola unica utils/ricerca (nome in qualunque ordine,
+    // telefono per cifre con/senza +39, targa senza spazi).
     return bookings.filter(booking => {
-      const customerName = booking.customer_name || booking.booking_details?.customer?.fullName
-      if (!customerName) return false
-      return customerName.toLowerCase().includes(query)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyBooking = booking as any
+      return corrispondeRicerca(searchQuery, [
+        booking.customer_name, booking.booking_details?.customer?.fullName,
+        booking.customer_email, booking.booking_details?.customer?.email,
+        booking.customer_phone, booking.booking_details?.customer?.phone,
+        booking.vehicle_name, anyBooking.vehicle_plate,
+        booking.booking_details?.vehicleInfo,
+        booking.service_name,
+      ])
     })
   }, [bookings, searchQuery])
 
@@ -234,7 +243,7 @@ export default function MechanicalCalendarTab() {
               className="w-48"
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Cerca clienti..."
+              placeholder="Cerca cliente, telefono, targa..."
             />
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-theme-text-muted">Questo Mese:</span>

@@ -6,6 +6,7 @@ import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { cifreTelefono } from '../../../utils/ricerca'
 import Paginazione from './Paginazione'
 import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -380,9 +381,18 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
         if (ricerca) {
           // Virgole e parentesi separano le condizioni di PostgREST: vanno
           // tolte, altrimenti la query fallisce e l'elenco resta vuoto.
-          const testo = ricerca.replace(/[(),%*]/g, ' ').trim()
-          if (testo) {
-            q = q.or(`customer_name.ilike.%${testo}%,contract_number.ilike.%${testo}%,customer_email.ilike.%${testo}%`)
+          const testo = ricerca.replace(/[(),%*\\]/g, ' ').trim()
+          // 02/10/2026: ogni parola deve comparire in uno dei campi (un .or()
+          // per parola, PostgREST li mette in AND): "rossi mario" trova Mario
+          // Rossi. Campi: nome, numero contratto, email, telefono, codice
+          // fiscale, veicolo. Il telefono si cerca anche per sole cifre (+39 tolto).
+          const parole = testo ? testo.split(/\s+/).slice(0, 5) : []
+          for (const p of parole) {
+            const condizioni = ['customer_name', 'contract_number', 'customer_email', 'customer_phone', 'customer_tax_code', 'vehicle_name']
+              .map(c => `${c}.ilike.%${p}%`)
+            const cifre = cifreTelefono(p)
+            if (cifre.length >= 3 && cifre !== p) condizioni.push(`customer_phone.ilike.%${cifre}%`)
+            q = q.or(condizioni.join(','))
           }
         }
         if (dateRange.from) q = q.gte('created_at', inizioGiornoRoma(dateRange.from))
@@ -1321,7 +1331,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
       {/* Search Bar + Period Filter */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
         <BarraRicerca
-          placeholder="Cerca cliente..."
+          placeholder="Cerca per nome, telefono, email, n. contratto, CF o veicolo..."
           value={searchQuery}
           onChange={setSearchQuery}
         />

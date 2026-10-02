@@ -15,6 +15,7 @@ import { maskIban, validateIban } from '../../../utils/ibanValidation'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface Cauzione {
     id: string
@@ -404,10 +405,13 @@ export default function CauzioniTab() {
 
     const applySearch = (list: Cauzione[]) => list.filter(c => {
         if (!passesDateRange(c)) return false
-        const matchesSearch = searchTerm === '' ||
-            c.cliente_nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.veicolo_modello?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.veicolo_targa?.toLowerCase().includes(searchTerm.toLowerCase())
+        // 02/10/2026: regola unica utils/ricerca (nome in qualunque ordine,
+        // telefono per cifre con/senza +39, targa senza spazi).
+        const matchesSearch = corrispondeRicerca(searchTerm, [
+            c.cliente_nome, c.cliente_email, c.cliente_telefono,
+            c.veicolo_modello, c.veicolo_targa,
+            c.intestatario_conto,
+        ])
         const matchesMetodo = filterMetodo === 'all' || c.metodo === filterMetodo
         return matchesSearch && matchesMetodo && matchesQuickFilter(c)
     })
@@ -1459,7 +1463,7 @@ export default function CauzioniTab() {
                         variante="compatta"
                         value={searchTerm}
                         onChange={setSearchTerm}
-                        placeholder="Cerca cliente, veicolo, targa..."
+                        placeholder="Cerca cliente, telefono, email, targa..."
                     />
                     <select
                         value={filterMetodo}
@@ -2408,7 +2412,7 @@ function AzioniRapide({ onNuova, onStorico }: { onNuova: () => void; onStorico: 
         } },
         { label: 'Report', icon: 'M3 7h18M3 12h18M3 17h12', onClick: () => window.alert('Apri sezione Report (in arrivo).') },
         { label: 'Filtri', icon: 'M4 6h16M6 12h12M10 18h4', onClick: () => {
-            const el = document.querySelector<HTMLInputElement>('input[placeholder="Cerca cliente, veicolo, targa..."]')
+            const el = document.querySelector<HTMLInputElement>('input[placeholder="Cerca cliente, telefono, email, targa..."]')
             el?.focus()
         } },
         { label: 'Stampa', icon: 'M6 9V2h12v7M6 18h12v4H6zM6 14h12', onClick: () => window.print() },

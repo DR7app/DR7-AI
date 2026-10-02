@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { ReportGrafici, ReportGrafico, ReportButton } from './ReportUI'
 import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
 // stesso colore, anche quando una fetta sparisce.
@@ -274,7 +275,7 @@ export default function ReportPreventiviTab() {
   // ===== FILTERED DATA =====
   const filtered = useMemo(() => {
     return preventivi.filter(p => {
-      if (filterVehicle && !p.vehicle_name?.toLowerCase().includes(filterVehicle.toLowerCase())) return false
+      if (filterVehicle && !corrispondeRicerca(filterVehicle, [p.vehicle_name, p.vehicle_plate, p.customer_name, p.customer_phone])) return false
       if (filterCategory && p.vehicle_category !== filterCategory) return false
       if (filterFascia && getTier(p) !== filterFascia) return false
       if (filterPriceRange) {
@@ -777,7 +778,7 @@ export default function ReportPreventiviTab() {
             <BarraRicerca
               variante="compatta"
               className="w-52"
-              placeholder="Filtra veicolo..."
+              placeholder="Veicolo, targa, cliente, telefono..."
               value={filterVehicle}
               onChange={setFilterVehicle}
             />

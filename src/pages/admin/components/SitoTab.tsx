@@ -36,6 +36,7 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import MoneyInput from '../../../components/MoneyInput'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { parseMoney } from '../../../utils/money'
 // Alberatura reale di dr7.app: una voce dell'onglet = una pagina del sito.
 // Catalogo dei testi del sito: GENERATO da scripts/genTestiCatalogo.mjs.
@@ -346,8 +347,7 @@ function SitoSidebar({ screenId, onSelect }: { screenId: string; onSelect: (id: 
             area,
             screens: screens.filter(s =>
                 q === '' ||
-                s.label.toLowerCase().includes(q) ||
-                s.path.toLowerCase().includes(q)),
+                corrispondeRicerca(q, [s.label, s.path])),
         }))
         .filter(g => g.screens.length > 0)
 
@@ -7062,7 +7062,7 @@ function TestiEditor({ screen, copy, setCopy }: {
         return base.filter(v => {
             if (soloModificati && !copy[v.chiave]) return false
             if (!q) return true
-            return v.it.toLowerCase().includes(q) || v.en.toLowerCase().includes(q) || v.file.toLowerCase().includes(q)
+            return corrispondeRicerca(q, [v.it, v.en, v.file, v.chiave])
         })
     }, [screen.id, condivisi, cerca, soloModificati, copy])
 

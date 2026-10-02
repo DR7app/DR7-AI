@@ -132,6 +132,7 @@ import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // --- Kasko Constants & Types ---
 // L'id di un'assicurazione e' quello che le da' Centralina Pro (un codice
@@ -2373,9 +2374,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
    * sola e si rifanno quando cambiano davvero i dati, il periodo o la ricerca.
    */
   const bookingsVisibili = useMemo(() => {
-    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-    const norm = (x: string) => x.replace(/[\s\-\+\(\)]/g, '')
-    const normalisedWords = words.map(norm)
+    const cercaAttiva = bookingSearchQuery.trim() !== ''
     const { from, to } = bookingDateRange
     return bookings.filter(booking => {
       // 2026-06-01: filtro periodo prima della ricerca testuale.
@@ -2386,31 +2385,31 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           if (to && pickup > to) return false
         }
       }
-      if (normalisedWords.length === 0) return true
+      if (!cercaAttiva) return true
       // Coverage estesa per "campi nome": alcune prenotazioni hanno fullName,
       // altre nome+cognome separati, altre solo first_name/last_name in
       // booking_details.customer. Senza questa lista la ricerca per nome
       // ometteva booking validi (es. Andrea Testa).
       const cust = booking.booking_details?.customer || {}
-      const nameParts = [
+      const bookingId = String(booking.id || '')
+      const bookingCode = bookingId.substring(0, 8)
+      // 2026-09-03: sulle Uscite Straordinarie il "cliente" non esiste, quindi
+      // la ricerca era cieca sul dato che conta davvero: l'autista.
+      const autisti = autistiDiUscita(booking).flatMap(a => [a.full_name, a.phone])
+      // 02/10/2026: regola unica utils/ricerca (accenti, parole in qualunque
+      // ordine, targa senza spazi, telefono per cifre con/senza +39).
+      return corrispondeRicerca(bookingSearchQuery, [
         cust.fullName, cust.full_name, cust.name,
         cust.first_name, cust.last_name,
         cust.firstName, cust.lastName,
         cust.nome, cust.cognome,
         booking.customer_name,
-      ].filter(Boolean).join(' ')
-      const customerName = nameParts.toLowerCase()
-      const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
-      const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
-      const vehicleName = (booking.vehicle_name || '').toLowerCase()
-      const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-      const bookingId = String(booking.id || '').toLowerCase()
-      const bookingCode = bookingId.substring(0, 8)
-      // 2026-09-03: sulle Uscite Straordinarie il "cliente" non esiste, quindi
-      // la ricerca era cieca sul dato che conta davvero: l'autista.
-      const autisti = autistiDiUscita(booking).map(a => `${a.full_name} ${a.phone}`).join(' ').toLowerCase()
-      const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${autisti} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-      return normalisedWords.every(word => searchText.includes(word))
+        booking.customer_email, cust.email,
+        booking.customer_phone, cust.phone, cust.telefono,
+        booking.vehicle_name, booking.vehicle_plate,
+        ...autisti,
+        bookingId, `dr7${bookingCode}`,
+      ])
     })
   }, [bookings, bookingSearchQuery, bookingDateRange])
 

@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useMemo } from 'react'
 import { authFetch } from '../../../utils/authFetch'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 interface SiteUser {
   id: string
@@ -366,19 +367,11 @@ export default function SiteUsersTab() {
   // `.sort()` sull'array di stato, quindi ordinava gli iscritti sul posto.
   // Ora si ricalcola solo quando cambiano elenco, ricerca o ordinamento.
   const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    const base = q
-      ? users.filter(u => (
-          u.email?.toLowerCase().includes(q) ||
-          u.nome?.toLowerCase().includes(q) ||
-          u.cognome?.toLowerCase().includes(q) ||
-          u.denominazione?.toLowerCase().includes(q) ||
-          u.ente_ufficio?.toLowerCase().includes(q) ||
-          u.codice_fiscale?.toLowerCase().includes(q) ||
-          u.partita_iva?.toLowerCase().includes(q) ||
-          u.citta_residenza?.toLowerCase().includes(q) ||
-          u.telefono?.includes(q)
-        ))
+    const base = searchQuery.trim()
+      ? users.filter(u => corrispondeRicerca(searchQuery, [
+          u.email, u.pec, u.nome, u.cognome, u.denominazione, u.ente_ufficio,
+          u.codice_fiscale, u.partita_iva, u.citta_residenza, u.telefono,
+        ]))
       : users
     // Copia: `users` e' lo stato, ordinarlo sul posto lo modificherebbe.
     return [...base].sort((a, b) => {

@@ -20,6 +20,7 @@ import { leggiMovimentoWallet } from '../../../utils/walletCliente'
 import MoneyInput from '../../../components/MoneyInput'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2776,12 +2777,24 @@ export default function UnpaidBookingsTab() {
 
     // Apply search
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
-      groups = groups.filter(g =>
-        g.customerName.toLowerCase().includes(q) ||
-        g.customerEmail.toLowerCase().includes(q) ||
-        g.customerPhone.includes(q)
-      )
+      // 02/10/2026: regola unica utils/ricerca. Oltre al cliente si cercano
+      // targa/veicolo/codice delle sue prenotazioni e i numeri fattura di
+      // penali e danni (il placeholder prometteva la targa, mai cercata).
+      groups = groups.filter(g => {
+        const prenotazioni = [
+          ...g.noleggioBookings, ...g.primeWashBookings,
+          ...g.penaliItems.map(i => i.booking), ...g.danniItems.map(i => i.booking),
+        ]
+        return corrispondeRicerca(searchQuery, [
+          g.customerName, g.customerEmail, g.customerPhone,
+          ...prenotazioni.flatMap(b => [
+            b.customer_phone, b.booking_details?.customer?.phone,
+            b.vehicle_name, b.vehicle_plate,
+            b.id, `dr7${String(b.id || '').substring(0, 8)}`,
+          ]),
+          ...[...g.penaliItems, ...g.danniItems].map(i => i.fatturaNumero),
+        ])
+      })
     }
 
     // 2026-06-01: filtro periodo — cliente passa se almeno un booking
@@ -4636,10 +4649,15 @@ export default function UnpaidBookingsTab() {
           riga giusta. L'incasso vero passa dal flusso gia' esistente. */}
       {nuovoIncassoOpen && (() => {
         const voci = vociDaIncassare(customerGroups)
-        const q = nuovoIncassoQuery.trim().toLowerCase()
-        const filtrate = q
-          ? voci.filter(v => `${v.cliente} ${v.tipo} ${v.descrizione}`.toLowerCase().includes(q))
-          : voci
+        // 02/10/2026: regola unica utils/ricerca; in piu' telefono ed email del
+        // cliente della voce (presi dal suo gruppo).
+        const gruppoDi = new Map(customerGroups.map(g => [g.customerKey, g]))
+        const filtrate = voci.filter(v => {
+          const g = gruppoDi.get(v.customerKey)
+          return corrispondeRicerca(nuovoIncassoQuery, [
+            v.cliente, v.tipo, v.descrizione, g?.customerPhone, g?.customerEmail,
+          ])
+        })
         return (
           <div
             className="fixed inset-0 z-[120] bg-black/60 flex items-start justify-center p-4 pt-[10vh]"
@@ -4667,7 +4685,7 @@ export default function UnpaidBookingsTab() {
                   autoFocus
                   value={nuovoIncassoQuery}
                   onChange={setNuovoIncassoQuery}
-                  placeholder="Cerca cliente, targa, penale..."
+                  placeholder="Cerca cliente, telefono, targa, penale..."
                 />
               </div>
 

@@ -1,4 +1,5 @@
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useState, useMemo, useEffect } from 'react'
 import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
@@ -310,7 +311,6 @@ export default function ReportClientiTab() {
 
   const filteredClienti = useMemo(() => {
     if (!clientiData?.customers) return []
-    const q = search.trim().toLowerCase()
     return clientiData.customers.filter(c => {
       // 2026-05-28: filtro per data ultima prenotazione (cliente "attivo
       // nel periodo"). Clienti senza prenotazioni passano sempre quando
@@ -318,7 +318,7 @@ export default function ReportClientiTab() {
       if (range.from || range.to) {
         if (!isInRange(c.ultima_prenotazione, range)) return false
       }
-      if (q && !((c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))) {
+      if (!corrispondeRicerca(search, [c.name, c.email, c.phone])) {
         return false
       }
       return true
@@ -676,7 +676,7 @@ export default function ReportClientiTab() {
             <BarraRicerca
               variante="compatta"
               className="w-full max-w-xs"
-              placeholder="Cerca per nome o email..."
+              placeholder="Cerca per nome, email o telefono..."
               value={search}
               onChange={setSearch}
             />

@@ -4,6 +4,7 @@
 // aggiungere un nuovo veicolo (insert minimale su `vehicles`); la modifica di
 // dettaglio resta nella scheda Veicoli.
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import { useEffect, useMemo, useState } from 'react'
 import { ScheletroLista } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
@@ -105,9 +106,7 @@ export default function TerraCatalogTab() {
 
   const filtered = useMemo(() => vehicles.filter(v => {
     if (catFilter !== 'all' && v.category !== catFilter) return false
-    const q = search.trim().toLowerCase()
-    if (!q) return true
-    return (v.display_name || '').toLowerCase().includes(q) || (v.plate || '').toLowerCase().includes(q)
+    return corrispondeRicerca(search, [v.display_name, v.plate])
   }), [vehicles, search, catFilter])
 
   // Raggruppa per categoria, nell'ordine di Centralina Pro; extra/sconosciute in fondo.

@@ -13,6 +13,7 @@ import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../utils/ricerca'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar, PieChart, Pie, Cell,
@@ -262,12 +263,9 @@ export default function IncomingInvoicesView() {
   }, [invoices.length, dateFrom, dateTo, mode])
 
   const filteredRaw = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return invoices
+    if (!search.trim()) return invoices
     return invoices.filter(i =>
-      i.sender.toLowerCase().includes(q) ||
-      (i.senderVat || '').toLowerCase().includes(q) ||
-      (i.invoiceNumber || '').toLowerCase().includes(q),
+      corrispondeRicerca(search, [i.sender, i.senderVat, i.invoiceNumber, i.filename]),
     )
   }, [invoices, search])
 

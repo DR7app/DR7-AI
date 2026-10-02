@@ -15,6 +15,7 @@ import NewClientModal from './NewClientModal'
 import Paginazione from './Paginazione'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import { corrispondeRicerca, cifreTelefono, compattaTesto } from '../../../utils/ricerca'
 
 /** Prenotazione mostrata nella ricerca "Collega prenotazione". */
 interface BookingLite {
@@ -120,6 +121,34 @@ interface TokenizedCard {
 }
 
 /**
+ * Ricerca prenotazioni sul server (collega transazione / pre-autorizzazione).
+ * Ogni parola e' un filtro (AND fra le parole, OR fra i campi): "rossi mario"
+ * trova "Mario Rossi". Virgole, parentesi e jolly romperebbero la sintassi
+ * PostgREST, quindi si tolgono.
+ */
+function paroleRicercaPrenotazioni(testo: string): string[] {
+    return testo.toLowerCase().replace(/[,()*%\\"']/g, ' ').split(/\s+/).filter(Boolean)
+}
+
+/**
+ * Condizioni OR di una parola: nome, email, telefono, mezzo, targa. In piu':
+ *  - telefono per sole cifre (senza +39/0039) con un jolly fra le cifre,
+ *    cosi' "3471234567" trova anche "+39 347 123 4567";
+ *  - targa compatta con un jolly fra i caratteri, cosi' "ab123cd" trova "AB 123 CD".
+ */
+function condizioniRicercaPrenotazione(parola: string): string {
+    const condizioni = ['customer_name', 'customer_email', 'customer_phone', 'vehicle_name', 'vehicle_plate']
+        .map(c => `${c}.ilike.*${parola}*`)
+    const cifre = cifreTelefono(parola)
+    if (cifre.length >= 6) condizioni.push(`customer_phone.ilike.*${cifre.split('').join('*')}*`)
+    const compatta = compattaTesto(parola)
+    if (compatta.length >= 4 && /[a-z]/.test(compatta) && /\d/.test(compatta)) {
+        condizioni.push(`vehicle_plate.ilike.*${compatta.split('').join('*')}*`)
+    }
+    return condizioni.join(',')
+}
+
+/**
  * Etichetta leggibile del servizio di una prenotazione. Le chiavi seguono
  * quelle usate in tutto il gestionale (car_wash / mechanical / rental / ...).
  */
@@ -173,11 +202,8 @@ export default function NexiTab() {
         if (dateRange.to && day > dateRange.to) return false
         return true
     }
-    const filterMatches = (haystacks: (string | null | undefined)[], needle: string) => {
-        const q = needle.trim().toLowerCase()
-        if (!q) return true
-        return haystacks.some(h => (h || '').toLowerCase().includes(q))
-    }
+    const filterMatches = (haystacks: (string | null | undefined)[], needle: string) =>
+        corrispondeRicerca(needle, haystacks)
     const dateCutoff = (() => {
         if (!dateFilter) return null
         const now = Date.now()
@@ -478,10 +504,11 @@ export default function NexiTab() {
         }
         setPreauthLinkBookingLoading(true)
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('bookings')
                 .select('id, customer_name, customer_email, vehicle_name, pickup_date, dropoff_date, service_type, status')
-                .or(`customer_name.ilike.%${q}%,customer_email.ilike.%${q}%`)
+            for (const parola of paroleRicercaPrenotazioni(q)) query = query.or(condizioniRicercaPrenotazione(parola))
+            const { data, error } = await query
                 .order('pickup_date', { ascending: false })
                 .limit(15)
             if (error) throw error
@@ -656,10 +683,11 @@ export default function NexiTab() {
         }
         setLinkBookingLoading(true)
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('bookings')
                 .select('id, customer_name, customer_email, vehicle_name, pickup_date, dropoff_date, service_type, status')
-                .or(`customer_name.ilike.%${q}%,customer_email.ilike.%${q}%`)
+            for (const parola of paroleRicercaPrenotazioni(q)) query = query.or(condizioniRicercaPrenotazione(parola))
+            const { data, error } = await query
                 .order('pickup_date', { ascending: false })
                 .limit(25)
             if (error) throw error
@@ -801,7 +829,7 @@ export default function NexiTab() {
     // All pending addebiti
     const [allAddebiti, setAllAddebiti] = useState<PendingAddebito[]>([])
     const filteredAddebiti = allAddebiti.filter(a => filterMatches(
-        [a.customer_name, a.customer_email, a.causale, a.contract_id], search
+        [a.customer_name, a.customer_email, a.causale, a.contract_id, a.contract_number], search
     ))
     const [paginaAddebiti, setPaginaAddebiti] = useState(1)
     useEffect(() => { setPaginaAddebiti(1) }, [search])
@@ -2540,7 +2568,7 @@ export default function NexiTab() {
                                                 type="text"
                                                 value={preauthLinkBookingSearch}
                                                 onChange={e => { setPreauthLinkBookingSearch(e.target.value); void cercaPrenotazioniPreauth(e.target.value) }}
-                                                placeholder="Cerca la prenotazione per nome o email..."
+                                                placeholder="Cerca la prenotazione per nome, telefono, email o targa..."
                                                 className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                                             />
                                             {preauthLinkBookingLoading && (
@@ -2678,7 +2706,7 @@ export default function NexiTab() {
                                 value={linkBookingSearch}
                                 onChange={setLinkBookingSearch}
                                 onKeyDown={(e) => { if (e.key === 'Enter') void searchBookingsToLink(linkBookingSearch) }}
-                                placeholder="Nome o email del cliente"
+                                placeholder="Nome, telefono, email o targa"
                             />
                             <button
                                 onClick={() => void searchBookingsToLink(linkBookingSearch)}

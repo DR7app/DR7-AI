@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EMTN_CATEGORIE } from './emtnCategorie'
 import BarraRicerca from '../../../../components/admin/BarraRicerca'
+import { corrispondeRicerca } from '../../../../utils/ricerca'
 
 export interface OpzioneCategoria {
     id: string
@@ -16,11 +17,6 @@ export interface OpzioneCategoria {
     helper: string
     /** Intestazione del gruppo nel menu (es. l'area EMTN). */
     gruppo?: string
-}
-
-/** Minuscolo e senza accenti: "Penalità" si trova scrivendo "penalita". */
-function normalizza(testo: string): string {
-    return testo.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 
 export default function SelettoreCategorieEMTN({
@@ -55,9 +51,9 @@ export default function SelettoreCategorieEMTN({
         [value, opzioni],
     )
     const filtrate = useMemo(() => {
-        const q = normalizza(ricerca)
-        if (!q) return opzioni
-        return opzioni.filter(c => normalizza(c.label).includes(q) || normalizza(c.helper).includes(q) || normalizza(c.gruppo || '').includes(q))
+        // Accenti e maiuscole non contano ("penalita" trova "Penalità"), parole in qualunque ordine.
+        if (!ricerca.trim()) return opzioni
+        return opzioni.filter(c => corrispondeRicerca(ricerca, [c.label, c.helper, c.gruppo]))
     }, [ricerca, opzioni])
 
     useEffect(() => {
