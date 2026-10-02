@@ -4,7 +4,7 @@ import { leggiRigaAdmin } from '../utils/rigaAdmin'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
 import { AlarmSoundPlayer, type AlarmSoundKey } from '../utils/alarmSounds'
-import { giroAllarmi, type EsitoGiro } from '../utils/alarmEngine'
+import { giroAllarmi, type EsitoGiro, type AlarmEventRow } from '../utils/alarmEngine'
 import { PRIORITY_RANK } from '../data/alarmCatalog'
 
 interface AlarmBooking {
@@ -51,7 +51,14 @@ interface VehicleAlarmContextType {
     stopAlarm: (bookingId: string) => void
     snoozeAlarm: (bookingId: string, minutes: number) => void
     markReturned: (bookingId: string) => Promise<{ ok: boolean; error?: string }>
+    /** Allarmi del catalogo da mostrare nella finestra centrale (null = chiusa). */
+    avvisoCatalogo: AvvisoCatalogo | null
+    chiudiAvvisoCatalogo: () => void
 }
+
+/** Una riga della finestra allarmi: l'occorrenza con il nome leggibile. */
+export interface AvvisoCatalogoRiga { evento: AlarmEventRow; label: string }
+export interface AvvisoCatalogo { righe: AvvisoCatalogoRiga[] }
 
 const VehicleAlarmContext = createContext<VehicleAlarmContextType | undefined>(undefined)
 
@@ -1129,6 +1136,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     // suonare - sono nel pannello - altrimenti all'apertura partirebbero tutte
     // insieme. Restano soggette alla ripetizione.
     const suonatiCatalogoRef = useRef<Map<string, number> | null>(null)
+    const [avvisoCatalogo, setAvvisoCatalogo] = useState<AvvisoCatalogo | null>(null)
+    const chiudiAvvisoCatalogo = () => {
+        setAvvisoCatalogo(null)
+        try { catalogoPlayerRef.current?.stop() } catch { /* ignore */ }
+    }
     const catalogoPlayerRef = useRef<AlarmSoundPlayer | null>(null)
     const avvisaCatalogo = (esito: EsitoGiro) => {
         const eventi = esito.eventiAperti || []
@@ -1171,12 +1183,17 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
         daSuonare.sort((a, b) => (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0))
         const primo = daSuonare[0]
-        const righe = daSuonare.slice(0, 3).map(e => {
-            const label = cfgs.get(e.alarm_id)?.label || e.alarm_id
-            return e.entita ? `${label} - ${e.entita}` : label
+        // 02/10/2026: niente piu' toast in alto a destra (spariva da solo e
+        // passava inosservato). Parole della direzione: "ca doit etre le pop
+        // up fenetre au milieu". Finestra centrale come il popup storico, che
+        // resta aperta finche' qualcuno non la chiude. Se e' gia' aperta si
+        // aggiungono le nuove righe, senza doppioni.
+        setAvvisoCatalogo(prev => {
+            const nuove: AvvisoCatalogoRiga[] = daSuonare.map(e => ({ evento: e, label: cfgs.get(e.alarm_id)?.label || e.alarm_id }))
+            if (!prev) return { righe: nuove }
+            const viste = new Set(prev.righe.map(r => r.evento.id))
+            return { righe: [...prev.righe, ...nuove.filter(r => !viste.has(r.evento.id))] }
         })
-        if (daSuonare.length > 3) righe.push(`e altri ${daSuonare.length - 3}`)
-        toast(`Allarmi:\n${righe.join('\n')}\n(Centralina Pro > Allarmi > Aperti)`, { duration: 15_000 })
 
         // Il suono e' quello dell'allarme piu' grave. Lettore separato da
         // quello del popup storico: suonare qui non deve zittire un rientro
@@ -1272,7 +1289,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     }, [])
 
     return (
-        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, disableAudio, stopAlarm, snoozeAlarm, markReturned }}>
+        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, disableAudio, stopAlarm, snoozeAlarm, markReturned, avvisoCatalogo, chiudiAvvisoCatalogo }}>
             {children}
         </VehicleAlarmContext.Provider>
     )

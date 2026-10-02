@@ -8,6 +8,7 @@ import { ClientStatusProvider } from './contexts/ClientStatusContext'
 import { BrandSedeProvider } from './contexts/BrandSedeContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
+import AvvisoAllarmiCatalogo from './components/AvvisoAllarmiCatalogo'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
 import AudioAllarmiSpento from './components/admin/AudioAllarmiSpento'
 import lazyWithRetry from './utils/lazyWithRetry'
@@ -74,6 +75,7 @@ function App() {
                     <ClientStatusProvider>
                       <VehicleAlarmProvider>
                         <AlarmNotification />
+                        <AvvisoAllarmiCatalogo />
                         <LateReturnAlarm />
                         <AudioAllarmiSpento />
                         <AdminDashboard />
