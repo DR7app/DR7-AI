@@ -251,3 +251,8 @@
 # ai clienti. Si lancia anche a mano da Stato generale > "Controlla adesso".
 [functions."system-control-controllo-orario"]
   schedule = "0 * * * *"
+
+# Font Unicode (polacco, cirillico, greco) per la copia di cortesia tradotta
+# del contratto. Se mancano, la function li scarica dal CDN.
+[functions."contratto-cortesia-background"]
+  included_files = ["netlify/functions/assets/fonts/*.ttf"]

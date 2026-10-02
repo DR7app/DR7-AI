@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
-import { nellaLinguaDelTelefono } from './utils/i18n'
+import { langFromPhone, nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -497,6 +497,7 @@ export const handler: Handler = async (event) => {
         const ipAddress = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown'
         const userAgent = event.headers['user-agent'] || 'unknown'
         const results: { name: string; role: string; sent: boolean }[] = []
+        const stranieri: { phone: string; name: string }[] = []
 
         for (const signer of signers) {
             // Salta chi ha già firmato: non ricreare la richiesta né reinviare
@@ -581,6 +582,22 @@ export const handler: Handler = async (event) => {
             }
 
             results.push({ name: signer.name, role: signer.role, sent })
+            if (sent && langFromPhone(signer.phone, 'en') !== 'it') stranieri.push({ phone: signer.phone, name: signer.name })
+        }
+
+        // Copia di cortesia tradotta per chi ha un prefisso non italiano
+        // (02/10/2026). Background: la traduzione dura minuti. Non blocca mai
+        // la firma: se la chiamata fallisce il link e' comunque partito.
+        if (stranieri.length > 0 && contract.id && process.env.ADMIN_API_TOKEN) {
+            try {
+                await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/contratto-cortesia-background`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.ADMIN_API_TOKEN}` },
+                    body: JSON.stringify({ contractId: contract.id, destinatari: stranieri }),
+                })
+            } catch (e) {
+                console.warn('[signature-init] copia di cortesia non avviata:', (e as Error).message)
+            }
         }
 
         const allSent = results.every(r => r.sent)
