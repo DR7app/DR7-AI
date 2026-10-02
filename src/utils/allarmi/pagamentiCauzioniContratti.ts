@@ -21,7 +21,6 @@
  * Importi: price_total e amount_paid sono in CENTESIMI; penali, danni,
  * estensioni e cauzioni sono in EURO.
  */
-import { supabase } from '../../supabaseClient'
 import {
     isNoleggio,
     isPagato,
@@ -36,6 +35,7 @@ import {
     type Detector,
     type DetectorContext,
     type ModuloAllarmi,
+    type ClienteAllarmi,
 } from '../alarmDetectors'
 import { getRomeDateComponents } from '../timezoneUtils'
 
@@ -717,7 +717,7 @@ const contr_da_rigenerare: Detector = (cfg, ctx) => {
 const GIORNI_LETTURA = 60
 const STATI_PREAUTH = 'pending_preauth,preauth_pending_link,preauth_held,preauth_voided,preauth_captured'
 
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const da = new Date(now.getTime() - GIORNI_LETTURA * GIORNO).toISOString()
     const daCauzioni = new Date(now.getTime() - 180 * GIORNO).toISOString()
     const out: Record<string, unknown[]> = {}

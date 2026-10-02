@@ -4,7 +4,10 @@
  * Errors always log, even in production.
  */
 
-const isDev = import.meta.env.DEV
+// 02/10/2026: `?.` perche' il motore allarmi gira anche nelle Netlify
+// function, dove import.meta.env non esiste e l'accesso diretto esplodeva
+// al caricamento del modulo.
+const isDev = !!import.meta.env?.DEV
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LogArgs = any[]

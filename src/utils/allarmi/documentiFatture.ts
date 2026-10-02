@@ -22,7 +22,6 @@
  * il motore riconosce un'occorrenza da prenotazione o veicolo, quindi per
  * questi si apre UNA sola occorrenza riassuntiva con l'elenco nel dettaglio.
  */
-import { supabase } from '../../supabaseClient'
 import { getRomeDateComponents } from '../timezoneUtils'
 import { classifyDriverTier } from '../tierClassification'
 import {
@@ -37,6 +36,7 @@ import {
     type Detector,
     type DetectorContext,
     type ModuloAllarmi,
+    type ClienteAllarmi,
 } from '../alarmDetectors'
 
 // ─── Chiavi dei dati in ctx.extra ────────────────────────────────────────────
@@ -918,7 +918,7 @@ const COLONNE_FATTURA = 'id, numero_fattura, booking_id, tipo_fattura, stato, sd
     'related_invoice_id, customer_name, customer_tax_code, customer_vat, importo_totale, note, ' +
     'auto_send_error:sdi_response->>auto_send_error'
 
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const da = new Date(now.getTime() - GIORNI_FINESTRA * GIORNO).toISOString()
     const a = new Date(now.getTime() + GIORNI_FINESTRA * GIORNO).toISOString()
     const daFatture = new Date(now.getTime() - GIORNI_FATTURE * GIORNO).toISOString()

@@ -21,6 +21,15 @@
  */
 import { getRomeDateComponents } from './timezoneUtils'
 import type { AlarmPriority, AlarmThresholdUnit } from '../data/alarmCatalog'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+/**
+ * 02/10/2026: il client arriva da fuori. Il giro gira nel browser (client
+ * dell'operatore) e sul server ogni minuto (alarm-engine-cron, chiave di
+ * servizio): nessun file del motore importa supabaseClient, che nel server
+ * non esiste.
+ */
+export type ClienteAllarmi = SupabaseClient
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +79,7 @@ export interface DetectorContext {
 export interface ModuloAllarmi {
     nome: string
     detectors: Record<string, Detector>
-    carica?: (now: Date) => Promise<Record<string, unknown[]>>
+    carica?: (now: Date, sb: ClienteAllarmi) => Promise<Record<string, unknown[]>>
 }
 
 export interface AlarmHit {

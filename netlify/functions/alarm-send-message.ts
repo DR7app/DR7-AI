@@ -1,33 +1,22 @@
 /**
- * Invio del messaggio collegato a un allarme.
+ * Invio del messaggio collegato a un allarme, chiamato dal gestionale.
  *
- * L'allarme suona, l'operatore preme "Avvisa il cliente" e parte il template
- * scelto dalla direzione in Centralina Pro > Allarmi. Il testo NON e' qui:
- * vive in Messaggi di Sistema Pro, come tutti gli altri.
- *
- * Perche' una funzione e non una fetch dal browser: il destinatario va
- * risolto, e da dove dipende dall'allarme — un allarme di rientro parte da una
- * prenotazione, uno di scadenza cauzione da una riga `cauzioni` che punta a un
- * cliente. Farlo lato client avrebbe voluto dire due query e due permessi di
- * lettura in piu' nel pannello.
+ * L'allarme suona, l'operatore preme "Avvisa il cliente" oppure (riserva,
+ * quando il motore sul server non batte) la scheda invia da se' il messaggio
+ * scelto in Centralina Pro > Allarmi. La logica sta in
+ * utils/messaggioAllarme.ts, condivisa con alarm-engine-cron.
  *
  * Input:  { alarmId, entityId, templateKey, eventId? }
  * Output: { sent: true, phone } oppure un motivo esplicito.
- *
- * 01/10/2026: con `eventId` (invio automatico dal motore allarmi) l'occorrenza
- * si "prenota" prima di spedire: alarm_events.messaggio_cliente_at passa da
- * NULL a adesso in una sola UPDATE. Chi arriva secondo trova la riga gia'
- * presa e non spedisce: un messaggio per occorrenza, qualunque numero di
- * schede aperte. L'esito resta scritto in messaggio_cliente_esito.
  */
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { inviaMessaggioAllarme } from './utils/messaggioAllarme'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-const SITE_URL = process.env.URL || 'https://platform.dr7ai.com'
 
 export const handler: Handler = async (event) => {
     const headers = {
@@ -58,182 +47,13 @@ export const handler: Handler = async (event) => {
         const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
             auth: { autoRefreshToken: false, persistSession: false },
         })
-
-        if (eventId) {
-            const { data: presa, error: errPresa } = await sb
-                .from('alarm_events')
-                .update({ messaggio_cliente_at: new Date().toISOString() })
-                .eq('id', eventId)
-                .is('messaggio_cliente_at', null)
-                .select('id')
-            if (errPresa || !presa || presa.length === 0) {
-                return {
-                    statusCode: 200,
-                    headers,
-                    body: JSON.stringify({ sent: false, reason: 'already_sent', message: 'Messaggio gia\' inviato per questo allarme' }),
-                }
-            }
+        const esito = await inviaMessaggioAllarme(sb, { alarmId, entityId, templateKey, eventId })
+        if (!esito.sent && esito.notFound) {
+            return { statusCode: 404, headers, body: JSON.stringify({ error: esito.message }) }
         }
-        const segnaEsito = async (esito: string) => {
-            if (!eventId) return
-            await sb.from('alarm_events').update({ messaggio_cliente_esito: esito }).eq('id', eventId)
-        }
-
-        let phone = ''
-        let nome = ''
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let booking: any = null
-
-        if (String(alarmId || '').startsWith('cauzione')) {
-            // L'entita' e' una riga `cauzioni`: il telefono sta in anagrafica.
-            const { data: cauz } = await sb
-                .from('cauzioni')
-                .select('id, cliente_id, importo, scadenza_cauzione')
-                .eq('id', entityId)
-                .maybeSingle()
-            if (!cauz) {
-                return { statusCode: 404, headers, body: JSON.stringify({ error: 'Cauzione non trovata' }) }
-            }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const c = cauz as any
-            if (c.cliente_id) {
-                const { data: cli } = await sb
-                    .from('customers_extended')
-                    .select('nome, cognome, ragione_sociale, denominazione, tipo_cliente, telefono')
-                    .eq('id', c.cliente_id)
-                    .maybeSingle()
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const x = cli as any
-                if (x) {
-                    phone = String(x.telefono || '')
-                    nome = x.tipo_cliente === 'azienda'
-                        ? String(x.ragione_sociale || x.denominazione || '')
-                        : `${x.nome || ''} ${x.cognome || ''}`.trim()
-                }
-            }
-        } else {
-            const { data: bk } = await sb
-                .from('bookings')
-                .select('*')
-                .eq('id', entityId)
-                .maybeSingle()
-            if (bk) {
-                booking = bk
-                phone = String(booking.customer_phone || booking.guest_phone || booking.booking_details?.customer?.phone || '')
-                nome = String(booking.customer_name || booking.guest_name || '')
-            } else {
-                // 02/10/2026: gli allarmi Lead aprono la pratica su un preventivo,
-                // un carrello Nexi o un invito, non su una prenotazione. Prima qui
-                // si rispondeva 404 e il messaggio scelto in Centralina Pro non
-                // partiva mai, senza lasciare traccia.
-                const altro = await destinatarioSenzaPrenotazione(sb, String(entityId))
-                if (!altro) {
-                    await segnaEsito('destinatario_non_trovato')
-                    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Prenotazione non trovata' }) }
-                }
-                phone = altro.phone
-                nome = altro.nome
-            }
-        }
-
-        if (!phone.replace(/\D/g, '')) {
-            await segnaEsito('no_phone')
-            return {
-                statusCode: 200,
-                headers,
-                body: JSON.stringify({ sent: false, reason: 'no_phone', message: 'Il cliente non ha un numero di telefono in scheda' }),
-            }
-        }
-
-        // Il corpo lo compone send-whatsapp-notification dal template Pro:
-        // se il template e' spento o vuoto, quella funzione risponde
-        // `skipped` e non parte niente. Nessun testo scritto qui.
-        const res = await fetch(`${SITE_URL}/.netlify/functions/send-whatsapp-notification`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                customPhone: phone,
-                templateKey,
-                ...(booking ? { booking } : {}),
-                templateVars: { nome: (nome.split(' ')[0] || 'Cliente'), customer_name: nome, cliente: nome },
-            }),
-        })
-        const out = await res.json().catch(() => ({}))
-        if (!res.ok || out?.skipped) {
-            await segnaEsito(out?.reason || 'send_failed')
-            return {
-                statusCode: 200,
-                headers,
-                body: JSON.stringify({
-                    sent: false,
-                    reason: out?.reason || 'send_failed',
-                    message: out?.reason === 'pro_template_unavailable'
-                        ? 'Il messaggio scelto non esiste, e\' spento oppure e\' vuoto in Messaggi di Sistema Pro'
-                        : (out?.message || 'Invio non riuscito'),
-                }),
-            }
-        }
-
-        await segnaEsito('inviato')
-        return { statusCode: 200, headers, body: JSON.stringify({ sent: true, phone }) }
+        return { statusCode: 200, headers, body: JSON.stringify(esito) }
     } catch (err) {
         console.error('[alarm-send-message]', err)
         return { statusCode: 500, headers, body: JSON.stringify({ error: (err as Error).message }) }
     }
-}
-
-/**
- * Destinatario di un allarme la cui pratica non e' una prenotazione: preventivo
- * (lead_preventivo_*), carrello Nexi abbandonato (lead_prenotazione_abbandonata),
- * invito a compilare i dati (lead_invito_non_compilato). Stesso id che il
- * motore scrive in alarm_events.booking_id.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function destinatarioSenzaPrenotazione(sb: any, id: string): Promise<{ phone: string; nome: string } | null> {
-    const { data: prev } = await sb
-        .from('preventivi')
-        .select('customer_name, customer_phone, customer_id')
-        .eq('id', id)
-        .maybeSingle()
-    if (prev) {
-        const phone = String(prev.customer_phone || '')
-        if (phone || !prev.customer_id) return { phone, nome: String(prev.customer_name || '') }
-        return await daAnagrafica(sb, prev.customer_id, String(prev.customer_name || ''))
-    }
-    const { data: carrello } = await sb
-        .from('pending_nexi_bookings')
-        .select('booking_data')
-        .eq('id', id)
-        .maybeSingle()
-    if (carrello) {
-        const d = carrello.booking_data || {}
-        return {
-            phone: String(d.customer_phone || d.guest_phone || ''),
-            nome: String(d.customer_name || d.guest_name || ''),
-        }
-    }
-    const { data: invito } = await sb
-        .from('customer_invites')
-        .select('customer_id')
-        .eq('id', id)
-        .maybeSingle()
-    if (invito) {
-        if (!invito.customer_id) return { phone: '', nome: '' }
-        return await daAnagrafica(sb, invito.customer_id, '')
-    }
-    return null
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function daAnagrafica(sb: any, clienteId: string, nomeNoto: string): Promise<{ phone: string; nome: string }> {
-    const { data: x } = await sb
-        .from('customers_extended')
-        .select('nome, cognome, ragione_sociale, denominazione, tipo_cliente, telefono')
-        .eq('id', clienteId)
-        .maybeSingle()
-    if (!x) return { phone: '', nome: nomeNoto }
-    const nome = x.tipo_cliente === 'azienda'
-        ? String(x.ragione_sociale || x.denominazione || '')
-        : `${x.nome || ''} ${x.cognome || ''}`.trim()
-    return { phone: String(x.telefono || ''), nome: nome || nomeNoto }
 }

@@ -16,9 +16,8 @@
  * Il motore tiene UNA occorrenza per allarme e prenotazione: piu' danni sulla
  * stessa prenotazione diventano un'occorrenza sola, con l'elenco nel dettaglio.
  */
-import { supabase } from '../../supabaseClient'
 import { getRomeDateComponents } from '../timezoneUtils'
-import { sogliaMs, type AlarmHit, type Detector, type DetectorContext, type ModuloAllarmi } from '../alarmDetectors'
+import { sogliaMs, type AlarmHit, type ClienteAllarmi, type Detector, type DetectorContext, type ModuloAllarmi } from '../alarmDetectors'
 
 const GIORNO = 24 * 60 * 60_000
 
@@ -179,7 +178,7 @@ export const DETECTORS_DANNI_SINISTRI: Record<string, Detector> = {
  * Prenotazioni degli ultimi GIORNI_LETTURA_DANNI giorni che hanno almeno un
  * danno. Si legge solo la lista dei danni, non tutto booking_details.
  */
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const da = new Date(now.getTime() - GIORNI_LETTURA_DANNI * GIORNO).toISOString()
     const righe: PrenotazioneConDanni[] = []
     for (let pagina = 0; pagina < 5; pagina++) {

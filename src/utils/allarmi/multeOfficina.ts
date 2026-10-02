@@ -28,7 +28,6 @@
  *
  * Nessuna chiamata di rete nei detector: legge tutto `carica`, una volta per giro.
  */
-import { supabase } from '../../supabaseClient'
 import { getRomeDateComponents, romeDateFromParts } from '../timezoneUtils'
 import {
     sogliaMs,
@@ -39,6 +38,7 @@ import {
     type BookingLite,
     type Detector,
     type ModuloAllarmi,
+    type ClienteAllarmi,
 } from '../alarmDetectors'
 
 // ─── Costanti ────────────────────────────────────────────────────────────────
@@ -384,7 +384,7 @@ const officina_ricambio_ordinato: Detector = (cfg, ctx) => {
 
 // ─── Lettura ─────────────────────────────────────────────────────────────────
 
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const giorniFa = (g: number) => new Date(now.getTime() - g * GIORNO).toISOString()
     const [pec, addebiti, veicoli, ordini] = await Promise.all([
         supabase.from('multe_pec_log')

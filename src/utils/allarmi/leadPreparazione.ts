@@ -28,7 +28,6 @@
  * verso bookings, e senza un id tutte le occorrenze di un allarme
  * collasserebbero in una sola riga).
  */
-import { supabase } from '../../supabaseClient'
 import { getRomeDateComponents } from '../timezoneUtils'
 import {
     sogliaMs,
@@ -43,6 +42,7 @@ import {
     type BookingLite,
     type Detector,
     type ModuloAllarmi,
+    type ClienteAllarmi,
 } from '../alarmDetectors'
 
 // ─── Chiavi in ctx.extra ─────────────────────────────────────────────────────
@@ -425,7 +425,7 @@ const prep_lavaggio_mancante_prima_uscita: Detector = (cfg, ctx) => {
 
 // ─── Lettura dati ────────────────────────────────────────────────────────────
 
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const da = new Date(now.getTime() - 30 * GIORNO).toISOString()
     const daCarrelli = new Date(now.getTime() - (GIORNI_RILEVANZA + 1) * GIORNO).toISOString()
     const [prev, carrelli, inviti] = await Promise.all([

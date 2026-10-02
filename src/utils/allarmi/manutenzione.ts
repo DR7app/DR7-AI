@@ -22,7 +22,6 @@
  *     'km'; se la riga ha ancora l'unita' in giorni si usano 1.000 km, il
  *     valore storico degli allarmi fleet_*.
  */
-import { supabase } from '../../supabaseClient'
 import { getRomeDateComponents } from '../timezoneUtils'
 import {
     isNoleggio,
@@ -34,6 +33,7 @@ import {
     type Detector,
     type DetectorContext,
     type ModuloAllarmi,
+    type ClienteAllarmi,
 } from '../alarmDetectors'
 
 const GIORNO = 24 * 60 * 60_000
@@ -360,7 +360,7 @@ const gomme_danno: Detector = (cfg, ctx, arg) => {
 
 // ─── Lettura dati ────────────────────────────────────────────────────────────
 
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const da = new Date(now.getTime() - GIORNI_ADDEBITI * GIORNO).toISOString()
     const [veicoliRes, logRes, addebitiRes] = await Promise.all([
         supabase

@@ -164,6 +164,14 @@
 [functions."nexi-preauth-allinea-cauzioni"]
   schedule = "*/10 * * * *"
 
+# Allarmi (02/10/2026): il giro del catalogo allarmi ogni minuto sul server,
+# cosi' rilevazioni e messaggi al cliente non dipendono da una postazione del
+# gestionale aperta. L'anticipo scelto sotto ogni allarme in Centralina Pro e'
+# al minuto. Il suono resta nel browser; se il battito del server
+# (alarm_engine_battito) manca, le schede rifanno il giro da sole.
+[functions."alarm-engine-cron"]
+  schedule = "* * * * *"
+
 # Marketing campaigns — every 2 min, materialise scheduled/recurring campaigns
 # whose scheduled_at has passed and pump the chunked send loop server-side.
 # 25s working budget per tick (out of the 30s scheduled-function timeout) so

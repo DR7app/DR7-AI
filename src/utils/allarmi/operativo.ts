@@ -21,7 +21,6 @@
  *
  * Nomi con prefisso `op_`: unici in tutto il catalogo.
  */
-import { supabase } from '../../supabaseClient'
 import { getRomeDateComponents } from '../timezoneUtils'
 import {
     isNoleggio,
@@ -36,6 +35,7 @@ import {
     type BookingLite,
     type Detector,
     type ModuloAllarmi,
+    type ClienteAllarmi,
 } from '../alarmDetectors'
 
 const MIN = 60_000
@@ -540,7 +540,7 @@ const op_booking_cancelled_open: Detector = (cfg, ctx) => {
 
 // ─── Lettura dati ────────────────────────────────────────────────────────────
 
-async function carica(now: Date): Promise<Record<string, unknown[]>> {
+async function carica(now: Date, supabase: ClienteAllarmi): Promise<Record<string, unknown[]>> {
     const da7 = new Date(now.getTime() - GIORNI_RILEVANZA * GIORNO).toISOString()
     const da60 = new Date(now.getTime() - 60 * GIORNO).toISOString()
     const [annRes, firmeRes] = await Promise.all([
