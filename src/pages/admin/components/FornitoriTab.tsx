@@ -1,8 +1,8 @@
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useEffect, useState, useMemo } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
-import Input from './Input'
 import FornitoreSimpleView from './fornitori/FornitoreSimpleView'
 import FornitoriRegistroMensile from './fornitori/FornitoriRegistroMensile'
 import FornitoreForm from './fornitori/FornitoreForm'
@@ -482,13 +482,13 @@ export default function FornitoriTab() {
             {view === 'lista' && (<>
 
             <div className="flex flex-wrap items-center gap-2">
-                <div className="flex-1 min-w-[240px]">
-                    <Input
-                        placeholder="Cerca per nome, P.IVA o categoria…"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-                </div>
+                <BarraRicerca
+                    variante="compatta"
+                    className="flex-1 min-w-[240px]"
+                    placeholder="Cerca per nome, P.IVA o categoria…"
+                    value={search}
+                    onChange={setSearch}
+                />
                 <select
                     value={categoryFilter}
                     onChange={e => setCategoryFilter(e.target.value)}

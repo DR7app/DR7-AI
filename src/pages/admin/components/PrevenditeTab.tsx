@@ -8,6 +8,7 @@ import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { getInsuranceOptions } from '../../../utils/configLookup'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import PromozioniView from './PromozioniView'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 /**
  * PREVENDITE DR7 — 14/09/2026
@@ -922,17 +923,13 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                 </button>
               ))}
             </div>
-            <div className="flex-1 min-w-[220px]">
-              <div className="bg-theme-bg-tertiary p-3 rounded-full border border-theme-border">
-                <input
-                  type="text"
-                  placeholder="Cerca cliente, email o prevendita..."
-                  value={ricercaVenduti}
-                  onChange={e => setRicercaVenduti(e.target.value)}
-                  className="w-full bg-transparent text-theme-text-primary outline-none"
-                />
-              </div>
-            </div>
+            <BarraRicerca
+              variante="compatta"
+              className="flex-1 min-w-[220px]"
+              placeholder="Cerca cliente, email o prevendita..."
+              value={ricercaVenduti}
+              onChange={setRicercaVenduti}
+            />
           </div>
 
           {vendutiCaricamento ? <ScheletroTabella righe={6} colonne={6} /> : (

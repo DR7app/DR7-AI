@@ -8,6 +8,7 @@ const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface SystemMessage {
     id: string
@@ -4108,21 +4109,11 @@ export default function MessaggiSistemaProTab() {
                         </div>
 
                         {/* Barra di ricerca variabili (2026-08-27) */}
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={customVarSearch}
-                                onChange={e => setCustomVarSearch(e.target.value)}
-                                placeholder="Cerca una variabile (chiave, valore o nota)..."
-                                className="w-full pl-9 pr-9 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm placeholder:text-theme-text-muted"
-                            />
-                            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-                            </svg>
-                            {customVarSearch && (
-                                <button type="button" onClick={() => setCustomVarSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary text-sm">×</button>
-                            )}
-                        </div>
+                        <BarraRicerca
+                            value={customVarSearch}
+                            onChange={setCustomVarSearch}
+                            placeholder="Cerca una variabile (chiave, valore o nota)..."
+                        />
 
                         {/* New variable form */}
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 rounded-lg bg-theme-bg-tertiary border border-theme-border">
@@ -4966,28 +4957,11 @@ export default function MessaggiSistemaProTab() {
                 )}
 
                 {/* Search */}
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Cerca messaggio (es. compleanno, noleggio, firma...)"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 text-sm"
-                    />
-                    <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary text-lg leading-none"
-                            aria-label="Svuota ricerca"
-                        >
-                            &times;
-                        </button>
-                    )}
-                </div>
+                <BarraRicerca
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Cerca messaggio (es. compleanno, noleggio, firma...)"
+                />
 
                 {/* Template list — flat */}
                 <div className="space-y-2">
@@ -5583,21 +5557,12 @@ export default function MessaggiSistemaProTab() {
                                                     </div>
                                                     {/* 2026-07-19: barra di ricerca trigger — filtra gli eventi
                                                         per nome/chiave così è facile trovare l'azione giusta. */}
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            value={eventSearch}
-                                                            onChange={(e) => setEventSearch(e.target.value)}
-                                                            placeholder="Cerca un trigger / azione (es. iban, cauzione, pagamento, contratto)..."
-                                                            className="w-full pl-8 pr-8 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs placeholder:text-theme-text-muted"
-                                                        />
-                                                        <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-                                                        </svg>
-                                                        {eventSearch && (
-                                                            <button type="button" onClick={() => setEventSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary text-sm">×</button>
-                                                        )}
-                                                    </div>
+                                                    <BarraRicerca
+                                                        variante="compatta"
+                                                        value={eventSearch}
+                                                        onChange={setEventSearch}
+                                                        placeholder="Cerca un trigger / azione (es. iban, cauzione, pagamento, contratto)..."
+                                                    />
                                                     {/* 2026-08-09: filtro per macro-sezione. Mostra solo le
                                                         aree che hanno davvero gruppi per questo template. */}
                                                     {(() => {

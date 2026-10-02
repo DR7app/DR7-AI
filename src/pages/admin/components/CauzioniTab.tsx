@@ -14,6 +14,7 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import { maskIban, validateIban } from '../../../utils/ibanValidation'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface Cauzione {
     id: string
@@ -1454,12 +1455,11 @@ export default function CauzioniTab() {
             {/* Filters */}
             <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input
-                        type="text"
-                        placeholder="Cerca cliente, veicolo, targa..."
+                    <BarraRicerca
+                        variante="compatta"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="px-4 py-2 bg-theme-bg-primary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
+                        onChange={setSearchTerm}
+                        placeholder="Cerca cliente, veicolo, targa..."
                     />
                     <select
                         value={filterMetodo}

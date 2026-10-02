@@ -3,6 +3,7 @@ import { useRegistraPeriodoReport, isoLocale } from '../../../utils/reportPeriod
 import { supabase } from '../../../supabaseClient'
 import { ReportGrafici, ReportGrafico, ReportButton } from './ReportUI'
 import { ReportPeriodo, usePeriodoReport, isoAEu } from './ReportPeriodo'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 // Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
 // stesso colore, anche quando una fetta sparisce.
@@ -773,12 +774,12 @@ export default function ReportPreventiviTab() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-3">
-            <input
-              type="text"
+            <BarraRicerca
+              variante="compatta"
+              className="w-52"
               placeholder="Filtra veicolo..."
               value={filterVehicle}
-              onChange={(e) => setFilterVehicle(e.target.value)}
-              className="px-3 py-1.5 text-sm bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary placeholder-theme-text-muted"
+              onChange={setFilterVehicle}
             />
             <select
               value={filterCategory}

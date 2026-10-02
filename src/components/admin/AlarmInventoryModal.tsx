@@ -32,6 +32,7 @@ import {
 } from '../../data/alarmCatalog'
 import { supabase } from '../../supabaseClient'
 import toast from 'react-hot-toast'
+import BarraRicerca from './BarraRicerca'
 
 /**
  * Variabili che il messaggio di un allarme sa riempire: dati della
@@ -313,12 +314,12 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
 
                 {/* Ricerca + filtri */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <input
-                        type="text"
+                    <BarraRicerca
+                        variante="compatta"
+                        className="flex-1 min-w-[200px]"
                         value={ricerca}
-                        onChange={e => setRicerca(e.target.value)}
+                        onChange={setRicerca}
                         placeholder="Cerca un allarme, un reparto..."
-                        className="flex-1 min-w-[200px] px-3 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary placeholder:text-theme-text-muted"
                     />
                     {([
                         ['tutti', 'Tutti'],

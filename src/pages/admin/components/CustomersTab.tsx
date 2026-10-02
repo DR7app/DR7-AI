@@ -23,6 +23,7 @@ import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface Customer {
   id: string
@@ -3051,33 +3052,11 @@ export default function CustomersTab() {
         </div>
 
         {/* Search Bar */}
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Cerca cliente per nome, email o telefono..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-4 py-3 pl-10 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold focus:border-transparent"
-          />
-          <svg
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <BarraRicerca
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Cerca cliente per nome, email o telefono..."
+        />
 
         {/* 2026-06-01: filtro periodo Da/A su data registrazione cliente */}
         <div className="mt-3">

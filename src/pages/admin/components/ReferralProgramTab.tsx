@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 type ActiveSection = 'overview' | 'participants'
 
@@ -192,12 +193,10 @@ export default function ReferralProgramTab() {
       {/* === PARTECIPANTI (referrers from website) === */}
       {activeSection === 'participants' && (
         <div className="animate-fadeIn space-y-4">
-          <input
-            type="text"
+          <BarraRicerca
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={setSearchQuery}
             placeholder="Cerca per nome, email, codice..."
-            className="w-full px-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-xl text-theme-text-primary placeholder-theme-text-muted focus:border-dr7-gold outline-none"
           />
 
           {referrersLoading ? (

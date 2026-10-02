@@ -131,6 +131,7 @@ import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 // (generate-invoice-from-booking → Centralina Pro > Fiscale). Niente pre-check client.
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 // --- Kasko Constants & Types ---
 // L'id di un'assicurazione e' quello che le da' Centralina Pro (un codice
@@ -9361,14 +9362,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         />
 
         {/* Search Bar */}
-        <div className="mb-4">
-          <Input
-            label="Cerca per codice, nome, email, telefono, targa o veicolo"
-            placeholder="Cerca per codice prenotazione, nome, email, telefono, targa o veicolo..."
-            value={bookingSearchQuery}
-            onChange={(e) => setBookingSearchQuery(e.target.value)}
-          />
-        </div>
+        <BarraRicerca
+          className="w-full mb-4"
+          value={bookingSearchQuery}
+          onChange={setBookingSearchQuery}
+          placeholder="Cerca per codice prenotazione, nome, email, telefono, targa o veicolo..."
+        />
 
         {/* 2026-06-01: filtro periodo per pickup_date — DD/MM/YYYY a DD/MM/YYYY */}
         <div className="mb-4">

@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import Paginazione from './Paginazione'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1388,15 +1389,13 @@ export default function ReviewManagementTab() {
             <option value="WASH">Solo Lavaggio</option>
           </select>
         </div>
-        <div className="flex-1 min-w-[200px]">
-          <input
-            type="text"
-            placeholder="Cerca per nome, email, telefono…"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-secondary focus:outline-none focus:border-dr7-gold"
-          />
-        </div>
+        <BarraRicerca
+          variante="compatta"
+          className="flex-1 min-w-[200px]"
+          placeholder="Cerca per nome, email, telefono…"
+          value={searchTerm}
+          onChange={setSearchTerm}
+        />
       </div>
 
       {/* Settings Panel (collapsible) */}

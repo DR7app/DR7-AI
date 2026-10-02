@@ -1,3 +1,4 @@
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroPagina } from '../../../components/Scheletro'
@@ -1442,12 +1443,10 @@ export default function FatturaTab() {
 
       {/* Search Bar */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
-        <input
-          type="text"
+        <BarraRicerca
           placeholder="Cerca per cliente, numero fattura o email..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
+          onChange={setSearchQuery}
         />
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col">

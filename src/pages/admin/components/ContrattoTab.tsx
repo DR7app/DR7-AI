@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import Paginazione from './Paginazione'
 import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -1319,12 +1320,10 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
 
       {/* Search Bar + Period Filter */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
-        <input
-          type="text"
+        <BarraRicerca
           placeholder="Cerca cliente..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
+          onChange={setSearchQuery}
         />
         {/* 2026-06-01: filtro periodo su created_at del contratto */}
         <DateRangeFilter value={dateRange} onChange={setDateRange} />

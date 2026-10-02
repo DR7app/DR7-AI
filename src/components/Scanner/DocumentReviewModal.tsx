@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import toast from 'react-hot-toast';
+import BarraRicerca from '../admin/BarraRicerca';
 
 interface DocumentReviewModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,14 +161,14 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                                 </div>
                             ) : (
                                 <div>
-                                    <input
-                                        type="text"
+                                    <BarraRicerca
+                                        variante="compatta"
+                                        className="w-full mb-2"
                                         placeholder="Cerca cliente..."
-                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-full px-4 py-2 text-theme-text-primary mb-2"
                                         value={searchQuery}
-                                        onChange={(e) => {
-                                            setSearchQuery(e.target.value);
-                                            searchCustomers(e.target.value);
+                                        onChange={(testo) => {
+                                            setSearchQuery(testo);
+                                            searchCustomers(testo);
                                         }}
                                     />
                                     <div className="max-h-40 overflow-y-auto space-y-1">

@@ -5,6 +5,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface CompletedBooking {
     id: string
@@ -465,12 +466,11 @@ export default function ReviewsTab() {
 
             {/* Filters */}
             <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border flex gap-4">
-                <input
-                    type="text"
+                <BarraRicerca
+                    className="w-full max-w-md"
                     placeholder="Cerca cliente o email..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-theme-bg-tertiary border border-theme-border-light text-theme-text-primary px-4 py-2 rounded-full w-full max-w-md focus:outline-none focus:border-dr7-gold"
+                    onChange={setSearchTerm}
                 />
             </div>
 

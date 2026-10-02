@@ -40,6 +40,7 @@ import SeatPlanPicker from './SeatPlanPicker'
 // sedili sulla pianta, non quanti col +/-.
 import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
 import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -3578,12 +3579,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           (serve solo per cercare nello storico delle prenotazioni esistenti). */}
       {!showForm && (
         <div className="mb-4 space-y-3">
-          <input
-            type="text"
-            placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
+          <BarraRicerca
             value={bookingSearchQuery}
-            onChange={(e) => setBookingSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+            onChange={setBookingSearchQuery}
+            placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
           />
           {/* 2026-06-01: filtro periodo per appointment_date */}
           <DateRangeFilter value={bookingDateRange} onChange={setBookingDateRange} />

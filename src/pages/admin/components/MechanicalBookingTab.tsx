@@ -12,6 +12,7 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface Customer {
   id: string
@@ -292,12 +293,10 @@ export default function MechanicalBookingTab() {
 
       {/* Search Bar + Period Filter */}
       <div className="mb-4 space-y-3">
-        <input
-          type="text"
-          placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
+        <BarraRicerca
           value={bookingSearchQuery}
-          onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          onChange={setBookingSearchQuery}
+          placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
         />
         {/* 2026-06-01: filtro periodo per appointment_date */}
         <DateRangeFilter value={bookingDateRange} onChange={setBookingDateRange} />

@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
 import SelettoreCategorieEMTN, { type OpzioneCategoria } from './SelettoreCategorieEMTN'
+import BarraRicerca from '../../../../components/admin/BarraRicerca'
 import {
     AREE_EMTN, CATEGORIE_EMTN, CAMPI_EVENTO, CAMPI_PRATICA, STATI_EMTN, TIPI_DOCUMENTO, NON_RISULTA, AVVISO_LEGALE,
     categoriaEMTN, etichettaStato, normalizzaRisultato, motiviRevisioneManuale,
@@ -261,11 +262,12 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                 {noleggi === null && <p className="text-xs text-theme-text-muted">Ricerca dei noleggi del cliente…</p>}
                                 {noleggi && noleggi.length === 0 && <p className="text-xs text-theme-text-muted">Nessun noleggio DR7 trovato per questo cliente: carica i documenti qui sotto.</p>}
                                 {noleggi && noleggi.length > 0 && (
-                                    <input
+                                    <BarraRicerca
+                                        variante="compatta"
+                                        className="w-full mb-2"
                                         value={cercaNoleggio}
-                                        onChange={e => setCercaNoleggio(e.target.value)}
+                                        onChange={setCercaNoleggio}
                                         placeholder="Cerca: targa, n. contratto, veicolo, data noleggio (gg/mm/aaaa o mese), danno, penale, codice DR7…"
-                                        className={`${inputCls} mb-2`}
                                     />
                                 )}
                                 {noleggi && noleggi.length > 0 && (

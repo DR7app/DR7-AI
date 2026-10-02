@@ -1,6 +1,7 @@
 import { Fragment, useState, useEffect, useMemo } from 'react'
 import { authFetch } from '../../../utils/authFetch'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface SiteUser {
   id: string
@@ -510,18 +511,11 @@ export default function SiteUsersTab() {
       </div>
 
       {/* Search */}
-      <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Cerca per nome, email, telefono, codice fiscale, citta..."
-          className="w-full pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
-        />
-      </div>
+      <BarraRicerca
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Cerca per nome, email, telefono, codice fiscale, citta..."
+      />
 
       {/* Layout: tabella a sinistra + sidebar a destra */}
       <div className="lg:flex lg:gap-4 lg:items-start">

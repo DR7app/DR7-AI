@@ -10,6 +10,7 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 // Static accent palette mirrored on the screenshot — keeps each panel
 // visually distinct without inventing data.
@@ -574,17 +575,13 @@ export default function CodiciScontoTab() {
                         </button>
                     ))}
                 </div>
-                <div className="flex-1 min-w-[200px]">
-                    <div className="bg-theme-bg-tertiary p-3 rounded-full border border-theme-border">
-                        <input
-                            type="text"
-                            placeholder="Cerca codice..."
-                            value={discountCodeSearch}
-                            onChange={(e) => setDiscountCodeSearch(e.target.value)}
-                            className="w-full bg-transparent text-theme-text-primary outline-none"
-                        />
-                    </div>
-                </div>
+                <BarraRicerca
+                    variante="compatta"
+                    className="flex-1 min-w-[200px]"
+                    placeholder="Cerca codice..."
+                    value={discountCodeSearch}
+                    onChange={setDiscountCodeSearch}
+                />
             </div>
 
             {/* Codes Table */}

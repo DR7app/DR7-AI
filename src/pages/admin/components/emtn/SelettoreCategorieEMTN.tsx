@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EMTN_CATEGORIE } from './emtnCategorie'
+import BarraRicerca from '../../../../components/admin/BarraRicerca'
 
 export interface OpzioneCategoria {
     id: string
@@ -127,12 +128,12 @@ export default function SelettoreCategorieEMTN({
             {aperto && (
                 <div className="absolute z-30 left-0 right-0 mt-1 rounded-lg border border-theme-border bg-theme-bg-secondary shadow-lg overflow-hidden">
                     <div className="p-2 border-b border-theme-border">
-                        <input
+                        <BarraRicerca
+                            variante="compatta"
                             ref={campoRicerca}
                             value={ricerca}
-                            onChange={e => setRicerca(e.target.value)}
+                            onChange={setRicerca}
                             placeholder="Cerca categoria..."
-                            className="w-full rounded-md border border-theme-border bg-theme-bg-primary px-2.5 py-1.5 text-xs text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none"
                         />
                     </div>
                     <ul role="listbox" aria-multiselectable="true" className="max-h-60 overflow-y-auto py-1">

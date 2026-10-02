@@ -19,6 +19,7 @@ import { isCreditWallet as isMetodoCreditWallet } from '../../../utils/paymentMe
 import { leggiMovimentoWallet } from '../../../utils/walletCliente'
 import MoneyInput from '../../../components/MoneyInput'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -3873,20 +3874,16 @@ export default function UnpaidBookingsTab() {
       <div className="bg-theme-bg-secondary rounded-2xl p-3 lg:p-4 border border-theme-border">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 lg:gap-3">
           {/* Search */}
-          <div className="relative flex-1 lg:max-w-md">
+          <div className="flex-1 lg:max-w-md">
             {/* 2026-06-01: filtro periodo Da/A (sopra la search bar) */}
             <div className="mb-2">
               <DateRangeFilter value={dateRange} onChange={setDateRange} />
             </div>
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
+            <BarraRicerca
+              variante="compatta"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={setSearchQuery}
               placeholder="Cerca cliente, email, telefono, targa..."
-              className="pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 w-full transition-all"
             />
           </div>
 
@@ -4666,12 +4663,11 @@ export default function UnpaidBookingsTab() {
               </div>
 
               <div className="p-4 pb-2">
-                <input
+                <BarraRicerca
                   autoFocus
                   value={nuovoIncassoQuery}
-                  onChange={e => setNuovoIncassoQuery(e.target.value)}
+                  onChange={setNuovoIncassoQuery}
                   placeholder="Cerca cliente, targa, penale..."
-                  className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary placeholder:text-theme-text-muted"
                 />
               </div>
 

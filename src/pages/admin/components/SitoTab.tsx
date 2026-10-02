@@ -35,6 +35,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import MoneyInput from '../../../components/MoneyInput'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { parseMoney } from '../../../utils/money'
 // Alberatura reale di dr7.app: una voce dell'onglet = una pagina del sito.
 // Catalogo dei testi del sito: GENERATO da scripts/genTestiCatalogo.mjs.
@@ -352,19 +353,12 @@ function SitoSidebar({ screenId, onSelect }: { screenId: string; onSelect: (id: 
 
     return (
         <div className="bg-theme-bg-primary rounded-2xl p-3 border border-theme-border shadow-sm space-y-3">
-            <div className="relative">
-                <input
-                    type="search"
-                    placeholder="Cerca una pagina o una URL…"
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl text-[13px] bg-theme-bg-secondary border border-transparent focus:bg-theme-bg-primary focus:border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
-                />
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-secondary pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <circle cx="11" cy="11" r="7" />
-                    <path strokeLinecap="round" d="m20 20-3-3" />
-                </svg>
-            </div>
+            <BarraRicerca
+                variante="compatta"
+                placeholder="Cerca una pagina o una URL…"
+                value={query}
+                onChange={setQuery}
+            />
 
             <p className="px-3 text-[11px] text-theme-text-secondary">
                 <strong className="text-theme-text-primary">{MANAGED_COUNT}</strong> schermate su {TOTAL_COUNT} modificabili da qui.

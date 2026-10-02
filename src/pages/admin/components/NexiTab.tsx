@@ -14,6 +14,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import Paginazione from './Paginazione'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 /** Prenotazione mostrata nella ricerca "Collega prenotazione". */
 interface BookingLite {
@@ -1600,20 +1601,12 @@ export default function NexiTab() {
                 <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1 min-w-[260px] flex-1">
                         <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Ricerca</span>
-                        <div className="relative">
-                            <input
-                                type="search"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                placeholder="Cliente, email, prenotazione, order ID, contratto…"
-                                className="w-full px-3 py-2 text-sm bg-theme-bg-primary/40 border border-theme-border/50 rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
-                            />
-                            {search && (
-                                <button onClick={() => setSearch('')}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
-                                    title="Cancella ricerca">&times;</button>
-                            )}
-                        </div>
+                        <BarraRicerca
+                            variante="compatta"
+                            value={search}
+                            onChange={setSearch}
+                            placeholder="Cliente, email, prenotazione, order ID, contratto…"
+                        />
                     </label>
 
                     <label className="flex flex-col gap-1">
@@ -2679,13 +2672,13 @@ export default function NexiTab() {
                         </p>
 
                         <div className="flex gap-2 mb-4">
-                            <input
-                                type="text"
+                            <BarraRicerca
+                                variante="compatta"
+                                className="flex-1 min-w-0"
                                 value={linkBookingSearch}
-                                onChange={(e) => setLinkBookingSearch(e.target.value)}
+                                onChange={setLinkBookingSearch}
                                 onKeyDown={(e) => { if (e.key === 'Enter') void searchBookingsToLink(linkBookingSearch) }}
                                 placeholder="Nome o email del cliente"
-                                className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
                             />
                             <button
                                 onClick={() => void searchBookingsToLink(linkBookingSearch)}

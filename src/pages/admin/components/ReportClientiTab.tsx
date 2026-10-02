@@ -1,3 +1,4 @@
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useState, useMemo, useEffect } from 'react'
 import { useRegistraPeriodoReport } from '../../../utils/reportPeriodo'
 import { ScheletroTabella } from '../../../components/Scheletro'
@@ -672,12 +673,12 @@ export default function ReportClientiTab() {
 
           {/* Search + Sort */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <input
-              type="text"
+            <BarraRicerca
+              variante="compatta"
+              className="w-full max-w-xs"
               placeholder="Cerca per nome o email..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted w-full max-w-xs"
+              onChange={setSearch}
             />
             <div className="flex items-center gap-2">
               <button onClick={() => setEditReport(v => !v)} title="Correggi/rimuovi/aggiungi voci a mano" className={`px-3 py-2 text-xs font-medium rounded border ${editReport ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-theme-bg-tertiary border-theme-border-light text-theme-text-secondary'}`}>{editReport ? '✓ Modifica report' : '✎ Modifica report'}</button>

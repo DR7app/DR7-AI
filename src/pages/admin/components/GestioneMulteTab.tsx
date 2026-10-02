@@ -8,6 +8,7 @@ import { loadMulteConfig, MULTE_CONFIG_DEFAULTS, type MulteConfigValues } from '
 import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../../utils/businessScope'
 import { businessRowForServiceType } from '../../../utils/businessConfigClient'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 /**
  * 2026-08-24 (direzione): "Multe" e' nel menu di ogni business. Lo storico
@@ -790,13 +791,13 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                             <button onClick={() => setSceltaManuale(false)} className="text-xs text-theme-text-muted hover:text-theme-text-primary">Chiudi</button>
                                         </div>
                                         <div className="flex gap-2">
-                                            <input
-                                                type="text"
+                                            <BarraRicerca
+                                                variante="compatta"
+                                                className="flex-1 min-w-0"
                                                 value={cercaNoleggio}
-                                                onChange={e => setCercaNoleggio(e.target.value)}
+                                                onChange={setCercaNoleggio}
                                                 onKeyDown={e => { if (e.key === 'Enter') caricaNoleggiCandidati(cercaNoleggio) }}
                                                 placeholder="Targa, auto, cliente..."
-                                                className="flex-1 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
                                             />
                                             <Button onClick={() => caricaNoleggiCandidati(cercaNoleggio)} disabled={caricamentoNoleggi}>
                                                 {caricamentoNoleggi ? 'Cerco...' : 'Cerca'}

@@ -1,3 +1,4 @@
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useState } from 'react'
 import { ScheletroPagina } from '../../../components/Scheletro'
 import { CATEGORY_KEYS } from './scadenze/scadenzeConfig'
@@ -69,12 +70,10 @@ export default function ScadenzeTab() {
           {/* Search - shown only on category views */}
           {activeView !== 'panoramica' && (
             <div className="mb-4">
-              <input
-                type="text"
+              <BarraRicerca
                 value={scadenzaSearch}
-                onChange={(e) => setScadenzaSearch(e.target.value)}
+                onChange={setScadenzaSearch}
                 placeholder="Cerca per targa, veicolo o descrizione..."
-                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:border-dr7-gold focus:outline-none"
               />
             </div>
           )}

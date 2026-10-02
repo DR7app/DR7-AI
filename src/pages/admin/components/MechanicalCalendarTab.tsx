@@ -7,6 +7,7 @@ import MechanicalBookingForm from './MechanicalBookingForm'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface MechanicalBooking {
   id: string
@@ -228,23 +229,13 @@ export default function MechanicalCalendarTab() {
             <h2 className="text-lg font-bold text-theme-text-primary">Calendario Meccanica</h2>
 
             {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Cerca clienti..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-primary rounded-full border border-theme-border focus:border-dr7-gold focus:outline-none text-sm w-48"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
-                >
-                  ×
-                </button>
-              )}
-            </div>
+            <BarraRicerca
+              variante="compatta"
+              className="w-48"
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Cerca clienti..."
+            />
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-theme-text-muted">Questo Mese:</span>
               <span className="text-dr7-gold font-bold text-sm">

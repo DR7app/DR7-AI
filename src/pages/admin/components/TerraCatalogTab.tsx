@@ -3,6 +3,7 @@
 // raggruppati per categoria (etichette da Centralina Pro). Da qui si può
 // aggiungere un nuovo veicolo (insert minimale su `vehicles`); la modifica di
 // dettaglio resta nella scheda Veicoli.
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useEffect, useMemo, useState } from 'react'
 import { ScheletroLista } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
@@ -206,11 +207,12 @@ export default function TerraCatalogTab() {
           <p className="text-sm text-theme-text-muted">{filtered.length} veicoli in {grouped.length} categorie — foto e dati dalla scheda Veicoli.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <input
+          <BarraRicerca
+            variante="compatta"
+            className="w-52"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
             placeholder="Cerca nome o targa..."
-            className="px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
           />
           <select
             value={catFilter}

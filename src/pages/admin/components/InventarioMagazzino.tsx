@@ -7,6 +7,7 @@
 // ogni modifica strutturale in inv_audit_log. Tabelle: migration
 // 20260721_inventario_magazzino.sql + _seed.sql.
 // =============================================================================
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
@@ -825,10 +826,11 @@ export default function InventarioMagazzino({ business }: { business?: Business 
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
+        <BarraRicerca
+          variante="compatta"
+          className="flex-1 min-w-[200px]"
+          value={search} onChange={setSearch}
           placeholder="Cerca articolo, codice, note..."
-          className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary placeholder:text-theme-text-muted"
         />
         <button
           onClick={() => setSoloSottoScorta(v => !v)}

@@ -1,3 +1,4 @@
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useReportSpese } from '../../../hooks/useReportSpese'
 import ReportSpesePanel from './ReportSpesePanel'
@@ -2049,12 +2050,12 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
 
           {/* Plate Search + Modifica report */}
           <div className="flex flex-wrap items-center gap-3">
-            <input
-              type="text"
+            <BarraRicerca
+              variante="compatta"
+              className="w-full max-w-xs"
               placeholder="Cerca per targa o nome..."
               value={plateSearch}
-              onChange={(e) => setPlateSearch(e.target.value)}
-              className="px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted w-full max-w-xs"
+              onChange={setPlateSearch}
             />
             {/* Modifica manuale report: correggi/rimuovi/aggiungi voci. Gli override
                 si riflettono anche nei totali/KPI (vedi fetchReport). */}

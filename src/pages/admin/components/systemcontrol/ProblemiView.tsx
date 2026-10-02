@@ -7,6 +7,7 @@ import { systemControl } from '../../../../utils/systemControl'
 import type { GruppoProblema, Diagnosi, Operazione, Severita } from '../../../../utils/systemControl'
 import { BadgeSeverita, BadgeClasse, Scheda, Vuoto, Bottone, Conferma } from './ui'
 import { dataOra, quandoRelativo } from './formato'
+import BarraRicerca from '../../../../components/admin/BarraRicerca'
 
 const SEVERITA: Severita[] = ['critico', 'alto', 'medio', 'basso', 'informativo']
 
@@ -63,8 +64,7 @@ export default function ProblemiView({ idIniziale, onApertoCambiato }: {
           <option value="2">Posso risolverlo io</option>
           <option value="3">Serve lo sviluppatore</option>
         </select>
-        <input value={cerca} onChange={e => setCerca(e.target.value)} placeholder="Cerca nel testo dell errore"
-          className="flex-1 min-w-[200px] px-3 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-xs text-theme-text-primary placeholder:text-theme-text-muted" />
+        <BarraRicerca variante="compatta" className="flex-1 min-w-[200px]" value={cerca} onChange={setCerca} placeholder="Cerca nel testo dell errore" />
         <Bottone onClick={() => void carica()}>Aggiorna</Bottone>
       </div>
 

@@ -158,6 +158,7 @@ interface Booking {
 // al pattern delle altre tab. useAdminRole / hasPermission usate per
 // detect collaboratori (nessun accesso a `reservations`).
 import { useAdminRole as useAdminRoleInternal } from '../../../hooks/useAdminRole'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 /**
  * 2026-08-14 (roadmap #11) — `serviceType` rende questo calendario utilizzabile
@@ -1096,12 +1097,12 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
             )}
             {calLayout.saving && <span className="text-[10px] text-theme-text-muted">salvataggio...</span>}
           </div>
-          <input
-            type="text"
-            placeholder="Cerca veicolo o cliente..."
-            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-1.5 text-sm w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold/50"
+          <BarraRicerca
+            variante="compatta"
+            className="w-64"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={setSearchQuery}
+            placeholder="Cerca veicolo o cliente..."
           />
         </div>
       </div>

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { sanitizeMoney, parseMoney } from '../../../utils/money'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -1030,18 +1031,11 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
           </div>
 
           {/* Search */}
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Cerca cliente..."
-              className="w-full pl-10 pr-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all text-sm"
-            />
-          </div>
+          <BarraRicerca
+            value={search}
+            onChange={setSearch}
+            placeholder="Cerca cliente..."
+          />
 
           {/* 2026-06-01: filtro periodo Da/A su date item (penali/danni) */}
           <DateRangeFilter value={dateRange} onChange={setDateRange} />

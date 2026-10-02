@@ -24,6 +24,7 @@ import SeatPlanPicker from './SeatPlanPicker'
 // Servizi venduti a sedile: si scelgono QUALI sedili sulla pianta.
 import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
 import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -875,12 +876,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           )
         })()}
         <div className="flex-1" />
-        <input
-          type="text"
-          placeholder="Cerca..."
-          className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-3 py-1 text-sm w-36 sm:w-52 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-cyan-400/50"
+        <BarraRicerca
+          variante="compatta"
+          className="w-36 sm:w-52"
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={setSearchQuery}
+          placeholder="Cerca..."
         />
         {canViewFinancials && (
           <button

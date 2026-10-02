@@ -23,6 +23,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator, type ContextFieldDef } from '../../../utils/otpConditionEngine'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface OtpRow {
     id: string
@@ -574,19 +575,13 @@ export default function GestioneOtpTab() {
                 <div className="xl:col-span-2 space-y-4">
                     {/* Toolbar: search + filter */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative flex-1 min-w-[200px]">
-                            <input
-                                type="text"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                placeholder="Cerca regola, ID, modulo o motivo…"
-                                className="w-full pl-9 pr-3 py-2 rounded-xl bg-theme-bg-secondary border border-theme-border text-theme-text-primary text-sm placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
-                            />
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted">
-                                <circle cx="11" cy="11" r="8"/>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                            </svg>
-                        </div>
+                        <BarraRicerca
+                            variante="compatta"
+                            className="flex-1 min-w-[200px]"
+                            value={search}
+                            onChange={setSearch}
+                            placeholder="Cerca regola, ID, modulo o motivo…"
+                        />
                         <div className="inline-flex rounded-xl bg-theme-bg-secondary border border-theme-border p-0.5 text-xs">
                             {(['all', 'active', 'inactive'] as const).map(f => (
                                 <button
@@ -1632,8 +1627,7 @@ function StoricoOtpSection() {
                         </label>
                         <label className="text-[11px] text-theme-text-muted lg:col-span-2">
                             <span className="block mb-1">Cerca</span>
-                            <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} placeholder="azione, codice, contesto…"
-                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary placeholder:text-theme-text-muted"/>
+                            <BarraRicerca variante="compatta" value={search} onChange={testo => { setSearch(testo); setPage(0) }} placeholder="azione, codice, contesto…" />
                         </label>
                     </div>
                     <div className="flex items-center justify-between gap-2">

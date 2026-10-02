@@ -12,6 +12,7 @@ import { ScheletroTabella } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar, PieChart, Pie, Cell,
@@ -490,16 +491,13 @@ export default function IncomingInvoicesView() {
               </button>
             </div>
           </div>
-          <div className="flex-1 min-w-[220px]">
-            <label className="block text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Cerca</label>
-            <input
-              type="text"
-              placeholder="Fornitore, P.IVA, numero fattura..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-            />
-          </div>
+          <BarraRicerca
+            variante="compatta"
+            className="flex-1 min-w-[220px]"
+            placeholder="Fornitore, P.IVA, numero fattura..."
+            value={search}
+            onChange={setSearch}
+          />
           <button
             onClick={load}
             disabled={loading}

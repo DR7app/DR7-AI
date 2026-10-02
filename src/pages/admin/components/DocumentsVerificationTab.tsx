@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 interface UserDocument {
   id: string
@@ -522,31 +523,12 @@ export default function DocumentsVerificationTab() {
         </div>
 
         {/* Search bar */}
-        <div className="relative mt-4">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted pointer-events-none"
-            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.3-4.3"/>
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cerca cliente per nome, email, telefono o CF…"
-            className="w-full pl-10 pr-10 py-2.5 bg-theme-bg-primary/60 border border-theme-border rounded-2xl text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/40"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary flex items-center justify-center"
-              title="Cancella"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          )}
-        </div>
+        <BarraRicerca
+          className="w-full mt-4"
+          value={search}
+          onChange={setSearch}
+          placeholder="Cerca cliente per nome, email, telefono o CF…"
+        />
       </div>
 
       {/* Summary + Filter (segmented control style) */}

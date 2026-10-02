@@ -10,6 +10,7 @@ import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } fro
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import BarraRicerca from '../../../components/admin/BarraRicerca'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -1186,12 +1187,10 @@ export default function CampagnaMarketingTab() {
                         </div>
                     </div>
 
-                    <input
-                        type="text"
+                    <BarraRicerca
                         placeholder="Cerca per nome, email, telefono..."
                         value={searchQuery}
-                        onChange={(e) => { setSearchQuery(e.target.value); setPage(1) }}
-                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary outline-none focus:border-dr7-gold"
+                        onChange={testo => { setSearchQuery(testo); setPage(1) }}
                     />
 
                     {loadingCustomers ? (
