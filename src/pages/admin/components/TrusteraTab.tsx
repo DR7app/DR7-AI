@@ -129,18 +129,49 @@ function DocumentiSubTab() {
     }
   }, [showCustomerDropdown])
 
+  // 02/10/2026: barra di ricerca come nelle altre tab. La lista mostra solo
+  // le ultime 100 richieste, quindi la ricerca va sul database (nome,
+  // email, telefono, nome documento) e non solo sulle righe gia' caricate.
+  const [ricerca, setRicerca] = useState('')
+  const ricercaRef = useRef('')
+  const primoCaricamentoRef = useRef(true)
+
   useEffect(() => {
     loadRequests()
   }, [])
 
-  async function loadRequests() {
-    setLoading(true)
+  useEffect(() => {
+    ricercaRef.current = ricerca
+    if (primoCaricamentoRef.current) { primoCaricamentoRef.current = false; return }
+    const t = setTimeout(() => loadRequests({ silenzioso: true }), 300)
+    return () => clearTimeout(t)
+  }, [ricerca])
+
+  async function loadRequests(opzioni: { silenzioso?: boolean } = {}) {
+    // Senza silenzioso la pagina torna allo scheletro e il campo di ricerca
+    // perderebbe il focus a ogni lettera.
+    if (!opzioni.silenzioso) setLoading(true)
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('signature_requests')
         .select('id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at')
         .order('created_at', { ascending: false })
         .limit(100)
+
+      // Virgole e parentesi spezzano il filtro .or() di PostgREST.
+      const testo = ricercaRef.current.trim().replace(/[,()%*\\]/g, ' ').trim()
+      if (testo.length >= 2) {
+        const filtri = [
+          `signer_name.ilike.%${testo}%`,
+          `signer_email.ilike.%${testo}%`,
+          `document_name.ilike.%${testo}%`,
+        ]
+        const cifre = testo.replace(/\D/g, '')
+        if (cifre.length >= 3) filtri.push(`signer_phone.ilike.%${cifre}%`)
+        query = query.or(filtri.join(','))
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
       const reqs = (data || []) as SignatureRequest[]
@@ -835,11 +866,39 @@ function DocumentiSubTab() {
         </div>
       )}
 
+      {/* Ricerca */}
+      <div className="relative">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="search"
+          value={ricerca}
+          onChange={(e) => setRicerca(e.target.value)}
+          placeholder="Cerca per firmatario, email, telefono o nome documento..."
+          className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-10 pr-10 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+        />
+        {ricerca && (
+          <button
+            type="button"
+            onClick={() => setRicerca('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
+            aria-label="Pulisci ricerca"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
       {/* Requests List */}
       <div className="space-y-3">
         {requests.length === 0 ? (
           <div className="bg-theme-bg-secondary rounded-lg p-12 text-center">
-            <p className="text-theme-text-muted text-lg">Nessuna richiesta di firma</p>
+            <p className="text-theme-text-muted text-lg">
+              {ricerca.trim().length >= 2 ? 'Nessun risultato per questa ricerca' : 'Nessuna richiesta di firma'}
+            </p>
           </div>
         ) : (
           requests.map((req) => {
