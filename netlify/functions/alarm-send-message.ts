@@ -117,12 +117,23 @@ export const handler: Handler = async (event) => {
                 .select('*')
                 .eq('id', entityId)
                 .maybeSingle()
-            if (!bk) {
-                return { statusCode: 404, headers, body: JSON.stringify({ error: 'Prenotazione non trovata' }) }
+            if (bk) {
+                booking = bk
+                phone = String(booking.customer_phone || booking.guest_phone || booking.booking_details?.customer?.phone || '')
+                nome = String(booking.customer_name || booking.guest_name || '')
+            } else {
+                // 02/10/2026: gli allarmi Lead aprono la pratica su un preventivo,
+                // un carrello Nexi o un invito, non su una prenotazione. Prima qui
+                // si rispondeva 404 e il messaggio scelto in Centralina Pro non
+                // partiva mai, senza lasciare traccia.
+                const altro = await destinatarioSenzaPrenotazione(sb, String(entityId))
+                if (!altro) {
+                    await segnaEsito('destinatario_non_trovato')
+                    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Prenotazione non trovata' }) }
+                }
+                phone = altro.phone
+                nome = altro.nome
             }
-            booking = bk
-            phone = String(booking.customer_phone || booking.guest_phone || booking.booking_details?.customer?.phone || '')
-            nome = String(booking.customer_name || booking.guest_name || '')
         }
 
         if (!phone.replace(/\D/g, '')) {
@@ -169,4 +180,60 @@ export const handler: Handler = async (event) => {
         console.error('[alarm-send-message]', err)
         return { statusCode: 500, headers, body: JSON.stringify({ error: (err as Error).message }) }
     }
+}
+
+/**
+ * Destinatario di un allarme la cui pratica non e' una prenotazione: preventivo
+ * (lead_preventivo_*), carrello Nexi abbandonato (lead_prenotazione_abbandonata),
+ * invito a compilare i dati (lead_invito_non_compilato). Stesso id che il
+ * motore scrive in alarm_events.booking_id.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function destinatarioSenzaPrenotazione(sb: any, id: string): Promise<{ phone: string; nome: string } | null> {
+    const { data: prev } = await sb
+        .from('preventivi')
+        .select('customer_name, customer_phone, customer_id')
+        .eq('id', id)
+        .maybeSingle()
+    if (prev) {
+        const phone = String(prev.customer_phone || '')
+        if (phone || !prev.customer_id) return { phone, nome: String(prev.customer_name || '') }
+        return await daAnagrafica(sb, prev.customer_id, String(prev.customer_name || ''))
+    }
+    const { data: carrello } = await sb
+        .from('pending_nexi_bookings')
+        .select('booking_data')
+        .eq('id', id)
+        .maybeSingle()
+    if (carrello) {
+        const d = carrello.booking_data || {}
+        return {
+            phone: String(d.customer_phone || d.guest_phone || ''),
+            nome: String(d.customer_name || d.guest_name || ''),
+        }
+    }
+    const { data: invito } = await sb
+        .from('customer_invites')
+        .select('customer_id')
+        .eq('id', id)
+        .maybeSingle()
+    if (invito) {
+        if (!invito.customer_id) return { phone: '', nome: '' }
+        return await daAnagrafica(sb, invito.customer_id, '')
+    }
+    return null
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function daAnagrafica(sb: any, clienteId: string, nomeNoto: string): Promise<{ phone: string; nome: string }> {
+    const { data: x } = await sb
+        .from('customers_extended')
+        .select('nome, cognome, ragione_sociale, denominazione, tipo_cliente, telefono')
+        .eq('id', clienteId)
+        .maybeSingle()
+    if (!x) return { phone: '', nome: nomeNoto }
+    const nome = x.tipo_cliente === 'azienda'
+        ? String(x.ragione_sociale || x.denominazione || '')
+        : `${x.nome || ''} ${x.cognome || ''}`.trim()
+    return { phone: String(x.telefono || ''), nome: nome || nomeNoto }
 }

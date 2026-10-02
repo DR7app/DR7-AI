@@ -216,6 +216,19 @@ describe('cauzione', () => {
         const restituita = { id: 'c1', importo: 3000, stato: 'Restituita', scadenza_cauzione: new Date(ORA.getTime() - 5 * 24 * 60 * MIN).toISOString() }
         expect(DETECTORS.deposit_return_due(cfg({ threshold_unit: 'days' }), contesto({ cauzioni: [restituita] }), 'superata')).toHaveLength(0)
     })
+
+    it('due cauzioni sullo stesso veicolo sono due pratiche, legate alla prenotazione', () => {
+        // Con il solo veicolo diventavano un allarme unico e il messaggio al
+        // cliente non partiva: si invia solo quando c'e' la prenotazione.
+        const scad = new Date(ORA.getTime() - 2 * 24 * 60 * MIN).toISOString()
+        const cauzioni = [
+            { id: 'c1', veicolo_id: 'v1', riferimento_contratto_id: 'b1', importo: 1000, stato: 'Attiva', scadenza_cauzione: scad, stato_restituzione: 'DA_RESTITUIRE', data_incasso: scad },
+            { id: 'c2', veicolo_id: 'v1', riferimento_contratto_id: 'b2', importo: 2000, stato: 'Attiva', scadenza_cauzione: scad, stato_restituzione: 'DA_RESTITUIRE', data_incasso: scad },
+        ]
+        const ctx = contesto({ cauzioni })
+        expect(DETECTORS.deposit_return_due(cfg({ threshold_unit: 'days' }), ctx, 'superata').map(h => h.bookingId)).toEqual(['b1', 'b2'])
+        expect(DETECTORS.deposit_action_due(cfg(), ctx, 'restituire').map(h => h.bookingId)).toEqual(['b1', 'b2'])
+    })
 })
 
 describe('riconsegna', () => {

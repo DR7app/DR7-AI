@@ -613,7 +613,11 @@ const deposit_return_due: Detector = (cfg, ctx, arg) => {
             if (arg === 'superata') return ctx.now.getTime() - scad.getTime() >= GIORNO
             return false
         })
+        // 02/10/2026: la pratica e' la prenotazione della cauzione. Con il solo
+        // veicolo due cauzioni sullo stesso mezzo diventavano UN allarme, e il
+        // "Messaggio al cliente" non partiva mai (si invia solo con la pratica).
         .map(c => ({
+            bookingId: c.riferimento_contratto_id ? String(c.riferimento_contratto_id) : undefined,
             vehicleId: c.veicolo_id || undefined,
             entita: `Cauzione ${Number(c.importo || 0).toFixed(2)} · scadenza ${oraIt(tempo(c.scadenza_cauzione))}`,
             dettaglio: `Stato: ${c.stato || '—'}`,
@@ -638,6 +642,7 @@ const deposit_action_due: Detector = (_cfg, ctx, arg) => {
             return false
         })
         .map(c => ({
+            bookingId: c.riferimento_contratto_id ? String(c.riferimento_contratto_id) : undefined,
             vehicleId: c.veicolo_id || undefined,
             entita: `Cauzione ${Number(c.importo || 0).toFixed(2)} · ${c.stato || '—'}`,
         }))
