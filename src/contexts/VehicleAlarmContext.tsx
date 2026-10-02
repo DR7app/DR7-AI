@@ -235,7 +235,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const enableAudio = async () => {
         // Prevent multiple simultaneous attempts
         if (alarmState.audioEnabled) {
-            toast.success('Sound alerts are already enabled!')
+            toast.success('Allarmi sonori gia\' attivi.')
             return
         }
 
@@ -266,11 +266,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 // Ignore unlock errors
             }
 
-            toast.success('Sound alerts enabled! You will hear an alarm when vehicles are due for return.')
+            // 02/10/2026: il messaggio parlava solo dei rientri dei veicoli; suonano
+            // tutti gli allarmi accesi in Centralina Pro > Allarmi.
+            toast.success('Allarmi sonori attivi. Sentirai ogni allarme acceso in Centralina Pro > Allarmi.')
             // Audio alerts enabled
         } catch (err) {
             console.error('Failed to enable audio:', err)
-            toast.error('Failed to enable sound alerts. Please try again.')
+            toast.error('Impossibile attivare gli allarmi sonori. Riprova.')
         }
     }
 
