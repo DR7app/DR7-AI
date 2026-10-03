@@ -15,11 +15,41 @@
   --radius-4xl: 0;
 }
 
-/* Stesso font del sito dr7.app (Jost) + mobile app feel */
-* {
-  font-family: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Caratteri del sito dr7.app (03/10/2026, direzione: "en harmonie avec le
+   site, meme les fonts"). Tre voci come sul sito (Sito/styles/index.css):
+   Jost per l'interfaccia, Bodoni Moda per i titoli H1/H2, IBM Plex Mono per
+   codici e cifre (font-mono). Prima un `* { font-family: Jost }` fuori dai
+   layer schiacciava anche font-mono: targhe e importi non erano mai mono. */
+@theme {
+  --font-sans: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Bodoni Moda', 'Playfair Display', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html, body {
+    font-family: var(--font-sans);
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'kern' 1;
+  }
+  /* Come sul sito: H1/H2 voce editoriale, H3 e minori voce d'interfaccia.
+     Selettori di ELEMENTO nel layer base: qualunque classe nel markup vince. */
+  h1, h2 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-optical-sizing: auto;
+    letter-spacing: -0.01em;
+  }
+  h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+  /* Maiuscoletto spaziato come sul sito, se il markup non sceglie gia'. */
+  .uppercase:not([class*='tracking-']) { letter-spacing: 0.14em; }
 }
 
 html, body, #root {
@@ -1025,21 +1055,70 @@ html[data-oscura] img[src*="signature"] {
   filter: blur(9px);
 }
 
-/* Angoli vivi (03/10/2026, direzione: "plus aucun bouton arrondi").
-   I raggi di Tailwind valgono 0 (@theme in cima a questo file). Qui si squadrano anche
-   bottoni e targhette scritti con rounded-full: tutto cio' che ha un
-   riempimento orizzontale (px-*) o e' un elemento premibile/di input.
-   Restano tondi: l'interruttore (bottone con dentro la pallina tonda),
-   puntini, rotelle di caricamento, avatar e barre, che non hanno px-*. */
-.rounded-full[class*="px-"],
-button.rounded-full:not([role="switch"]):not(:has(> .rounded-full)),
-a.rounded-full,
-input.rounded-full,
-select.rounded-full,
-textarea.rounded-full,
-[class*="rounded-l-full"],
-[class*="rounded-r-full"],
+/* Angoli vivi (03/10/2026, direzione: "plus rien arrondi, comme sur le site").
+   I raggi di Tailwind valgono 0 (@theme in cima). Qui si squadra anche ogni
+   rounded-full (varianti sm:/lg: comprese), TRANNE cio' che e' tondo per
+   natura, come sul sito: puntini, avatar e icone tonde (larghezza = altezza),
+   barre di avanzamento sottili, rotelle di caricamento, immagini, e
+   l'interruttore con la sua pallina. Un bottone o un link tondo-icona invece
+   si squadra comunque (sul sito e' stato fatto lo stesso). */
+[class*="rounded-full"]:not(img):not(.animate-spin):not([role="switch"]):not([class*="translate-x"]):not(:has(> [class*="translate-x"])):not(:is(
+    .w-0\.5.h-0\.5,
+    .w-1.h-1,
+    .w-1\.5.h-1\.5,
+    .w-2.h-2,
+    .w-2\.5.h-2\.5,
+    .w-3.h-3,
+    .w-3\.5.h-3\.5,
+    .w-4.h-4,
+    .w-5.h-5,
+    .w-6.h-6,
+    .w-7.h-7,
+    .w-8.h-8,
+    .w-9.h-9,
+    .w-10.h-10,
+    .w-11.h-11,
+    .w-12.h-12,
+    .w-14.h-14,
+    .w-16.h-16,
+    .w-20.h-20,
+    .w-24.h-24,
+    .w-28.h-28,
+    .w-32.h-32,
+    .w-36.h-36,
+    .w-40.h-40,
+    .w-48.h-48,
+    .size-0\.5,
+    .size-1,
+    .size-1\.5,
+    .size-2,
+    .size-2\.5,
+    .size-3,
+    .size-3\.5,
+    .size-4,
+    .size-5,
+    .size-6,
+    .size-7,
+    .size-8,
+    .size-9,
+    .size-10,
+    .size-11,
+    .size-12,
+    .size-14,
+    .size-16,
+    .size-20,
+    .size-24,
+    .size-28,
+    .size-32,
+    .size-36,
+    .size-40,
+    .size-48)):not(:is(.h-0\.5, .h-1, .h-1\.5, .h-2, .h-2\.5, .h-3)),
+:is(button, a, input, select, textarea, label)[class*="rounded-full"]:not([role="switch"]):not(:has(> [class*="translate-x"])),
 .rounded, .rounded-t, .rounded-b, .rounded-l, .rounded-r,
 .rounded-tl, .rounded-tr, .rounded-bl, .rounded-br {
   border-radius: 0 !important;
 }
+
+/* Barre di scorrimento e mappa (Leaflet): anche loro senza raggio. */
+::-webkit-scrollbar-thumb, ::-webkit-scrollbar-track { border-radius: 0 !important; }
+.leaflet-popup-content-wrapper, .leaflet-bar, .leaflet-bar a, .leaflet-control-layers { border-radius: 0 !important; }
