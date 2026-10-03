@@ -135,7 +135,7 @@ export default function WalletAnalytics({ totalBalanceCents, activeCount, inacti
               <XAxis dataKey="day" stroke="#9ca3af" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis stroke="#9ca3af" tick={{ fontSize: 10 }} />
               <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }}
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 0, color: '#fff' }}
                 formatter={(v) => `€${fmtEur(Number(v) || 0)}`}
               />
               <Area type="monotone" dataKey="ricariche" stroke="#10b981" strokeWidth={2} fill="url(#wallet-in)" />
@@ -170,7 +170,7 @@ export default function WalletAnalytics({ totalBalanceCents, activeCount, inacti
                 {slices.map((s, i) => <Cell key={i} fill={s.color} />)}
               </Pie>
               <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }}
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 0, color: '#fff' }}
                 formatter={(v, name) => {
                   const num = Number(v) || 0
                   const isCount = name === 'Clienti inattivi'

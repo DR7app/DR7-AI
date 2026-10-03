@@ -478,7 +478,7 @@ export default function OperatorProfileModal({
                                         <XAxis dataKey="label" stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} />
                                         <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(v / 60)}h`} />
                                         <Tooltip
-                                            contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                                            contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 0, fontSize: 12 }}
                                             formatter={(v: unknown) => fmtMin(Number(v) || 0)}
                                             labelFormatter={(label) => `Giorno ${label}`}
                                         />

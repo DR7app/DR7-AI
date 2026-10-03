@@ -769,7 +769,7 @@ export default function GpsKeylessTab({ business = 'rental' }: { business?: Busi
                   contentStyle={{
                     background: theme === 'dark' ? '#09090b' : '#ffffff',
                     border: `1px solid ${theme === 'dark' ? 'rgba(34,211,238,0.3)' : 'rgba(14,116,144,0.25)'}`,
-                    borderRadius: 6,
+                    borderRadius: 0,
                     fontSize: 11,
                     color: theme === 'dark' ? '#fff' : '#0c4a6e',
                   }}
