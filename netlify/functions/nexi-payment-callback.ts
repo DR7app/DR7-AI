@@ -1,5 +1,6 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
+import { scopoPagamento } from './utils/scopoPagamento';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
@@ -355,10 +356,7 @@ const handler: Handler = async (event) => {
         const linkSostituito = transaction.status === 'superseded';
         if (isSuccess && (expiresAtStr || linkSostituito)) {
             const adesso = new Date();
-            const scopoTardivo = transaction.metadata?.payment_purpose
-                || (transaction.description?.toLowerCase().startsWith('danni') ? 'danni' : null)
-                || (transaction.description?.toLowerCase().startsWith('penali') ? 'penali' : null)
-                || 'booking';
+            const scopoTardivo = scopoPagamento(transaction);
             let prenotazioneTardivo: any = null;
             const scaduto = !!expiresAtStr && adesso.getTime() > new Date(expiresAtStr).getTime() + TOLLERANZA_SCADENZA_MS;
             if ((scaduto || linkSostituito) && transaction.booking_id) {
@@ -418,10 +416,8 @@ const handler: Handler = async (event) => {
         }
 
         // Detect payment purpose from metadata or description
-        const paymentPurpose = transaction.metadata?.payment_purpose
-            || (transaction.description?.toLowerCase().startsWith('danni') ? 'danni' : null)
-            || (transaction.description?.toLowerCase().startsWith('penali') ? 'penali' : null)
-            || 'booking';
+        // Una penale/danno non e' mai un saldo del noleggio: vedi utils/scopoPagamento.
+        const paymentPurpose = scopoPagamento(transaction);
         const isDanniPenali = paymentPurpose === 'danni' || paymentPurpose === 'penali' || paymentPurpose === 'danni_penali';
         const isExtension = paymentPurpose === 'extension';
         const isTopup = paymentPurpose === 'booking_topup';
