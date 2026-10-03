@@ -1399,7 +1399,10 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function sendPayByLink(booking: UnpaidBooking, amountEur: number, description: string) {
+  // scopo: 'penali' / 'danni' per le righe penale/danno. Con 'booking_topup'
+  // la callback Nexi tratta l'incasso come saldo del noleggio e rigenera e
+  // RIMANDA il contratto ai firmatari (incidente 02/10/2026, penale Rocca).
+  async function sendPayByLink(booking: UnpaidBooking, amountEur: number, description: string, scopo: 'booking_topup' | 'penali' | 'danni' = 'booking_topup') {
     // Structured so that (a) link generation errors show clearly, and (b)
     // NOTHING between link creation and the WhatsApp send can abort the flow.
     // Clipboard, toast, or any other browser-gated API that throws
@@ -1426,7 +1429,7 @@ export default function UnpaidBookingsTab() {
           customerName: booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente',
           description,
           expirationDays: 7,
-          paymentPurpose: 'booking_topup',
+          paymentPurpose: scopo,
         })
       })
       result = await res.json().catch(() => ({}))
@@ -1466,6 +1469,24 @@ export default function UnpaidBookingsTab() {
       const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
       const customerName = booking.customer_name || 'Cliente'
       const amountStr = amountEur.toFixed(2)
+      const perAddebito = scopo === 'penali' || scopo === 'danni'
+      // Penale/danno: stesso template di DanniPenaliModal ("Link pagamento
+      // penali e danni"), cercato per LABEL. Quello del noleggio dice
+      // "la sua prenotazione e' stata registrata" e il cliente non capisce.
+      let templateKey = 'payment_link_customer'
+      if (perAddebito) {
+        templateKey = 'pro_custom_link_pagamento_penali_e_danni_1776869218359'
+        try {
+          const { data: tplRow } = await supabase
+            .from('system_messages')
+            .select('message_key')
+            .ilike('label', '%link pagamento%penali%')
+            .eq('is_enabled', true)
+            .limit(1)
+            .maybeSingle()
+          if (tplRow?.message_key) templateKey = tplRow.message_key
+        } catch { /* usa la chiave nota */ }
+      }
       const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1476,8 +1497,8 @@ export default function UnpaidBookingsTab() {
           // service_type così il resolver sceglie il template Prime Wash
           // custom se presente (es. "Link pagamento lavaggi"), o cade
           // sul canonical rental se rental.
-          templateKey: 'payment_link_customer',
-          booking: { service_type: (booking as { service_type?: string })?.service_type || 'rental' },
+          templateKey,
+          booking: { ...(perAddebito ? { id: booking.id } : {}), service_type: (booking as { service_type?: string })?.service_type || 'rental' },
           // Pass every alias the Pro template might use so nothing leaks as
           // raw `{...}` in the outbound message.
           templateVars: {
@@ -1496,7 +1517,7 @@ export default function UnpaidBookingsTab() {
       })
       const sendJson = await sendRes.json().catch(() => ({}))
       if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
-        toast.error('Template per "payment_link_customer" mancante in Messaggi di Sistema Pro')
+        toast.error(`Template per "${perAddebito ? 'Link pagamento penali e danni' : 'payment_link_customer'}" mancante in Messaggi di Sistema Pro`)
       } else if (!sendRes.ok) {
         toast.error(`Invio WhatsApp fallito: ${sendJson?.message || 'errore sconosciuto'}`)
       } else {
@@ -3493,7 +3514,7 @@ export default function UnpaidBookingsTab() {
                       className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
                     >Pagato</button>
                     <button
-                      onClick={() => sendPayByLink(item.booking, item.remaining, `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label}`)}
+                      onClick={() => sendPayByLink(item.booking, item.remaining, `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label}`, type === 'penalties' ? 'penali' : 'danni')}
                       className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
                     >Invia Link</button>
                     {partialLinkKey !== itemKey && partialPayItemKey !== partialKey && (
@@ -3516,7 +3537,7 @@ export default function UnpaidBookingsTab() {
                         <button onClick={() => {
                           const amt = parseFloat(partialLinkValue)
                           if (!amt || amt <= 0) return
-                          sendPayByLink(item.booking, Math.min(amt, item.remaining), `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label} (parziale)`)
+                          sendPayByLink(item.booking, Math.min(amt, item.remaining), `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label} (parziale)`, type === 'penalties' ? 'penali' : 'danni')
                           setPartialLinkKey(null)
                         }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
                         <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>

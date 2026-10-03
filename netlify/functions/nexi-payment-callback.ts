@@ -685,19 +685,38 @@ const handler: Handler = async (event) => {
                 // the raw total leaves the booking looking under-paid forever.
                 let updated = false;
                 const arrayKeys = paymentPurpose === 'danni' ? ['danni'] : paymentPurpose === 'penali' ? ['penalties'] : ['danni', 'penalties'];
+                // 03/10/2026: l'incasso copre le righe aperte in ordine, fino
+                // all'importo pagato. Prima ogni riga aperta diventava "paid" a
+                // prescindere dall'importo: un Link Parziale da Da Saldare
+                // saldava tutto. Un link per l'intero carrello (DanniPenaliModal)
+                // copre esattamente le righe aperte: stesso esito di prima.
+                const toccate: { key: string; item: any; pagatoOra: number; saldataDaZero: boolean }[] = [];
+                let residuoCent = transaction.amount_cents;
                 for (const key of arrayKeys) {
                     const items = details[key] || [];
                     for (const item of items) {
-                        if (item.paymentStatus === 'nexi_pay_by_link' || item.paymentStatus === 'pending' || !item.paymentStatus) {
-                            const itemTotal = item.total || (item.amount || 0) * (item.quantity || 1);
-                            const itemDiscount = Number(item.discount) || 0;
-                            const itemEffective = Math.round((itemTotal - itemDiscount) * 100) / 100;
-                            item.paymentStatus = 'paid';
-                            item.paymentMethod = 'Nexi Pay by Link';
-                            item.amountPaid = itemEffective;
-                            item.paidAt = new Date().toISOString();
-                            updated = true;
-                        }
+                        if (residuoCent <= 0) break;
+                        const aperta = item.paymentStatus === 'nexi_pay_by_link' || item.paymentStatus === 'pending'
+                            || item.paymentStatus === 'partial' || !item.paymentStatus;
+                        if (!aperta) continue;
+                        const itemTotal = item.total || (item.amount || 0) * (item.quantity || 1);
+                        const itemDiscount = Number(item.discount) || 0;
+                        const effettivoCent = Math.round((itemTotal - itemDiscount) * 100);
+                        const giaPagatoCent = item.paymentStatus === 'partial' ? Math.round((Number(item.amountPaid) || 0) * 100) : 0;
+                        const dovutoCent = Math.max(0, effettivoCent - giaPagatoCent);
+                        if (dovutoCent <= 0) continue;
+                        const ora = Math.min(residuoCent, dovutoCent);
+                        residuoCent -= ora;
+                        const pagatoCent = giaPagatoCent + ora;
+                        // Lo sconto del carrello e' ripartito riga per riga con
+                        // arrotondamento: qualche centesimo di scarto = saldata.
+                        const saldata = pagatoCent >= effettivoCent - 5;
+                        item.paymentStatus = saldata ? 'paid' : 'partial';
+                        item.paymentMethod = 'Nexi Pay by Link';
+                        item.amountPaid = (saldata ? effettivoCent : pagatoCent) / 100;
+                        item.paidAt = new Date().toISOString();
+                        toccate.push({ key, item, pagatoOra: ora / 100, saldataDaZero: giaPagatoCent === 0 && saldata });
+                        updated = true;
                     }
                 }
 
@@ -712,27 +731,23 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] Marked ${paymentPurpose} as paid in booking_details`);
                 }
 
-                // Generate penalty/danni fattura.
-                // Items are passed at FULL price (so the fattura subtotale
-                // matches what the customer originally saw). The aggregate
-                // `discount` (set by DanniPenaliModal) is sent as
-                // discountAmount — generate-penalty-invoice appends a Sconto
-                // line so Subtotal − Sconto = Totale renders correctly.
+                // Generate penalty/danni fattura — solo per quello che QUESTO
+                // incasso ha coperto (prima rientravano anche righe gia' pagate
+                // con un link precedente). Righe saldate per intero: prezzo
+                // pieno + sconto aggregato (generate-penalty-invoice aggiunge
+                // la riga Sconto). Acconti: la riga vale l'importo incassato.
                 try {
                     const custId = details.customer?.customerId || details.customer?.id || details.customer_id;
                     const allItems: { label: string; amount: number; quantity: number }[] = [];
                     let aggregateDiscount = 0;
-                    for (const key of arrayKeys) {
-                        for (const item of (details[key] || [])) {
-                            if (item.paidAt === new Date().toISOString().split('T')[0] || item.paymentMethod === 'Nexi Pay by Link') {
-                                const itemTotal = item.total || (item.amount || 0) * (item.quantity || 1);
-                                allItems.push({
-                                    label: item.label || (key === 'danni' ? 'Danno' : 'Penale'),
-                                    amount: itemTotal,
-                                    quantity: 1, // already aggregated into amount
-                                });
-                                aggregateDiscount += Number(item.discount) || 0;
-                            }
+                    for (const t of toccate) {
+                        const etichetta = t.item.label || (t.key === 'danni' ? 'Danno' : 'Penale');
+                        if (t.saldataDaZero) {
+                            const itemTotal = t.item.total || (t.item.amount || 0) * (t.item.quantity || 1);
+                            allItems.push({ label: etichetta, amount: itemTotal, quantity: 1 });
+                            aggregateDiscount += Number(t.item.discount) || 0;
+                        } else {
+                            allItems.push({ label: `${etichetta} (acconto)`, amount: t.pagatoOra, quantity: 1 });
                         }
                     }
                     // Use all items that were just marked paid
