@@ -70,6 +70,8 @@ export function isColonnaMancante(err: { code?: string; message?: string } | nul
 export interface AlarmCfgMotore extends AlarmCfgLite {
     label?: string | null
     sound_key?: string | null
+    /** true = il suono continua finche' la finestra non si chiude; false = una volta. */
+    suono_continuo?: boolean | null
     notifica_gestionale?: boolean | null
     ripeti_finche_non_risolto?: boolean | null
     ripeti_ogni_minuti?: number | null
@@ -77,11 +79,21 @@ export interface AlarmCfgMotore extends AlarmCfgLite {
 
 /** Le righe del catalogo che oggi possono davvero suonare. */
 export async function caricaConfigurazioni(sb: ClienteAllarmi): Promise<AlarmCfgMotore[]> {
-    const { data, error } = await sb
+    let { data, error }: { data: unknown[] | null; error: { code?: string; message?: string } | null } = await sb
         .from('system_alarms')
-        .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti')
+        .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, suono_continuo, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti')
         .eq('is_enabled', true)
         .eq('stato_rilevamento', 'attivo')
+    // 03/10/2026: `suono_continuo` arriva con la migration 20261003 (a mano).
+    // Finche' non c'e', si rilegge senza: gli allarmi non devono tacere per
+    // una colonna mancante.
+    if (error && isColonnaMancante(error)) {
+        ;({ data, error } = await sb
+            .from('system_alarms')
+            .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti')
+            .eq('is_enabled', true)
+            .eq('stato_rilevamento', 'attivo'))
+    }
     if (error) {
         if (isColonnaMancante(error)) throw new CatalogoNonInstallato()
         throw error

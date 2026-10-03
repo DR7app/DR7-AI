@@ -36,6 +36,7 @@ interface AlarmConfigRow {
     message_key?: string | null
     /** Suono scelto in Centralina Pro > Allarmi. Assente = 'classic'. */
     sound_key?: AlarmSoundKey | null
+    suono_continuo?: boolean | null
 }
 
 interface AlarmState {
@@ -216,19 +217,24 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             for (const r of rows || []) map.set(r.id, r)
             alarmConfigRef.current = map
         }
+        // 03/10/2026: `suono_continuo` arriva con una migration a mano: se
+        // la colonna manca si rilegge senza, e il suono resta continuo.
+        const leggi = async () => {
+            const COLONNE = 'id, is_enabled, threshold_value, threshold_unit, message_key, sound_key'
+            const r = await supabase.from('system_alarms').select(COLONNE + ', suono_continuo')
+            if (!r.error) return r.data
+            const { data } = await supabase.from('system_alarms').select(COLONNE)
+            return data
+        }
         ;(async () => {
-            const { data } = await supabase
-                .from('system_alarms')
-                .select('id, is_enabled, threshold_value, threshold_unit, message_key, sound_key')
+            const data = await leggi()
             if (cancelled) return
             apply(data as AlarmConfigRow[] | null)
         })()
         const channel = supabase
             .channel('system-alarms-config')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'system_alarms' }, async () => {
-                const { data } = await supabase
-                    .from('system_alarms')
-                    .select('id, is_enabled, threshold_value, threshold_unit, message_key, sound_key')
+                const data = await leggi()
                 if (!cancelled) apply(data as AlarmConfigRow[] | null)
             })
             .subscribe()
@@ -471,7 +477,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 // di sempre: chi non tocca la configurazione non sente differenze.
                 const cfgSuono = booking.alarmId ? alarmConfigRef.current.get(booking.alarmId) : undefined
                 const suono = (cfgSuono?.sound_key || 'classic') as AlarmSoundKey
-                getSoundPlayer().play(suono, true, 0.8)
+                // 03/10/2026: "Ripetizione suono" in Centralina Pro. Assente = continuo,
+                // come e' sempre stato per questi allarmi.
+                getSoundPlayer().play(suono, cfgSuono?.suono_continuo !== false, 0.8)
             } catch {
                 // Error setting up alarm audio
             }
@@ -1201,8 +1209,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         if (audioEnabledRef.current) {
             try {
                 if (!catalogoPlayerRef.current) catalogoPlayerRef.current = new AlarmSoundPlayer()
-                const suono = (cfgs.get(primo.alarm_id)?.sound_key || 'classic') as AlarmSoundKey
-                catalogoPlayerRef.current.play(suono, false, 0.8)
+                const cfgPrimo = cfgs.get(primo.alarm_id)
+                const suono = (cfgPrimo?.sound_key || 'classic') as AlarmSoundKey
+                // 03/10/2026 (direzione): "la ca fait juste un bip". Si sceglie
+                // per allarme in Centralina Pro: continuo = suona finche' la
+                // finestra non si chiude (default), una volta = un solo giro.
+                catalogoPlayerRef.current.play(suono, cfgPrimo?.suono_continuo !== false, 0.8)
             } catch { /* resta l'avviso visivo */ }
         }
     }

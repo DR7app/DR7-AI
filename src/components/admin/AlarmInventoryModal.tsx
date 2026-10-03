@@ -78,6 +78,7 @@ interface AlarmRow {
     message_key: string | null
     messaggio_cliente_auto?: boolean | null
     sound_key?: string | null
+    suono_continuo?: boolean | null
 }
 
 interface Props {
@@ -655,6 +656,19 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                                     >&#9654;</button>
                                                                 </div>
                                                             </div>
+
+                                                            {/* 03/10/2026 (direzione): "la ca fait juste un bip". Si sceglie
+                                                                se il suono si ripete finche' la finestra non si chiude o
+                                                                suona una volta sola. Assente = continuo. */}
+                                                            <span className="text-theme-text-muted">Ripetizione suono</span>
+                                                            <select
+                                                                value={valueOf(row, 'suono_continuo') === false ? 'una' : 'continuo'}
+                                                                onChange={e => setField(row.id, 'suono_continuo', e.target.value === 'continuo')}
+                                                                className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                            >
+                                                                <option value="continuo">Continuo, finche' non si chiude la finestra</option>
+                                                                <option value="una">Una volta sola</option>
+                                                            </select>
 
                                                             {/* Messaggio al cliente — solo dove un cliente esiste. */}
                                                             {row.category === 'booking' && (
