@@ -80,7 +80,24 @@ export async function inviaMessaggioAllarme(
         if (bk) {
             booking = bk
             phone = String(booking.customer_phone || booking.guest_phone || booking.booking_details?.customer?.phone || '')
-            nome = String(booking.customer_name || booking.guest_name || '')
+            // 03/10/2026 (direzione): "les messages doivent partir avec le vrai
+            // nom, pas Gentile Cliente". Prima si leggeva solo customer_name:
+            // vuoto = "Cliente". Ora anche la scheda nella prenotazione e, se
+            // serve, l'anagrafica del cliente collegato (user_id).
+            const cust = booking.booking_details?.customer || {}
+            nome = String(
+                booking.customer_name || booking.guest_name || cust.fullName || cust.full_name
+                || [cust.firstName, cust.lastName].filter(Boolean).join(' ') || '',
+            ).trim()
+            if (!nome && booking.user_id) {
+                const { data: ce } = await sb
+                    .from('customers_extended')
+                    .select('id')
+                    .eq('user_id', booking.user_id)
+                    .limit(1)
+                    .maybeSingle()
+                if (ce?.id) nome = (await daAnagrafica(sb, String(ce.id), '')).nome
+            }
         } else {
             // 02/10/2026: gli allarmi Lead aprono la pratica su un preventivo,
             // un carrello Nexi o un invito, non su una prenotazione. Prima qui
@@ -111,7 +128,12 @@ export async function inviaMessaggioAllarme(
             customPhone: phone,
             templateKey,
             ...(booking ? { booking } : {}),
-            templateVars: { nome: (nome.split(' ')[0] || 'Cliente'), customer_name: nome, cliente: nome },
+            // Nome trovato = prima parola. Niente nome con prenotazione: lo
+            // ricava send-whatsapp-notification dalla prenotazione; senza
+            // prenotazione (lead) resta 'Cliente', come prima.
+            templateVars: nome
+                ? { nome: nome.split(/\s+/)[0], customer_name: nome, cliente: nome }
+                : (booking ? {} : { nome: 'Cliente' }),
         }),
     })
     const out = await res.json().catch(() => ({}))

@@ -4088,7 +4088,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         return
       }
       const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
-      const nome = String(booking.customer_name || '').trim().split(/\s+/)[0] || 'Cliente'
+      // 03/10/2026: il nome anche dalla scheda nella prenotazione, non solo da
+      // customer_name (vuoto = il messaggio partiva "Gentile Cliente").
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const custBd = ((booking.booking_details as any)?.customer || {}) as Record<string, string | undefined>
+      const nomeCompleto = String(
+        booking.customer_name || custBd.fullName || custBd.full_name
+        || [custBd.firstName, custBd.lastName].filter(Boolean).join(' ') || '',
+      ).trim()
+      const nome = nomeCompleto.split(/\s+/)[0] || 'Cliente'
       const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
