@@ -257,6 +257,46 @@ export async function leggiNonRisolti(sb: ClienteAllarmi): Promise<AlarmEventRow
     return tutti
 }
 
+/** Chi chiude un'occorrenza in automatico. Tutto il resto e' una persona. */
+const CHIUSO_DAL_SISTEMA = 'Sistema — condizione rientrata'
+
+/** Un veicolo risolto a mano torna a suonare solo dopo un giorno. */
+const RISOLTO_VEICOLO_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 03/10/2026 (direzione): "risolto ca veut dire que ca doit plus sonner".
+ * Prima "Risolto" chiudeva l'occorrenza, ma al giro dopo (1 minuto) la
+ * condizione era ancora vera (es. "ritiro tra 30 minuti") e se ne apriva una
+ * nuova: suonava di nuovo ogni 1-2 minuti, e un messaggio al cliente collegato
+ * sarebbe ripartito a ogni riapertura.
+ * Ora le occorrenze risolte da una PERSONA bloccano la riapertura:
+ *   - su una prenotazione: mai piu' per quella prenotazione;
+ *   - su un veicolo: per 24 ore (una scadenza ancora aperta deve tornare).
+ * La chiusura automatica ("condizione rientrata") non blocca niente.
+ */
+export async function leggiRisoltiAMano(sb: ClienteAllarmi, now: Date): Promise<Map<string, number>> {
+    const mappa = new Map<string, number>()
+    const da = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    for (let i = 0; i < 20000; i += 1000) {
+        const { data, error } = await sb
+            .from('alarm_events')
+            .select('alarm_id, booking_id, vehicle_id, risolto_at, risolto_da_nome')
+            .eq('stato', 'risolto')
+            .gte('risolto_at', da)
+            .order('id', { ascending: true })
+            .range(i, i + 999)
+        if (error) return mappa // nel dubbio si torna al comportamento di prima
+        for (const e of (data || []) as Pick<AlarmEventRow, 'alarm_id' | 'booking_id' | 'vehicle_id' | 'risolto_at' | 'risolto_da_nome'>[]) {
+            if (e.risolto_da_nome === CHIUSO_DAL_SISTEMA) continue
+            const k = chiave(e.alarm_id, { bookingId: e.booking_id || undefined, vehicleId: e.vehicle_id || undefined, entita: '' })
+            const t = e.risolto_at ? new Date(e.risolto_at).getTime() : 0
+            if (t > (mappa.get(k) || 0)) mappa.set(k, t)
+        }
+        if (!data || data.length < 1000) break
+    }
+    return mappa
+}
+
 /**
  * Allinea `alarm_events` a quello che le rilevazioni vedono adesso.
  *
@@ -269,7 +309,7 @@ export async function sincronizzaEventi(
     risultati: { cfg: AlarmCfgLite; hit: AlarmHit }[],
     now: Date,
 ): Promise<EsitoGiro> {
-    const aperti = await leggiNonRisolti(sb)
+    const [aperti, risoltiAMano] = await Promise.all([leggiNonRisolti(sb), leggiRisoltiAMano(sb, now)])
     const apertiPerChiave = new Map<string, AlarmEventRow>()
     for (const e of aperti) {
         apertiPerChiave.set(chiave(e.alarm_id, { bookingId: e.booking_id || undefined, vehicleId: e.vehicle_id || undefined, entita: '' }), e)
@@ -284,6 +324,11 @@ export async function sincronizzaEventi(
         if (visti.has(k)) continue // stessa occorrenza vista due volte nello stesso giro
         visti.add(k)
         const esistente = apertiPerChiave.get(k)
+        const risoltoAlle = risoltiAMano.get(k)
+        if (!esistente && risoltoAlle !== undefined
+            && (hit.bookingId || now.getTime() - risoltoAlle < RISOLTO_VEICOLO_MS)) {
+            continue // risolto da una persona: non si riapre (vedi leggiRisoltiAMano)
+        }
         if (!esistente) {
             daInserire.push({
                 alarm_id: cfg.id,
@@ -352,7 +397,7 @@ export async function sincronizzaEventi(
             .update({
                 stato: 'risolto',
                 risolto_at: now.toISOString(),
-                risolto_da_nome: 'Sistema — condizione rientrata',
+                risolto_da_nome: CHIUSO_DAL_SISTEMA,
             })
             .in('id', daChiudere.slice(i, i + 200).map(e => e.id))
         if (errChiusura) console.warn('[allarmi] chiusura automatica fallita:', errChiusura)
