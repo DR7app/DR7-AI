@@ -2396,7 +2396,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       if (!result.available) {
         // Stesso conflitto gia' accettato alla scelta del mezzo: niente secondo popup.
         const dettaglioSlot = result.reason || 'Slot non disponibile'
-        if (slotAvvisoAccettatoRef.current !== dettaglioSlot && !confermaSlotOccupato(dettaglioSlot)) return
+        if (slotAvvisoAccettatoRef.current !== dettaglioSlot && !(await confermaSlotOccupato(dettaglioSlot))) return
         slotConflictReason = result.reason || 'Slot non disponibile'
         motivazioni.push(`Slot non disponibile — ${slotConflictReason}`)
         trippedCodes.push('slot')
@@ -5975,7 +5975,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                 )
                 if (esito.available) return
                 const dettaglio = esito.reason || 'Slot non disponibile'
-                if (confermaSlotOccupato(dettaglio)) {
+                if (await confermaSlotOccupato(dettaglio)) {
                   slotAvvisoAccettatoRef.current = dettaglio
                 } else {
                   setForm(prev => prev.vehicle_id === newId ? { ...prev, vehicle_id: '' } : prev)

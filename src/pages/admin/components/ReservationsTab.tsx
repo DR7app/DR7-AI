@@ -6630,7 +6630,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             // secondo popup. Se date/ore sono cambiate il dettaglio e' diverso
             // e l'avviso riparte.
             const dettaglioSlot = availabilityResult.reason || 'Slot non disponibile'
-            if (slotAvvisoAccettatoRef.current !== dettaglioSlot && !confermaSlotOccupato(dettaglioSlot)) {
+            if (slotAvvisoAccettatoRef.current !== dettaglioSlot && !(await confermaSlotOccupato(dettaglioSlot))) {
               setIsSubmitting(false)
               submitLockRef.current = false
               return
@@ -10800,7 +10800,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       label={`${assetLabels.asset} (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
                       required
                       value={formData.vehicle_id}
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const v = e.target.value
                         // 05/10/2026 (direzione): l'avviso "slot non disponibile"
                         // parte SUBITO alla scelta del mezzo, non solo al Salva.
@@ -10819,7 +10819,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             )
                             if (!esito.available) {
                               const dettaglio = esito.reason || 'Slot non disponibile'
-                              if (!confermaSlotOccupato(dettaglio)) return
+                              if (!(await confermaSlotOccupato(dettaglio))) return
                               slotAvvisoAccettatoRef.current = dettaglio
                             }
                           }
