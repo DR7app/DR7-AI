@@ -35,13 +35,18 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import MoneyInput from '../../../components/MoneyInput'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { INPUT_CLS, eur, eurToCents, centsToEur, toRomeIso, missingTableHint, BTN_PRIMARY, BTN_GHOST } from './noleggioFormBits'
-import { Header, Badge, ErrorBox, EmptyBox } from './noleggioUiBits'
+import { ErrorBox } from './noleggioUiBits'
+import Button from './Button'
+import GestisciMenu, { type GestisciSection } from './GestisciMenu'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import {
   generateAllDayLavaggioSlots,
   isInLavaggioHours,
   isSlotBlocked,
   getSlotBlock,
 } from '../../../utils/lavaggioHours'
+import SeatPlanPicker from './SeatPlanPicker'
+import { isSeatPricedService, normalizeSeats, seatListLabel } from '../../../utils/seatPlan'
 
 /* ------------------------------- CATALOGO ------------------------------- */
 
@@ -104,6 +109,9 @@ interface VoceCarrello {
   subtotal: number         // EUR
   durationMinutes: number
   principale?: boolean
+  /** Sigle dei sedili scelti sulla pianta (servizi venduti a sedile, come
+   *  PRIME SEAT CLEAN). Stessa chiave dei cartItems di sito e Prenotazioni. */
+  seats?: string[]
 }
 
 interface DettaglioServizi {
@@ -133,8 +141,53 @@ interface RigaPreventivo {
 
 const STATI = ['bozza', 'inviato', 'accettato', 'rifiutato']
 
+// 05/10/2026 (direzione): "il formato dei preventivi lavaggio deve essere
+// ESATTAMENTE come i preventivi noleggio, con il bottone Gestisci". Lista a
+// griglia, riquadri per stato, filtri e card mobile ricalcano PreventiviTab;
+// le azioni stanno in un solo menu Gestisci, come in Prenotazioni.
+const STATUS_LABELS: Record<string, string> = {
+  bozza: 'Bozza',
+  inviato: 'Inviato',
+  accettato: 'Accettato',
+  rifiutato: 'Rifiutato',
+  convertito: 'Convertito',
+}
+const PER_PAGINA = 10
+const COLONNE_LISTA = 'grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_104px]'
+
+function iniziali(nome?: string | null): string {
+  if (!nome) return '??'
+  const parti = nome.trim().split(/\s+/).filter(Boolean)
+  if (parti.length >= 2) return (parti[0][0] + parti[1][0]).toUpperCase()
+  return nome.slice(0, 2).toUpperCase()
+}
+const PALETTE_AVATAR = [
+  'bg-rose-500/20 text-rose-300 ring-rose-500/40',
+  'bg-amber-500/20 text-amber-300 ring-amber-500/40',
+  'bg-blue-500/20 text-blue-300 ring-blue-500/40',
+  'bg-emerald-500/20 text-emerald-300 ring-emerald-500/40',
+  'bg-purple-500/20 text-purple-300 ring-purple-500/40',
+  'bg-cyan-500/20 text-cyan-300 ring-cyan-500/40',
+  'bg-orange-500/20 text-orange-300 ring-orange-500/40',
+]
+function coloreAvatar(chiave: string): string {
+  let h = 0
+  for (let i = 0; i < chiave.length; i++) h = (h * 31 + chiave.charCodeAt(i)) | 0
+  return PALETTE_AVATAR[Math.abs(h) % PALETTE_AVATAR.length]
+}
+function badgeStato(status: string): { bg: string; sub: string; subColor: string } {
+  switch (status) {
+    case 'bozza':      return { bg: 'bg-slate-500/15 text-slate-300 ring-slate-500/40', sub: 'In attesa', subColor: 'text-slate-400' }
+    case 'inviato':    return { bg: 'bg-blue-500/15 text-blue-300 ring-blue-500/40', sub: 'In attesa risposta', subColor: 'text-blue-300/80' }
+    case 'accettato':  return { bg: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40', sub: 'Convertibile', subColor: 'text-emerald-300/80' }
+    case 'convertito': return { bg: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40', sub: 'Appuntamento creato', subColor: 'text-emerald-300/80' }
+    case 'rifiutato':  return { bg: 'bg-rose-500/15 text-rose-300 ring-rose-500/40', sub: 'Non accettata', subColor: 'text-rose-300/80' }
+    default:           return { bg: 'bg-gray-500/15 text-gray-300 ring-gray-500/40', sub: '', subColor: 'text-theme-text-muted' }
+  }
+}
+
 /** Una riga scelta nel catalogo: opzione di prezzo e quantita'. */
-interface Scelta { option: string; qty: number }
+interface Scelta { option: string; qty: number; seats?: string[] }
 
 const VUOTO = {
   customer_name: '',
@@ -205,6 +258,14 @@ export default function PreventiviLavaggioView() {
   const [convAcconto, setConvAcconto] = useState('0')
   const [convConferma, setConvConferma] = useState(true)
   const [convInvio, setConvInvio] = useState(false)
+  // 05/10/2026 (direzione): "su PRIME SEAT CLEAN non si apre lo schema dei
+  // sedili". Il preventivo sceglieva solo QUANTI sedili con la quantita'; ora
+  // apre la stessa pianta di sito e Prenotazioni Lavaggio.
+  const [seatPer, setSeatPer] = useState<ServizioLavaggio | null>(null)
+  // Filtri e pagina della lista, come su Preventivi Noleggio.
+  const [filtroStato, setFiltroStato] = useState<string>('all')
+  const [ricerca, setRicerca] = useState('')
+  const [pagina, setPagina] = useState(1)
 
   /* --------------------------- caricamento dati --------------------------- */
 
@@ -307,7 +368,9 @@ export default function PreventiviLavaggioView() {
     let primo = true
     return serviziScelti.map(s => {
       const sc = form.scelte[s.id]
-      const qty = Math.max(1, sc.qty || 1)
+      const seats = normalizeSeats(sc.seats)
+      // Servizio a sedile: la quantita' e' sempre il numero di sedili scelti.
+      const qty = seats.length || Math.max(1, sc.qty || 1)
       const prezzo = prezzoDi(s, sc.option || '')
       // `principale` marca la prima voce non-extra: serve solo a riaprire il
       // preventivo sulla scheda giusta, non cambia prezzi ne' durata.
@@ -322,19 +385,25 @@ export default function PreventiviLavaggioView() {
         subtotal: prezzo * qty,
         durationMinutes: durataInMinuti(s.duration) * qty,
         ...(principale ? { principale: true } : {}),
+        ...(seats.length ? { seats } : {}),
       }
     })
   }, [serviziScelti, form.scelte, prezzoDi])
 
   /** Accende/spegne un servizio del catalogo. */
   const commuta = useCallback((s: ServizioLavaggio) => {
+    // Servizio a sedile non ancora scelto: prima la pianta, poi il carrello.
+    if (!form.scelte[s.id] && isSeatPricedService(s.name, s.price_unit)) {
+      setSeatPer(s)
+      return
+    }
     setForm(f => {
       const scelte = { ...f.scelte }
       if (scelte[s.id]) delete scelte[s.id]
       else scelte[s.id] = { option: s.price_options?.[0]?.label || '', qty: 1 }
       return { ...f, scelte, amount_manuale: false }
     })
-  }, [])
+  }, [form.scelte])
   /** Toglie un servizio dal preventivo (dal riepilogo). */
   const togli = useCallback((id: string) => {
     setForm(f => {
@@ -419,7 +488,11 @@ export default function PreventiviLavaggioView() {
       vehicle_name: p.vehicle_name || '',
       vehicle_plate: p.vehicle_plate || '',
       main_tab: (servizioDb?.main_tab === 'meccanica' ? 'meccanica' : 'lavaggio'),
-      scelte: Object.fromEntries(items.map(i => [i.serviceId, { option: i.option || '', qty: i.quantity || 1 }])),
+      scelte: Object.fromEntries(items.map(i => [i.serviceId, {
+        option: i.option || '',
+        qty: i.quantity || 1,
+        ...(normalizeSeats(i.seats).length ? { seats: normalizeSeats(i.seats) } : {}),
+      }])),
       prime_flex: !!dett?.prime_flex,
       appointment_date: p.start_date ? p.start_date.substring(0, 10) : '',
       appointment_time: p.start_time || '09:00',
@@ -667,6 +740,7 @@ export default function PreventiviLavaggioView() {
             price: i.price,
             option: i.option,
             subtotal: i.subtotal,
+            ...(normalizeSeats(i.seats).length ? { seats: normalizeSeats(i.seats) } : {}),
           })),
           totalDuration: durataBooking || 0,
           amountPaid: accontoCents,
@@ -681,7 +755,7 @@ export default function PreventiviLavaggioView() {
         },
         created_at: new Date().toISOString(),
       }
-      const { error } = await supabase.from('bookings').insert(payload).select('id').single()
+      const { data: creata, error } = await supabase.from('bookings').insert(payload).select('id').single()
       if (error) { toast.error('Conversione fallita: ' + error.message); return }
       await supabase.from('noleggio_preventivi')
         .update({ status: 'convertito', updated_at: new Date().toISOString() }).eq('id', p.id)
@@ -690,8 +764,74 @@ export default function PreventiviLavaggioView() {
       toast.success(pagato
         ? 'Convertito in appuntamento (Pagato) — lo trovi in Prenotazioni e in Calendario'
         : 'Convertito in appuntamento (Da Saldare) — lo trovi in Prenotazioni e in Calendario')
+      await inviaConfermaCliente(p, creata?.id || '', inizio || '', pagato, pagato || convConferma)
     } finally {
       setConvInvio(false)
+    }
+  }
+
+  /**
+   * 05/10/2026 (direzione): "ho accettato il preventivo e al cliente non e'
+   * arrivato niente". La conversione creava la prenotazione e basta: nessun
+   * messaggio. Ora parte la STESSA conferma che manda Prenotazioni Lavaggio
+   * (CarWashBookingsTab) quando si salva un appuntamento: template
+   * carwash_new_customer / mechanical_new_customer, piu' la ricevuta per
+   * metodo se e' gia' pagato. Stesse regole: Da Saldare senza Conferma =
+   * nessun messaggio. La lingua la sceglie il server dal prefisso.
+   */
+  async function inviaConfermaCliente(p: RigaPreventivo, bookingId: string, inizioIso: string, pagato: boolean, confermata: boolean) {
+    const tel = (p.customer_phone || '').replace(/\D/g, '')
+    if (!tel) { toast('Appuntamento creato, ma il preventivo non ha un telefono: nessun messaggio inviato', { icon: '!' }); return }
+    if (!pagato && !confermata) return
+    const servizioPrincipale = servizi.find(x => x.id === (p.carwash_servizi?.items || [])[0]?.serviceId)
+    const isMech = servizioPrincipale?.main_tab === 'meccanica'
+    const svc = isMech ? 'mechanical' : 'car_wash'
+    const dt = new Date(inizioIso)
+    const data = dt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+    const dataLunga = dt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
+    const ora = dt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+    const totale = ((p.amount || 0) / 100).toFixed(2)
+    const nome = (p.customer_name || '').trim().split(/\s+/)[0] || 'Cliente'
+    const servizio = p.asset_name || 'Lavaggio'
+    const pagamento = pagato ? 'Pagato' : 'Da saldare'
+    const rif = bookingId.substring(0, 8).toUpperCase()
+    const templateVars = {
+      customer_name: nome, nome,
+      service_name: servizio, servizio,
+      appointment_date: data, appointment_time: ora, date: data, time: ora, data, ora, data_lunga: dataLunga,
+      total: totale, totale, amount: totale, importo: totale,
+      vehicle_plate: p.vehicle_plate || '', targa: p.vehicle_plate || '', plate: p.vehicle_plate || '',
+      payment_info: pagamento, payment_status: pagamento, pagamento,
+      booking_id: rif, booking_ref: rif,
+      notes: p.notes || '', note: p.notes || '',
+    }
+    const invia = (templateKey: string) => fetch('/.netlify/functions/send-whatsapp-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customPhone: tel, templateKey, booking: { service_type: svc }, templateVars, skipHeader: true }),
+    })
+    try {
+      const risposta = await invia(isMech ? 'mechanical_new_customer' : 'carwash_new_customer')
+      const esito = await risposta.json().catch(() => ({}))
+      if (!risposta.ok || esito?.skipped) {
+        toast.error(`Appuntamento creato, ma la conferma WhatsApp non e' partita: template ${isMech ? 'Conferma Meccanica' : 'Conferma Lavaggio'} mancante o spento in Messaggi di Sistema Pro`, { duration: 10000 })
+        return
+      }
+      toast.success('Conferma inviata al cliente su WhatsApp')
+      // Ricevuta per metodo, come in Prenotazioni Lavaggio: solo se pagato.
+      if (pagato) {
+        const pm = String(convMetodo || '').toLowerCase().trim()
+        const pref = isMech ? 'mechanical' : 'carwash'
+        let evento: string | null = null
+        if (pm.includes('contanti') || pm === 'cash' || pm === 'prepagata') evento = `${pref}_paid_cash`
+        else if (pm.includes('carta') || pm.includes('bancomat') || pm === 'pos') evento = `${pref}_paid_card`
+        else if (pm.includes('bonifico') || pm.includes('sepa')) evento = `${pref}_paid_bank_transfer`
+        else if (pm === 'paypal') evento = `${pref}_paid_paypal`
+        else if (pm.includes('wallet') || pm === 'credit wallet') evento = `${pref}_paid_wallet`
+        if (evento) void invia(evento).catch(err => console.error(`Ricevuta WhatsApp (${evento}) non inviata:`, err))
+      }
+    } catch (e) {
+      toast.error('Appuntamento creato, ma errore invio WhatsApp: ' + (e instanceof Error ? e.message : String(e)))
     }
   }
 
@@ -699,10 +839,10 @@ export default function PreventiviLavaggioView() {
 
   return (
     <div className="space-y-4">
-      <Header
-        title="Lavaggio & Meccanica — Preventivi"
-        action={<button onClick={apriNuovo} className={BTN_PRIMARY}>+ Nuovo preventivo</button>}
-      />
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-theme-text-primary">Preventivi</h2>
+        <Button onClick={apriNuovo}>+ Nuovo Preventivo</Button>
+      </div>
       {errore && <ErrorBox msg={errore} />}
       {colonneDettaglio === false && (
         <div className="bg-amber-500/10 border border-amber-500/40 text-amber-300 px-4 py-3 rounded-lg text-sm">
@@ -795,13 +935,24 @@ export default function PreventiviLavaggioView() {
                                 ))}
                               </select>
                             )}
-                            {/* Quantita': due auto dello stesso cliente = 2. Moltiplica
-                                prezzo E durata, cosi' l'appuntamento occupa il tempo vero. */}
+                            {/* Servizio a sedile: la quantita' si cambia solo dalla
+                                pianta, cosi' in officina si sa QUALI sedili. */}
+                            {isSeatPricedService(s.name, s.price_unit) ? (
+                              <button type="button" onClick={() => setSeatPer(s)}
+                                className="text-xs font-semibold text-dr7-gold hover:underline text-left">
+                                {normalizeSeats(sc.seats).length
+                                  ? `Sedili: ${seatListLabel(sc.seats || [], 'it')} — modifica`
+                                  : 'Scegli i sedili'}
+                              </button>
+                            ) : (
+                            /* Quantita': due auto dello stesso cliente = 2. Moltiplica
+                                prezzo E durata, cosi' l'appuntamento occupa il tempo vero. */
                             <label className="flex items-center gap-1 text-xs text-theme-text-muted">
                               Quantita'
                               <input className={`${INPUT_CLS} py-1 w-16`} inputMode="numeric" value={String(sc.qty)}
                                 onChange={ev => aggiorna(s.id, { qty: Math.max(1, parseInt(ev.target.value.replace(/\D/g, '') || '1', 10)) })} />
                             </label>
+                            )}
                           </div>
                         )}
                         {sc && s.price_unit === 'custom' && (
@@ -823,6 +974,7 @@ export default function PreventiviLavaggioView() {
                 <div key={v.serviceId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                   <span className="text-theme-text-primary min-w-0 truncate">
                     {v.serviceName}{v.option ? ` (${v.option})` : ''}{v.quantity > 1 ? ` x${v.quantity}` : ''}
+                    {v.seats?.length ? <span className="block text-xs text-theme-text-muted">{seatListLabel(v.seats, 'it')}</span> : null}
                   </span>
                   <span className="flex items-center gap-3 shrink-0">
                     <span className="text-xs text-theme-text-muted tabular-nums">{durataLeggibile(v.durationMinutes)}</span>
@@ -908,67 +1060,281 @@ export default function PreventiviLavaggioView() {
         </div>
       )}
 
+      {/* ─── Panoramica Preventivi: riquadri per stato, come su Noleggio ─── */}
+      {(() => {
+        const conta = (st: string) => righe.filter(r => r.status === st).length
+        const totale = righe.length
+        const pct = (n: number) => totale > 0 ? `${(n / totale * 100).toFixed(1).replace('.', ',')}% del totale` : '—'
+        const cards: { key: string; label: string; value: number; sub: string; tone: string; iconBg: string; iconColor: string; ring: string; svg: React.ReactNode }[] = [
+          { key: 'all', label: 'Tutti i Preventivi', value: totale, sub: 'Totale', tone: 'text-cyan-300', iconBg: 'bg-cyan-500/15', iconColor: 'text-cyan-300', ring: 'ring-cyan-500/30',
+            svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/> },
+          { key: 'bozza', label: 'Bozza', value: conta('bozza'), sub: pct(conta('bozza')), tone: 'text-slate-300', iconBg: 'bg-slate-500/15', iconColor: 'text-slate-300', ring: 'ring-slate-500/30',
+            svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/> },
+          { key: 'inviato', label: 'Inviati', value: conta('inviato'), sub: pct(conta('inviato')), tone: 'text-blue-300', iconBg: 'bg-blue-500/15', iconColor: 'text-blue-300', ring: 'ring-blue-500/30',
+            svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/> },
+          { key: 'accettato', label: 'Accettati', value: conta('accettato'), sub: pct(conta('accettato')), tone: 'text-emerald-300', iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-300', ring: 'ring-emerald-500/30',
+            svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/> },
+          { key: 'convertito', label: 'Convertiti', value: conta('convertito'), sub: pct(conta('convertito')), tone: 'text-emerald-300', iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-300', ring: 'ring-emerald-500/30',
+            svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/> },
+          { key: 'rifiutato', label: 'Rifiutati', value: conta('rifiutato'), sub: pct(conta('rifiutato')), tone: 'text-rose-300', iconBg: 'bg-rose-500/15', iconColor: 'text-rose-300', ring: 'ring-rose-500/30',
+            svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/> },
+        ]
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1.5">
+            {cards.map(c => {
+              const attivo = filtroStato === c.key
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => { setFiltroStato(c.key); setPagina(1) }}
+                  className={`relative overflow-hidden text-left rounded-lg px-2.5 py-1.5 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm ${
+                    attivo
+                      ? `${c.ring} ring-2 shadow-[0_0_18px_-10px_rgba(34,211,238,0.4)]`
+                      : `ring-theme-border ${c.ring.replace('/30', '/10')}`
+                  }`}
+                >
+                  <div className={`absolute -top-4 -right-4 w-14 h-14 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-50`}/>
+                  <div className="relative flex items-center gap-2">
+                    <div className={`grid w-6 h-6 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring} shrink-0`}>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-[9px] uppercase tracking-[0.12em] font-bold ${c.tone} truncate leading-none`}>{c.label}</p>
+                      <p className="text-base font-bold text-theme-text-primary tabular-nums leading-tight">{c.value}</p>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-theme-text-muted/80 font-mono truncate relative mt-0.5">{c.sub}</p>
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {/* Filtri per stato + ricerca */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {['all', 'bozza', 'inviato', 'accettato', 'convertito', 'rifiutato'].map(st => {
+          const n = st === 'all' ? righe.length : righe.filter(r => r.status === st).length
+          const attivo = filtroStato === st
+          return (
+            <button
+              key={st}
+              onClick={() => { setFiltroStato(st); setPagina(1) }}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ring-1 ${
+                attivo
+                  ? 'bg-cyan-500/15 text-cyan-200 ring-cyan-500/40'
+                  : 'bg-theme-bg-tertiary text-theme-text-muted ring-transparent hover:text-theme-text-primary hover:ring-theme-border'
+              }`}
+            >
+              {st === 'all' ? 'Tutti' : STATUS_LABELS[st]} <span className="opacity-60 font-mono ml-1">({n})</span>
+            </button>
+          )
+        })}
+        <input
+          className={`${INPUT_CLS} ml-auto w-full sm:w-64 py-1.5`}
+          placeholder="Cerca cliente, telefono, targa, servizio"
+          value={ricerca}
+          onChange={e => { setRicerca(e.target.value); setPagina(1) }}
+        />
+      </div>
+
       {caricamento && <ScheletroTabella righe={6} colonne={6} />}
-      {!caricamento && righe.length === 0 && !errore && <EmptyBox msg="Nessun preventivo." />}
-      {righe.length > 0 && (
-        <div className="overflow-x-auto border border-theme-border rounded-lg">
-          <table className="w-full text-sm">
-            <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Cliente</th>
-                <th className="text-left px-3 py-2 font-medium">Servizio</th>
-                <th className="text-left px-3 py-2 font-medium">Veicolo</th>
-                <th className="text-left px-3 py-2 font-medium">Appuntamento</th>
-                <th className="text-left px-3 py-2 font-medium">Stato</th>
-                <th className="text-right px-3 py-2 font-medium">Importo</th>
-                <th className="text-right px-3 py-2 font-medium">Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {righe.map(p => (
-                <tr key={p.id} className="border-t border-theme-border hover:bg-theme-bg-hover align-top">
-                  <td className="px-3 py-2 text-theme-text-primary">{p.customer_name || '—'}</td>
-                  <td className="px-3 py-2 text-theme-text-secondary">
-                    {p.asset_name || '—'}
-                    {p.duration_minutes ? <span className="block text-xs text-theme-text-muted">{durataLeggibile(p.duration_minutes)}</span> : null}
-                  </td>
-                  <td className="px-3 py-2 text-theme-text-secondary">
-                    {p.vehicle_name || '—'}
-                    {p.vehicle_plate ? <span className="block text-xs font-mono text-theme-text-muted">{p.vehicle_plate}</span> : null}
-                  </td>
-                  <td className="px-3 py-2 text-theme-text-secondary tabular-nums">
-                    {dataIt(p.start_date)}{p.start_time ? ` · ${p.start_time}` : ''}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge value={p.status} />
-                    {p.whatsapp_sent_at && (
-                      <span className="block text-[11px] text-theme-text-muted tabular-nums pt-1">
-                        inviato {dataIt(p.whatsapp_sent_at)}
+      {(() => {
+        if (caricamento) return null
+        const q = ricerca.trim().toLowerCase()
+        const qCifre = q.replace(/\D/g, '')
+        const filtrate = righe.filter(r => {
+          if (filtroStato !== 'all' && r.status !== filtroStato) return false
+          if (!q) return true
+          const testo = [r.customer_name, r.asset_name, r.vehicle_name, r.vehicle_plate, r.notes].filter(Boolean).join(' ').toLowerCase()
+          if (testo.includes(q)) return true
+          return qCifre.length >= 3 && (r.customer_phone || '').replace(/\D/g, '').includes(qCifre)
+        })
+        if (filtrate.length === 0) {
+          return !errore ? (
+            <div className="rounded-2xl ring-1 ring-theme-border bg-theme-bg-secondary/40 px-4 py-10 text-center text-sm text-theme-text-muted">
+              {righe.length === 0 ? 'Nessun preventivo.' : 'Nessun preventivo con questi filtri.'}
+            </div>
+          ) : null
+        }
+        const totPagine = Math.max(1, Math.ceil(filtrate.length / PER_PAGINA))
+        const paginaSicura = Math.min(pagina, totPagine)
+        const righePagina = filtrate.slice((paginaSicura - 1) * PER_PAGINA, paginaSicura * PER_PAGINA)
+
+        /** Le stesse azioni di prima, raccolte nel menu Gestisci. */
+        const sezioniGestisci = (p: RigaPreventivo): GestisciSection[] => {
+          const aperto = p.status !== 'convertito'
+          return [
+            {
+              title: 'Preventivo',
+              actions: [
+                { label: 'Modifica', onClick: () => apriModifica(p) },
+                { label: p.whatsapp_sent_at ? 'Reinvia su WhatsApp' : 'Invia su WhatsApp', onClick: () => { setWaPer(p); setWaTel(p.customer_phone || '') } },
+              ],
+            },
+            {
+              title: 'Esito',
+              actions: [
+                // Accetta = crea l'appuntamento e manda la conferma al
+                // cliente, come l'Accetta del Noleggio Terra.
+                { label: 'Accetta e crea appuntamento', onClick: () => apriConversione(p), visible: aperto },
+                { label: 'Rifiuta', onClick: () => cambiaStato(p, 'rifiutato'), visible: aperto && p.status !== 'rifiutato' },
+              ],
+            },
+            {
+              title: 'Archivio',
+              actions: [
+                { label: 'Elimina', onClick: () => elimina(p) },
+              ],
+            },
+          ]
+        }
+
+        return (
+          <>
+            {/* Desktop: lista a griglia, stessa di Preventivi Noleggio */}
+            <div className="hidden sm:block bg-theme-bg-secondary/40 rounded-2xl ring-1 ring-theme-border overflow-hidden">
+              <div className={`grid ${COLONNE_LISTA} gap-2 px-4 py-3 border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.14em] text-theme-text-muted`}>
+                <span>Preventivo</span>
+                <span>Cliente</span>
+                <span>Appuntamento</span>
+                <span>Durata</span>
+                <span className="text-right">Totale</span>
+                <span>Stato</span>
+                <span className="text-right">Azioni</span>
+              </div>
+              <div className="divide-y divide-theme-border/50">
+                {righePagina.map(p => {
+                  const sb = badgeStato(p.status)
+                  return (
+                    <div key={p.id} className={`grid ${COLONNE_LISTA} gap-2 px-4 py-3 items-center transition-colors hover:bg-theme-bg-tertiary/30`}>
+                      {/* Preventivo: servizi + veicolo + targa */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-14 h-10 shrink-0 rounded-md ring-1 ring-theme-border bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary grid place-items-center text-theme-text-muted">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-bold text-theme-text-primary truncate" title={p.asset_name || ''}>{p.asset_name || '—'}</div>
+                          {(p.vehicle_name || p.vehicle_plate) && (
+                            <div className="text-[10px] text-theme-text-muted truncate">
+                              {p.vehicle_name || ''}{p.vehicle_plate ? <span className="font-mono">{p.vehicle_name ? ' · ' : ''}{p.vehicle_plate}</span> : null}
+                            </div>
+                          )}
+                          {p.created_at && <div className="text-[9px] text-theme-text-muted/70 truncate">Creato {dataIt(p.created_at)}</div>}
+                        </div>
+                      </div>
+
+                      {/* Cliente */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {p.customer_name || p.customer_phone ? (
+                          <>
+                            <div className={`grid w-8 h-8 place-items-center rounded-full ring-1 text-[10px] font-bold shrink-0 ${coloreAvatar(p.customer_name || p.customer_phone || p.id)}`}>
+                              {iniziali(p.customer_name || p.customer_phone)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[12px] font-semibold text-theme-text-primary truncate flex items-center gap-1.5">
+                                {p.customer_name || '—'}
+                                <ClientStatusBadge phone={p.customer_phone} />
+                              </div>
+                              {p.customer_phone && <div className="text-[10px] font-mono text-theme-text-muted truncate">{p.customer_phone}</div>}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-theme-text-muted italic">Nessun cliente</span>
+                        )}
+                      </div>
+
+                      {/* Appuntamento */}
+                      <div className="text-[11px] text-theme-text-secondary leading-tight tabular-nums">
+                        <div className="font-medium">{dataIt(p.start_date)}</div>
+                        <div className="text-theme-text-muted">{p.start_time || ''}{p.start_time && p.end_time ? ` → ${p.end_time}` : ''}</div>
+                      </div>
+
+                      {/* Durata */}
+                      <div className="text-[12px] font-mono text-theme-text-primary tabular-nums">{p.duration_minutes ? durataLeggibile(p.duration_minutes) : '—'}</div>
+
+                      {/* Totale */}
+                      <div className="text-right">
+                        <div className="text-[13px] font-bold text-theme-text-primary tabular-nums">{eur(p.amount)}</div>
+                        <div className="text-[9px] text-theme-text-muted">IVA inclusa</div>
+                      </div>
+
+                      {/* Stato */}
+                      <div className="min-w-0">
+                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ring-1 ${sb.bg}`}>
+                          {STATUS_LABELS[p.status] || p.status}
+                        </span>
+                        {sb.sub && <div className={`text-[10px] mt-0.5 truncate ${sb.subColor}`}>{sb.sub}</div>}
+                        {p.whatsapp_sent_at && <div className="text-[10px] text-emerald-400/80 truncate tabular-nums">Inviato {dataIt(p.whatsapp_sent_at)}</div>}
+                      </div>
+
+                      {/* Azioni */}
+                      <div className="flex justify-end">
+                        <GestisciMenu sections={sezioniGestisci(p)} size="sm" />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Mobile: card, come su Preventivi Noleggio */}
+            <div className="sm:hidden space-y-2">
+              {righePagina.map(p => {
+                const sb = badgeStato(p.status)
+                return (
+                  <div key={p.id} className="bg-theme-bg-tertiary/60 rounded-2xl p-4 border border-theme-border/60">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[15px] font-semibold text-theme-text-primary truncate">{p.asset_name || '—'}</div>
+                        {p.customer_name && (
+                          <div className="text-[12px] text-theme-text-muted truncate flex items-center gap-1.5 flex-wrap">
+                            <span className="truncate">{p.customer_name}{p.customer_phone ? ` · ${p.customer_phone}` : ''}</span>
+                            <ClientStatusBadge phone={p.customer_phone} />
+                          </div>
+                        )}
+                        {!p.customer_name && p.customer_phone && <div className="text-[12px] text-theme-text-muted">{p.customer_phone}</div>}
+                      </div>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ring-1 ${sb.bg}`}>
+                        {STATUS_LABELS[p.status] || p.status}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(p.amount)}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    {p.status !== 'convertito' && (
-                      <button onClick={() => apriConversione(p)} className="text-dr7-gold hover:underline font-semibold mr-3">Converti</button>
-                    )}
-                    {p.status !== 'accettato' && p.status !== 'convertito' && (
-                      <button onClick={() => cambiaStato(p, 'accettato')} className="text-emerald-400 hover:underline mr-3">Accetta</button>
-                    )}
-                    {p.status !== 'rifiutato' && p.status !== 'convertito' && (
-                      <button onClick={() => cambiaStato(p, 'rifiutato')} className="text-amber-400 hover:underline mr-3">Rifiuta</button>
-                    )}
-                    <button onClick={() => { setWaPer(p); setWaTel(p.customer_phone || '') }}
-                      className="text-emerald-400 hover:underline mr-3">WhatsApp</button>
-                    <button onClick={() => apriModifica(p)} className="text-theme-text-secondary hover:underline mr-3">Modifica</button>
-                    <button onClick={() => elimina(p)} className="text-red-400 hover:underline">Elimina</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                    </div>
+                    <div className="grid grid-cols-[1fr_auto] gap-y-1 gap-x-3 text-[12px]">
+                      <span className="text-theme-text-muted">Appuntamento</span>
+                      <span className="text-theme-text-primary tabular-nums">
+                        {dataIt(p.start_date)}{p.start_time ? ` · ${p.start_time}` : ''}
+                        {p.duration_minutes ? <span className="text-theme-text-muted ml-1">· {durataLeggibile(p.duration_minutes)}</span> : null}
+                      </span>
+                      {(p.vehicle_name || p.vehicle_plate) && (<>
+                        <span className="text-theme-text-muted">Veicolo</span>
+                        <span className="text-theme-text-primary truncate">{[p.vehicle_name, p.vehicle_plate].filter(Boolean).join(' · ')}</span>
+                      </>)}
+                      <span className="text-theme-text-muted">Totale</span>
+                      <span className="text-dr7-gold font-semibold tabular-nums">{eur(p.amount)}</span>
+                    </div>
+                    <div className="flex justify-end mt-3 pt-3 border-t border-theme-border/40">
+                      <GestisciMenu sections={sezioniGestisci(p)} size="md" />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {totPagine > 1 && (
+              <div className="flex items-center justify-between gap-3 text-[12px] text-theme-text-muted">
+                <span className="tabular-nums">{filtrate.length} preventivi · pagina {paginaSicura} di {totPagine}</span>
+                <div className="flex gap-1.5">
+                  <button type="button" disabled={paginaSicura <= 1} onClick={() => setPagina(paginaSicura - 1)}
+                    className="px-3 py-1.5 rounded-lg ring-1 ring-theme-border bg-theme-bg-tertiary text-theme-text-primary disabled:opacity-40">Precedente</button>
+                  <button type="button" disabled={paginaSicura >= totPagine} onClick={() => setPagina(paginaSicura + 1)}
+                    className="px-3 py-1.5 rounded-lg ring-1 ring-theme-border bg-theme-bg-tertiary text-theme-text-primary disabled:opacity-40">Successiva</button>
+                </div>
+              </div>
+            )}
+          </>
+        )
+      })()}
 
       {/* --- Invio WhatsApp: si conferma il numero, il testo arriva dal
              template Pro. Stesso passaggio del preventivo Noleggio Terra. --- */}
@@ -991,6 +1357,26 @@ export default function PreventiviLavaggioView() {
             </div>
           </div>
         </div>
+      )}
+
+      {seatPer && (
+        <SeatPlanPicker
+          serviceName={seatPer.name}
+          unitPrice={prezzoDi(seatPer, form.scelte[seatPer.id]?.option || seatPer.price_options?.[0]?.label || '')}
+          initialSeats={form.scelte[seatPer.id]?.seats || []}
+          onClose={() => setSeatPer(null)}
+          onConfirm={seats => {
+            const s = seatPer
+            setForm(f => {
+              const scelte = { ...f.scelte }
+              const pulite = normalizeSeats(seats)
+              if (pulite.length === 0) delete scelte[s.id]
+              else scelte[s.id] = { option: f.scelte[s.id]?.option ?? (s.price_options?.[0]?.label || ''), qty: pulite.length, seats: pulite }
+              return { ...f, scelte, amount_manuale: false }
+            })
+            setSeatPer(null)
+          }}
+        />
       )}
 
       {/* --- Conversione in appuntamento: metodo, stato e acconto prima di
