@@ -97,6 +97,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'avviso_slot_occupato',
+    label: 'Popup rosso slot occupato (avviso, non OTP)',
+    used_in: 'Prenotazioni + Preventivi > scelta mezzo e Salva su slot gia prenotato',
+    reason: 'Popup rosso con sirena che mostra la prenotazione gia presente: si sceglie se procedere comunque.',
+    group: 'Noleggio',
+    wired: true,
+  },
+  {
     id: 'pickup_in_past',
     label: 'Data ritiro nel passato',
     used_in: 'Salva prenotazione con pickup_date < oggi',

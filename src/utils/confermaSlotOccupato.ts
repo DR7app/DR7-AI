@@ -1,4 +1,5 @@
 import { AlarmSoundPlayer } from './alarmSounds'
+import { isOtpRequired } from './otpConfigCache'
 
 // 05/10/2026 (direzione): uno slot gia' occupato deve SEMPRE avvisare,
 // anche per chi ha role:bypass-otp o quando l'OTP slot_unavailable e'
@@ -12,6 +13,9 @@ import { AlarmSoundPlayer } from './alarmSounds'
 let aperto: Promise<boolean> | null = null
 
 export function confermaSlotOccupato(dettaglio: string): Promise<boolean> {
+  // Interruttore in Gestione OTP (riga 'avviso_slot_occupato'): spento =
+  // nessun popup. Riga assente o cache non caricata = popup acceso.
+  if (!isOtpRequired('avviso_slot_occupato')) return Promise.resolve(true)
   // Un solo popup per volta (scelta mezzo + Salva ravvicinati).
   if (aperto) return aperto
 
