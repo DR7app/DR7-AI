@@ -11,6 +11,8 @@
  * EMTN registra FATTI CONTRATTUALI documentati, mai giudizi sulla persona.
  */
 
+import { categoriaScoreValida } from './emtnScore/regole'
+
 export interface CategoriaEMTN {
     codice: number
     area: number
@@ -267,6 +269,9 @@ export const CAMPI_EVENTO: { chiave: string; label: string; tipo: 'testo' | 'dat
     // 01/10/2026: per l'EMTN Score (src/utils/emtnScore), ricavati dai documenti.
     { chiave: 'comunicazione_cliente', label: "Comunicazione dell'evento da parte del cliente (SPONTANEA / SU_RICHIESTA / OMESSA)", tipo: 'testo' },
     { chiave: 'responsabilita', label: 'Responsabilita\' (ACCERTATA / CONTESTATA / NON_ATTRIBUIBILE)', tipo: 'testo' },
+    // 05/10/2026: l'AI propone la categoria delle regole di punteggio
+    // (src/utils/emtnScore/regole.ts); i punti li calcola il motore.
+    { chiave: 'categoria_score', label: 'Categoria punteggio EMTN (proposta)', tipo: 'testo' },
 ]
 
 export type DatiEvento = Record<string, string | number | null>
@@ -414,6 +419,16 @@ export function normalizzaRisultato(input: unknown): { risultato: RisultatoAnali
             const v = e?.dati?.[campo.chiave]
             if (v == null || v === '' || String(v).toUpperCase() === NON_RISULTA) { dati[campo.chiave] = null; continue }
             dati[campo.chiave] = campo.tipo === 'importo' ? numero(v) : String(v).trim()
+        }
+        // Categoria di punteggio fuori elenco: tolta (il motore usera' il codice).
+        // Furto e frode non si propongono: sono informazioni legali (decide la direzione).
+        if (dati.categoria_score === 'furto' || dati.categoria_score === 'frode') {
+            avvisi.push(`${categoriaEMTN(codice)?.label}: categoria "${dati.categoria_score}" non ammessa nella pratica, decide la direzione`)
+            dati.categoria_score = null
+        }
+        if (dati.categoria_score != null && !categoriaScoreValida(dati.categoria_score)) {
+            avvisi.push(`${categoriaEMTN(codice)?.label}: categoria punteggio "${dati.categoria_score}" non prevista dalle regole, ignorata`)
+            dati.categoria_score = null
         }
         const residuo = residuoEvento(dati)
         if (residuo != null) {

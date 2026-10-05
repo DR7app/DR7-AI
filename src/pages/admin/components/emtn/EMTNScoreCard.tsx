@@ -7,6 +7,10 @@
  * Tutto quello che si vede qui arriva dal motore (src/utils/emtnScore):
  * score, confidence, livello, trend, fattori, flag, spiegazione e storico
  * dei ricalcoli. La direzione puo' intervenire a mano, sempre con motivo.
+ *
+ * 05/10/2026: regole fisse della direzione. La scheda mostra il registro
+ * del punteggio: ogni variazione con contratto, motivo, prove e stato del
+ * pagamento; blocchi (insoluto/sicurezza) ed eventi in revisione umana.
  */
 import { useState } from 'react'
 import { authFetch } from '../../../../utils/authFetch'
@@ -23,6 +27,20 @@ export interface EMTNScoreUI {
     scorePrecedente6Mesi: number | null
     profiloInCostruzione: boolean
     revisioneManuale: boolean
+    blocco?: 'sicurezza' | 'insoluto' | null
+    revisioni?: string[]
+    movimenti?: Array<{
+        data: string | null
+        tipo: string
+        categoria: string
+        contratto: string | null
+        motivo: string
+        punti: number
+        score: number
+        prove: string[]
+        statoPagamento: string | null
+        importo: number | null
+    }>
     flag: Array<{ codice: string; label: string; tetto: number }>
     positivi: string[]
     rischi: string[]
@@ -60,6 +78,20 @@ const TREND: Record<EMTNScoreUI['trend'], string> = {
     Stable: 'Stabile',
     Deteriorating: 'In peggioramento',
 }
+const STATI_PAGAMENTO: Record<string, string> = {
+    pagato: 'pagato',
+    parziale: 'pagato in parte',
+    aperto: 'non pagato',
+    non_applicabile: 'nessun importo',
+}
+
+function dataBreve(v: string | null): string {
+    if (!v) return 'data non nota'
+    const d = new Date(v)
+    if (!Number.isFinite(d.getTime())) return 'data non nota'
+    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+}
+
 const TIPI_OVERRIDE: Array<{ id: string; label: string }> = [
     { id: 'limite_massimo', label: 'Limite massimo' },
     { id: 'score_fisso', label: 'Score fisso' },
@@ -100,6 +132,8 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
     onAggiornato: () => void
 }) {
     const [apriStorico, setApriStorico] = useState(false)
+    const [apriRegistro, setApriRegistro] = useState(false)
+    const [registroCompleto, setRegistroCompleto] = useState(false)
     const [apriOverride, setApriOverride] = useState(false)
     const [tipo, setTipo] = useState('limite_massimo')
     const [valore, setValore] = useState('')
@@ -174,7 +208,15 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
 
             {score.profiloInCostruzione && (
                 <p className="text-[11px] rounded-lg border border-theme-border bg-theme-bg-secondary px-2.5 py-1.5 text-theme-text-secondary">
-                    Profilo in costruzione: storico insufficiente. L'assenza di problemi non e' ancora prova di affidabilita'.
+                    Cliente nuovo: storico insufficiente. Punteggio di partenza 50/100.
+                </p>
+            )}
+
+            {score.blocco && (
+                <p className="text-[11px] rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-red-700 dark:text-red-300 font-semibold">
+                    {score.blocco === 'insoluto'
+                        ? "Blocco per insoluto: 0/100 finche' esiste un saldo scaduto."
+                        : 'Blocco di sicurezza: 0/100, nessuna risalita automatica. Solo revisione umana documentata.'}
                 </p>
             )}
 
@@ -182,7 +224,7 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                 <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-2 space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Flag critici · revisione manuale</p>
                     {score.flag.map((f, i) => (
-                        <p key={i} className="text-[11px] text-theme-text-primary">{f.label} <span className="text-theme-text-muted">(max {f.tetto})</span></p>
+                        <p key={i} className="text-[11px] text-theme-text-primary">{f.label}{f.tetto < 100 && <span className="text-theme-text-muted"> (max {f.tetto})</span>}</p>
                     ))}
                 </div>
             )}
@@ -205,6 +247,13 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                 <p className="text-[11px] text-theme-text-muted">
                     {score.dettaglio.eventiInRevisione} segnalazioni in revisione: non pesano finche' la direzione non decide.
                 </p>
+            )}
+
+            {(score.revisioni || []).length > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Revisione umana · nessun punto applicato</p>
+                    {(score.revisioni || []).map((r, i) => <p key={i} className="text-[11px] text-theme-text-primary">{r}</p>)}
+                </div>
             )}
 
             {score.positivi.length > 0 && (
@@ -234,6 +283,43 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                     Intervento manuale ({score.override.operatore || 'direzione'}, {dataOra(score.override.creato_il)}): {score.override.motivo}.
                     Score calcolato dal motore: {score.scoreCalcolato}.
                 </p>
+            )}
+
+            {(score.movimenti || []).length > 0 && (
+                <div className="pt-2 border-t border-theme-border">
+                    <button type="button" onClick={() => setApriRegistro(v => !v)}
+                        className="text-[11px] font-medium text-cyan-600 dark:text-cyan-400 hover:underline">
+                        {apriRegistro ? 'Nascondi registro del punteggio' : `Registro del punteggio (${(score.movimenti || []).length} movimenti)`}
+                    </button>
+                    {apriRegistro && (
+                        <div className="mt-2 space-y-1.5">
+                            <p className="text-[10px] text-theme-text-muted">Partenza 50/100. Dal piu' recente.</p>
+                            {[...(score.movimenti || [])].reverse().slice(0, registroCompleto ? undefined : 8).map((m, i) => (
+                                <div key={i} className="rounded-lg border border-theme-border bg-theme-bg-secondary px-2.5 py-1.5">
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <p className="text-[11px] text-theme-text-primary">{m.motivo}</p>
+                                        <p className={`text-[11px] font-semibold tabular-nums shrink-0 ${m.punti > 0 ? 'text-emerald-600 dark:text-emerald-400' : m.punti < 0 ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`}>
+                                            {m.punti > 0 ? `+${m.punti}` : m.punti < 0 ? m.punti : '0'} · {m.score}
+                                        </p>
+                                    </div>
+                                    <p className="text-[10px] text-theme-text-muted">
+                                        {dataBreve(m.data)}
+                                        {m.contratto ? ` · contratto ${m.contratto}` : ''}
+                                        {m.statoPagamento ? ` · ${STATI_PAGAMENTO[m.statoPagamento] || m.statoPagamento}` : ''}
+                                        {m.importo != null ? ` · ${m.importo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR` : ''}
+                                    </p>
+                                    {m.prove.length > 0 && <p className="text-[10px] text-theme-text-muted">Prove: {m.prove.join('; ')}</p>}
+                                </div>
+                            ))}
+                            {(score.movimenti || []).length > 8 && (
+                                <button type="button" onClick={() => setRegistroCompleto(v => !v)}
+                                    className="text-[11px] font-medium text-theme-text-secondary hover:text-theme-text-primary">
+                                    {registroCompleto ? 'Mostra solo gli ultimi 8' : 'Mostra tutti i movimenti'}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
 
             <div className="flex items-center justify-between gap-2 pt-1">
@@ -299,7 +385,7 @@ export default function EMTNScoreCard({ score, clientId, isDirezione, onAggiorna
                 </div>
             )}
 
-            <p className="text-[10px] text-theme-text-muted">Algoritmo {score.versione}. Calcolato a ogni consultazione dai dati documentati.</p>
+            <p className="text-[10px] text-theme-text-muted">Algoritmo {score.versione}. Regole fisse della direzione, ricalcolate a ogni consultazione dai dati documentati.</p>
         </section>
     )
 }

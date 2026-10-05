@@ -12,6 +12,7 @@ import {
     AREE_EMTN, CATEGORIE_EMTN, CAMPI_EVENTO, STATI_EMTN, STATI_CONTESTAZIONE, NON_RISULTA, AVVISO_LEGALE,
     CAMPI_PRATICA, TIPI_DOCUMENTO, ESITI_VERIFICA,
 } from '../../../src/utils/emtnMobilityRisk'
+import { categorieScorePerPrompt } from '../../../src/utils/emtnScore/regole'
 
 /** Ordine di preferenza, identico a extract-document-data.ts. */
 export const MODELLI_EMTN = [
@@ -69,6 +70,8 @@ ${campi}
 comunicazione_cliente: SPONTANEA solo se un documento mostra che il cliente ha comunicato l'evento di sua iniziativa (es. messaggio o verbale prima del controllo dell'operatore); SU_RICHIESTA se lo ha confermato solo dopo la contestazione dell'operatore; OMESSA solo se un documento dimostra che lo ha taciuto o negato a fronte di prove. Altrimenti null.
 responsabilita: ACCERTATA solo se i documenti attribuiscono l'evento al cliente (es. ammissione firmata, constatazione amichevole, perizia, sentenza); CONTESTATA se il cliente la contesta e non e' decisa; NON_ATTRIBUIBILE se risulta un responsabile diverso dal cliente (es. terzo identificato, guasto). Altrimenti null.
 Solo se presenti o ricavabili con certezza dai documenti. Se un dato non risulta, usa null (a schermo diventera' "${NON_RISULTA}"). Non inventare, non presumere, non completare dati mancanti con supposizioni. Il ritardo di riconsegna lo calcola il sistema dalle due date/ore: riportale esattamente.
+categoria_score: per ogni evento proponi UNA categoria del punteggio EMTN tra quelle qui sotto (scrivi solo l'identificativo). Scegli quella che descrive il fatto documentato; se nessuna corrisponde con certezza usa non_previsto. NON indicare punti: li calcola il sistema con regole fisse. Per un incidente distingui: incidente_terzi solo se risulta la responsabilita' esclusiva di un terzo; con responsabilita' del cliente usa danno; danno preesistente, usura o guasto = non_imputabile. Furto e frode NON vanno mai proposti (sono informazioni legali).
+${categorieScorePerPrompt()}
 In "fonti" metti i nomi dei documenti da cui risulta l'evento.
 
 DATI DELLA PRATICA (in "pratica"): ${CAMPI_PRATICA.map(c => c.chiave).join(', ')}. Stesse regole: null se non risulta.

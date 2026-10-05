@@ -23,6 +23,9 @@ import {
     categoriaEMTN, etichettaStato, normalizzaRisultato, motiviRevisioneManuale,
     type RisultatoAnalisi, type EventoEMTN, type ControlloGestionale,
 } from '../../../../utils/emtnMobilityRisk'
+import { REGOLE_SCORE, type GruppoRegola } from '../../../../utils/emtnScore/regole'
+
+const GRUPPI_SCORE: GruppoRegola[] = [...new Set(REGOLE_SCORE.map(r => r.gruppo))]
 
 const OPZIONI_EMTN: OpzioneCategoria[] = CATEGORIE_EMTN.map(c => ({
     id: String(c.codice), label: `${c.codice}. ${c.label}`, helper: c.descrizione, gruppo: `Area ${c.area} – ${AREE_EMTN[c.area]}`,
@@ -408,9 +411,24 @@ export default function EMTNPraticaModal({ open, onClose, onInviata, clientId, n
                                                 {CAMPI_EVENTO.map(c => (
                                                     <label key={c.chiave} className="block">
                                                         <span className="block text-[10px] text-theme-text-muted mb-0.5">{c.label}</span>
-                                                        <input className={inputCls} value={ev.dati[c.chiave] == null ? '' : String(ev.dati[c.chiave])} placeholder={NON_RISULTA}
-                                                            inputMode={c.tipo === 'importo' ? 'decimal' : undefined}
-                                                            onChange={e => aggiornaDato(i, c.chiave, e.target.value)} />
+                                                        {c.chiave === 'categoria_score' ? (
+                                                            // 05/10/2026: l'AI propone, l'operatore conferma; i punti li calcola il motore.
+                                                            <select className={inputCls} value={ev.dati[c.chiave] == null ? '' : String(ev.dati[c.chiave])}
+                                                                onChange={e => aggiornaDato(i, c.chiave, e.target.value)}>
+                                                                <option value="">Dal codice EMTN</option>
+                                                                {GRUPPI_SCORE.map(g => (
+                                                                    <optgroup key={g} label={g}>
+                                                                        {REGOLE_SCORE.filter(r => r.gruppo === g && r.id !== 'furto' && r.id !== 'frode').map(r => (
+                                                                            <option key={r.id} value={r.id}>{r.label}</option>
+                                                                        ))}
+                                                                    </optgroup>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <input className={inputCls} value={ev.dati[c.chiave] == null ? '' : String(ev.dati[c.chiave])} placeholder={NON_RISULTA}
+                                                                inputMode={c.tipo === 'importo' ? 'decimal' : undefined}
+                                                                onChange={e => aggiornaDato(i, c.chiave, e.target.value)} />
+                                                        )}
                                                     </label>
                                                 ))}
                                             </div>

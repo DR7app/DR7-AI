@@ -25,9 +25,9 @@ import {
 import { cercaStoricoRete, copiaDellaRete } from './utils/emtnRete'
 import { categoriaEMTN } from '../../src/utils/emtnMobilityRisk'
 import { calcolaEMTNScore } from '../../src/utils/emtnScore/motore'
-import { classificaVoce, type StatoPagamentoEvento } from '../../src/utils/emtnScore/normalizza'
+import { type StatoPagamentoEvento } from '../../src/utils/emtnScore/normalizza'
 import {
-    eNoleggio, eventiDaEmtnEvents, eventiDaMulte, eventiDaPosizioni, eventiDaRete, eventiDaVociDr7,
+    contrattiPerBooking, eNoleggio, eventiDaEmtnEvents, eventiDaMulte, eventiDaPosizioni, eventiDaRete, eventiDaVociDr7,
     leggiOverride, noleggiNormalizzati, registraStorico, type EmtnEventRow, type MultaRow, type PosizioneRow,
 } from './utils/emtnScoreServer'
 
@@ -243,7 +243,7 @@ export const handler: Handler = async (event) => {
         dropoff_date?: string | null
         vehicle_id?: string | null
         // NB: la chiave JSON usata da DR7 e\' `penalties` (inglese), non `penali`.
-        booking_details?: { danni?: DanniItem[]; penalties?: PenaliItem[] } | null
+        booking_details?: { danni?: DanniItem[]; penalties?: PenaliItem[]; extras?: unknown; parent_booking_id?: string | null } | null
     }
 
     // bookings non ha una colonna CF: l'unica colonna di linkage e\'
@@ -560,42 +560,21 @@ export const handler: Handler = async (event) => {
     const storicoRete = estero ? [] : await cercaStoricoRete(sb, cf)
     const reteResiduo = storicoRete.reduce((t, e) => t + (e.statoPagamento === 'paid' ? 0 : e.residuo), 0)
 
-    // ── EMTN Score (01/10/2026, direzione) ──────────────────
-    // Non piu' un contatore di penalita': tutte le fonti diventano eventi
-    // normalizzati e il motore (src/utils/emtnScore/motore.ts) pesa
-    // gravita', comportamento, tempo, recidiva e storico positivo.
-    // Prezzo giornaliero del veicolo = proxy del valore affidato.
-    const prezzoPerBooking = new Map<string, number | null>()
-    {
-        const vehicleIds = Array.from(new Set(bookings.map(b => b.vehicle_id).filter(Boolean))) as string[]
-        const prezzi = new Map<string, number>()
-        for (let i = 0; i < vehicleIds.length; i += 100) {
-            const { data } = await sb.from('vehicles').select('id, price_resident_daily').in('id', vehicleIds.slice(i, i + 100))
-            for (const v of (data || []) as { id: string; price_resident_daily: number | null }[]) {
-                if (Number(v.price_resident_daily) > 0) prezzi.set(v.id, Number(v.price_resident_daily))
-            }
-        }
-        for (const b of bookings) prezzoPerBooking.set(b.id, b.vehicle_id ? prezzi.get(b.vehicle_id) ?? null : null)
-    }
-    // Multe rinotificate al conducente (multe_pec_log): violazioni documentate.
+    // ── EMTN Score ───────────────────────────────────────────
+    // 05/10/2026 (direzione, "MTN — Regole di punteggio clienti"): registro a
+    // punti fissi (src/utils/emtnScore/regole.ts). Tutte le fonti diventano
+    // eventi normalizzati con la loro categoria; il motore riparte da 50 e
+    // ripercorre la storia. Il numero di contratto accompagna ogni variazione.
+    const contratti = await contrattiPerBooking(sb, bookings.map(b => b.id))
+    // Multe rinotificate al conducente (multe_pec_log): un verbale = una detrazione.
     const multe: MultaRow[] = []
     {
         const ids = bookings.map(b => b.id)
         for (let i = 0; i < ids.length; i += 100) {
-            const { data } = await sb.from('multe_pec_log').select('id, booking_id, data_infrazione, importo').in('booking_id', ids.slice(i, i + 100))
+            const { data } = await sb.from('multe_pec_log').select('id, booking_id, data_infrazione, importo, numero_verbale').in('booking_id', ids.slice(i, i + 100))
             multe.push(...((data || []) as MultaRow[]))
         }
     }
-    // Noleggio "non regolare" solo per fatti veri: km e carburante saldati
-    // sono uso del veicolo e non tolgono lo storico positivo.
-    const vociLievi = new Set(['km', 'carburante', 'regolarizzazione'])
-    const problema = (v: { label: string; stato: string }, tipo: 'danno' | 'penale') =>
-        v.stato !== 'pagato' || !vociLievi.has(classificaVoce(v.label, tipo))
-    const conProblemi = new Set<string>([
-        ...dr7Damages.filter(v => problema(v, 'danno')).map(v => v.bookingId),
-        ...dr7Penalties.filter(v => problema(v, 'penale')).map(v => v.bookingId),
-        ...multe.map(m => String(m.booking_id || '')),
-    ])
     // Data del saldo ricavata in automatico quando la voce non la ha:
     // 1) pagamento Nexi riuscito sulla stessa prenotazione con lo stesso
     //    importo (+-1 EUR), non prima dell'evento; 2) fattura pagata della
@@ -630,17 +609,17 @@ export const handler: Handler = async (event) => {
         }
     }
     const eventiScore = [
-        ...eventiDaVociDr7(dr7Damages, 'danno', prezzoPerBooking),
-        ...eventiDaVociDr7(dr7Penalties, 'penale', prezzoPerBooking),
+        ...eventiDaVociDr7(dr7Damages, 'danno', contratti),
+        ...eventiDaVociDr7(dr7Penalties, 'penale', contratti),
         ...eventiDaRete(storicoRete),
-        ...eventiDaMulte(multe),
+        ...eventiDaMulte(multe, contratti),
         ...eventiDaEmtnEvents((events || []) as EmtnEventRow[]),
-        ...eventiDaPosizioni((posizioni || []) as PosizioneRow[], [...dr7Damages, ...dr7Penalties].map(v => ({ bookingId: v.bookingId, amount: v.amount }))),
+        ...eventiDaPosizioni((posizioni || []) as PosizioneRow[], [...dr7Damages, ...dr7Penalties].map(v => ({ bookingId: v.bookingId, amount: v.amount })), contratti),
     ]
     const override = await leggiOverride(sb, client!.id)
     const emtnScore = calcolaEMTNScore({
         eventi: eventiScore,
-        noleggi: noleggiNormalizzati(bookings, conProblemi, prezzoPerBooking),
+        noleggi: noleggiNormalizzati(bookings, contratti),
         identificato: !estero && !!ext,
         override,
     })

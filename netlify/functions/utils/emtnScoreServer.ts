@@ -1,83 +1,82 @@
 /**
  * EMTN Score lato server: dalle righe del database agli EventoNormalizzato
  * (fase 1), lettura degli override della direzione e storico dei ricalcoli.
- * Il calcolo vero e' in src/utils/emtnScore/motore.ts.
+ * Il calcolo vero e' in src/utils/emtnScore/motore.ts, i punti in regole.ts.
  *
- * 01/10/2026: regola sulle fonti. I fatti critici (furto, frode,
- * mancata restituzione, recupero del veicolo) fanno scattare un flag SOLO
- * se vengono da una pratica EMTN pubblicata o da un emtn_events APPROVED,
- * oppure da un override motivato della direzione. Un nome di voce DR7 come
- * "Furto" o "chiavi non restituite" resta un danno/violazione: puo' essere
- * il furto subito dal cliente, non commesso.
+ * 01/10/2026: regola sulle fonti. I fatti critici (furto, frode) fanno
+ * scattare il blocco SOLO se vengono da un emtn_events APPROVED o da un
+ * override motivato della direzione. Un nome di voce DR7 come "Furto" resta
+ * un danno: puo' essere il furto subito dal cliente, non commesso.
+ *
+ * 05/10/2026: ogni fonte porta la categoria delle regole fisse della
+ * direzione. Le pratiche EMTN usano la categoria proposta dall'AI
+ * (categoria_score) e confermata dall'operatore; senza, il codice EMTN.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-    classificaVoce, dataIso, famigliaCodiceEMTN, giorniTra, ORDINE_FAMIGLIA, statoDaImporti,
-    type EventoNormalizzato, type Famiglia, type NoleggioNormalizzato, type StatoPagamentoEvento,
+    categoriaCodiceEMTN, classificaVoce, dataIso, minutiDaTesto, minutiTra, statoDaImporti,
+    type EventoNormalizzato, type NoleggioNormalizzato, type StatoPagamentoEvento,
 } from '../../../src/utils/emtnScore/normalizza'
 import { VERSIONE_ALGORITMO, type OverrideScore, type RisultatoEMTNScore } from '../../../src/utils/emtnScore/motore'
-
-const CRITICHE_SOLO_DA_EMTN = new Set<Famiglia>(['furto', 'frode', 'falsificazione', 'mancata_restituzione', 'recupero_veicolo'])
-
-/** Famiglia di una voce scritta da un operatore DR7: mai un flag critico. */
-function famigliaVoceInterna(label: string, predefinita: Famiglia): { famiglia: Famiglia; grave: boolean } {
-    const f = classificaVoce(label, predefinita)
-    if (!CRITICHE_SOLO_DA_EMTN.has(f)) return { famiglia: f, grave: false }
-    return f === 'furto' ? { famiglia: 'danno', grave: true } : { famiglia: 'violazione_contratto', grave: false }
-}
+import { categoriaScoreValida, type CategoriaScore } from '../../../src/utils/emtnScore/regole'
 
 const num = (v: unknown): number => {
     const n = Number(String(v ?? '').replace(',', '.'))
     return Number.isFinite(n) ? n : 0
 }
+const PAGATO = new Set(['paid', 'completed', 'succeeded'])
 
 export interface VoceDr7 {
     bookingId: string
     date?: string | null
     label: string
     amount: number
+    quantity?: number
     residuo: number
     stato: StatoPagamentoEvento
     contesto?: {
         paidAt?: string | null
+        scadenza?: string | null
         dichiaratoDalCliente?: boolean | null
         responsabilita?: string | null
         gravita?: string | null
     }
 }
 
-export function eventiDaVociDr7(voci: VoceDr7[], tipo: 'danno' | 'penale', prezzoPerBooking: Map<string, number | null>): EventoNormalizzato[] {
+export function eventiDaVociDr7(voci: VoceDr7[], tipo: 'danno' | 'penale', contratti: Map<string, string>): EventoNormalizzato[] {
     const visti = new Map<string, number>()
     return voci.map(v => {
-        const { famiglia, grave } = famigliaVoceInterna(v.label, tipo)
+        const { categoria, fermo } = classificaVoce(v.label, tipo)
         const resp = String(v.contesto?.responsabilita || '').toLowerCase()
-        const grav = String(v.contesto?.gravita || '').toLowerCase()
         const importo = Math.max(0, num(v.amount))
+        // id stabile tra un calcolo e l'altro (storico: "nuovi eventi").
+        const k = `${tipo}:${v.bookingId}:${v.label.toLowerCase().trim()}:${importo.toFixed(2)}`
+        const n = visti.get(k) || 0
+        visti.set(k, n + 1)
         return {
-            // id stabile tra un calcolo e l'altro (storico: "nuovi eventi").
-            id: (() => {
-                const k = `${tipo}:${v.bookingId}:${v.label.toLowerCase().trim()}:${importo.toFixed(2)}`
-                const n = visti.get(k) || 0
-                visti.set(k, n + 1)
-                return n ? `${k}#${n}` : k
-            })(),
+            id: n ? `${k}#${n}` : k,
             fonte: 'dr7_prenotazione',
-            famiglia,
+            categoria,
+            fermo,
             label: v.label,
             data: dataIso(v.date),
+            bookingId: v.bookingId || null,
+            contratto: contratti.get(v.bookingId) || null,
             importo,
             pagato: Math.max(0, importo - num(v.residuo)),
             residuo: Math.max(0, num(v.residuo)),
             statoPagamento: v.stato,
-            giorniAlSaldo: v.stato === 'pagato' ? giorniTra(v.date, v.contesto?.paidAt) : null,
+            // Le voci del gestionale non hanno una scadenza: nessun ritardo
+            // di pagamento ne' insoluto inventati.
+            scadenza: dataIso(v.contesto?.scadenza) || null,
+            dataSaldo: v.stato === 'pagato' ? dataIso(v.contesto?.paidAt) : null,
+            minutiRitardo: categoria === 'ritardo_riconsegna' ? minutiDaTesto(v.label, v.quantity) : null,
             verificato: true,
             inRevisione: false,
             dichiaratoDalCliente: typeof v.contesto?.dichiaratoDalCliente === 'boolean' ? v.contesto.dichiaratoDalCliente : null,
             responsabilita: resp === 'accertata' || resp === 'contestata' || resp === 'non_attribuibile' ? resp : null,
-            gravitaIndicata: grave ? 'grave' : grav === 'lieve' || grav === 'media' || grav === 'grave' ? grav : null,
             contestazione: resp === 'contestata' ? 'aperta' : null,
-            prezzoGiornoVeicolo: prezzoPerBooking.get(v.bookingId) ?? null,
-            bookingId: v.bookingId || null,
+            prove: [`Gestionale DR7: ${tipo === 'danno' ? 'danno' : 'penale'} "${v.label}"`],
         }
     })
 }
@@ -95,34 +94,45 @@ export interface EventoReteRow {
 
 export function eventiDaRete(rete: EventoReteRow[]): EventoNormalizzato[] {
     return rete.map((r, i) => {
-        const { famiglia } = famigliaVoceInterna(r.voce || r.tipo, r.tipo)
+        const categoria: CategoriaScore = r.tipo === 'insoluto' ? 'insoluto' : classificaVoce(r.voce || r.tipo, r.tipo === 'danno' ? 'danno' : 'penale').categoria
         const stato: StatoPagamentoEvento = r.statoPagamento === 'paid' ? 'pagato' : r.statoPagamento === 'partial' ? 'parziale' : 'aperto'
+        const data = dataIso(r.dataEvento)
+        const t = data ? Date.parse(data) : NaN
         return {
             // id stabile (non la posizione nella lista): voce, data, importo.
             id: `rete:${(r.voce || r.tipo).toLowerCase().trim()}:${r.dataEvento || ''}:${num(r.importo).toFixed(2)}:${i}`,
-            fonte: 'rete', famiglia, label: r.voce || r.tipo, data: dataIso(r.dataEvento),
+            fonte: 'rete', categoria, label: r.voce || r.tipo, data, bookingId: null, contratto: null,
             importo: num(r.importo), pagato: num(r.pagato), residuo: num(r.residuo), statoPagamento: stato,
-            giorniAlSaldo: r.giorniAlSaldo, verificato: true, inRevisione: false, dichiaratoDalCliente: null,
-            responsabilita: null, gravitaIndicata: null, contestazione: null, prezzoGiornoVeicolo: null, bookingId: null,
+            scadenza: null,
+            dataSaldo: stato === 'pagato' && r.giorniAlSaldo != null && Number.isFinite(t) ? new Date(t + r.giorniAlSaldo * 86_400_000).toISOString().slice(0, 10) : null,
+            minutiRitardo: categoria === 'ritardo_riconsegna' ? minutiDaTesto(r.voce || '') : null,
+            verificato: true, inRevisione: false, dichiaratoDalCliente: null, responsabilita: null, contestazione: null,
+            prove: ['Storico della rete EMTN (altro operatore)'],
         }
     })
 }
 
-export interface MultaRow { id: string; booking_id: string | null; data_infrazione: string | null; importo: string | null }
+export interface MultaRow { id: string; booking_id: string | null; data_infrazione: string | null; importo: string | null; numero_verbale?: string | null }
 
-export function eventiDaMulte(multe: MultaRow[]): EventoNormalizzato[] {
-    return multe.map(m => {
-        // data_infrazione e' testo: dd/mm/yyyy o ISO.
-        const data = dataIso(m.data_infrazione)
-        return {
-            id: `multa:${m.id}`, fonte: 'multa', famiglia: 'multa', label: 'Multa', data,
-            // La multa la paga il conducente all'ente: per DR7 nessuna esposizione.
-            importo: num(m.importo), pagato: 0, residuo: 0, statoPagamento: 'non_applicabile',
-            giorniAlSaldo: null, verificato: true, inRevisione: false, dichiaratoDalCliente: null,
-            responsabilita: null, gravitaIndicata: null, contestazione: null, prezzoGiornoVeicolo: null,
-            bookingId: m.booking_id,
-        }
-    })
+/**
+ * Un verbale = una detrazione, non ogni notifica: multe_pec_log ha una riga
+ * per invio PEC (05/10/2026: 10 righe per 6 verbali), si unisce per numero.
+ */
+export function eventiDaMulte(multe: MultaRow[], contratti: Map<string, string>): EventoNormalizzato[] {
+    const perVerbale = new Map<string, MultaRow>()
+    for (const m of multe) {
+        const k = String(m.numero_verbale || '').trim().toUpperCase() || m.id
+        if (!perVerbale.has(k)) perVerbale.set(k, m)
+    }
+    return [...perVerbale.entries()].map(([k, m]) => ({
+        id: `multa:${k}`, fonte: 'multa', categoria: 'multa', label: 'Multa', data: dataIso(m.data_infrazione),
+        bookingId: m.booking_id, contratto: m.booking_id ? contratti.get(m.booking_id) || null : null,
+        // La multa la paga il conducente all'ente: per DR7 nessuna esposizione.
+        importo: num(m.importo), pagato: 0, residuo: 0, statoPagamento: 'non_applicabile',
+        scadenza: null, dataSaldo: null, minutiRitardo: null,
+        verificato: true, inRevisione: false, dichiaratoDalCliente: null, responsabilita: null, contestazione: null,
+        prove: [`Registro multe: verbale ${m.numero_verbale || 'senza numero'} rinotificato al conducente`],
+    }))
 }
 
 export interface EmtnEventRow { id: string; type: string; status: string; headline?: string | null; occurred_at?: string | null; created_at: string; booking_id?: string | null }
@@ -132,21 +142,26 @@ export function eventiDaEmtnEvents(rows: EmtnEventRow[]): EventoNormalizzato[] {
     for (const r of rows) {
         if (r.status !== 'APPROVED' && r.status !== 'UNDER_REVIEW') continue
         const approvato = r.status === 'APPROVED'
-        const famiglia: Famiglia = r.type === 'THEFT_REPORTED' ? 'furto'
-            : r.type === 'NON_RETURN' ? 'mancata_restituzione'
+        const categoria: CategoriaScore = r.type === 'THEFT_REPORTED' ? 'furto'
+            : r.type === 'NON_RETURN' ? 'ritardo_riconsegna'
             : r.type === 'UNPAID_DAMAGE' ? 'danno'
             : r.type === 'INSOLVENCY' ? 'insoluto'
-            : 'violazione_contratto'
+            : 'non_previsto'
         const aperto = r.type === 'UNPAID_DAMAGE' || r.type === 'INSOLVENCY'
         out.push({
-            id: `evento:${r.id}`, fonte: 'emtn_evento', famiglia, label: r.headline || famiglia,
-            data: r.occurred_at || r.created_at, importo: 0, pagato: 0, residuo: 0,
-            statoPagamento: aperto ? 'aperto' : 'non_applicabile', giorniAlSaldo: null,
-            verificato: approvato, inRevisione: !approvato, dichiaratoDalCliente: null, responsabilita: null,
+            id: `evento:${r.id}`, fonte: 'emtn_evento', categoria, label: r.headline || categoria,
+            data: r.occurred_at || r.created_at,
             // Con la prenotazione si unisce alle voci DR7 dello stesso noleggio:
             // un UNPAID_DAMAGE gia' saldato in gestionale non resta aperto.
-            gravitaIndicata: aperto ? 'grave' : null, contestazione: null, prezzoGiornoVeicolo: null, bookingId: r.booking_id || null,
-            accertato: approvato && famiglia === 'furto',
+            bookingId: r.booking_id || null, contratto: null,
+            importo: 0, pagato: 0, residuo: 0,
+            statoPagamento: aperto ? 'aperto' : 'non_applicabile',
+            scadenza: null, dataSaldo: null,
+            // Mancata restituzione approvata dalla direzione: oltre 24 ore.
+            minutiRitardo: r.type === 'NON_RETURN' ? 24 * 60 + 1 : null,
+            verificato: approvato, inRevisione: !approvato, dichiaratoDalCliente: null, responsabilita: null, contestazione: null,
+            accertato: approvato && categoria === 'furto',
+            prove: [`Segnalazione EMTN ${approvato ? 'approvata' : 'in revisione'}: ${r.headline || r.type}`],
         })
     }
     return out
@@ -155,7 +170,7 @@ export function eventiDaEmtnEvents(rows: EmtnEventRow[]): EventoNormalizzato[] {
 export interface PosizioneRow {
     id: string
     stato?: string | null
-    eventi?: Array<{ codice: number; dati?: Record<string, unknown> }> | null
+    eventi?: Array<{ codice: number; dati?: Record<string, unknown>; fonti?: string[] }> | null
     in_approvazione?: boolean | null
     pubblicata?: boolean | null
     titolo?: string | null
@@ -165,77 +180,67 @@ export interface PosizioneRow {
 }
 
 /**
- * Una pratica = un evento, con la famiglia piu' grave tra i suoi codici.
- * Pubblicata = verificata; in approvazione = in revisione (non pesa).
- * La pratica porta la prenotazione (booking_id): il motore la unisce alle
- * voci DR7 dello stesso noleggio in un solo incidente (raggruppaIncidenti).
+ * Ogni evento di una pratica e' un fatto con la sua categoria; i fatti della
+ * stessa pratica restano legati (gruppo = id pratica) e, con la prenotazione,
+ * si uniscono alle voci DR7 dello stesso noleggio. Pubblicata = verificata;
+ * in approvazione = in revisione (non pesa).
  * Senza booking_id, una voce DR7 con lo stesso importo indica lo stesso fatto.
  */
-export function eventiDaPosizioni(rows: PosizioneRow[], vociInterne: Array<{ bookingId: string; amount: number }>): EventoNormalizzato[] {
+export function eventiDaPosizioni(rows: PosizioneRow[], vociInterne: Array<{ bookingId: string; amount: number }>, contratti: Map<string, string>): EventoNormalizzato[] {
     const out: EventoNormalizzato[] = []
+    const sommaPerNoleggio = new Map<string, number>()
+    for (const v of vociInterne) sommaPerNoleggio.set(v.bookingId, (sommaPerNoleggio.get(v.bookingId) || 0) + v.amount)
     for (const p of rows) {
         if (!p.pubblicata && !p.in_approvazione) continue
         const stato = String(p.stato || '').toUpperCase()
         if (stato === 'ANNULLATO') continue
         const eventi = Array.isArray(p.eventi) ? p.eventi : []
         const codici = eventi.map(e => Number(e.codice)).filter(Number.isFinite)
-        const famiglie: Famiglia[] = codici.map(famigliaCodiceEMTN).filter(f => f !== 'regolarizzazione')
-        if (famiglie.length === 0) continue
-        const famiglia = ORDINE_FAMIGLIA.find(f => famiglie.includes(f)) || famiglie[0]
-        let importo = 0, pagato = 0, residuo = 0
-        let data: string | null = null
-        let pagatoIl: string | null = null
-        let contestazione: EventoNormalizzato['contestazione'] = null
-        let dichiarato: boolean | null = null
-        let responsabilita: EventoNormalizzato['responsabilita'] = null
-        // I codici di una pratica descrivono lo STESSO fatto da piu' lati
-        // (danno documentato, preventivo, accordo, regolarizzazione): gli
-        // importi non si sommano, vale il maggiore.
-        let residuoEsplicito: number | null = null
-        for (const e of eventi) {
-            const d = e.dati || {}
-            importo = Math.max(importo, num(d.importo_dovuto ?? d.importo_richiesto))
-            pagato = Math.max(pagato, num(d.importo_pagato))
-            if (d.importo_residuo != null && d.importo_residuo !== '') {
-                residuoEsplicito = residuoEsplicito == null ? num(d.importo_residuo) : Math.min(residuoEsplicito, num(d.importo_residuo))
-            }
-            if (!data) data = dataIso(d.data_evento)
-            if (!pagatoIl) pagatoIl = dataIso(d.data_pagamento)
-            // Ricavati dall'analisi AI dei documenti e confermati dall'operatore.
-            const com = String(d.comunicazione_cliente || '').toUpperCase()
-            if (com === 'SPONTANEA' && dichiarato == null) dichiarato = true
-            if (com === 'OMESSA') dichiarato = false
-            const resp = String(d.responsabilita || '').toUpperCase()
-            if (resp === 'NON_ATTRIBUIBILE') responsabilita = 'non_attribuibile'
-            else if (resp === 'ACCERTATA' && responsabilita !== 'non_attribuibile') responsabilita = 'accertata'
-            else if (resp === 'CONTESTATA' && !responsabilita) responsabilita = 'contestata'
-            const sc = String(d.stato_contestazione || '').toUpperCase()
-            if (sc === 'RESPINTO') contestazione = 'respinta'
-            else if (sc === 'ACCOLTO' && contestazione !== 'respinta') contestazione = 'accolta'
-            else if ((sc === 'APERTO' || [14, 15, 16, 17, 18, 36, 57].includes(Number(e.codice))) && !contestazione) contestazione = 'aperta'
-        }
         const regolarizzata = stato === 'REGOLARIZZATO' || stato === 'CHIUSO' || codici.some(c => c === 24 || c === 26 || c === 58)
-        residuo = residuoEsplicito ?? Math.max(0, importo - pagato)
-        const statoPagamento: StatoPagamentoEvento = regolarizzata ? 'pagato'
-            : importo > 0 || residuo > 0 ? statoDaImporti(Math.max(importo, residuo), pagato) : 'non_applicabile'
+        const importoMax = Math.max(0, ...eventi.map(e => num(e.dati?.importo_dovuto ?? e.dati?.importo_richiesto)))
         // Senza booking_id: stessa cifra di una voce DR7 o della somma delle
         // voci di un noleggio (es. danno 8.129,30 + fermo 4.870,70 = 13.000).
-        const sommaPerNoleggio = new Map<string, number>()
-        for (const v of vociInterne) sommaPerNoleggio.set(v.bookingId, (sommaPerNoleggio.get(v.bookingId) || 0) + v.amount)
         const bookingId = p.booking_id
-            || (importo > 0 ? vociInterne.find(v => Math.abs(v.amount - importo) < 1)?.bookingId : null)
-            || (importo > 0 ? [...sommaPerNoleggio.entries()].find(([, t]) => Math.abs(t - importo) < 1)?.[0] : null)
+            || (importoMax > 0 ? vociInterne.find(v => Math.abs(v.amount - importoMax) < 1)?.bookingId : null)
+            || (importoMax > 0 ? [...sommaPerNoleggio.entries()].find(([, t]) => Math.abs(t - importoMax) < 1)?.[0] : null)
             || null
-        out.push({
-            id: `pratica:${p.id}`, fonte: 'emtn_pratica', famiglia, label: p.titolo || famiglia,
-            data: data || p.approvata_at || p.created_at,
-            importo, pagato, residuo: statoPagamento === 'pagato' ? 0 : residuo, statoPagamento,
-            giorniAlSaldo: statoPagamento === 'pagato' ? giorniTra(data, pagatoIl) : null,
-            verificato: !!p.pubblicata, inRevisione: !p.pubblicata && !!p.in_approvazione,
-            dichiaratoDalCliente: dichiarato, responsabilita, gravitaIndicata: null,
-            contestazione: contestazione || (responsabilita === 'contestata' ? 'aperta' : null),
-            prezzoGiornoVeicolo: null, bookingId,
-            veicoloRestituito: codici.includes(40),
+        eventi.forEach((e, i) => {
+            const d = e.dati || {}
+            const codice = Number(e.codice)
+            // L'AI propone la categoria; l'operatore la conferma. Se manca o non
+            // e' una delle regole, vale il codice EMTN.
+            const proposta = String(d.categoria_score || '').trim()
+            const categoria = categoriaScoreValida(proposta) ? proposta : categoriaCodiceEMTN(codice)
+            const importo = num(d.importo_dovuto ?? d.importo_richiesto)
+            const pagato = num(d.importo_pagato)
+            const residuoEsplicito = d.importo_residuo != null && d.importo_residuo !== '' ? num(d.importo_residuo) : null
+            const residuo = regolarizzata ? 0 : residuoEsplicito ?? Math.max(0, importo - pagato)
+            const statoPagamento: StatoPagamentoEvento = regolarizzata ? (importo > 0 ? 'pagato' : 'non_applicabile')
+                : importo > 0 || residuo > 0 ? statoDaImporti(Math.max(importo, residuo), pagato) : 'non_applicabile'
+            const com = String(d.comunicazione_cliente || '').toUpperCase()
+            const resp = String(d.responsabilita || '').toUpperCase()
+            const sc = String(d.stato_contestazione || '').toUpperCase()
+            const contestazione: EventoNormalizzato['contestazione'] = sc === 'RESPINTO' ? 'respinta' : sc === 'ACCOLTO' ? 'accolta'
+                : sc === 'APERTO' ? 'aperta' : resp === 'CONTESTATA' ? 'aperta' : null
+            let minuti = minutiTra(String(d.riconsegna_prevista || ''), String(d.riconsegna_effettiva || ''))
+            // "Mancata restituzione alla scadenza" senza orari: oltre 24 ore.
+            if (minuti == null && codice === 39) minuti = 24 * 60 + 1
+            out.push({
+                id: `pratica:${p.id}:${i}`, fonte: 'emtn_pratica', categoria,
+                label: String(d.sottotipologia || p.titolo || categoria),
+                data: dataIso(d.data_evento) || p.approvata_at || p.created_at,
+                bookingId, gruppo: p.id,
+                contratto: String(d.numero_contratto || '').trim() || (bookingId ? contratti.get(bookingId) || null : null),
+                importo, pagato, residuo: statoPagamento === 'pagato' ? 0 : residuo, statoPagamento,
+                scadenza: dataIso(d.data_scadenza),
+                dataSaldo: statoPagamento === 'pagato' ? dataIso(d.data_pagamento) : null,
+                minutiRitardo: categoria === 'ritardo_riconsegna' ? minuti : null,
+                verificato: !!p.pubblicata, inRevisione: !p.pubblicata && !!p.in_approvazione,
+                dichiaratoDalCliente: com === 'SPONTANEA' ? true : com === 'OMESSA' ? false : null,
+                responsabilita: resp === 'NON_ATTRIBUIBILE' ? 'non_attribuibile' : resp === 'ACCERTATA' ? 'accertata' : resp === 'CONTESTATA' ? 'contestata' : null,
+                contestazione,
+                prove: [`Pratica EMTN "${p.titolo || p.id}"`, ...(Array.isArray(e.fonti) ? e.fonti.map(String) : [])],
+            })
         })
     }
     return out
@@ -252,10 +257,12 @@ export interface BookingPerScore {
     dropoff_date?: string | null
     appointment_date?: string | null
     status?: string | null
+    payment_status?: string | null
     service_type?: string | null
     vehicle_name?: string | null
     vehicle_plate?: string | null
     vehicle_id?: string | null
+    booking_details?: { extras?: unknown; parent_booking_id?: string | null } | null
 }
 
 /** Solo noleggi veri: niente lavaggi/meccanica, annullati o veicoli TEST. */
@@ -266,19 +273,44 @@ export function eNoleggio(b: BookingPerScore): boolean {
     return true
 }
 
-export function noleggiNormalizzati(bookings: BookingPerScore[], conProblemi: Set<string>, prezzi: Map<string, number | null>, oggi = new Date()): NoleggioNormalizzato[] {
-    return bookings.filter(eNoleggio).map(b => {
+function haExtra(extras: unknown): boolean {
+    if (Array.isArray(extras)) return extras.length > 0
+    if (extras && typeof extras === 'object') return Object.values(extras as Record<string, unknown>).some(v => v === true || (typeof v === 'number' && v > 0))
+    return false
+}
+
+/**
+ * Una proroga resta nella stessa prenotazione (extension_history); una
+ * prenotazione figlia (parent_booking_id) non e' un nuovo noleggio.
+ */
+export function noleggiNormalizzati(bookings: BookingPerScore[], contratti: Map<string, string>, oggi = new Date()): NoleggioNormalizzato[] {
+    return bookings.filter(b => eNoleggio(b) && !b.booking_details?.parent_booking_id).map(b => {
         const fine = b.dropoff_date || b.pickup_date || b.appointment_date || null
         const st = String(b.status || '').toLowerCase()
         const concluso = st !== 'pending' && !!fine && Date.parse(fine) < oggi.getTime()
         return {
             id: b.id,
+            contratto: contratti.get(b.id) || null,
+            inizio: b.pickup_date || b.appointment_date || null,
             data: fine,
             concluso,
-            regolare: concluso && !conProblemi.has(b.id),
-            prezzoGiorno: prezzi.get(b.id) ?? null,
+            saldato: PAGATO.has(String(b.payment_status || '').toLowerCase()),
+            conExtra: haExtra(b.booking_details?.extras),
         }
     })
+}
+
+/** Numero di contratto DR7XXXX per prenotazione (il piu' recente). */
+export async function contrattiPerBooking(sb: SupabaseClient, bookingIds: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    for (let i = 0; i < bookingIds.length; i += 100) {
+        const { data } = await sb.from('contracts').select('booking_id, contract_number, created_at')
+            .in('booking_id', bookingIds.slice(i, i + 100)).order('created_at', { ascending: true })
+        for (const r of (data || []) as Array<{ booking_id: string; contract_number: string | null }>) {
+            if (r.contract_number) out.set(r.booking_id, r.contract_number)
+        }
+    }
+    return out
 }
 
 /* ---------- override e storico ---------- */
@@ -366,7 +398,7 @@ export async function registraStorico(
             if (nPrima != null && r.dettaglio.noleggiConclusi > nPrima) cause.push(`${r.dettaglio.noleggiConclusi - nPrima} nuovi noleggi conclusi`)
             if ((prec.override_id || null) !== overrideId) cause.push(overrideId ? 'Intervento manuale della direzione' : 'Intervento manuale revocato o scaduto')
             if (flagOra !== flagPrima) cause.push('Flag critici cambiati')
-            if (!cause.length) cause.push('Passare del tempo (attenuazione eventi / stato pagamenti)')
+            if (!cause.length) cause.push('Ricalcolo: stato dei pagamenti, scadenze o revisioni cambiati')
         }
         const riga = {
             client_id: clientId,
