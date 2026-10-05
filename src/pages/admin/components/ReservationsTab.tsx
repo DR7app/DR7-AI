@@ -12540,7 +12540,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         key={`booking-${booking.id}`}
                         className={`border-t border-theme-border cursor-pointer ${
                           isCancelled
-                            ? 'bg-red-500/10 hover:bg-red-500/15 text-red-300'
+                            // 05/10/2026 (direzione): stesso rosso del badge
+                            // "Non Pagato"; testo chiaro forzato sulle celle
+                            // perche' resti leggibile anche in tema chiaro.
+                            ? 'bg-red-900 hover:bg-red-800 text-red-100 [&>td]:text-red-100!'
                             : 'hover:bg-theme-bg-tertiary/30'
                         }`}
                         title={isCancelled ? 'Prenotazione annullata' : undefined}
