@@ -124,8 +124,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [fatture, setFatture] = useState<RigaFatturaAddebito[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
-  // Interessi wallet e veicoli utilizzati: chiusi su 3 righe, la freccia apre le altre.
+  // Interessi wallet, veicoli utilizzati e storico prenotazioni: chiusi su 3
+  // righe, la freccia apre tutto e richiude.
   const [interessiAperti, setInteressiAperti] = useState(false)
+  const [storicoAperto, setStoricoAperto] = useState(false)
   const [veicoliAperti, setVeicoliAperti] = useState(false)
   const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
   const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
@@ -1208,7 +1210,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                   )
                 })()}
                 <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Storico Prenotazioni</h3>
-                <div className="bg-theme-bg-secondary rounded-xl border border-theme-border overflow-hidden">
+                <div className="bg-theme-bg-secondary rounded-xl border border-theme-border">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-border">
@@ -1219,7 +1221,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                       </tr>
                     </thead>
                     <tbody>
-                      {bookings.slice(0, 20).map(b => (
+                      {(storicoAperto ? bookings : bookings.slice(0, 3)).map(b => (
                         <tr key={b.id} className="border-b border-theme-border/50 hover:bg-theme-bg-tertiary/50">
                           <td className="px-3 py-2 text-theme-text-muted whitespace-nowrap">{fmtDate(b.appointment_date || b.pickup_date || b.created_at)}</td>
                           <td className="px-3 py-2 text-theme-text-primary">
@@ -1247,6 +1249,18 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                       )}
                     </tbody>
                   </table>
+                  {bookings.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setStoricoAperto(v => !v)}
+                      className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-theme-text-muted hover:text-theme-text-primary ${storicoAperto ? 'sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border' : ''}`}
+                    >
+                      {storicoAperto ? 'Mostra meno' : `Mostra tutte (${bookings.length} prenotazioni)`}
+                      <svg className={`w-3.5 h-3.5 transition-transform ${storicoAperto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
 
