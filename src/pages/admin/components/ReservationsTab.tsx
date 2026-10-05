@@ -12616,6 +12616,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           </td>
                         )}
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
+                          {/* 05/10/2026 (direzione): scritta grande CANCELLATA nello
+                              spazio libero della riga, solo se annullata. */}
+                          <div className="flex items-center justify-between gap-4">
                           {isCarWash ? (
                             <span className="flex items-center gap-2">
                               <span>{booking.service_name || 'Autolavaggio'}</span>
@@ -12635,6 +12638,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               )}
                             </div>
                           )}
+                          {isCancelled && (
+                            <span className="text-2xl font-extrabold tracking-[0.3em] text-white pr-4 select-none">
+                              CANCELLATA
+                            </span>
+                          )}
+                          </div>
                         </td>
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                           {(() => {
