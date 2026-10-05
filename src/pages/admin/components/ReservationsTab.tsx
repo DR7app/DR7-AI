@@ -84,6 +84,7 @@ import {
   getPrePickupCarwashBufferMinutes,
   getCrossVehicleGapMinutes
 } from '../../../utils/vehicleAvailability'
+import { confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
 import Input from './Input'
 import Select from './Select'
 import AddressAutocomplete from './AddressAutocomplete'
@@ -6622,6 +6623,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           )
 
           if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
+            if (!confermaSlotOccupato(availabilityResult.reason || 'Slot non disponibile')) {
+              setIsSubmitting(false)
+              submitLockRef.current = false
+              return
+            }
             setOverrideDetails(buildOverrideDetailsBase([
               { label: 'Motivo richiesta', value: 'Slot non disponibile / conflitto disponibilita' },
               { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },

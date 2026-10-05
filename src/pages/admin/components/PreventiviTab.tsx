@@ -38,6 +38,7 @@ import { toBusiness, BUSINESS_LABELS, BUSINESS_ASSET_LABELS, type Business } fro
 import { uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
+import { confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { getHolidayForDate, isSunday as isSundayDate } from '../../../data/italianHolidays'
@@ -2390,6 +2391,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         (windowBookings || []) as AvailabilityBooking[],
       )
       if (!result.available) {
+        if (!confermaSlotOccupato(result.reason || 'Slot non disponibile')) return
         slotConflictReason = result.reason || 'Slot non disponibile'
         motivazioni.push(`Slot non disponibile — ${slotConflictReason}`)
         trippedCodes.push('slot')
