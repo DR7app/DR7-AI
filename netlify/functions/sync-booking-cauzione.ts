@@ -131,7 +131,27 @@ export const handler: Handler = async (event) => {
                 console.error('Error fetching cauzione by customer:', byCustomerErr)
             }
 
-            if (byCustomer) {
+            // 2026-10-05: la cauzione del cliente si riaggancia SOLO se la sua
+            // prenotazione e' chiusa (il cliente la lascia per il noleggio
+            // successivo). Se e' ancora di una prenotazione aperta, prenderla
+            // la toglieva a quella prenotazione e la nuova restava senza
+            // cauzione: si crea invece una cauzione nuova.
+            let liberaDaRiagganciare = !!byCustomer
+            if (byCustomer?.riferimento_contratto_id && byCustomer.riferimento_contratto_id !== bookingId) {
+                const { data: altraPrenotazione } = await supabase
+                    .from('bookings')
+                    .select('status')
+                    .eq('id', byCustomer.riferimento_contratto_id)
+                    .maybeSingle()
+                const statoAltra = String(altraPrenotazione?.status || '').toLowerCase()
+                const chiusa = !altraPrenotazione || ['completed', 'completata', 'cancelled', 'annullata'].includes(statoAltra)
+                if (!chiusa) {
+                    liberaDaRiagganciare = false
+                    console.log(`📌 Cauzione ${byCustomer.id} resta alla prenotazione ${byCustomer.riferimento_contratto_id} (${statoAltra}): ne creo una nuova`)
+                }
+            }
+
+            if (byCustomer && liberaDaRiagganciare) {
                 existingCauzione = byCustomer
                 console.log(`📌 Found cauzione by cliente_id instead of bookingId: ${byCustomer.id}`)
             }
