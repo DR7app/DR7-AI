@@ -25,6 +25,7 @@ import { authFetch } from '../../../utils/authFetch'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
 import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
+import { confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink, isWalletOrGift, isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { leggiSaldoWallet, leggiMovimentoWallet, importoDovutoWallet, formattaEuro, type SaldoWallet } from '../../../utils/walletCliente'
@@ -183,6 +184,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // synchronous, so the second call bails immediately and we don't fire
   // duplicate WhatsApp confirmations / duplicate inserts.
   const submitLockRef = useRef(false)
+  // Slot gia' accettato nel popup rosso (data|ora): al Salva non si richiede.
+  const slotAvvisoAccettatoRef = useRef<string | null>(null)
   // Lock dedicato per la chiamata createBooking (insert + WhatsApp).
   // Distinto da submitLockRef cosi' protegge anche i replay OTP / force.
   const createBookingLockRef = useRef(false)
@@ -3135,6 +3138,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           })
           errorMessage += 'Sovrapporre richiede autorizzazione direzionale.'
 
+          // 05/10/2026 (direzione): popup rosso con sirena anche sul lavaggio,
+          // per tutti (anche con bypass). Gia' accettato sull'orario = niente bis.
+          const chiaveSlot = `${formData.appointment_date}|${formData.appointment_time}`
+          if (slotAvvisoAccettatoRef.current !== chiaveSlot) {
+            const dettaglioRegole = schedulingValidation.errors.map(e => e.message).join('\n')
+            if (!(await confermaSlotOccupato(dettaglioRegole))) {
+              setSubmitting(false)
+              submitLockRef.current = false
+              return
+            }
+            slotAvvisoAccettatoRef.current = chiaveSlot
+          }
+
           const bypassed = override.requestOverride('carwash_slot_occupied', errorMessage)
           if (!bypassed) {
             // Modal aperto — il save riprende dopo OTP approval via resume hook
@@ -3208,6 +3224,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           logger.log('ADMIN OVERRIDE: slot conflict bypassato via OTP', conflictingBooking.customer_name, conflictDetails)
         } else {
           logger.warn('Conflitto orario lavaggio:', conflictingBooking.customer_name, conflictDetails)
+          const chiaveSlot = `${formData.appointment_date}|${formData.appointment_time}`
+          if (slotAvvisoAccettatoRef.current !== chiaveSlot) {
+            if (!(await confermaSlotOccupato(`Slot ${formData.appointment_time} occupato da ${conflictingBooking.customer_name || 'altro cliente'} (${conflictDetails}).`))) {
+              setSubmitting(false)
+              submitLockRef.current = false
+              return
+            }
+            slotAvvisoAccettatoRef.current = chiaveSlot
+          }
           const bypassed = override.requestOverride(
             'carwash_slot_occupied',
             `Slot ${formData.appointment_time} occupato da ${conflictingBooking.customer_name || 'altro cliente'} (${conflictDetails}). Sovrapporre richiede autorizzazione direzionale.`,
@@ -5006,7 +5031,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora *</label>
                   <select
                     value={formData.appointment_time}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       // 2026-05-28: slot occupati SELEZIONABILI — direzione
                       // decide se sovrascrivere con OTP. Stessa pattern del
                       // preventivo slot picker. requestOverride rispetta il
@@ -5036,6 +5061,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         const cStart = (() => { const [h, m] = (conflict.appointment_time || '0:0').split(':').map(Number); return h * 60 + m })()
                         const nStart = (() => { const [h, m] = newTime.split(':').map(Number); return h * 60 + m })()
                         const dentro = nStart >= cStart
+                        // 05/10/2026 (direzione): popup rosso con sirena SUBITO,
+                        // per tutti. Annulla = orario tolto.
+                        const avviso = dentro
+                          ? `Slot ${newTime} occupato da ${who} (prenotazione delle ${conflict.appointment_time}${conflict.service_name ? ` - ${conflict.service_name}` : ''}).`
+                          : `Alle ${newTime} il posto e' libero, ma il servizio scelto (${newDuration}') finirebbe dentro la prenotazione delle ${conflict.appointment_time} di ${who}.`
+                        if (!(await confermaSlotOccupato(avviso))) {
+                          setFormData(prev => ({ ...prev, appointment_time: '' }))
+                          return
+                        }
+                        slotAvvisoAccettatoRef.current = `${formData.appointment_date}|${newTime}`
                         override.requestOverride('carwash_slot_occupied', dentro
                           ? `Slot ${newTime} occupato da ${who} — sovrapporre richiede autorizzazione direzionale.`
                           : `Alle ${newTime} il posto e' libero, ma il servizio scelto (${newDuration}') finirebbe dentro la prenotazione delle ${conflict.appointment_time} di ${who}. Sovrapporre richiede autorizzazione direzionale.`)

@@ -297,6 +297,35 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
+/* 05/10/2026 (direzione): icona calendario A SINISTRA su tutti i campi data
+   nativi, vicino alla data (prima era tutta a destra, lontana). L'icona e'
+   disegnata come sfondo (Safari non mostra l'indicatore); in Chrome
+   l'indicatore nativo, invisibile, viene spostato sopra l'icona cosi' il
+   clic apre il calendario. Grigio neutro: leggibile in tema chiaro e scuro.
+   Fuori da @layer: vince sul px-* di Tailwind, il testo non finisce sotto
+   l'icona. I campi data di EuropeanDateInput hanno gia' la loro icona. */
+input[type="date"],
+input[type="datetime-local"] {
+  position: relative;
+  padding-left: 2.25rem;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%239ca3af' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0.65rem center;
+  background-size: 1rem 1rem;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2.25rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0 !important;
+  cursor: pointer;
+}
+
 /* Rimuove le freccette su/giu' (spinner) da TUTTI i campi numerici
    nell'admin. L'admin digita i valori manualmente — i micro-bottoni
    non sono utili e occupano spazio. */
