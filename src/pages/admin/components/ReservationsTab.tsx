@@ -5678,6 +5678,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitLockRef = useRef(false)
+  // Dettaglio del conflitto slot gia' accettato alla scelta del mezzo
+  // (vedi onChange del select veicolo): al Salva non si richiede di nuovo.
+  const slotAvvisoAccettatoRef = useRef<string | null>(null)
   const [confirmBooking, setConfirmBooking] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
@@ -6623,7 +6626,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           )
 
           if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
-            if (!confermaSlotOccupato(availabilityResult.reason || 'Slot non disponibile')) {
+            // Stesso conflitto gia' accettato alla scelta del mezzo: niente
+            // secondo popup. Se date/ore sono cambiate il dettaglio e' diverso
+            // e l'avviso riparte.
+            const dettaglioSlot = availabilityResult.reason || 'Slot non disponibile'
+            if (slotAvvisoAccettatoRef.current !== dettaglioSlot && !confermaSlotOccupato(dettaglioSlot)) {
               setIsSubmitting(false)
               submitLockRef.current = false
               return
@@ -10793,7 +10800,32 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       label={`${assetLabels.asset} (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
                       required
                       value={formData.vehicle_id}
-                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, vehicle_id: v })) }}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        // 05/10/2026 (direzione): l'avviso "slot non disponibile"
+                        // parte SUBITO alla scelta del mezzo, non solo al Salva.
+                        // Annulla = il mezzo non viene selezionato.
+                        if (v && !editingId) {
+                          const scelto = vehicles.find(x => x.id === v)
+                          if (scelto) {
+                            const esito = isVehicleAvailable(
+                              scelto,
+                              formData.pickup_date,
+                              formData.return_date,
+                              formData.pickup_time,
+                              formData.return_time,
+                              [...bookings, ...carWashBookings],
+                              undefined
+                            )
+                            if (!esito.available) {
+                              const dettaglio = esito.reason || 'Slot non disponibile'
+                              if (!confermaSlotOccupato(dettaglio)) return
+                              slotAvvisoAccettatoRef.current = dettaglio
+                            }
+                          }
+                        }
+                        setFormData(prev => ({ ...prev, vehicle_id: v }))
+                      }}
                       options={[
                         { value: '', label: `Seleziona ${assetLabels.asset.toLowerCase()}...` },
                         ...vehiclesForDropdown.map((v: Vehicle) => {

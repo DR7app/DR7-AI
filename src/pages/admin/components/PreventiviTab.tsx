@@ -638,6 +638,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // and forth between flagged/in-window slots doesn't re-prompt.
   const [outOfHoursOverrideId, setOutOfHoursOverrideId] = useState<string | null>(null)
   const slotCheckTimerRef = useRef<number | null>(null)
+  // Dettaglio del conflitto slot gia' accettato alla scelta del mezzo:
+  // al Salva non si richiede di nuovo.
+  const slotAvvisoAccettatoRef = useRef<string | null>(null)
 
   // Combined OTP modal: when più gate scattano insieme (es. No Cauzione +
   // Fuori orario), apriamo UNA sola modal con TUTTE le motivazioni. La
@@ -2391,7 +2394,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         (windowBookings || []) as AvailabilityBooking[],
       )
       if (!result.available) {
-        if (!confermaSlotOccupato(result.reason || 'Slot non disponibile')) return
+        // Stesso conflitto gia' accettato alla scelta del mezzo: niente secondo popup.
+        const dettaglioSlot = result.reason || 'Slot non disponibile'
+        if (slotAvvisoAccettatoRef.current !== dettaglioSlot && !confermaSlotOccupato(dettaglioSlot)) return
         slotConflictReason = result.reason || 'Slot non disponibile'
         motivazioni.push(`Slot non disponibile — ${slotConflictReason}`)
         trippedCodes.push('slot')
@@ -5935,6 +5940,48 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
               cv: m.cv != null ? String(m.cv) : prev.cv,
               acceleration_0_100: m.acceleration_0_100 != null ? String(m.acceleration_0_100) : prev.acceleration_0_100,
             }))
+            // 05/10/2026 (direzione): avviso "slot non disponibile" SUBITO
+            // alla scelta del mezzo, non solo al Salva. Annulla = mezzo tolto.
+            if (v && form.pickup_date && form.return_date && !slotOverrideId) {
+              void (async () => {
+                const windowStart = romeDateFromParts(form.pickup_date)
+                const windowEnd = romeDateFromParts(form.return_date, '23:59', 59)
+                windowStart.setDate(windowStart.getDate() - 1)
+                windowEnd.setDate(windowEnd.getDate() + 1)
+                const { data: windowBookings } = await supabase
+                  .from('bookings')
+                  .select('id,vehicle_id,vehicle_plate,vehicle_name,customer_name,pickup_date,dropoff_date,status,service_type,payment_method,payment_status')
+                  .lt('pickup_date', windowEnd.toISOString())
+                  .gt('dropoff_date', windowStart.toISOString())
+                const esito = isVehicleAvailable(
+                  {
+                    id: v.id,
+                    display_name: v.display_name,
+                    plate: v.plate,
+                    status: (v.status === 'available' || v.status === 'rented' || v.status === 'maintenance' || v.status === 'retired')
+                      ? v.status
+                      : 'available',
+                    daily_rate: v.daily_rate,
+                    category: (v.category as AvailabilityVehicle['category']) || undefined,
+                    metadata: v.metadata,
+                    created_at: '',
+                    updated_at: '',
+                  },
+                  form.pickup_date,
+                  form.return_date,
+                  form.pickup_time,
+                  form.return_time,
+                  (windowBookings || []) as AvailabilityBooking[],
+                )
+                if (esito.available) return
+                const dettaglio = esito.reason || 'Slot non disponibile'
+                if (confermaSlotOccupato(dettaglio)) {
+                  slotAvvisoAccettatoRef.current = dettaglio
+                } else {
+                  setForm(prev => prev.vehicle_id === newId ? { ...prev, vehicle_id: '' } : prev)
+                }
+              })()
+            }
           }}
           options={[
             { value: '', label: `Seleziona ${assetLabels.asset.toLowerCase()}...` },
