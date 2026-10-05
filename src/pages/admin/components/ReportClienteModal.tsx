@@ -124,8 +124,9 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [fatture, setFatture] = useState<RigaFatturaAddebito[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
-  // Interessi wallet: chiusi su 3 righe, la freccia apre le altre.
+  // Interessi wallet e veicoli utilizzati: chiusi su 3 righe, la freccia apre le altre.
   const [interessiAperti, setInteressiAperti] = useState(false)
+  const [veicoliAperti, setVeicoliAperti] = useState(false)
   const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
   const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
   // Livelli DR7 Club come configurati in Centralina Pro (non piu' i tre
@@ -1072,7 +1073,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                         <span className="text-[10px] text-theme-text-muted">{uniqueVehicles.length} {uniqueVehicles.length === 1 ? 'veicolo' : 'veicoli'}</span>
                       </div>
                       <div className="space-y-2">
-                        {uniqueVehicles.slice(0, 6).map((v, i) => (
+                        {(veicoliAperti ? uniqueVehicles : uniqueVehicles.slice(0, 3)).map((v, i) => (
                           <div key={i} className="flex items-center gap-3 rounded-xl border border-theme-border bg-theme-bg-primary/50 p-2">
                             <div className="w-12 h-10 rounded-lg bg-gradient-to-br from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/20 grid place-items-center shrink-0">
                               <svg className="w-6 h-5 text-dr7-gold" fill="currentColor" viewBox="0 0 24 24">
@@ -1093,6 +1094,18 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                           </div>
                         ))}
                       </div>
+                      {uniqueVehicles.length > 3 && (
+                        <button
+                          type="button"
+                          onClick={() => setVeicoliAperti(v => !v)}
+                          className="w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 text-[11px] font-medium text-theme-text-muted hover:text-theme-text-primary"
+                        >
+                          {veicoliAperti ? 'Mostra meno' : `Mostra tutti (${uniqueVehicles.length} veicoli)`}
+                          <svg className={`w-3.5 h-3.5 transition-transform ${veicoliAperti ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
