@@ -747,7 +747,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
   return (
     <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-theme-bg-primary border border-theme-border rounded-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-theme-bg-primary border border-theme-border rounded-2xl w-full max-w-7xl max-h-[95vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
 
         {/* Hero Header — avatar + identita + 4 KPI cards */}
         <div className="relative shrink-0 border-b border-theme-border">
@@ -1000,8 +1000,9 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         </div>
 
         {/* Tab Content + Right Sidebar */}
-        <div className="flex-1 flex overflow-hidden min-h-0">
-        <div className="flex-1 overflow-y-auto p-6 min-w-0">
+        {/* Una sola barra di scorrimento: scorre la scheda intera, non le colonne. */}
+        <div className="flex">
+        <div className="flex-1 p-6 min-w-0">
 
           {/* STATO CLIENTE */}
           {activeTab === 'stato' && (
@@ -1068,7 +1069,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                         <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Veicoli utilizzati</h3>
                         <span className="text-[10px] text-theme-text-muted">{uniqueVehicles.length} {uniqueVehicles.length === 1 ? 'veicolo' : 'veicoli'}</span>
                       </div>
-                      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                      <div className="space-y-2">
                         {uniqueVehicles.slice(0, 6).map((v, i) => (
                           <div key={i} className="flex items-center gap-3 rounded-xl border border-theme-border bg-theme-bg-primary/50 p-2">
                             <div className="w-12 h-10 rounded-lg bg-gradient-to-br from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/20 grid place-items-center shrink-0">
@@ -1563,7 +1564,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         </div>
 
           {/* Right Sidebar — Azioni / Alert / Insight / Documenti */}
-          <aside className="hidden xl:flex flex-col w-80 shrink-0 border-l border-theme-border overflow-y-auto bg-theme-bg-secondary/30">
+          <aside className="hidden xl:flex flex-col w-80 shrink-0 border-l border-theme-border bg-theme-bg-secondary/30">
             <div className="p-4 space-y-4">
               {/* Azioni Rapide */}
               <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
