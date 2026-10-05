@@ -124,6 +124,8 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [fatture, setFatture] = useState<RigaFatturaAddebito[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
+  // Interessi wallet: chiusi su 3 righe, la freccia apre le altre.
+  const [interessiAperti, setInteressiAperti] = useState(false)
   const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
   const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
   // Livelli DR7 Club come configurati in Centralina Pro (non piu' i tre
@@ -1161,9 +1163,9 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                               </tr>
                             </thead>
                             <tbody>
-                              {interestAccruals.slice(0, 14).map(a => (
+                              {(interessiAperti ? interestAccruals : interestAccruals.slice(0, 3)).map(a => (
                                 <tr key={a.accrual_date} className="border-b border-theme-border/30">
-                                  <td className="px-3 py-1.5 text-theme-text-muted whitespace-nowrap">{a.accrual_date}</td>
+                                  <td className="px-3 py-1.5 text-theme-text-muted whitespace-nowrap">{a.accrual_date.slice(0, 10).split('-').reverse().join('/')}</td>
                                   <td className="px-3 py-1.5 text-right text-theme-text-secondary">{fmtEur(Number(a.principal_eur))}</td>
                                   <td className="px-3 py-1.5 text-right font-bold text-dr7-gold">+{fmtEur(Number(a.accrual_eur))}</td>
                                   <td className="px-3 py-1.5 text-right">
@@ -1175,10 +1177,17 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                               ))}
                             </tbody>
                           </table>
-                          {interestAccruals.length > 14 && (
-                            <div className="px-3 py-1.5 text-[10px] text-theme-text-muted border-t border-theme-border/30">
-                              +{interestAccruals.length - 14} altri giorni — vedi tab Storico per la lista completa
-                            </div>
+                          {interestAccruals.length > 3 && (
+                            <button
+                              type="button"
+                              onClick={() => setInteressiAperti(v => !v)}
+                              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-theme-text-muted hover:text-theme-text-primary border-t border-theme-border/30"
+                            >
+                              {interessiAperti ? 'Mostra meno' : `Mostra tutti (${interestAccruals.length} giorni)`}
+                              <svg className={`w-3.5 h-3.5 transition-transform ${interessiAperti ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
                           )}
                         </div>
                       )}
