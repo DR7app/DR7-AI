@@ -48,6 +48,11 @@ interface LimitationOverrideModalProps {
    * operatori. Lasciato vuoto, la richiesta passa comunque.
    */
   showNotes?: boolean
+  /**
+   * Solo visualizzazione (tab Gestione OTP, "Vedi anteprima"): niente
+   * auto-bypass per ruolo e nessuna richiesta OTP inviata.
+   */
+  anteprima?: boolean
   onClose?: () => void
   onCancel?: () => void
   onOverrideApproved: (overrideId: string, notes?: string) => void
@@ -64,6 +69,7 @@ export default function LimitationOverrideModal({
   flowType,
   details,
   showNotes = false,
+  anteprima = false,
   onClose: _onClose,
   onCancel,
   onOverrideApproved,
@@ -86,7 +92,7 @@ export default function LimitationOverrideModal({
   // modale auto-approva al volo (zero flash sullo schermo). Reason
   // 'role_bypass_otp:<email>' nel log per audit.
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || anteprima) return
     let cancelled = false
     ;(async () => {
       try {
@@ -116,7 +122,7 @@ export default function LimitationOverrideModal({
       } catch { /* ignore */ }
     })()
     return () => { cancelled = true }
-  }, [isOpen, limitationCode, onOverrideApproved])
+  }, [isOpen, anteprima, limitationCode, onOverrideApproved])
 
   // Reset internal state whenever the modal is closed externally (isOpen→false)
   // or whenever the limitationCode changes (re-open for a different rule).
@@ -142,6 +148,10 @@ export default function LimitationOverrideModal({
   }, [otpCode, step])
 
   async function sendOtp() {
+    if (anteprima) {
+      toast('Anteprima: nessun OTP inviato')
+      return
+    }
     setSending(true)
     setError(null)
     try {

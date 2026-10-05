@@ -303,30 +303,9 @@ export default function GestioneOtpTab() {
         gated('gestione_otp_delete', `Eliminazione dell'OTP "${row.label}" richiede autorizzazione direzionale`, () => doRemoveRow(row))
     }
 
-    // Send a sample OTP email for THIS rule to the logged-in admin's inbox.
-    // No DB writes, no real OTP — just the email render so direzione can
-    // preview what the operatori would receive when this gate fires.
-    const [testingId, setTestingId] = useState<string | null>(null)
-    const sendTestForRow = async (row: OtpRow) => {
-        setTestingId(row.id)
-        try {
-            const res = await authFetch('/.netlify/functions/send-otp-preview', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: row.id, label: row.label, reason: row.reason }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok) {
-                toast.error(`Invio fallito: ${data?.error || res.status}`)
-            } else {
-                toast.success(`Anteprima inviata a ${data.recipient || 'la tua email'}`)
-            }
-        } catch (e) {
-            toast.error('Invio fallito: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
-        } finally {
-            setTestingId(null)
-        }
-    }
+    // Mostra il popup OTP di QUESTA regola come lo vede l'operatore.
+    // Solo visualizzazione: nessun invio, nessun OTP creato.
+    const [anteprimaRow, setAnteprimaRow] = useState<OtpRow | null>(null)
 
     // Derived data
     const requiredCount = rows.filter(r => r.is_required).length
@@ -395,6 +374,18 @@ export default function GestioneOtpTab() {
                 flowType={override.flowType}
                 onCancel={override.cancelLimitation}
                 onOverrideApproved={override.handleOverrideApproved}
+            />
+
+            <LimitationOverrideModal
+                isOpen={!!anteprimaRow}
+                anteprima
+                limitationCode={anteprimaRow?.id || ''}
+                limitationMessage={anteprimaRow?.label || ''}
+                details={anteprimaRow?.reason ? { 'Motivo OTP': anteprimaRow.reason } : undefined}
+                draftSessionId="anteprima"
+                flowType="anteprima"
+                onCancel={() => setAnteprimaRow(null)}
+                onOverrideApproved={() => setAnteprimaRow(null)}
             />
 
             {/* 05/10/2026 (direzione): popup di avviso rossi — ON/OFF e suono. */}
@@ -836,12 +827,11 @@ export default function GestioneOtpTab() {
                                                     Elimina
                                                 </button>
                                                 <button
-                                                    onClick={() => sendTestForRow(row)}
-                                                    disabled={testingId === row.id}
-                                                    title="Invia un'anteprima dell'email OTP alla tua casella"
-                                                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 disabled:opacity-50"
+                                                    onClick={() => setAnteprimaRow(row)}
+                                                    title="Mostra il popup OTP come lo vede l'operatore"
+                                                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20"
                                                 >
-                                                    {testingId === row.id ? 'Invio…' : 'Invia anteprima'}
+                                                    Vedi anteprima
                                                 </button>
                                             </div>
                                             {dirty && (
