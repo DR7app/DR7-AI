@@ -1068,7 +1068,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex fondo-marmo">
+    <div className="min-h-screen flex bg-theme-bg-secondary fondo-marmo">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSidebarOpen(false)} />
@@ -1682,7 +1682,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Content */}
-        <main className={`flex-1 bg-theme-bg-secondary ${(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'p-0' : 'p-3 sm:p-6 lg:p-8'}`}>
+        <main className={`flex-1 bg-theme-bg-secondary contenuto-admin ${(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'p-0' : 'p-3 sm:p-6 lg:p-8'}`}>
           <Suspense fallback={<TabLoader />}>
           {puoEsportare && !isTabRestricted(activeTab) && (
             <div className={(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'px-3 pt-3' : ''}>
@@ -1980,6 +1980,7 @@ export default function AdminDashboard() {
 function PalettePreview({ palette }: { palette: Palette }) {
     const swatch: Record<Palette, { bg: string; surface: string; border: string; accent: string; text: string }> = {
         dr7:      { bg: '#050708', surface: '#12171B', border: '#1E262C', accent: '#19C2D6', text: '#F5F7FA' },
+        dr7ai:    { bg: '#030405', surface: '#12171B', border: '#2A3236', accent: '#19C2D6', text: '#F5F7FA' },
         graphite: { bg: '#090909', surface: '#141414', border: '#1F1F1F', accent: '#8BA3B8', text: '#F5F5F5' },
         slate:    { bg: '#0B1220', surface: '#131C2E', border: '#1F2A3F', accent: '#5E7CE2', text: '#E5EAF2' },
         mono:     { bg: '#000000', surface: '#111111', border: '#2A2A2A', accent: '#FFFFFF', text: '#FFFFFF' },

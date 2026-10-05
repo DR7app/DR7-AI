@@ -1155,29 +1155,23 @@ html[data-oscura] img[src*="signature"] {
 ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-track { border-radius: 0 !important; }
 .leaflet-popup-content-wrapper, .leaflet-bar, .leaflet-bar a, .leaflet-control-layers { border-radius: 0 !important; }
 
-/* Fondo marmo (05/10/2026, direzione): marmo leggero nel blu-verde del
-   logo (#19C2D6 / #0A8FA3) su tutta la piattaforma. Le venature stanno in
-   public/fondo-marmo.svg (rumore SVG, nessuna foto da scaricare); carte,
-   header e sidebar restano pieni, il marmo si vede solo negli spazi. */
-.fondo-marmo,
-html.dark body,
-html:not(.light):not(.dark) body {
-  background-color: #041416;
+/* Tema DR7 AI (05/10/2026, direzione): marmo NERO con venature ciano del
+   logo, SOLO con palette "DR7 AI" in modo scuro. Tutti gli altri temi e il
+   modo chiaro restano senza marmo (prima era acceso ovunque, anche in chiaro).
+   Texture: public/marmo-dr7ai.webp (scripts/genera-marmo-dr7ai.py). Il velo
+   scuro sopra tiene leggibile il contenuto; carte, header e menu restano pieni
+   e il marmo si vede negli spazi della pagina. */
+html[data-palette="dr7ai"].dark body,
+html[data-palette="dr7ai"].dark .fondo-marmo {
+  background-color: #030405;
   background-image:
-    url('/fondo-marmo.svg'),
-    radial-gradient(ellipse at 20% 0%, rgba(25, 194, 214, 0.10), transparent 60%),
-    radial-gradient(ellipse at 90% 100%, rgba(10, 143, 163, 0.12), transparent 55%);
-  background-size: cover, auto, auto;
+    linear-gradient(rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.30)),
+    url('/marmo-dr7ai.webp');
+  background-size: cover;
+  background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
 }
-html.light .fondo-marmo,
-html.light body {
-  background-color: #EEF6F7;
-  background-image:
-    url('/fondo-marmo.svg'),
-    radial-gradient(ellipse at 20% 0%, rgba(25, 194, 214, 0.08), transparent 60%);
-  background-size: cover, auto;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+html[data-palette="dr7ai"].dark .contenuto-admin {
+  background-color: transparent;
 }

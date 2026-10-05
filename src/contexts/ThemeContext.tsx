@@ -21,7 +21,7 @@ import type { ReactNode } from 'react'
  * call sites that only know about dark/light don't break.
  */
 
-export type Palette = 'dr7' | 'graphite' | 'slate' | 'mono' | 'obsidian' | 'frost' | 'tesla'
+export type Palette = 'dr7' | 'dr7ai' | 'graphite' | 'slate' | 'mono' | 'obsidian' | 'frost' | 'tesla'
 export type Mode = 'dark' | 'light'
 
 /**
@@ -33,6 +33,9 @@ export type Mode = 'dark' | 'light'
  */
 export const PALETTES: { id: Palette; label: string; description: string; inspiration: string }[] = [
     { id: 'dr7',      label: 'DR7 Motion',       description: 'Brand DR7 raffinato, accento ciano.', inspiration: 'Tesla UI · mobility OS' },
+    // 2026-10-05 (direzione): il marmo NON e' piu' su tutta la piattaforma;
+    // e' il tema DR7 AI, marmo nero solo in modo scuro. In chiaro niente marmo.
+    { id: 'dr7ai',    label: 'DR7 AI',           description: 'Marmo nero, venature ciano del logo. Solo in modo scuro.', inspiration: 'DR7 A.I.' },
     { id: 'graphite', label: 'Graphite Pro',     description: 'Monocromatico esecutivo, ultra clean.', inspiration: 'Apple Pro Apps · Linear' },
     { id: 'slate',    label: 'Slate Enterprise', description: 'Fintech AI, blu professionale.', inspiration: 'Stripe · Bloomberg' },
     { id: 'mono',     label: 'Mono Minimal',     description: 'Bianco e nero puro, timeless.', inspiration: 'Apple · Nothing Tech' },
