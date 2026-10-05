@@ -17,11 +17,15 @@ interface OtpRow {
     id: string
     is_required: boolean
     conditions?: OtpCondition[] | null
+    sound_key?: string | null
+    sound_loop?: boolean | null
 }
 
 interface OtpCacheEntry {
     is_required: boolean
     conditions: OtpCondition[]
+    sound_key: string | null
+    sound_loop: boolean | null
 }
 
 let cache: Map<string, OtpCacheEntry> | null = null
@@ -30,15 +34,42 @@ let subscribed = false
 
 function rowToEntry(r: OtpRow): OtpCacheEntry {
     const conds = Array.isArray(r.conditions) ? r.conditions : []
-    return { is_required: !!r.is_required, conditions: conds }
+    return {
+        is_required: !!r.is_required,
+        conditions: conds,
+        sound_key: r.sound_key ?? null,
+        sound_loop: r.sound_loop ?? null,
+    }
+}
+
+// 05/10/2026: sound_key/sound_loop (migrazione 20261005_otp_avviso_suono).
+// Se le colonne mancano la select fallisce: si rilegge senza, cosi' gli OTP
+// continuano a funzionare e i popup usano il suono di default.
+async function leggiRighe(): Promise<OtpRow[]> {
+    const conSuono = await supabase
+        .from('system_otp_overrides')
+        .select('id, is_required, conditions, sound_key, sound_loop')
+    if (!conSuono.error) return (conSuono.data || []) as OtpRow[]
+    const base = await supabase
+        .from('system_otp_overrides')
+        .select('id, is_required, conditions')
+    return (base.data || []) as OtpRow[]
+}
+
+/**
+ * Suono configurato per un popup di avviso (Centralina Pro > Gestione OTP).
+ * null = usa il default del chiamante. sound_key 'none' = nessun suono.
+ */
+export function getAvvisoSuono(code: string): { soundKey: string | null; loop: boolean | null } {
+    if (!cache && !loadPromise) loadOnce()
+    const entry = cache?.get(code)
+    return { soundKey: entry?.sound_key ?? null, loop: entry?.sound_loop ?? null }
 }
 
 async function loadOnce(): Promise<void> {
     if (loadPromise) return loadPromise
     loadPromise = (async () => {
-        const { data } = await supabase
-            .from('system_otp_overrides')
-            .select('id, is_required, conditions')
+        const data = await leggiRighe()
         const map = new Map<string, OtpCacheEntry>()
         for (const r of (data || []) as OtpRow[]) map.set(r.id, rowToEntry(r))
         cache = map
@@ -48,9 +79,7 @@ async function loadOnce(): Promise<void> {
             supabase
                 .channel('system-otp-overrides')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'system_otp_overrides' }, async () => {
-                    const { data: fresh } = await supabase
-                        .from('system_otp_overrides')
-                        .select('id, is_required, conditions')
+                    const fresh = await leggiRighe()
                     const next = new Map<string, OtpCacheEntry>()
                     for (const r of (fresh || []) as OtpRow[]) next.set(r.id, rowToEntry(r))
                     cache = next

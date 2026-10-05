@@ -84,7 +84,7 @@ import {
   getPrePickupCarwashBufferMinutes,
   getCrossVehicleGapMinutes
 } from '../../../utils/vehicleAvailability'
-import { confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
+import { confermaSlotOccupato, confermaRitiroNelPassato } from '../../../utils/confermaSlotOccupato'
 import Input from './Input'
 import Select from './Select'
 import AddressAutocomplete from './AddressAutocomplete'
@@ -6422,6 +6422,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
         const pickupCheck = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
         if (pickupCheck < nowRome && !hasOverride('pickup_in_past')) {
+          // 05/10/2026 (direzione): popup rosso per tutti, anche con bypass OTP.
+          const [aa, mm, gg] = formData.pickup_date.split('-')
+          if (!(await confermaRitiroNelPassato(
+            `Il ritiro e' impostato al ${gg}/${mm}/${aa} alle ${formData.pickup_time}, che e' gia' passato.\nOra attuale: ${nowRome.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.\nControlla data e ora del ritiro.`
+          ))) {
+            setIsSubmitting(false)
+            submitLockRef.current = false
+            return
+          }
           setOverrideDetails(buildOverrideDetailsBase([
             { label: 'Motivo richiesta', value: 'Data e ora di ritiro nel passato' },
             { label: 'Ora attuale (Roma)', value: nowRome.toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) },

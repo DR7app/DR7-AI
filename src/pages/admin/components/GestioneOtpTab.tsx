@@ -25,6 +25,7 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import { ALARM_SOUNDS, ascoltaAnteprima, type AlarmSoundKey } from '../../../utils/alarmSounds'
 
 interface OtpRow {
     id: string
@@ -35,7 +36,18 @@ interface OtpRow {
     sort_order: number
     conditions: OtpCondition[]
     updated_at?: string | null
+    sound_key?: string | null
+    sound_loop?: boolean | null
 }
+
+// 05/10/2026 (direzione): popup di avviso rossi (non OTP). Si gestiscono nel
+// blocco "Popup di avviso" in cima, con il loro suono: non compaiono nella
+// lista delle regole OTP per non confonderli con un'autorizzazione.
+const AVVISO_POPUP: { id: string; titolo: string; descrizione: string }[] = [
+    { id: 'avviso_slot_occupato', titolo: 'Slot occupato', descrizione: 'Prenotazioni, Preventivi e Lavaggio: mezzo o orario gia prenotato.' },
+    { id: 'avviso_ritiro_passato', titolo: 'Ritiro nel passato', descrizione: 'Prenotazioni: nuova prenotazione con il ritiro gia passato.' },
+]
+const AVVISO_IDS = new Set(AVVISO_POPUP.map(a => a.id))
 
 // Chi può bypassare l'OTP per la tab Gestione OTP: direzione (failsafe valerio/ilenia)
 // oppure developer (failsafe ophe). Gestito via `role:direzione` / `role:developer`
@@ -214,6 +226,24 @@ export default function GestioneOtpTab() {
         setRows(prev => prev.map(r => (r.id === row.id ? { ...r, is_required: next } : r)))
         await reloadOtpConfig()
     }
+    const doSalvaSuono = async (row: OtpRow, patch: { sound_key?: string; sound_loop?: boolean }) => {
+        setSavingId(row.id)
+        const { error } = await supabase
+            .from('system_otp_overrides')
+            .update({ ...patch, updated_at: new Date().toISOString() })
+            .eq('id', row.id)
+        setSavingId(null)
+        if (error) {
+            toast.error('Salvataggio suono fallito: ' + error.message)
+            return
+        }
+        setRows(prev => prev.map(r => (r.id === row.id ? { ...r, ...patch } : r)))
+        await reloadOtpConfig()
+    }
+    const salvaSuono = (row: OtpRow, patch: { sound_key?: string; sound_loop?: boolean }) => {
+        gated('gestione_otp_write', `Modifica suono del popup "${row.label}" richiede autorizzazione direzionale`, () => doSalvaSuono(row, patch))
+    }
+
     const toggleRequired = (row: OtpRow) => {
         const verb = row.is_required ? 'Disattivare' : 'Attivare'
         gated('gestione_otp_toggle', `${verb} l'OTP "${row.label}" richiede autorizzazione direzionale`, () => doToggleRequired(row))
@@ -310,6 +340,7 @@ export default function GestioneOtpTab() {
     const filteredRows = useMemo(() => {
         const q = search.trim().toLowerCase()
         return rows.filter(r => {
+            if (AVVISO_IDS.has(r.id)) return false
             if (filter === 'active' && !r.is_required) return false
             if (filter === 'inactive' && r.is_required) return false
             if (!q) return true
@@ -365,6 +396,80 @@ export default function GestioneOtpTab() {
                 onCancel={override.cancelLimitation}
                 onOverrideApproved={override.handleOverrideApproved}
             />
+
+            {/* 05/10/2026 (direzione): popup di avviso rossi — ON/OFF e suono. */}
+            <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                <h3 className="text-base font-semibold text-theme-text-primary">Popup di avviso</h3>
+                <p className="text-xs text-theme-text-muted mt-1 mb-4">
+                    Popup rosso che avvisa l'operatore e chiede se procedere comunque. Non e' un OTP: vale per tutti,
+                    anche per chi ha il bypass. Spento = nessun popup.
+                </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {AVVISO_POPUP.map(av => {
+                        const row = rows.find(r => r.id === av.id)
+                        if (!row) {
+                            return (
+                                <div key={av.id} className="rounded-xl border border-theme-border bg-theme-bg-primary p-4 text-sm text-theme-text-muted">
+                                    {av.titolo}: riga <code>{av.id}</code> mancante in system_otp_overrides.
+                                </div>
+                            )
+                        }
+                        const suonoAttuale = row.sound_key || 'sirena'
+                        const loopAttuale = row.sound_loop ?? true
+                        const occupato = savingId === row.id
+                        return (
+                            <div key={av.id} className={`rounded-xl border p-4 ${row.is_required ? 'border-red-500/50 bg-red-500/5' : 'border-theme-border bg-theme-bg-primary'}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-theme-text-primary">{av.titolo}</div>
+                                        <div className="text-xs text-theme-text-muted mt-0.5">{av.descrizione}</div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={occupato}
+                                        onClick={() => toggleRequired(row)}
+                                        className={`shrink-0 px-3 py-1.5 text-xs font-bold rounded-full transition-colors disabled:opacity-50 ${row.is_required ? 'bg-red-600 text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary'}`}
+                                    >
+                                        {row.is_required ? 'ACCESO' : 'SPENTO'}
+                                    </button>
+                                </div>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <label className="text-xs text-theme-text-secondary">Suono</label>
+                                    <select
+                                        value={suonoAttuale}
+                                        disabled={occupato}
+                                        onChange={e => salvaSuono(row, { sound_key: e.target.value })}
+                                        className="px-2 py-1.5 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                                    >
+                                        {ALARM_SOUNDS.map(sn => (
+                                            <option key={sn.key} value={sn.key}>{sn.label}</option>
+                                        ))}
+                                        <option value="none">Nessun suono</option>
+                                    </select>
+                                    <button
+                                        type="button"
+                                        disabled={suonoAttuale === 'none'}
+                                        onClick={() => ascoltaAnteprima(suonoAttuale as AlarmSoundKey)}
+                                        className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-40"
+                                        title="Ascolta questo suono"
+                                    >
+                                        Ascolta
+                                    </button>
+                                    <label className="flex items-center gap-1.5 text-xs text-theme-text-secondary ml-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={loopAttuale}
+                                            disabled={occupato || suonoAttuale === 'none'}
+                                            onChange={e => salvaSuono(row, { sound_loop: e.target.checked })}
+                                        />
+                                        Suona finche' non si risponde
+                                    </label>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
 
             {/* Hero header */}
             <div className="rounded-2xl border border-theme-border bg-gradient-to-br from-theme-bg-secondary to-theme-bg-primary p-6 shadow-sm">

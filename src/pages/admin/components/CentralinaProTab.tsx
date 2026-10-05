@@ -37,6 +37,9 @@ import lazyWithRetry from '../../../utils/lazyWithRetry'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import { isVoceSforoKm } from '../../../utils/sforoKmContratto'
 const SitoSection = lazyWithRetry(() => import('./SitoTab'))
+// 05/10/2026 (direzione): Gestione OTP non e' piu' nel menu laterale, vive
+// qui (stesso componente, nessuna copia) insieme ai popup di avviso e ai suoni.
+const GestioneOtpSection = lazyWithRetry(() => import('./GestioneOtpTab'))
 
 type FleetVehicle = {
   id: string
@@ -68,7 +71,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -125,6 +128,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'status-clienti', title: 'Status Clienti' },
   { id: 'autisti', title: 'Autisti' },
   { id: 'sito', title: 'Sito' },
+  { id: 'gestione-otp', title: 'Gestione OTP' },
   // 'Marketing' rimossa: ora vive in admin > Marketing > Social Links.
   // Il campo `marketing` resta nel snapshot per preservarlo durante save.
 ]
@@ -2686,6 +2690,14 @@ export default function CentralinaProTab() {
                 </Suspense>
               </>
             )}
+            {section === 'gestione-otp' && (
+              <>
+                <GlobaleBadge cosa="Le regole OTP e i popup di avviso" />
+                <Suspense fallback={<ScheletroTabella righe={8} colonne={2} />}>
+                  <GestioneOtpSection />
+                </Suspense>
+              </>
+            )}
             </>)}
           </main>
         </div>
@@ -2697,7 +2709,7 @@ export default function CentralinaProTab() {
           Salva: mostrarne due confondeva, e quello grande li' non salvava
           niente di quella sezione. */}
       {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti'
-        && section !== 'sito'
+        && section !== 'sito' && section !== 'gestione-otp'
         && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && (
         <SaveBar
           changes={changes}

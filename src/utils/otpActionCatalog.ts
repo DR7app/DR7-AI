@@ -105,6 +105,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'avviso_ritiro_passato',
+    label: 'Popup rosso ritiro nel passato (avviso, non OTP)',
+    used_in: 'Prenotazioni > Salva nuova prenotazione con ritiro gia passato',
+    reason: 'Popup rosso con sirena che mostra data/ora del ritiro: si sceglie se procedere comunque.',
+    group: 'Noleggio',
+    wired: true,
+  },
+  {
     id: 'pickup_in_past',
     label: 'Data ritiro nel passato',
     used_in: 'Salva prenotazione con pickup_date < oggi',

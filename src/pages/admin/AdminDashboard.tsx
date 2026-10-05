@@ -877,7 +877,7 @@ export default function AdminDashboard() {
       { tab: 'acconti', label: 'Acconti' },
       { tab: 'fornitori', label: 'Fornitori' },
       { tab: 'nexi', label: 'Nexi' },
-      { tab: 'gestione-otp', label: 'Gestione OTP' },
+      // 05/10/2026 (direzione): Gestione OTP spostata in Centralina Pro > Gestione OTP.
       { tab: 'verifica-documenti', label: 'Verifica Documenti' },
     ] },
     { name: 'Centralina Pro', tabs: [

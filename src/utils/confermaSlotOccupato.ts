@@ -1,5 +1,5 @@
-import { AlarmSoundPlayer } from './alarmSounds'
-import { isOtpRequired } from './otpConfigCache'
+import { AlarmSoundPlayer, ALARM_SOUNDS, type AlarmSoundKey } from './alarmSounds'
+import { isOtpRequired, getAvvisoSuono } from './otpConfigCache'
 
 // 05/10/2026 (direzione): uno slot gia' occupato deve SEMPRE avvisare,
 // anche per chi ha role:bypass-otp o quando l'OTP slot_unavailable e'
@@ -16,12 +16,30 @@ export function confermaSlotOccupato(dettaglio: string): Promise<boolean> {
   // Interruttore in Gestione OTP (riga 'avviso_slot_occupato'): spento =
   // nessun popup. Riga assente o cache non caricata = popup acceso.
   if (!isOtpRequired('avviso_slot_occupato')) return Promise.resolve(true)
+  return avvisoRosso('avviso_slot_occupato', 'SLOT NON DISPONIBILE', dettaglio)
+}
+
+// 05/10/2026 (direzione): stesso popup rosso per il ritiro nel passato.
+// Una prenotazione e' stata salvata per errore con ritiro "ieri alle 20:00"
+// senza che nessuno se ne accorgesse (operatore con bypass OTP).
+export function confermaRitiroNelPassato(dettaglio: string): Promise<boolean> {
+  if (!isOtpRequired('avviso_ritiro_passato')) return Promise.resolve(true)
+  return avvisoRosso('avviso_ritiro_passato', 'RITIRO NEL PASSATO', dettaglio)
+}
+
+function avvisoRosso(codice: string, titoloAvviso: string, dettaglio: string): Promise<boolean> {
   // Un solo popup per volta (scelta mezzo + Salva ravvicinati).
   if (aperto) return aperto
 
   aperto = new Promise<boolean>((resolve) => {
+    // Suono scelto in Centralina Pro > Gestione OTP > Popup di avviso.
+    // Default: sirena in loop. 'none' = muto. Chiave sconosciuta = default.
+    const scelta = getAvvisoSuono(codice)
     const suono = new AlarmSoundPlayer()
-    suono.play('sirena', true)
+    const chiave = scelta.soundKey && ALARM_SOUNDS.some(a => a.key === scelta.soundKey)
+      ? scelta.soundKey as AlarmSoundKey
+      : 'sirena'
+    if (scelta.soundKey !== 'none') suono.play(chiave, scelta.loop ?? true)
 
     const scrim = document.createElement('div')
     scrim.setAttribute('role', 'alertdialog')
@@ -32,7 +50,7 @@ export function confermaSlotOccupato(dettaglio: string): Promise<boolean> {
     box.style.cssText = 'width:100%;max-width:520px;background:#b91c1c;color:#fff;border:3px solid #fecaca;box-shadow:0 20px 60px rgba(0,0,0,0.5);padding:24px;font-family:inherit;'
 
     const titolo = document.createElement('div')
-    titolo.textContent = 'SLOT NON DISPONIBILE'
+    titolo.textContent = titoloAvviso
     titolo.style.cssText = 'font-size:22px;font-weight:800;letter-spacing:0.08em;margin-bottom:14px;'
 
     const testo = document.createElement('div')
