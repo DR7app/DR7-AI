@@ -186,7 +186,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         disabled={disabled}
         tabIndex={-1}
         aria-hidden="true"
-        className="absolute left-0 top-0 h-full w-full opacity-0 pointer-events-none"
+        className="dr7-data-nascosta absolute left-0 top-0 h-full w-full opacity-0 pointer-events-none"
       />
       <input
         ref={testoRef}
@@ -238,7 +238,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         tabIndex={-1}
         aria-label="Apri calendario"
         title="Apri calendario"
-        className="absolute left-0 top-0 h-full w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+        className="dr7-data-nascosta absolute left-0 top-0 h-full w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
       />
     </div>
   );

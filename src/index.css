@@ -303,9 +303,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
    l'indicatore nativo, invisibile, viene spostato sopra l'icona cosi' il
    clic apre il calendario. Grigio neutro: leggibile in tema chiaro e scuro.
    Fuori da @layer: vince sul px-* di Tailwind, il testo non finisce sotto
-   l'icona. I campi data di EuropeanDateInput hanno gia' la loro icona. */
-input[type="date"],
-input[type="datetime-local"] {
+   l'icona. I campi data di EuropeanDateInput hanno gia' la loro icona e i
+   loro input nativi invisibili (.dr7-data-nascosta) DEVONO restare esclusi:
+   il position: relative qui sotto batteva il loro `absolute` di Tailwind e
+   non si poteva piu' scrivere la data (scheda cliente, 05/10/2026). */
+input[type="date"]:not(.dr7-data-nascosta),
+input[type="datetime-local"]:not(.dr7-data-nascosta) {
   position: relative;
   padding-left: 2.25rem;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%239ca3af' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'/%3E%3C/svg%3E");
@@ -313,8 +316,8 @@ input[type="datetime-local"] {
   background-position: 0.65rem center;
   background-size: 1rem 1rem;
 }
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+input[type="date"]:not(.dr7-data-nascosta)::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]:not(.dr7-data-nascosta)::-webkit-calendar-picker-indicator {
   position: absolute;
   left: 0;
   top: 0;
