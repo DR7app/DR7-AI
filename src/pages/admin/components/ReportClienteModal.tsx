@@ -1098,7 +1098,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                         <button
                           type="button"
                           onClick={() => setVeicoliAperti(v => !v)}
-                          className="w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 text-[11px] font-medium text-theme-text-muted hover:text-theme-text-primary"
+                          className={`w-full flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 text-[11px] font-medium text-theme-text-muted hover:text-theme-text-primary ${veicoliAperti ? 'sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border' : ''}`}
                         >
                           {veicoliAperti ? 'Mostra meno' : `Mostra tutti (${uniqueVehicles.length} veicoli)`}
                           <svg className={`w-3.5 h-3.5 transition-transform ${veicoliAperti ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -1165,7 +1165,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                           Nessuna riga di accrediti ancora. Il cron giornaliero scrive la prima riga la notte successiva all'iscrizione al club.
                         </p>
                       ) : (
-                        <div className="bg-theme-bg-secondary/50 rounded-lg overflow-hidden">
+                        <div className="bg-theme-bg-secondary/50 rounded-lg">
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="border-b border-theme-border/50">
@@ -1194,7 +1194,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                             <button
                               type="button"
                               onClick={() => setInteressiAperti(v => !v)}
-                              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-theme-text-muted hover:text-theme-text-primary border-t border-theme-border/30"
+                              className={`w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-theme-text-muted hover:text-theme-text-primary border-t border-theme-border/30 ${interessiAperti ? 'sticky bottom-0 bg-theme-bg-secondary' : ''}`}
                             >
                               {interessiAperti ? 'Mostra meno' : `Mostra tutti (${interestAccruals.length} giorni)`}
                               <svg className={`w-3.5 h-3.5 transition-transform ${interessiAperti ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
