@@ -25,6 +25,15 @@ export interface RigaStoricoRete {
     lotto: string
 }
 
+/**
+ * Copia venduta (05/10/2026, direzione): ha la chiave della rete. Li' l'EMTN
+ * e' in sola consultazione: nessun intervento manuale sullo score.
+ * L'installazione DR7 non ha la chiave.
+ */
+export function copiaDellaRete(): boolean {
+    return !!process.env.EMTN_RETE_CHIAVE
+}
+
 /** Impronta del codice fiscale: HMAC-SHA256 con la chiave della copia. */
 export function improntaCF(cf: string, chiave: string): string {
     return crypto.createHmac('sha256', chiave).update(String(cf).trim().toUpperCase()).digest('hex')
@@ -38,7 +47,10 @@ export function voceAnonima(label: string | null | undefined): string | null {
     let v = String(label || '').trim()
     v = v.replace(/^(penale|danno)\s+prenotazione\s+[0-9a-f]{6,}\s*-\s*/i, '')
     v = v.replace(/^(penale|danno)\s*-\s*/i, '')
-    v = v.replace(/\b[0-9a-f]{8}\b/gi, '').replace(/\s+/g, ' ').trim()
+    v = v.replace(/\b[0-9a-f]{8}\b/gi, '')
+    // Mai il nome dell'azienda da cui arriva l'evento.
+    v = v.replace(/\b(dr7|dubai\s*rent(\s*7(\.0)?)?)\b[\s\-:.]*/gi, '')
+    v = v.replace(/^[\s\-:.·]+|[\s\-:.·]+$/g, '').replace(/\s+/g, ' ').trim()
     return v ? v.slice(0, 120) : null
 }
 

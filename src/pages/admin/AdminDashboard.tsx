@@ -393,16 +393,34 @@ export default function AdminDashboard() {
   // Contenuto della tab: il PDF dei Report si costruisce da qui.
   const contenutoTabRef = useRef<HTMLDivElement>(null)
   const [tabHistory, setTabHistory] = useState<TabType[]>([])
+  // Pagina interna aperta dentro una tab (es. EMTN: scheda di un cliente
+  // aperta con "Apri"). La freccia Indietro chiude prima quella e torna
+  // alla lista, invece di saltare alla tab precedente.
+  const [sottoPagina, setSottoPagina] = useState(false)
+  useEffect(() => {
+    function handleSotto(e: Event) {
+      setSottoPagina(!!(e as CustomEvent<{ aperta: boolean }>).detail?.aperta)
+    }
+    window.addEventListener('admin:sotto-pagina', handleSotto)
+    return () => window.removeEventListener('admin:sotto-pagina', handleSotto)
+  }, [])
   const setActiveTab = (tab: TabType) => {
     setTabHistory(prev => [...prev.slice(-19), activeTab])
+    setSottoPagina(false)
     _setActiveTab(tab)
     try { sessionStorage.setItem(ACTIVE_TAB_KEY, tab) } catch { /* ignore */ }
   }
   const goBack = () => {
+    if (sottoPagina) {
+      window.dispatchEvent(new CustomEvent('admin:chiudi-sotto-pagina'))
+      return
+    }
     if (tabHistory.length > 0) {
       const prev = tabHistory[tabHistory.length - 1]
       setTabHistory(h => h.slice(0, -1))
+      setSottoPagina(false)
       _setActiveTab(prev)
+      try { sessionStorage.setItem(ACTIVE_TAB_KEY, prev) } catch { /* ignore */ }
     }
   }
 
@@ -1191,7 +1209,7 @@ export default function AdminDashboard() {
               </svg>
             </button>
             )}
-            {tabHistory.length > 0 && (
+            {(tabHistory.length > 0 || sottoPagina) && (
               <button
                 onClick={goBack}
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-theme-bg-hover transition-colors text-theme-text-secondary hover:text-theme-text-primary flex-shrink-0"

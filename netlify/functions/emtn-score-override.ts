@@ -15,6 +15,7 @@ import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
 import { getServiceSupabase, jsonResponse } from './utils/emtn'
 import { userHasRole } from './utils/adminRoles'
+import { copiaDellaRete } from './utils/emtnRete'
 
 const TIPI = new Set(['limite_massimo', 'score_fisso', 'flag_critico'])
 
@@ -39,6 +40,9 @@ export const handler: Handler = async (event) => {
         return jsonResponse(200, { override: data || [] }, origin)
     }
 
+    if (copiaDellaRete()) {
+        return jsonResponse(403, { error: 'EMTN in sola consultazione: lo score non si modifica a mano' }, origin)
+    }
     if (!(await userHasRole(operatorEmail || '', 'direzione'))) {
         return jsonResponse(403, { error: 'Solo la direzione puo\' modificare l\'EMTN Score' }, origin)
     }

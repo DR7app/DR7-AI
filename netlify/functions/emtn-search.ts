@@ -22,7 +22,7 @@ import {
     jsonResponse,
     normalizeCF,
 } from './utils/emtn'
-import { cercaStoricoRete } from './utils/emtnRete'
+import { cercaStoricoRete, copiaDellaRete } from './utils/emtnRete'
 import { categoriaEMTN } from '../../src/utils/emtnMobilityRisk'
 import { calcolaEMTNScore } from '../../src/utils/emtnScore/motore'
 import { classificaVoce, type StatoPagamentoEvento } from '../../src/utils/emtnScore/normalizza'
@@ -694,6 +694,8 @@ export const handler: Handler = async (event) => {
         reportUnlocked: unlocked,
         recentEvents,
         score: { ...emtnScore, storico: storicoScore },
+        // Copia venduta: score in sola consultazione (niente intervento manuale).
+        scoreSolaConsultazione: copiaDellaRete(),
         dr7History: {
             // Visibile sempre all'admin DR7: e' la cronologia interna
             // della tua azienda, niente OTP serve qui.

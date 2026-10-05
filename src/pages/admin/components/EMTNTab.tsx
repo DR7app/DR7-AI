@@ -165,6 +165,7 @@ interface SearchResponse {
     reportUnlocked: boolean
     recentEvents: RecentEvent[]
     dr7History?: DR7History
+    scoreSolaConsultazione?: boolean
     rete?: { eventi: EventoRete[]; residuo: number }
 }
 
@@ -302,6 +303,24 @@ export default function EMTNTab() {
         setPratica({ posizioneId: null, contesto: null })
     }
 
+    function tornaAllaLista() {
+        setData(null); setError(null); setCfInput(''); setDatiEstero(ESTERO_VUOTO)
+    }
+
+    // Scheda cliente aperta = pagina interna: la freccia Indietro del
+    // gestionale torna alla lista EMTN, non alla tab precedente.
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('admin:sotto-pagina', { detail: { aperta: !!data } }))
+    }, [data])
+    useEffect(() => {
+        const chiudi = () => tornaAllaLista()
+        window.addEventListener('admin:chiudi-sotto-pagina', chiudi)
+        return () => {
+            window.removeEventListener('admin:chiudi-sotto-pagina', chiudi)
+            window.dispatchEvent(new CustomEvent('admin:sotto-pagina', { detail: { aperta: false } }))
+        }
+    }, [])
+
     async function handleSearchSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (searching) return
@@ -354,7 +373,7 @@ export default function EMTNTab() {
                                 <div className="flex items-center justify-between">
                                     <button
                                         type="button"
-                                        onClick={() => { setData(null); setError(null); setCfInput(''); setDatiEstero(ESTERO_VUOTO) }}
+                                        onClick={tornaAllaLista}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-theme-border text-xs font-semibold text-theme-text-primary hover:bg-theme-bg-hover"
                                     >
                                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -385,7 +404,7 @@ export default function EMTNTab() {
                                 <EMTNScoreCard
                                     score={data.score}
                                     clientId={data.client.id}
-                                    isDirezione={isDirezioneEMTN}
+                                    isDirezione={isDirezioneEMTN && !data.scoreSolaConsultazione}
                                     onAggiornato={() => { void refresh() }}
                                 />
                                 {data.dr7History && (data.dr7History.damages.length + data.dr7History.penalties.length) > 0 && (
@@ -955,7 +974,7 @@ function AttivitaRecenti({ events, dr7History }: { events: RecentEvent[]; dr7His
     )
 }
 
-/* ---------- Sidebar: Storico DR7 (danni e penali di questa azienda) ---------- */
+/* ---------- Sidebar: Storico interno (danni e penali di questa azienda) ---------- */
 
 // 28/09/2026: la scheda mostrava solo il totale NON pagato. Un danno saldato
 // (es. 13.000 EUR sulla Clio di Nelson Badini) non compariva da nessuna parte.
@@ -969,7 +988,7 @@ function StoricoDr7Card({ history }: { history: DR7History }) {
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Storico DR7 · Danni e penali</h3>
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Storico interno · Danni e penali</h3>
                 <span className={'text-[10px] font-semibold tabular-nums ' + (residuo > 0 ? 'text-red-400' : 'text-emerald-500')}>
                     {residuo > 0 ? `Non saldato ${fmt(residuo)}` : 'Tutto saldato'}
                 </span>
@@ -1337,7 +1356,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                             </svg>
                         </span>
-                        <h3 className="text-sm font-semibold">Clienti DR7 con danni, penali o in attesa di pagamento</h3>
+                        <h3 className="text-sm font-semibold">Clienti con danni, penali o in attesa di pagamento</h3>
                     </div>
                     <div className="flex items-center gap-3 text-[11px]">
                         <span className="text-theme-text-muted">{clients.length} clienti</span>
@@ -1359,7 +1378,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage
                 )}
                 {!loading && !error && clients.length === 0 && (
                     <p className="text-[11px] text-theme-text-muted italic py-2">
-                        Nessun cliente con danni, penali o pagamenti in sospeso nei record DR7.
+                        Nessun cliente con danni, penali o pagamenti in sospeso nei record dell'azienda.
                     </p>
                 )}
                 {!loading && !error && clients.length > 0 && (
