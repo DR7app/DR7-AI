@@ -7,6 +7,7 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
+import { getDayBlock, getSlotBlock, lavaggioHoursPronto } from '../../../utils/lavaggioHours'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { logger } from '../../../utils/logger'
@@ -225,6 +226,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // Giorno (single-day chronological timeline). NO Operatori tab — left out
   // by explicit request.
   const [viewMode, setViewMode] = useState<'mese' | 'settimana' | 'giorno'>('mese')
+  // 05/10/2026: giorni/orari bloccati (Centralina Pro) in rosso "BLOCCO".
+  // La config si legge in modo asincrono: si ridisegna quando arriva.
+  const [, setBlocchiPronti] = useState(false)
+  useEffect(() => { lavaggioHoursPronto.then(() => setBlocchiPronti(true)) }, [])
   // For Giorno/Settimana, anchor date is `currentDate`. "Oggi" button below
   // resets `currentDate` to today.
 
@@ -936,6 +941,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600/85" /><span className="text-theme-text-primary">Rientro</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#22d3ee]" /><span className="text-theme-text-primary">Oggi</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600/30 border border-red-600" /><span className="text-theme-text-primary">Bloccato</span></span>
       </div>
 
       {/* 2. Main area: calendar grid + (lg only) right sidebar */}
@@ -958,6 +964,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               const isHol = getHolidayForDate(d)
               const isSun = isSunday(d)
               const isToday = day === todayDay
+              const bloccoGiorno = getDayBlock(d)
 
               return (
                 <div
@@ -969,8 +976,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         una colonna rosa che compete coi blocchi colorati. */''}
                     ${(isHol || isSun) ? 'bg-theme-text-primary/[0.04]' : ''}
                     ${isToday ? 'bg-gradient-to-b from-[#22d3ee]/45 to-[#22d3ee]/15 border-l-2 border-r-2 border-[#22d3ee] shadow-[inset_0_-3px_0_0_#22d3ee]' : ''}
+                    ${bloccoGiorno && !isToday ? 'bg-red-600/80' : ''}
                   `}
                   style={headerCellStyle}
+                  title={bloccoGiorno ? `BLOCCO${bloccoGiorno.note ? ` - ${bloccoGiorno.note}` : ''}` : undefined}
                 >
                   {/* Red dot for Sundays and holidays */}
                   {(isHol || isSun) && (
@@ -981,14 +990,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   )}
 
                   <span
-                    className={`text-xs font-bold leading-none ${isToday ? 'text-[#22d3ee]' : 'text-theme-text-primary/90'}`}
+                    className={`text-xs font-bold leading-none ${isToday ? 'text-[#22d3ee]' : bloccoGiorno ? 'text-white' : 'text-theme-text-primary/90'}`}
                   >
                     {day}
                   </span>
                   <span
-                    className={`text-[8px] uppercase tracking-wide leading-none ${isToday ? 'text-[#22d3ee]/80' : 'text-theme-text-primary/50'}`}
+                    className={`text-[8px] uppercase tracking-wide leading-none ${bloccoGiorno && !isToday ? 'font-bold text-white' : isToday ? 'text-[#22d3ee]/80' : 'text-theme-text-primary/50'}`}
                   >
-                    {d.toLocaleDateString('it-IT', { weekday: 'short' })}
+                    {bloccoGiorno ? 'Blocco' : d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
                 </div>
               )
@@ -1046,6 +1055,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
                     const isRedDay = getHolidayForDate(d) || isSunday(d)
                     const isToday = day === todayDay
+                    const bloccoSlot = getSlotBlock(d, timeString)
+                    // Etichetta solo sulla prima riga di ogni fascia bloccata.
+                    const inizioBlocco = !!bloccoSlot && (i === 0 || !getSlotBlock(d, `${String(Math.floor((totalMinutes - 5) / 60)).padStart(2, '0')}:${String((totalMinutes - 5) % 60).padStart(2, '0')}`))
 
                     // Find ALL bookings occupying this slot
                     const slotBookings = eventsWithLanes.filter(evt => {
@@ -1087,8 +1099,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           ${!isToday && !slotBooking && !isRedDay ? 'hover:bg-theme-text-primary/[0.06] cursor-pointer' : ''}
                           ${!isToday && !slotBooking && isRedDay ? 'bg-theme-text-primary/[0.02] hover:bg-theme-text-primary/[0.06]' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
+                          ${bloccoSlot && !slotBooking ? 'bg-red-600/25 hover:bg-red-600/35' : ''}
                         `}
                         style={dayCellStyle}
+                        title={bloccoSlot ? `BLOCCO${bloccoSlot.note ? ` - ${bloccoSlot.note}` : ''}` : undefined}
                         onClick={() => {
                           // Only allow booking on available slots (green cells)
                           if (!slotBooking && !isRedDay && onNewBooking) {
@@ -1097,6 +1111,11 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           }
                         }}
                       >
+                        {inizioBlocco && (
+                          <span className="absolute left-0.5 right-0.5 top-0.5 z-[1] pointer-events-none truncate text-[9px] font-bold uppercase leading-none text-red-600 dark:text-red-400">
+                            Blocco{bloccoSlot?.note ? ` · ${bloccoSlot.note}` : ''}
+                          </span>
+                        )}
                         {/* Render booking blocks for all bookings starting at this slot */}
                         {startingBookings.map(startEvt => {
                           const isRientro = isRientroBooking(startEvt.booking)

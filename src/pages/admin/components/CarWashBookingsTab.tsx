@@ -23,9 +23,9 @@ import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '.
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
-import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock } from '../../../utils/lavaggioHours'
+import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock, type LavaggioBlock } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
-import { confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
+import { confermaSlotOccupato, confermaLavaggioBloccato } from '../../../utils/confermaSlotOccupato'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink, isWalletOrGift, isCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { leggiSaldoWallet, leggiMovimentoWallet, importoDovutoWallet, formattaEuro, type SaldoWallet } from '../../../utils/walletCliente'
@@ -141,6 +141,16 @@ interface CarWashService {
 }
 
 // Helper to parse duration string to minutes
+/** Testo del popup rosso per un giorno/orario lavaggio bloccato. Date dd/mm/yyyy. */
+function testoBloccoLavaggio(data: string, ora: string, blocco: LavaggioBlock): string {
+  const it = (ymd: string) => ymd.split('-').reverse().join('/')
+  const quando = blocco.start && blocco.end
+    ? `dalle ${blocco.start} alle ${blocco.end}`
+    : 'tutto il giorno'
+  const periodo = blocco.from === blocco.to ? `il ${it(blocco.from)}` : `dal ${it(blocco.from)} al ${it(blocco.to)}`
+  return `Lavaggio del ${it(data)} alle ${ora}: prenotazioni BLOCCATE ${quando} ${periodo}.${blocco.note ? `\nMotivo: ${blocco.note}` : ''}`
+}
+
 function parseDurationToMinutes(duration: string): number {
   if (!duration || duration === '-') return 30 // Default 30 min for services without duration
   const match = duration.match(/(\d+)\s*min/i)
@@ -186,6 +196,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const submitLockRef = useRef(false)
   // Slot gia' accettato nel popup rosso (data|ora): al Salva non si richiede.
   const slotAvvisoAccettatoRef = useRef<string | null>(null)
+  // Giorno/orario BLOCCATO gia' accettato nel popup rosso (data|ora).
+  const bloccoAccettatoRef = useRef<string | null>(null)
   // Lock dedicato per la chiamata createBooking (insert + WhatsApp).
   // Distinto da submitLockRef cosi' protegge anche i replay OTP / force.
   const createBookingLockRef = useRef(false)
@@ -2103,6 +2115,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const [byy, bmm, bdd] = formData.appointment_date.split('-').map(Number)
       const slotBlock = getSlotBlock(new Date(byy, bmm - 1, bdd), formData.appointment_time)
       if (slotBlock) {
+        // 05/10/2026: prima il popup rosso, per tutti (l'OTP qui sotto scatta
+        // solo se acceso in Gestione OTP). Gia' accettato sull'orario = niente bis.
+        const chiave = `${formData.appointment_date}|${formData.appointment_time}`
+        if (bloccoAccettatoRef.current !== chiave) {
+          if (!(await confermaLavaggioBloccato(testoBloccoLavaggio(formData.appointment_date, formData.appointment_time, slotBlock)))) {
+            createBookingLockRef.current = false
+            return
+          }
+          bloccoAccettatoRef.current = chiave
+        }
         pendingCreateBookingRef.current = { force: forceBooking }
         createBookingLockRef.current = false
         override.requestOverride('carwash_blocked_slot', `Orario ${formData.appointment_time} del ${formData.appointment_date} bloccato${slotBlock.note ? ` (${slotBlock.note})` : ''}. Forzare richiede autorizzazione direzionale.`)
@@ -5042,7 +5064,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       // selezionabile, ma l'OTP (carwash_slot_occupied) scatta
                       // sia per slot OCCUPATO sia per slot FUORI ORARIO lavaggio.
                       const dateForChk = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00') : new Date()
-                      const closed = !isInLavaggioHours(dateForChk, newTime)
+                      const bloccoSlot = formData.appointment_date ? getSlotBlock(dateForChk, newTime) : null
+                      // Un orario bloccato ha il suo popup qui sotto e il suo
+                      // OTP al Salva: non si chiede anche quello "fuori orario".
+                      const closed = !bloccoSlot && !isInLavaggioHours(dateForChk, newTime)
                       const newDuration = getTotalDuration() || 60
                       const conflict = busyBookingsOnDate.find(b => {
                         const bookingTime = b.appointment_time
@@ -5053,6 +5078,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         return checkTimeOverlap(newTime, newDuration, bookingTime, existingDuration as number)
                       })
                       setFormData({ ...formData, appointment_time: newTime })
+                      // 05/10/2026: giorno/orario bloccato (es. SOLD OUT) -> popup
+                      // rosso subito. Annulla = orario tolto.
+                      if (bloccoSlot) {
+                        const chiave = `${formData.appointment_date}|${newTime}`
+                        if (bloccoAccettatoRef.current !== chiave) {
+                          if (!(await confermaLavaggioBloccato(testoBloccoLavaggio(formData.appointment_date, newTime, bloccoSlot)))) {
+                            setFormData(prev => ({ ...prev, appointment_time: '' }))
+                            return
+                          }
+                          bloccoAccettatoRef.current = chiave
+                        }
+                      }
                       if (override.hasOverride('carwash_slot_occupied')) return
                       if (conflict) {
                         const who = conflict.customer_name || 'altro cliente'

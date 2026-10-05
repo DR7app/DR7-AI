@@ -113,6 +113,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'avviso_blocco_lavaggio',
+    label: 'Popup rosso giorno/orario lavaggio BLOCCATO (avviso, non OTP)',
+    used_in: 'Lavaggio > scelta orario e Salva su un giorno/orario bloccato (Automazioni o Orari Lavaggio)',
+    reason: 'Popup rosso con sirena che mostra il blocco (es. SOLD OUT): si sceglie se prenotare comunque.',
+    group: 'Lavaggio',
+    wired: true,
+  },
+  {
     id: 'pickup_in_past',
     label: 'Data ritiro nel passato',
     used_in: 'Salva prenotazione con pickup_date < oggi',

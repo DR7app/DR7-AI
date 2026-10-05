@@ -46,6 +46,7 @@ interface OtpRow {
 const AVVISO_POPUP: { id: string; titolo: string; descrizione: string }[] = [
     { id: 'avviso_slot_occupato', titolo: 'Slot occupato', descrizione: 'Prenotazioni, Preventivi e Lavaggio: mezzo o orario gia prenotato.' },
     { id: 'avviso_ritiro_passato', titolo: 'Ritiro nel passato', descrizione: 'Prenotazioni: nuova prenotazione con il ritiro gia passato.' },
+    { id: 'avviso_blocco_lavaggio', titolo: 'Lavaggio bloccato', descrizione: 'Lavaggio: giorno o orario bloccato (es. SOLD OUT) da Centralina Pro.' },
 ]
 const AVVISO_IDS = new Set(AVVISO_POPUP.map(a => a.id))
 

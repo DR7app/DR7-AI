@@ -27,6 +27,15 @@ export function confermaRitiroNelPassato(dettaglio: string): Promise<boolean> {
   return avvisoRosso('avviso_ritiro_passato', 'RITIRO NEL PASSATO', dettaglio)
 }
 
+// 05/10/2026 (direzione): i giorni/orari lavaggio bloccati (Centralina Pro >
+// Automazioni > Blocco prenotazioni lavaggio, o Orari Lavaggio > Blocchi)
+// valevano solo sul sito. In gestionale si puo' prenotare lo stesso, ma solo
+// dopo aver letto il blocco in questo popup.
+export function confermaLavaggioBloccato(dettaglio: string): Promise<boolean> {
+  if (!isOtpRequired('avviso_blocco_lavaggio')) return Promise.resolve(true)
+  return avvisoRosso('avviso_blocco_lavaggio', 'PRENOTAZIONI BLOCCATE', dettaglio)
+}
+
 function avvisoRosso(codice: string, titoloAvviso: string, dettaglio: string): Promise<boolean> {
   // Un solo popup per volta (scelta mezzo + Salva ravvicinati).
   if (aperto) return aperto

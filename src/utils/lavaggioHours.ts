@@ -55,6 +55,17 @@ const DEFAULT_CONFIG: LavaggioHoursConfig = {
 
 let CONFIG: LavaggioHoursConfig = DEFAULT_CONFIG
 
+// 2026-10-05: i periodi di "Centralina Pro > Automazioni > Blocco prenotazioni
+// lavaggio" (automations.carwash_block_ranges) li leggeva SOLO il sito: il
+// gestionale prenotava sui giorni SOLD OUT senza accorgersene e il calendario
+// non li mostrava. Ora entrano qui come blocchi di intera giornata, cosi'
+// slot, gate di salvataggio e calendario li vedono come gli altri blocchi.
+let PERIODI_BLOCCO: LavaggioBlock[] = []
+
+let segnalaPronto: () => void = () => {}
+/** Si risolve quando la config e' stata letta (o la lettura e' fallita). */
+export const lavaggioHoursPronto: Promise<void> = new Promise((r) => { segnalaPronto = r })
+
 ;(async () => {
     try {
         // 2026-08-14 (roadmap #16): si legge PRIMA `business_lavaggio`, poi
@@ -77,6 +88,20 @@ let CONFIG: LavaggioHoursConfig = DEFAULT_CONFIG
             return l && l.hours && typeof l.hours === 'object' ? l : null
         }
         const lh = leggi('business_lavaggio') ?? leggi('main')
+        const periodi = (id: string) => {
+            const c = righe.find(r => r.id === id)?.config as Record<string, unknown> | undefined
+            const a = c?.automations as Record<string, unknown> | undefined
+            return Array.isArray(a?.carwash_block_ranges) ? (a!.carwash_block_ranges as { from?: string; to?: string; message?: string }[]) : null
+        }
+        PERIODI_BLOCCO = (periodi('business_lavaggio') ?? periodi('main') ?? [])
+            .filter((r) => r && r.from && r.to)
+            .map((r, i) => ({
+                id: `periodo_${i}`,
+                from: String(r.from), to: String(r.to),
+                weekdays: [], start: '', end: '',
+                note: r.message ? String(r.message) : 'Prenotazioni bloccate',
+                active: true,
+            }))
         if (lh && lh.hours && typeof lh.hours === 'object') {
             const slot = typeof lh.slot_minutes === 'number' && lh.slot_minutes > 0 ? lh.slot_minutes : DEFAULT_CONFIG.slot_minutes
             CONFIG = {
@@ -87,6 +112,8 @@ let CONFIG: LavaggioHoursConfig = DEFAULT_CONFIG
         }
     } catch {
         // keep DEFAULT_CONFIG
+    } finally {
+        segnalaPronto()
     }
 })()
 
@@ -119,7 +146,7 @@ function ymd(date: Date): string {
 function getApplicableBlocks(date: Date): LavaggioBlock[] {
     const ds = ymd(date)
     const dow = date.getDay()
-    return (CONFIG.blocks || []).filter((b) =>
+    return [...(CONFIG.blocks || []), ...PERIODI_BLOCCO].filter((b) =>
         // SICUREZZA: un blocco senza periodo (from+to) e' INCOMPLETO e viene
         // IGNORATO. Senza questo un blocco vuoto (appena aggiunto) bloccava ogni
         // giorno intero -> lavaggio non prenotabile / OTP per tutti.
@@ -175,6 +202,10 @@ export function getSlotBlock(date: Date, time: string): LavaggioBlock | null {
         if (t >= timeToMinutes(b.start) && t < timeToMinutes(b.end)) return b
     }
     return null
+}
+/** Blocco che chiude l'INTERA giornata (periodo SOLD OUT o blocco senza orari), o null. */
+export function getDayBlock(date: Date): LavaggioBlock | null {
+    return getApplicableBlocks(date).find((b) => !b.start || !b.end) || null
 }
 export function isSlotBlocked(date: Date, time: string): boolean {
     return getSlotBlock(date, time) !== null
