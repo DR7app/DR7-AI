@@ -68,30 +68,12 @@ export const handler: Handler = async (event) => {
                 if (!vehicleId) {
                     vehicleId = bookingRow.vehicle_id || ''
                 }
-                // Final fallback: resolve customer from email/phone in
-                // customers_extended. Handles guest bookings where the
-                // admin removed the email from the lead but the row still
-                // exists under a different identifier.
-                if (!customerId) {
-                    const email = (bookingRow.customer_email || '').trim().toLowerCase()
-                    const phone = (bookingRow.customer_phone || '').trim()
-                    if (email) {
-                        const { data: byEmail } = await supabase
-                            .from('customers_extended')
-                            .select('id')
-                            .ilike('email', email)
-                            .maybeSingle()
-                        if (byEmail?.id) customerId = byEmail.id
-                    }
-                    if (!customerId && phone) {
-                        const { data: byPhone } = await supabase
-                            .from('customers_extended')
-                            .select('id')
-                            .eq('telefono', phone)
-                            .maybeSingle()
-                        if (byPhone?.id) customerId = byPhone.id
-                    }
-                }
+                // 2026-10-05: niente piu' ricerca del cliente per email o
+                // telefono. Un'email vuota trovava il primo cliente senza
+                // email e la cauzione di Matteo Stara e' finita intestata a
+                // un estraneo (richiesta IBAN partita a lui). Il cliente
+                // arriva SOLO dalla prenotazione; se manca, la cauzione non
+                // si crea e il gestionale mostra l'errore.
             }
         }
 
@@ -240,7 +222,11 @@ export const handler: Handler = async (event) => {
                 updated_at: new Date().toISOString(),
             }
             // Only update these if explicitly provided
-            if (customerId) updateData.cliente_id = customerId
+            // 2026-10-05: chi ha versato la cauzione puo' non essere chi ha
+            // prenotato (es. GLE 63 di Matteo Stara, cauzione pagata da
+            // Nicola Mossa). Se la cauzione ha gia' un intestatario, salvare
+            // la prenotazione non lo sovrascrive piu'.
+            if (customerId && !existingCauzione.cliente_id) updateData.cliente_id = customerId
             if (vehicleId) updateData.veicolo_id = vehicleId
             if (depositAmount > 0) updateData.importo = depositAmount
             if (paymentMethod) updateData.metodo = cauzioneMetodo
