@@ -25,7 +25,7 @@ interface EuropeanDateInputProps {
  * EuropeanDateInput — DD/MM/YYYY text input + calendar popup.
  *
  * - Text field accepts DD/MM/YYYY typed input (auto-inserts slashes)
- * - Calendar icon on the right opens the browser's native date picker
+ * - Calendar icon on the left opens the browser's native date picker
  *   (visual calendar). Clicking a date fills the text field.
  * - Calls onChange with ISO format (YYYY-MM-DD) for the consuming form.
  */
@@ -201,7 +201,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         // Il calendario del browser prende la tastiera appena si apre, quindi
         // le cifre digitate finivano li' e non si poteva piu' scrivere la data
         // a mano (scheda cliente, documenti, ritiro/riconsegna). Il testo si
-        // scrive, il calendario si apre dall'icona a destra.
+        // scrive, il calendario si apre dall'icona a sinistra (05/10/2026, direzione: prima era a destra, lontana dalla data).
         placeholder={placeholder}
         required={required}
         disabled={disabled}
@@ -212,13 +212,13 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         aria-label={ariaLabel}
         maxLength={10}
         inputMode="numeric"
-        className={`${className} pr-8${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
+        className={`${className} pl-9${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
       />
       {/* Icona calendario — solo grafica: il tocco lo prende l'input nativo qui
           sotto (pointer-events-none, altrimenti su mobile intercetterebbe il tap). */}
       <span
         aria-hidden="true"
-        className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-theme-text-muted pointer-events-none ${disabled ? 'opacity-40' : ''}`}
+        className={`absolute left-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-theme-text-muted pointer-events-none ${disabled ? 'opacity-40' : ''}`}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -238,7 +238,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         tabIndex={-1}
         aria-label="Apri calendario"
         title="Apri calendario"
-        className="absolute right-0 top-0 h-full w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+        className="absolute left-0 top-0 h-full w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
       />
     </div>
   );
