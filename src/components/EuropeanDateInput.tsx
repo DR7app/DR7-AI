@@ -208,11 +208,13 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         readOnly={readOnly}
         autoFocus={autoFocus}
         title={warnTitle}
-        style={style}
+        // pl-9 perdeva contro il px-3 del chiamante (Tailwind 4 ordina px dopo pl):
+        // l'icona copriva la prima cifra. Inline vince sempre.
+        style={{ ...style, paddingLeft: '2.25rem' }}
         aria-label={ariaLabel}
         maxLength={10}
         inputMode="numeric"
-        className={`${className} pl-9${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
+        className={`${className}${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
       />
       {/* Icona calendario — solo grafica: il tocco lo prende l'input nativo qui
           sotto (pointer-events-none, altrimenti su mobile intercetterebbe il tap). */}
