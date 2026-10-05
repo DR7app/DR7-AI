@@ -1068,7 +1068,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex bg-theme-bg-secondary">
+    <div className="min-h-screen flex fondo-marmo">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSidebarOpen(false)} />
