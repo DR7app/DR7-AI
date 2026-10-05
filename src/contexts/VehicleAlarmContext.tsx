@@ -43,6 +43,8 @@ interface AlarmState {
     activeAlarm: AlarmBooking | null
     isPlaying: boolean
     audioEnabled: boolean
+    /** 05/10/2026: il collaboratore ha scelto allarmi senza suono (solo finestra). */
+    suonoSpentoPerScelta: boolean
 }
 
 interface VehicleAlarmContextType {
@@ -76,7 +78,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [alarmState, setAlarmState] = useState<AlarmState>({
         activeAlarm: null,
         isPlaying: false,
-        audioEnabled: localStorage.getItem('audioAlertsEnabled') === 'true'
+        audioEnabled: localStorage.getItem('audioAlertsEnabled') === 'true',
+        suonoSpentoPerScelta: false
     })
 
     const [session, setSession] = useState<Session | null>(null)
@@ -206,6 +209,28 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         return () => { cancelled = true }
     }, [session])
 
+    // 05/10/2026 (direzione): "chaque collaborateur doit avoir la possibilite de
+    // choisir s'il active le son des alarmes ou non" (es. Davide: allarmi si',
+    // suono no). La scelta e' nei metadati dell'account, non nel browser: vale
+    // su ogni dispositivo e non passa all'altro account aperto sullo stesso PC.
+    // Gli allarmi restano tutti: si spegne solo l'audio.
+    const suonoSpento = session?.user?.user_metadata?.allarmi_suono_spento === true
+    useEffect(() => {
+        if (!session?.user?.id) return
+        setAlarmState(prev => ({
+            ...prev,
+            suonoSpentoPerScelta: suonoSpento,
+            audioEnabled: !suonoSpento && localStorage.getItem('audioAlertsEnabled') === 'true',
+        }))
+        if (suonoSpento) { soundPlayerRef.current?.stop(); catalogoPlayerRef.current?.stop() }
+    }, [session?.user?.id, suonoSpento])
+
+    const salvaSceltaSuono = async (spento: boolean) => {
+        const { error } = await supabase.auth.updateUser({ data: { allarmi_suono_spento: spento } })
+        if (error) console.error('Salvataggio scelta suono allarmi fallito:', error.message)
+        return !error
+    }
+
     // Load alarm config + subscribe to changes. Admin edits in
     // AlarmInventoryModal flow through this realtime channel so the
     // next polling tick uses the new thresholds without a reload.
@@ -255,7 +280,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         try {
             // Simple approach: just enable it
             localStorage.setItem('audioAlertsEnabled', 'true')
-            setAlarmState(prev => ({ ...prev, audioEnabled: true }))
+            setAlarmState(prev => ({ ...prev, audioEnabled: true, suonoSpentoPerScelta: false }))
+            if (suonoSpento) void salvaSceltaSuono(false)
 
             // Try to unlock audio with AudioContext (reuse single instance)
             try {
@@ -290,17 +316,21 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     }
 
     // Disable audio entirely (counterpart to enableAudio).
-    // Stops any current alarm sound and clears the localStorage flag so
-    // future browser sessions also start with audio off.
-    const disableAudio = () => {
+    // 05/10/2026: e' la scelta del collaboratore, salvata sul suo account.
+    // Il flag del browser (audioAlertsEnabled) non si tocca: un altro account
+    // sullo stesso PC continua a sentire gli allarmi.
+    const disableAudio = async () => {
         if (audioRef.current) {
             audioRef.current.pause()
             audioRef.current.currentTime = 0
         }
         soundPlayerRef.current?.stop()
-        localStorage.setItem('audioAlertsEnabled', 'false')
-        setAlarmState(prev => ({ ...prev, audioEnabled: false, isPlaying: false }))
-        toast.success('Allarmi audio disattivati. Le notifiche visive restano attive.')
+        catalogoPlayerRef.current?.stop()
+        setAlarmState(prev => ({ ...prev, audioEnabled: false, isPlaying: false, suonoSpentoPerScelta: true }))
+        const ok = await salvaSceltaSuono(true)
+        toast.success(ok
+            ? 'Suono degli allarmi spento. Gli allarmi restano attivi, senza audio.'
+            : 'Suono spento su questo dispositivo, ma la scelta non e\' stata salvata sull\'account.')
     }
 
     // Stop alarm

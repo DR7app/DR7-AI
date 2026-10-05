@@ -453,7 +453,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   // 2026-08-18: gli allarmi non stanno piu' in fondo alla sidebar ma nel menu
   // utente in alto a destra, accanto alle altre azioni personali.
-  const { alarmState, enableAudio } = useVehicleAlarm()
+  const { alarmState, enableAudio, disableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
   const { role: adminRole, hasPermission, hasRole, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
@@ -1492,7 +1492,45 @@ export default function AdminDashboard() {
                         poteva attivare l'audio e non sentiva nessun allarme. */}
                     {!isCollaboratore && (
                       <>
-                        {!alarmState.audioEnabled ? (
+                        {/* 05/10/2026: ogni collaboratore sceglie se sentire il suono.
+                            Spento = gli allarmi restano (finestra al centro), senza audio. */}
+                        {alarmState.audioEnabled ? (
+                          <>
+                            <div className="w-full text-left px-3 py-3 text-green-500 flex items-center gap-2 min-h-[44px]">
+                              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                              </svg>
+                              Allarmi attivi
+                            </div>
+                            <button
+                              onClick={() => { setUserMenuOpen(false); void disableAudio() }}
+                              className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                            >
+                              <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                              </svg>
+                              Disattiva suono
+                            </button>
+                          </>
+                        ) : alarmState.suonoSpentoPerScelta ? (
+                          <>
+                            <div className="w-full text-left px-3 py-3 text-green-500 flex items-center gap-2 min-h-[44px]">
+                              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                              </svg>
+                              Allarmi attivi, senza suono
+                            </div>
+                            <button
+                              onClick={() => { setUserMenuOpen(false); enableAudio() }}
+                              className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                            >
+                              <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                              </svg>
+                              Attiva suono
+                            </button>
+                          </>
+                        ) : (
                           <button
                             onClick={() => { setUserMenuOpen(false); enableAudio() }}
                             className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
@@ -1502,13 +1540,6 @@ export default function AdminDashboard() {
                             </svg>
                             Attiva Allarmi
                           </button>
-                        ) : (
-                          <div className="w-full text-left px-3 py-3 text-green-500 flex items-center gap-2 min-h-[44px]">
-                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                            </svg>
-                            Allarmi attivi
-                          </div>
                         )}
                         <div className="border-t border-theme-border my-1" />
                       </>

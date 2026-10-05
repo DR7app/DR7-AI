@@ -11,7 +11,8 @@ import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
  */
 export default function AudioAllarmiSpento() {
     const { alarmState, enableAudio } = useVehicleAlarm()
-    if (alarmState.audioEnabled) return null
+    // 05/10/2026: chi ha scelto allarmi senza suono non va richiamato.
+    if (alarmState.audioEnabled || alarmState.suonoSpentoPerScelta) return null
     return (
         <button
             type="button"
