@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { ScheletroPagina } from '../../../components/Scheletro'
 import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
-import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 
 /**
@@ -116,12 +115,14 @@ function KpiCard({ label, value, delta, sub, tone }: KpiCardProps) {
   )
 }
 
-export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
+// 05/10/2026: `kpi` arriva dal DashboardTab, che chiama gia' dashboard-kpi
+// con lo stesso periodo. Prima l'Overview la richiamava per conto suo: due
+// chiamate identiche da ~5 s a ogni apertura del Dashboard.
+export default function DashboardOverview({ dateFrom, dateTo, kpi }: { dateFrom: string; dateTo: string; kpi: KpiPayload | null }) {
   // Range is driven by the parent's date pickers — a single date control for
   // the whole dashboard. GA traffic uses the closest preset to the span.
   const gaRange = spanToGaPreset(dateFrom, dateTo)
   const [ga, setGa] = useState<GaPayload | null>(null)
-  const [kpi, setKpi] = useState<KpiPayload | null>(null)
   const [walletUsers, setWalletUsers] = useState<number>(0)
   const [clubMembers, setClubMembers] = useState<number>(0)
   const [topVehicles, setTopVehicles] = useState<TopVehicle[]>([])
@@ -133,35 +134,32 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
       setLoading(true)
       const now = new Date()
       try {
-        const [gaRes, kpiRes] = await Promise.all([
+        // 05/10/2026: le quattro letture partono insieme (prima in fila).
+        const sinceISO = new Date(now.getTime() - 30 * 86400000).toISOString()
+        const [gaRes, walletRes, clubRes, vehRes] = await Promise.all([
           fetch(`/.netlify/functions/ga-report?range=${gaRange}`).then(r => r.json()).catch(() => null),
-          authFetch(`/.netlify/functions/dashboard-kpi?from=${dateFrom}&to=${dateTo}`).then(r => r.json()).catch(() => null),
+          // Wallet users (count distinct user_id with balance > 0)
+          supabase
+            .from('user_credit_balance')
+            .select('user_id', { count: 'exact', head: true })
+            .gt('balance', 0),
+          // Club active members
+          supabase
+            .from('dr7_club_subscriptions')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'active'),
+          // Top vehicles by booking count last 30 days
+          supabase
+            .from('bookings')
+            .select('vehicle_name, vehicle_plate, vehicle_id')
+            .gte('booked_at', sinceISO)
+            .eq('service_type', 'car_rental'),
         ])
         if (cancelled) return
         setGa(gaRes)
-        setKpi(kpiRes)
-
-        // Wallet users (count distinct user_id with balance > 0)
-        const { count: walletCount } = await supabase
-          .from('user_credit_balance')
-          .select('user_id', { count: 'exact', head: true })
-          .gt('balance', 0)
-        if (!cancelled) setWalletUsers(walletCount || 0)
-
-        // Club active members
-        const { count: clubCount } = await supabase
-          .from('dr7_club_subscriptions')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'active')
-        if (!cancelled) setClubMembers(clubCount || 0)
-
-        // Top vehicles by booking count last 30 days
-        const sinceISO = new Date(now.getTime() - 30 * 86400000).toISOString()
-        const { data: vehData } = await supabase
-          .from('bookings')
-          .select('vehicle_name, vehicle_plate, vehicle_id')
-          .gte('booked_at', sinceISO)
-          .eq('service_type', 'car_rental')
+        setWalletUsers(walletRes.count || 0)
+        setClubMembers(clubRes.count || 0)
+        const vehData = vehRes.data
         const counts = new Map<string, { name: string; plate: string; count: number }>()
         for (const b of vehData || []) {
           const key = (b.vehicle_id || b.vehicle_name || '').toString()

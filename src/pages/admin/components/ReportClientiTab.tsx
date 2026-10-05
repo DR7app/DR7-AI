@@ -10,6 +10,7 @@ import type { ClientTier } from '../../../contexts/ClientStatusContext'
 import { resolveDateRange, isInRange } from '../../../components/admin/DateRangePicker'
 import { ReportPeriodo, usePeriodoReport } from './ReportPeriodo'
 import toast from 'react-hot-toast'
+import { authFetch } from '../../../utils/authFetch'
 // #38 Modifica manuale report: correggi/rimuovi/aggiungi voci; gli override
 // (report_overrides) si applicano PRIMA dei totali.
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
@@ -286,11 +287,16 @@ export default function ReportClientiTab() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/.netlify/functions/report-clienti')
+      // 05/10/2026 — le correzioni manuali (#38) si leggevano solo DOPO il
+      // report, un giro di rete in piu' in fila: ora partono insieme. Il
+      // report ora viaggia con il token dell'operatore (authFetch): la
+      // function rispondeva a chiunque, con nomi, email e telefoni.
+      const overridesPromise = loadReportOverrides('clienti')
+      const res = await authFetch('/.netlify/functions/report-clienti')
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || 'Errore nel caricamento')
       setClientiData(data)
-      setOverrides(await loadReportOverrides('clienti'))
+      setOverrides(await overridesPromise)
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       setError(_errMsg || 'Errore sconosciuto')

@@ -59,21 +59,51 @@ const handler: Handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
     if (event.httpMethod !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
 
-    const { error: authErr } = await requireAuth(event)
-    if (authErr) return authErr
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing Supabase config' }) }
-    }
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    try {
+    // 05/10/2026: le due letture (schede clienti + transazioni con contratto)
+    // erano in fila e partivano solo DOPO il controllo del token: tre attese
+    // una dietro l'altra (~2,6 s). Ora partono insieme e insieme al controllo;
+    // nessun dato esce se l'auth fallisce (la risposta si costruisce dopo).
+    // Le due query sono le stesse di prima, con gli stessi filtri e ordini.
+    const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null
+    const letture = supabase ? Promise.all([
         // Source 1 — customers_extended whose metadata holds a Nexi contract id.
-        const { data: customers } = await supabase
+        supabase
             .from('customers_extended')
             .select('id, nome, cognome, email, telefono, metadata, updated_at')
             .not('metadata->nexi_contract_id', 'is', null)
-            .order('updated_at', { ascending: false })
+            .order('updated_at', { ascending: false }),
+        // Source 2 — vedi sotto. Del `metadata` della transazione servono
+        // solo le chiavi lette piu' giu' (nome, PAN, circuito, tipo, brand):
+        // si estraggono in Postgres invece di scaricare l'intero blob.
+        supabase
+            .from('nexi_transactions')
+            .select('id, order_id, contract_id, customer_email, booking_id, amount_cents, status, description, m_customer_name:metadata->customer_name, m_masked_pan:metadata->masked_pan, m_nexi_card_masked_pan:metadata->nexi_card_masked_pan, m_payment_instrument:metadata->payment_instrument, m_circuit:metadata->circuit, m_nexi_card_circuit:metadata->nexi_card_circuit, m_payment_circuit:metadata->payment_circuit, m_card_type:metadata->card_type, m_nexi_card_type:metadata->nexi_card_type, m_card_brand:metadata->card_brand, m_nexi_card_brand:metadata->nexi_card_brand, created_at, updated_at, booking:bookings(customer_name, customer_phone)')
+            .not('contract_id', 'is', null)
+            .in('status', ['completed', 'paid', 'authorized', 'captured', 'succeeded'])
+            .order('created_at', { ascending: false }),
+    ]) : null
+    letture?.catch(() => { /* gestita sotto, evita l'unhandled rejection */ })
+
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
+
+    if (!supabase || !letture) {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing Supabase config' }) }
+    }
+
+    try {
+        const [{ data: customers }, { data: txsGrezze }] = await letture
+        // Rimette le chiavi estratte dentro `metadata`, con gli stessi nomi
+        // letti dal codice qui sotto (le chiavi assenti restano assenti).
+        const txs = (txsGrezze || []).map((r: Record<string, unknown>) => {
+            const metadata: Record<string, unknown> = {}
+            const resto: Record<string, unknown> = {}
+            for (const [k, v] of Object.entries(r)) {
+                if (k.startsWith('m_')) { if (v !== null && v !== undefined) metadata[k.slice(2)] = v }
+                else resto[k] = v
+            }
+            return { ...resto, metadata }
+        })
 
         // One row PER tokenized card. listCards() reads metadata.nexi_cards and,
         // for customers still on the legacy single-card shape, synthesizes one
@@ -104,14 +134,8 @@ const handler: Handler = async (event) => {
         // success status. We use this both to surface contracts that don't
         // have a customers_extended row AND to attach the payment history
         // to every card (Source 1 too). amount_cents/description/status come
-        // from here.
+        // from here. (Letta piu' sopra, in parallelo.)
         const knownContractIds = new Set(cards.map(c => c.contract_id).filter(Boolean))
-        const { data: txs } = await supabase
-            .from('nexi_transactions')
-            .select('id, order_id, contract_id, customer_email, booking_id, amount_cents, status, description, metadata, created_at, updated_at, booking:bookings(customer_name, customer_phone)')
-            .not('contract_id', 'is', null)
-            .in('status', ['completed', 'paid', 'authorized', 'captured', 'succeeded'])
-            .order('created_at', { ascending: false })
 
         for (const tx of (txs || []) as Record<string, unknown>[]) {
             const cid = String(tx.contract_id || '')

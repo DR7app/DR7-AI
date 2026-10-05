@@ -80,14 +80,13 @@ export async function loadClubTiers(): Promise<ClubTierDef[]> {
   if (pending) return pending
   pending = (async () => {
     try {
+      // 05/10/2026: si chiede solo il ramo letto qui, non tutta la riga (204 KB a ogni apertura).
       const { data } = await supabase
         .from('centralina_pro_config')
-        .select('config')
+        .select('tiers:config->dr7_club->tiers')
         .eq('id', 'main')
         .maybeSingle()
-      const cfg = (data?.config ?? null) as Record<string, unknown> | null
-      const dr7Club = cfg?.dr7_club as Record<string, unknown> | undefined
-      const normalized = normalizeClubTiers(dr7Club?.tiers)
+      const normalized = normalizeClubTiers((data as { tiers?: unknown } | null)?.tiers)
       cache = normalized ?? DEFAULT_CLUB_TIERS
       return cache
     } catch (err) {

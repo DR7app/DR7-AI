@@ -1267,6 +1267,11 @@ export default function NexiTab() {
         const daRisolvere = txs.filter(t => !t.booking?.customer_name && !t.customer_name)
         if (daRisolvere.length === 0) return txs
 
+        // 05/10/2026: le due ricerche (per cauzione e per email) e i blocchi
+        // di email partono insieme invece che in fila. Si cercano le email di
+        // TUTTE le righe da risolvere: per una riga risolta dalla cauzione
+        // l'email non si usa (vince `daCauzione` qui sotto), quindi il
+        // risultato e' identico a prima.
         // --- 2. per cauzione_id -------------------------------------------
         const perCauzione = new Map<string, string>()
         const cauzioneIds = Array.from(new Set(
@@ -1274,7 +1279,8 @@ export default function NexiTab() {
                 .map(t => String((t.metadata as Record<string, unknown> | null)?.cauzione_id || '').trim())
                 .filter(Boolean)
         ))
-        if (cauzioneIds.length > 0) {
+        const ricercaCauzioni = (async () => {
+            if (cauzioneIds.length === 0) return
             try {
                 const { data: cauz } = await supabase
                     .from('cauzioni')
@@ -1287,32 +1293,39 @@ export default function NexiTab() {
             } catch (e) {
                 console.warn('[NexiTab] lookup cliente per cauzione fallito (non-bloccante):', e)
             }
-        }
+        })()
 
         // --- 3. per email (case-insensitive, a blocchi) --------------------
         const perEmail = new Map<string, string>()
         const emails = Array.from(new Set(
             daRisolvere
-                .filter(t => !perCauzione.has(String((t.metadata as Record<string, unknown> | null)?.cauzione_id || '')))
                 .map(t => String(t.customer_email || '').trim().toLowerCase())
                 .filter(e => e.includes('@'))
         ))
-        for (let i = 0; i < emails.length; i += 40) {
-            const chunk = emails.slice(i, i + 40)
+        const blocchiEmail: string[][] = []
+        for (let i = 0; i < emails.length; i += 40) blocchiEmail.push(emails.slice(i, i + 40))
+        const risultatiEmail = await Promise.all(blocchiEmail.map(async chunk => {
             try {
                 const { data: custs } = await supabase
                     .from('customers_extended')
                     .select('email, nome, cognome, denominazione, ragione_sociale')
                     .or(chunk.map(e => `email.ilike.${e}`).join(','))
-                for (const c of (custs || []) as Record<string, unknown>[]) {
-                    const nome = nomeDa(c)
-                    const mail = String(c.email || '').trim().toLowerCase()
-                    if (nome && mail) perEmail.set(mail, nome)
-                }
+                return (custs || []) as Record<string, unknown>[]
             } catch (e) {
                 console.warn('[NexiTab] lookup cliente per email fallito (non-bloccante):', e)
+                return [] as Record<string, unknown>[]
+            }
+        }))
+        // Stesso ordine di scrittura di prima (blocco per blocco): a parita'
+        // di email vince l'ultima riga letta, come nel ciclo in fila.
+        for (const custs of risultatiEmail) {
+            for (const c of custs) {
+                const nome = nomeDa(c)
+                const mail = String(c.email || '').trim().toLowerCase()
+                if (nome && mail) perEmail.set(mail, nome)
             }
         }
+        await ricercaCauzioni
 
         return txs.map(t => {
             if (t.booking?.customer_name || t.customer_name) return t
@@ -1328,8 +1341,43 @@ export default function NexiTab() {
     async function fetchTransactions() {
         try {
             setLoading(true)
-            const response = await authFetch('/.netlify/functions/nexi-list-orders')
-            const data = await response.json()
+            // 05/10/2026: le tre fonti (ordini Nexi, ricariche wallet,
+            // prenotazioni pagate con carta) partivano una dopo l'altra: le
+            // due letture Supabase aspettavano i ~3 s della function. Ora
+            // partono tutte e tre subito; il merge sotto e' identico.
+            const ordiniNexi = authFetch('/.netlify/functions/nexi-list-orders')
+                .then(async response => ({ response, data: await response.json() }))
+            ordiniNexi.catch(() => { /* gestita sotto, evita l'unhandled rejection */ })
+            const ricaricheWallet = Promise.resolve(supabase
+                .from('credit_wallet_purchases')
+                .select('id, nexi_order_id, recharge_amount, package_name, payment_status, customer_email, customer_name, payment_completed_at, created_at')
+                .not('nexi_order_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(500))
+            ricaricheWallet.catch(() => { /* gestita sotto */ })
+            const prenotazioniCarta = (async () => {
+                // Paginato: PostgREST taglia a 1000 righe per richiesta e i
+                // pagamenti carta le superano. Senza range() le transazioni
+                // piu' vecchie sparirebbero in silenzio.
+                const bks: Record<string, unknown>[] = []
+                const PAGE = 1000
+                for (let page = 0; page < 20; page++) {
+                    const { data: chunk, error: bkErr } = await supabase
+                        .from('bookings')
+                        .select('id, created_at, payment_completed_at, nexi_order_id, nexi_payment_id, payment_status, payment_method, service_type, service_name, vehicle_name, customer_name, customer_email, price_total')
+                        .or('nexi_order_id.not.is.null,nexi_payment_id.not.is.null')
+                        .order('created_at', { ascending: false })
+                        .range(page * PAGE, page * PAGE + PAGE - 1)
+                    if (bkErr) throw bkErr
+                    if (!chunk || chunk.length === 0) break
+                    bks.push(...(chunk as Record<string, unknown>[]))
+                    if (chunk.length < PAGE) break
+                }
+                return bks
+            })()
+            prenotazioniCarta.catch(() => { /* gestita sotto */ })
+
+            const { response, data } = await ordiniNexi
 
             if (!response.ok) throw new Error(data.error || 'Failed to fetch messages')
 
@@ -1342,12 +1390,7 @@ export default function NexiTab() {
             // non-bloccante: se fallisce, restano i soli ordini Nexi standard.
             let walletTx: NexiTransaction[] = []
             try {
-                const { data: rech } = await supabase
-                    .from('credit_wallet_purchases')
-                    .select('id, nexi_order_id, recharge_amount, package_name, payment_status, customer_email, customer_name, payment_completed_at, created_at')
-                    .not('nexi_order_id', 'is', null)
-                    .order('created_at', { ascending: false })
-                    .limit(500)
+                const { data: rech } = await ricaricheWallet
                 walletTx = (rech || []).map((r: Record<string, unknown>) => {
                     const ps = String(r.payment_status || '').toLowerCase()
                     const status: NexiTransaction['status'] =
@@ -1379,23 +1422,8 @@ export default function NexiTab() {
             // questa pagina. Dedup per order_id contro le righe Nexi native.
             let bookingTx: NexiTransaction[] = []
             try {
-                // Paginato: PostgREST taglia a 1000 righe per richiesta e i
-                // pagamenti carta le superano. Senza range() le transazioni
-                // piu' vecchie sparirebbero in silenzio.
-                const bks: Record<string, unknown>[] = []
-                const PAGE = 1000
-                for (let page = 0; page < 20; page++) {
-                    const { data: chunk, error: bkErr } = await supabase
-                        .from('bookings')
-                        .select('id, created_at, payment_completed_at, nexi_order_id, nexi_payment_id, payment_status, payment_method, service_type, service_name, vehicle_name, customer_name, customer_email, price_total')
-                        .or('nexi_order_id.not.is.null,nexi_payment_id.not.is.null')
-                        .order('created_at', { ascending: false })
-                        .range(page * PAGE, page * PAGE + PAGE - 1)
-                    if (bkErr) throw bkErr
-                    if (!chunk || chunk.length === 0) break
-                    bks.push(...(chunk as Record<string, unknown>[]))
-                    if (chunk.length < PAGE) break
-                }
+                // Lettura paginata partita all'inizio (prenotazioniCarta).
+                const bks = await prenotazioniCarta
                 bookingTx = (bks || []).map((b: Record<string, unknown>) => {
                     const ps = String(b.payment_status || '').toLowerCase()
                     const status: NexiTransaction['status'] =

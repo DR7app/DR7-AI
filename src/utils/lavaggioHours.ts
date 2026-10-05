@@ -77,21 +77,20 @@ export const lavaggioHoursPronto: Promise<void> = new Promise((r) => { segnalaPr
         // Nessun parametro nei getter, a differenza di noleggioHours: questo
         // modulo E' il lavaggio, non serve chiedergli di quale business si
         // tratta.
+        // 05/10/2026: si chiede solo il ramo letto qui, non tutta la riga (204 KB a ogni apertura).
         const { data } = await supabase
             .from('centralina_pro_config')
-            .select('id, config')
+            .select('id, lh:config->lavaggio_hours, blocchi:config->automations->carwash_block_ranges')
             .in('id', ['business_lavaggio', 'main'])
-        const righe = (data || []) as { id: string; config: Record<string, unknown> }[]
+        const righe = (data || []) as unknown as { id: string; lh: Partial<LavaggioHoursConfig> | null; blocchi: unknown }[]
         const leggi = (id: string) => {
-            const c = righe.find(r => r.id === id)?.config as Record<string, unknown> | undefined
-            const l = c?.lavaggio_hours as Partial<LavaggioHoursConfig> | undefined
+            const l = righe.find(r => r.id === id)?.lh ?? undefined
             return l && l.hours && typeof l.hours === 'object' ? l : null
         }
         const lh = leggi('business_lavaggio') ?? leggi('main')
         const periodi = (id: string) => {
-            const c = righe.find(r => r.id === id)?.config as Record<string, unknown> | undefined
-            const a = c?.automations as Record<string, unknown> | undefined
-            return Array.isArray(a?.carwash_block_ranges) ? (a!.carwash_block_ranges as { from?: string; to?: string; message?: string }[]) : null
+            const b = righe.find(r => r.id === id)?.blocchi
+            return Array.isArray(b) ? (b as { from?: string; to?: string; message?: string }[]) : null
         }
         PERIODI_BLOCCO = (periodi('business_lavaggio') ?? periodi('main') ?? [])
             .filter((r) => r && r.from && r.to)

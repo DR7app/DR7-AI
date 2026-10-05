@@ -42,8 +42,7 @@ export default function ReferralProgramTab() {
   const [referrersLoading, setReferrersLoading] = useState(false)
 
   useEffect(() => {
-    loadSiteReferrals()
-    loadReferrers()
+    loadAll()
   }, [])
 
   async function callReferralAdmin(action: string, body: Record<string, unknown> = {}) {
@@ -58,6 +57,52 @@ export default function ReferralProgramTab() {
       throw new Error(json.error || `HTTP ${res.status}`)
     }
     return json
+  }
+
+  // 05/10/2026: all'apertura la tab chiamava referral-admin DUE volte
+  // (Panoramica + Partecipanti), pagando due volte avvio della function e
+  // controllo del token. Ora una sola chiamata (`site_overview`) restituisce
+  // le due risposte, identiche a quelle singole; ogni sezione gestisce il
+  // proprio errore come prima. Se la function non conosce ancora l'azione
+  // (deploy non allineato) si torna alle due chiamate separate.
+  async function loadAll() {
+    setSiteLoading(true)
+    setReferrersLoading(true)
+    let json: { site_referrals?: { statusCode: number; body: Record<string, unknown> }; site_referrers?: { statusCode: number; body: Record<string, unknown> } }
+    try {
+      json = await callReferralAdmin('site_overview')
+    } catch {
+      setSiteLoading(false)
+      setReferrersLoading(false)
+      loadSiteReferrals()
+      loadReferrers()
+      return
+    }
+    const parte = (p: { statusCode: number; body: Record<string, unknown> } | undefined) => {
+      if (!p) throw new Error('Risposta vuota')
+      if (p.statusCode >= 400 || p.body?.error) throw new Error(String(p.body?.error || `HTTP ${p.statusCode}`))
+      return p.body
+    }
+    try {
+      const body = parte(json.site_referrals)
+      setSiteReferrals((body.referrals || []) as SiteReferral[])
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[ReferralProgramTab] site referrals error:', err)
+      toast.error(`Errore caricamento Panoramica: ${msg}`)
+    } finally {
+      setSiteLoading(false)
+    }
+    try {
+      const body = parte(json.site_referrers)
+      setReferrers((body.referrers || []) as SiteReferrer[])
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[ReferralProgramTab] referrers error:', err)
+      toast.error(`Errore caricamento partecipanti: ${msg}`)
+    } finally {
+      setReferrersLoading(false)
+    }
   }
 
   async function loadSiteReferrals() {

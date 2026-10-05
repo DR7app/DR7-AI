@@ -26,20 +26,35 @@ async function colonneEsistenti(tabella: string, volute: string[]): Promise<stri
 // PostgREST tronca ogni richiesta a 1000 righe. Ogni tabella letta qui va
 // scorsa a blocchi, altrimenti gli iscritti oltre il millesimo restano senza
 // dati: e' esattamente il difetto che svuotava l'elenco.
-async function leggiTutto(tabella: string, colonne: string) {
-  const righe: any[] = []
+//
+// 05/10/2026 — i blocchi si chiedevano UNO DOPO L'ALTRO: sulla copia demo
+// (22.000 iscritti) erano 23 giri di rete in fila solo per gli utenti, e la
+// tab restava 2,6 s a caricare. Ora il primo blocco porta anche il totale
+// delle righe e tutti gli altri partono insieme (stessa regola di
+// report-clienti). Serve un ordine fisso, altrimenti due blocchi diversi
+// possono vedere la stessa riga due volte e un'altra mai: `ordine` e' una
+// colonna unica della tabella (o l'ORDER BY gia' dentro la RPC).
+async function aBlocchi(crea: (conConteggio: boolean) => any): Promise<any[]> {
   const BLOCCO = 1000
-  for (let da = 0; ; da += BLOCCO) {
-    const { data, error } = await supabase
-      .from(tabella)
-      .select(colonne)
-      .range(da, da + BLOCCO - 1)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    righe.push(...data)
-    if (data.length < BLOCCO) break
+  const prima = await crea(true).range(0, BLOCCO - 1)
+  if (prima.error) throw prima.error
+  const righe: any[] = [...(prima.data || [])]
+  const totale = typeof prima.count === 'number' ? prima.count : righe.length
+  if (righe.length < BLOCCO || totale <= BLOCCO) return righe
+  const altri: Promise<any>[] = []
+  for (let da = BLOCCO; da < totale; da += BLOCCO) altri.push(crea(false).range(da, da + BLOCCO - 1))
+  for (const res of await Promise.all(altri)) {
+    if (res.error) throw res.error
+    righe.push(...(res.data || []))
   }
   return righe
+}
+
+async function leggiTutto(tabella: string, colonne: string, ordine: string) {
+  return aBlocchi(conConteggio => supabase
+    .from(tabella)
+    .select(colonne, conConteggio ? { count: 'exact' } : undefined)
+    .order(ordine, { ascending: true }))
 }
 
 // I dati della registrazione stanno SEMPRE nei metadati auth; la scheda
@@ -116,8 +131,11 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
   if (event.httpMethod !== 'GET') return { statusCode: 405, headers, body: '{"error":"Method not allowed"}' }
 
-  const { error: authErr } = await requireAuth(event)
-  if (authErr) return authErr
+  // 05/10/2026 — il controllo dell'operatore (token + scheda admins) costava
+  // due giri di rete PRIMA di iniziare le letture. Ora parte insieme a loro e
+  // si aspetta prima di rispondere: senza operatore valido non esce nessun
+  // dato, nemmeno il messaggio di un errore.
+  const autorizzazione = requireAuth(event)
 
   try {
     // Utenti auth. Le tabelle qui sotto non dipendono dagli utenti: si leggono
@@ -150,15 +168,16 @@ export const handler: Handler = async (event) => {
     // SQL senza quelle chiavi (0,36 MB). Se la RPC manca o fallisce si torna
     // all'API Auth come prima.
     const leggiUtentiSql = async (): Promise<boolean> => {
-      const lette: any[] = []
-      for (let da = 0; ; da += 1000) {
-        const { data, error } = await supabase.rpc('admin_elenco_iscritti_sito').range(da, da + 999)
-        if (error) {
-          console.warn('[list-site-users] RPC admin_elenco_iscritti_sito non disponibile:', error.message)
-          return false
-        }
-        lette.push(...(data || []))
-        if (!data || data.length < 1000) break
+      let lette: any[] = []
+      try {
+        // La RPC ordina gia' per (created_at, id): i blocchi paralleli vedono
+        // la stessa sequenza.
+        lette = await aBlocchi(conConteggio => supabase.rpc(
+          'admin_elenco_iscritti_sito', {}, conConteggio ? { count: 'exact' } : undefined,
+        ))
+      } catch (error: any) {
+        console.warn('[list-site-users] RPC admin_elenco_iscritti_sito non disponibile:', error?.message || error)
+        return false
       }
       for (const u of lette) {
         utenti.push({
@@ -203,7 +222,7 @@ export const handler: Handler = async (event) => {
     }
 
     const leggiSaldi = async () => {
-      const saldi = await leggiTutto('user_credit_balance', 'user_id, balance')
+      const saldi = await leggiTutto('user_credit_balance', 'user_id, balance', 'user_id')
       const m = new Map<string, number>()
       for (const b of saldi) m.set(b.user_id, Number(b.balance) || 0)
       return m
@@ -213,18 +232,12 @@ export const handler: Handler = async (event) => {
     const leggiBonus = async () => {
       const bonus = new Set<string>()
       try {
-        const BLOCCO = 1000
-        for (let da = 0; ; da += BLOCCO) {
-          const { data, error } = await supabase
-            .from('credit_transactions')
-            .select('user_id')
-            .eq('reference_type', 'welcome_bonus')
-            .range(da, da + BLOCCO - 1)
-          if (error) throw error
-          if (!data || data.length === 0) break
-          for (const t of data) if (t.user_id) bonus.add(t.user_id)
-          if (data.length < BLOCCO) break
-        }
+        const righe = await aBlocchi(conConteggio => supabase
+          .from('credit_transactions')
+          .select('user_id', conConteggio ? { count: 'exact' } : undefined)
+          .eq('reference_type', 'welcome_bonus')
+          .order('id', { ascending: true }))
+        for (const t of righe) if (t.user_id) bonus.add(t.user_id)
       } catch (e: any) {
         console.warn('[list-site-users] bonus non leggibile:', e.message)
       }
@@ -242,16 +255,21 @@ export const handler: Handler = async (event) => {
     ]
     const leggiSchede = async () => leggiTutto(
       'customers_extended',
-      (await colonneEsistenti('customers_extended', VOLUTE)).join(', ')
+      (await colonneEsistenti('customers_extended', VOLUTE)).join(', '),
+      'id',
     )
 
     // Le quattro letture partono insieme: la piu' lenta detta il tempo totale.
-    const [, saldoDi, bonus, schede] = await Promise.all([
+    const letture = Promise.all([
       leggiUtenti(),
       leggiSaldi(),
       leggiBonus(),
       leggiSchede(),
     ])
+    letture.catch(() => { /* gestito sotto, dopo il controllo operatore */ })
+    const { error: authErr } = await autorizzazione
+    if (authErr) return authErr
+    const [, saldoDi, bonus, schede] = await letture
     if (paginaMancante > 0) {
       console.warn(`[list-site-users] ${paginaMancante} pagine auth non lette dopo i tentativi`)
     }
@@ -354,6 +372,8 @@ export const handler: Handler = async (event) => {
       }),
     }
   } catch (err: any) {
+    const { error: authErr } = await autorizzazione
+    if (authErr) return authErr
     console.error('[list-site-users] Error:', err)
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) }
   }

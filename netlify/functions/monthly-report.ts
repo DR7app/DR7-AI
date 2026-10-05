@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 // System Control: misura la funzione e registra da solo gli errori 500.
 // Registra SOLO le chiamate lente o fallite, per non pesare sulle altre.
 import { conSystemControl } from './utils/systemControl'
+import { intestazioniCacheReportPrivata, chiedeRicalcolo, INTESTAZIONI_NESSUNA_CACHE } from './utils/cacheReport'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -323,32 +324,41 @@ async function generateVehicleReport(
   // loro catalogo. Il catalogo viene normalizzato nella STESSA forma della
   // flotta, cosi' tutto il resto del report (match per targa/id/nome, righe
   // per mezzo, totali) resta identico e non va duplicato.
+  // 05/10/2026: le quattro letture iniziali (mezzi, prenotazioni, contratti,
+  // fatture) non dipendono l'una dall'altra: partono insieme invece che in
+  // fila. Prima erano quattro viaggi di rete uno dopo l'altro sul percorso
+  // critico di Dashboard, Prenotazioni e Calendario. Stesse query, stessi
+  // filtri, stessi errori rilanciati: cambia solo l'attesa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let vehicles: any[] | null = null
-  if (business === 'rental') {
-    // Fetch ALL vehicles (including retired — they may have historical bookings)
-    const { data, error: vehiclesError } = await supabase
-      .from('vehicles')
-      .select('id, display_name, plate, status, daily_rate, category, metadata, created_at')
-      .order('display_name')
-    if (vehiclesError) throw vehiclesError
-    vehicles = data
-  } else {
-    const { data, error: catalogError } = await supabase
-      .from('noleggio_catalog')
-      .select('id, name, price_per_day, is_active')
-      .eq('service_type', business)
-      .order('name')
-    if (catalogError) throw catalogError
-    vehicles = (data || []).map(c => ({
-      id: c.id,
-      display_name: c.name,
-      plate: null,                       // barche/elicotteri/alloggi non hanno targa
-      status: c.is_active ? 'active' : 'retired',
-      daily_rate: (c.price_per_day || 0) / 100,  // il catalogo tiene i centesimi
-      category: business,
-      metadata: null,
-    }))
+  const leggiMezzi = async (): Promise<any[] | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let vehicles: any[] | null = null
+    if (business === 'rental') {
+      // Fetch ALL vehicles (including retired — they may have historical bookings)
+      const { data, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('id, display_name, plate, status, daily_rate, category, metadata, created_at')
+        .order('display_name')
+      if (vehiclesError) throw vehiclesError
+      vehicles = data
+    } else {
+      const { data, error: catalogError } = await supabase
+        .from('noleggio_catalog')
+        .select('id, name, price_per_day, is_active')
+        .eq('service_type', business)
+        .order('name')
+      if (catalogError) throw catalogError
+      vehicles = (data || []).map(c => ({
+        id: c.id,
+        display_name: c.name,
+        plate: null,                       // barche/elicotteri/alloggi non hanno targa
+        status: c.is_active ? 'active' : 'retired',
+        daily_rate: (c.price_per_day || 0) / 100,  // il catalogo tiene i centesimi
+        category: business,
+        metadata: null,
+      }))
+    }
+    return vehicles
   }
 
   // Fetch ALL bookings that overlap with this month — we filter in JS for full control
@@ -366,57 +376,68 @@ async function generateVehicleReport(
   // 2026-06-12) il report ne riceveva solo 1000 in ordine arbitrario e
   // SCARTAVA silenziosamente il resto → prenotazioni reali (confermate e
   // pagate) sparivano dal Report Noleggio. Ora si pagina finche' esaurito.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allBookings: any[] = []
-  for (let pageStart = 0; ; pageStart += 1000) {
-    // 2026-08-24: per Mare/Aria/Soggiorni si filtra il service_type GIA' lato
-    // database. Prima si scaricavano tutte le prenotazioni della tabella
-    // (2.537 righe, JSONB booking_details incluso) per poi tenerne 16 in JS:
-    // il Report Aria finiva quasi sempre in "canceling statement due to
-    // statement timeout". Terra resta a filtro JS perche' e' il complemento
-    // (service_type NULL, 'rental', 'car_rental', ...) e non si esprime con
-    // una uguaglianza.
-    let query = supabase
-      .from('bookings')
-      .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
-      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
-      .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
-      // 03/09/2026: si scaricava TUTTA la tabella (2.609 righe, JSONB
-      // booking_details compreso) per poi tenerne quelle di un mese — 2
-      // secondi, e questa lettura sta sul percorso critico di Prenotazioni e
-      // Calendario, che la richiamano al preriscaldamento.
-      //
-      // Il filtro qui sotto e' l'UNICA condizione che il filtro JS applica
-      // senza eccezioni: "un noleggio chiuso prima dell'inizio del periodo
-      // non c'entra" (riga `if (dropoffDate < monthStartISO) return false`).
-      // Le anticipate — pagate nel periodo per un ritiro futuro — restano
-      // dentro: se il ritiro e' dopo la fine del periodo, a maggior ragione
-      // la riconsegna e' dopo l'inizio. Nessuna riga sparisce dal report,
-      // cambia solo quante ne viaggiano sul filo.
-      //
-      // Le righe senza `dropoff_date` erano gia' scartate dal filtro JS
-      // (`if (!b.pickup_date || !b.dropoff_date) return false`), e `gte` le
-      // esclude allo stesso modo.
-      .gte('dropoff_date', monthStartISO)
-    if (business !== 'rental') query = query.eq('service_type', business)
-    const { data: page, error: bookingsError } = await query
-      .order('created_at', { ascending: false })
-      .range(pageStart, pageStart + 999)
+  const leggiPrenotazioni = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allBookings: any[] = []
+    for (let pageStart = 0; ; pageStart += 1000) {
+      // 2026-08-24: per Mare/Aria/Soggiorni si filtra il service_type GIA' lato
+      // database. Prima si scaricavano tutte le prenotazioni della tabella
+      // (2.537 righe, JSONB booking_details incluso) per poi tenerne 16 in JS:
+      // il Report Aria finiva quasi sempre in "canceling statement due to
+      // statement timeout". Terra resta a filtro JS perche' e' il complemento
+      // (service_type NULL, 'rental', 'car_rental', ...) e non si esprime con
+      // una uguaglianza.
+      let query = supabase
+        .from('bookings')
+        .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
+        .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
+        // 03/09/2026: si scaricava TUTTA la tabella (2.609 righe, JSONB
+        // booking_details compreso) per poi tenerne quelle di un mese — 2
+        // secondi, e questa lettura sta sul percorso critico di Prenotazioni e
+        // Calendario, che la richiamano al preriscaldamento.
+        //
+        // Il filtro qui sotto e' l'UNICA condizione che il filtro JS applica
+        // senza eccezioni: "un noleggio chiuso prima dell'inizio del periodo
+        // non c'entra" (riga `if (dropoffDate < monthStartISO) return false`).
+        // Le anticipate — pagate nel periodo per un ritiro futuro — restano
+        // dentro: se il ritiro e' dopo la fine del periodo, a maggior ragione
+        // la riconsegna e' dopo l'inizio. Nessuna riga sparisce dal report,
+        // cambia solo quante ne viaggiano sul filo.
+        //
+        // Le righe senza `dropoff_date` erano gia' scartate dal filtro JS
+        // (`if (!b.pickup_date || !b.dropoff_date) return false`), e `gte` le
+        // esclude allo stesso modo.
+        .gte('dropoff_date', monthStartISO)
+      if (business !== 'rental') query = query.eq('service_type', business)
+      const { data: page, error: bookingsError } = await query
+        .order('created_at', { ascending: false })
+        .range(pageStart, pageStart + 999)
 
-    if (bookingsError) throw bookingsError
-    if (!page || page.length === 0) break
-    allBookings.push(...page)
-    if (page.length < 1000) break
+      if (bookingsError) throw bookingsError
+      if (!page || page.length === 0) break
+      allBookings.push(...page)
+      if (page.length < 1000) break
+    }
+    return allBookings
   }
 
-  const contratti = await contaContrattiPeriodo(monthStartISO, monthEndISO, business)
-
   // Fetch penalty/danni fatture for the month (to catch penalties not saved in booking_details)
-  const { data: fatture } = await supabase
-    .from('fatture')
-    .select('id, booking_id, importo_totale, items, data_emissione, customer_name')
-    .gte('data_emissione', monthStartISO)
-    .lte('data_emissione', monthEndISO)
+  const leggiFatture = async () => {
+    const { data } = await supabase
+      .from('fatture')
+      .select('id, booking_id, importo_totale, items, data_emissione, customer_name')
+      .gte('data_emissione', monthStartISO)
+      .lte('data_emissione', monthEndISO)
+    return data
+  }
+
+  const [vehicles, allBookings, contratti, fatture] = await Promise.all([
+    leggiMezzi(),
+    leggiPrenotazioni(),
+    contaContrattiPeriodo(monthStartISO, monthEndISO, business),
+    leggiFatture(),
+  ])
 
   // Build maps: booking_id -> EUR sum of penali / danni.
   // 2026-06-05 FIX: prima si sommava l'INTERO importo_totale della fattura sia
@@ -1708,4 +1729,39 @@ async function generateCauzioniReport(
   }
 }
 
-export const handler = conSystemControl('monthly-report', handlerInterno)
+/**
+ * 05/10/2026: stesso calcolo, chiamato DENTRO un'altra funzione (dashboard-kpi)
+ * invece che con un giro HTTP: niente avvio a freddo di una seconda funzione,
+ * niente rete. Il chiamante e' gia' autenticato. Riceve gli stessi parametri
+ * della query string e restituisce lo stesso { statusCode, body }.
+ */
+export async function calcolaReportMensile(params: Record<string, string>): Promise<{ statusCode: number; body: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const res = await handlerInterno({ httpMethod: 'GET', queryStringParameters: params, headers: {} } as any, {} as any)
+  return res as { statusCode: number; body: string }
+}
+
+/**
+ * 05/10/2026: cache CDN di 60 secondi sulle risposte riuscite (vedi
+ * utils/cacheReport.ts), con il token nella chiave. Mai in cache: errori,
+ * `debug=true`, `type=diagnose` e `refresh=1` (ricalcolo vero). Il calcolo e
+ * i numeri restituiti non cambiano.
+ */
+const handlerConCache: Handler = async (event, context) => {
+  const res = await handlerInterno(event, context)
+  if (!res) return { statusCode: 500, body: JSON.stringify({ error: 'Risposta vuota' }) }
+  const params = event.queryStringParameters || {}
+  const cacheabile = res.statusCode === 200
+    && params.debug !== 'true'
+    && params.type !== 'diagnose'
+    && !chiedeRicalcolo(params)
+  return {
+    ...res,
+    headers: {
+      ...(res.headers || {}),
+      ...(cacheabile ? intestazioniCacheReportPrivata(`monthly-report-${params.type || 'x'}`) : INTESTAZIONI_NESSUNA_CACHE),
+    },
+  }
+}
+
+export const handler = conSystemControl('monthly-report', handlerConCache)

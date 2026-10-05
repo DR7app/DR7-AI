@@ -383,7 +383,10 @@ export default function DashboardTab() {
     setLoading(true)
     setError(null)
     try {
-      const res = await authFetch(`/.netlify/functions/dashboard-kpi?from=${dateFrom}&to=${dateTo}`)
+      // 05/10/2026: il pulsante Aggiorna salta la copia in cache sulla CDN
+      // (60 s) e ricalcola davvero.
+      const saltaCache = opts?.force ? '&refresh=1' : ''
+      const res = await authFetch(`/.netlify/functions/dashboard-kpi?from=${dateFrom}&to=${dateTo}${saltaCache}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
@@ -467,7 +470,9 @@ export default function DashboardTab() {
     <div className="space-y-6 max-w-[1400px] mx-auto">
 
       {/* ========== OVERVIEW (KPI strip + charts) ========== */}
-      <DashboardOverview dateFrom={dateFrom} dateTo={dateTo} />
+      {/* 05/10/2026: l'Overview riceve la stessa risposta di dashboard-kpi gia'
+          caricata qui, invece di richiederla una seconda volta (~5 s doppi). */}
+      <DashboardOverview dateFrom={dateFrom} dateTo={dateTo} kpi={data} />
 
       {/* ========== HEADER ========== */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">

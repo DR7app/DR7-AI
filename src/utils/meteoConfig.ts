@@ -242,9 +242,9 @@ export const METEO_CONFIG_KEY = 'meteo_config'
 export async function loadMeteoConfigClient(business: MeteoBusiness): Promise<MeteoBusinessConfig> {
   const rowId = METEO_BUSINESS_ROW[business]
   try {
-    const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', rowId).maybeSingle()
-    const cfg = (data?.config as Record<string, unknown>) || {}
-    return normalizeMeteoConfig(cfg[METEO_CONFIG_KEY], business)
+    // 05/10/2026: si chiede solo il ramo letto qui, non tutta la riga (204 KB a ogni apertura).
+    const { data } = await supabase.from('centralina_pro_config').select(`meteo:config->${METEO_CONFIG_KEY}`).eq('id', rowId).maybeSingle()
+    return normalizeMeteoConfig((data as { meteo?: unknown } | null)?.meteo ?? undefined, business)
   } catch {
     return normalizeMeteoConfig(undefined, business)
   }

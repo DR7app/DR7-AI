@@ -23,6 +23,25 @@ interface AuthResult {
   error: { statusCode: number; headers: Record<string, string>; body: string } | null
 }
 
+// 05/10/2026 — ogni chiamata del gestionale rifaceva in fila due giri verso
+// Supabase prima di cominciare il lavoro vero: verifica del token
+// (/auth/v1/user) e riga `admins`. Un'istanza calda della function ora ricorda
+// per 60 secondi i token GIA' verificati come staff. Solo gli esiti positivi:
+// un token rifiutato si riverifica sempre. La copia non supera mai la scadenza
+// del token stesso. Effetto collaterale accettato: un operatore archiviato
+// adesso resta dentro al massimo 60 secondi su quell'istanza.
+const STAFF_VERIFICATO_MS = 60_000
+const staffVerificati = new Map<string, { user: { id: string; email?: string }; finoA: number }>()
+
+function scadenzaToken(token: string): number {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1] || '', 'base64url').toString('utf8'))
+    return typeof payload?.exp === 'number' ? payload.exp * 1000 : 0
+  } catch {
+    return 0
+  }
+}
+
 export async function requireAuth(event: { headers: Record<string, string> }): Promise<AuthResult> {
   const origin = event.headers.origin || event.headers.Origin
   const headers = corsHeaders(origin)
@@ -43,6 +62,10 @@ export async function requireAuth(event: { headers: Record<string, string> }): P
   }
 
   // Validate Supabase JWT
+  const ricordato = staffVerificati.get(token)
+  if (ricordato && ricordato.finoA > Date.now()) return { user: ricordato.user, error: null }
+  if (ricordato) staffVerificati.delete(token)
+
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
@@ -65,7 +88,13 @@ export async function requireAuth(event: { headers: Record<string, string> }): P
       }
     }
 
-    return { user: { id: user.id, email: user.email }, error: null }
+    const verificato = { id: user.id, email: user.email }
+    const finoA = Math.min(Date.now() + STAFF_VERIFICATO_MS, scadenzaToken(token))
+    if (finoA > Date.now()) {
+      if (staffVerificati.size > 500) staffVerificati.clear()
+      staffVerificati.set(token, { user: verificato, finoA })
+    }
+    return { user: verificato, error: null }
   } catch {
     return {
       user: null,

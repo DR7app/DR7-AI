@@ -451,10 +451,29 @@ export default function UnpaidBookingsTab() {
       // importi non pagati calano da soli. Ora sono paginate e partono
       // insieme: stesse righe, tutte, e si aspetta il massimo non la somma.
 
+      // 2026-10-05: le tre letture scaricavano select('*') di ~1.000 righe
+      // (misurato in produzione: 3,9 MB solo la prima, 102 colonne) per
+      // tenerne poi una decina. Ora si fanno in due tempi, con le STESSE
+      // regole di prima: (1) le tre query leggono solo le colonne che i filtri
+      // qui sotto guardano (id, stato, pagamento, targa, created_at e i rami
+      // penalties/danni/extension_history di booking_details, ~250 KB);
+      // (2) le righe che restano si rileggono INTERE per id. La lista, gli
+      // importi e le azioni ricevono quindi le stesse righe complete di prima.
+      const COLONNE_FILTRO = 'id, status, payment_status, vehicle_plate, created_at, bd_penalties:booking_details->penalties, bd_danni:booking_details->danni, bd_ext:booking_details->extension_history'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ricomponi = (rows: any[]) => rows.map(({ bd_penalties, bd_danni, bd_ext, ...r }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const booking_details: Record<string, any> = {}
+        if (bd_penalties != null) booking_details.penalties = bd_penalties
+        if (bd_danni != null) booking_details.danni = bd_danni
+        if (bd_ext != null) booking_details.extension_history = bd_ext
+        return { ...r, booking_details }
+      })
+
       // Primary fetch: active/pending bookings that might be unpaid.
       const activePromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
-        .select('*')
+        .select(COLONNE_FILTRO)
         .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
@@ -465,7 +484,7 @@ export default function UnpaidBookingsTab() {
       // cancelled booking would never appear in "In attesa di pagamento".
       const terminalWithItemsPromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
-        .select('*')
+        .select(COLONNE_FILTRO)
         .in('status', ['cancelled', 'annullata', 'completed', 'completata'])
         .neq('customer_name', 'Lavaggio Rientro')
         .or('booking_details->penalties.neq.[],booking_details->danni.neq.[]')
@@ -481,7 +500,7 @@ export default function UnpaidBookingsTab() {
       // because the primary query excludes completed statuses.
       const terminalUnpaidPromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
-        .select('*')
+        .select(COLONNE_FILTRO)
         .in('status', ['completed', 'completata'])
         .not('payment_status', 'in', '(paid,completed,succeeded)')
         .neq('customer_name', 'Lavaggio Rientro')
@@ -500,10 +519,14 @@ export default function UnpaidBookingsTab() {
       //
       // `.then(r => r)` fa partire davvero la query: senza, supabase-js la
       // tiene ferma fino all'await e tornerebbe in fila come prima.
-      const fatturePromise = supabase
+      // 2026-10-05: fatture paginate - oggi sono 891, a quota 1000 PostgREST
+      // avrebbe cominciato a tagliare in silenzio le voci fatturate.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fatturePromise = fetchAllRows<any>((from, to) => supabase
         .from('fatture')
         .select('id, booking_id, numero_fattura, items')
-        .then(r => r)
+        .order('id', { ascending: true })
+        .range(from, to))
 
       const addebitiPromise = supabase
         .from('pending_addebiti')
@@ -515,9 +538,9 @@ export default function UnpaidBookingsTab() {
         activePromise, terminalWithItemsPromise, terminalUnpaidPromise,
       ])
       if (activeRes.error) throw activeRes.error
-      const activeData = activeRes.data
-      const terminalWithItems = terminalWithItemsRes.data
-      const terminalUnpaid = terminalUnpaidRes.data
+      const activeData = ricomponi(activeRes.data)
+      const terminalWithItems = ricomponi(terminalWithItemsRes.data)
+      const terminalUnpaid = ricomponi(terminalUnpaidRes.data)
 
       // 2026-05-30: a cancelled/completed booking should only stay in
       // "In attesa di pagamento" if a penale/danno is ACTUALLY UNPAID.
@@ -694,7 +717,27 @@ export default function UnpaidBookingsTab() {
         return false
       })
 
-      setBookings(unpaidBookings)
+      // 2026-10-05: secondo tempo - le righe rimaste si rileggono complete
+      // (select('*')) e restano nello stesso ordine della lista filtrata.
+      const idsRimasti = unpaidBookings.map(b => String(b.id))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const righeComplete = new Map<string, any>()
+      const blocchiIds: string[][] = []
+      for (let k = 0; k < idsRimasti.length; k += 200) blocchiIds.push(idsRimasti.slice(k, k + 200))
+      const risposteComplete = await Promise.all(blocchiIds.map(chunk => supabase
+        .from('bookings')
+        .select('*')
+        .in('id', chunk)
+        .then(r => r)))
+      for (const r of risposteComplete) {
+        if (r.error) throw r.error
+        for (const row of (r.data || [])) righeComplete.set(String(row.id), row)
+      }
+      const unpaidBookingsComplete = idsRimasti
+        .map(id => righeComplete.get(id))
+        .filter(Boolean)
+
+      setBookings(unpaidBookingsComplete)
     } catch (error) {
       console.error('Failed to load unpaid bookings:', error)
     } finally {

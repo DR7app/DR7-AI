@@ -556,6 +556,27 @@ function getNext15MinuteTime(): string {
 // Helper to normalize plate strings (remove spaces, uppercase)
 const normalizePlate = (s: string) => s ? s.replace(/\s+/g, '').toUpperCase() : ''
 
+/**
+ * 05/10/2026 - colonne della lettura "leggera" di TUTTE le prenotazioni.
+ * Servono a: disponibilita' contro lavaggi/meccanica (isBookingForVehicle,
+ * isVehicleAvailable, orario piu' vicino) e clienti derivati dalle
+ * prenotazioni. Se uno di quei percorsi comincia a leggere un campo nuovo di
+ * `carWashBookings`, va aggiunto qui: PostgREST torna solo quello elencato.
+ * I rami di booking_details sono rimontati in loadData.
+ */
+const COLONNE_PRENOTAZIONI_LEGGERE = [
+  'id', 'status', 'service_type', 'service_name', 'vehicle_type',
+  'pickup_date', 'dropoff_date', 'pickup_time', 'return_time', 'dropoff_time',
+  'appointment_date', 'appointment_time', 'duration_minutes',
+  'vehicle_id', 'vehicle_plate', 'vehicle_name',
+  'customer_name', 'customer_email', 'customer_phone', 'user_id',
+  'payment_status', 'price_total', 'booked_at', 'created_at',
+  'bd_customer:booking_details->customer',
+  'bd_customer_id:booking_details->customer_id',
+  'bd_vehicle_id:booking_details->vehicle_id',
+  'bd_vehicle_plate:booking_details->vehicle_plate',
+].join(',')
+
 // Helper to check if a booking belongs to a vehicle
 // CRITICAL: Only matches by vehicle_id or plate - NEVER by name
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2946,12 +2967,52 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // NB: i builder di supabase-js partono solo quando qualcuno chiama
       // `then()`, quindi qui va messo `.then(r => r)` - senza, la richiesta
       // resterebbe ferma fino all'await e non ci sarebbe nessun parallelismo.
+      //
+      // 05/10/2026 - due letture invece di una.
+      //
+      // Prima si scaricavano TUTTE le prenotazioni con `select('*')` (102
+      // colonne): 2.539 righe = 9,2 MB di JSON (13 MB misurati dal browser) a
+      // ogni apertura, di cui 1.510 lavaggi che qui non si mostrano mai.
+      // Ora:
+      //  - `bookingsPromise`: SOLO le righe del business a video, intere. Il
+      //    filtro lato server rispecchia quello client (che resta comunque
+      //    applicato sotto), quindi l'elenco e' identico.
+      //  - `slimPromise`: TUTTE le righe ma con le sole colonne che servono a
+      //    disponibilita' (lavaggi/meccanica) e ai clienti derivati dalle
+      //    prenotazioni. Stesse righe di prima, nessuna in meno.
+      const filtroBusiness = viewMode === 'uscite'
+        ? (q: any) => q.eq('service_type', USCITA_SERVICE_TYPE) // eslint-disable-line @typescript-eslint/no-explicit-any
+        : isAltroBusiness
+          ? (q: any) => q.eq('service_type', serviceType) // eslint-disable-line @typescript-eslint/no-explicit-any
+          : (q: any) => q.or(`service_type.is.null,service_type.not.in.(car_wash,mechanical_service,mechanical,heli_rental,boat_rental,stay_rental,${USCITA_SERVICE_TYPE})`) // eslint-disable-line @typescript-eslint/no-explicit-any
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bookingsPromise = loadCached('reservations:bookings', () => fetchAllRows<any>((from, to) => supabase
+      const bookingsPromise = loadCached(`reservations:bookings:${serviceType || 'terra'}:${viewMode}`, () => fetchAllRows<any>((from, to) => filtroBusiness(supabase
         .from('bookings')
-        .select('*')
+        .select('*'))
         .order('created_at', { ascending: false })
         .range(from, to)), { bypass })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const slimPromise = loadCached('reservations:bookings-slim', () => fetchAllRows<any>((from, to) => supabase
+        .from('bookings')
+        .select(COLONNE_PRENOTAZIONI_LEGGERE)
+        .order('created_at', { ascending: false })
+        .range(from, to)).then(r => ({
+          ...r,
+          // booking_details ricostruito con i soli rami letti da
+          // vehicleAvailability (vehicle_id, vehicle_plate) e dai clienti
+          // derivati (customer, customer_id).
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data: r.data.map(({ bd_customer, bd_customer_id, bd_vehicle_id, bd_vehicle_plate, ...resto }: any) => ({
+            ...resto,
+            booking_details: {
+              customer: bd_customer ?? undefined,
+              customer_id: bd_customer_id ?? undefined,
+              vehicle_id: bd_vehicle_id ?? undefined,
+              vehicle_plate: bd_vehicle_plate ?? undefined,
+            },
+          })),
+        })), { bypass })
 
       const contractsPromise = loadCached('reservations:contracts', () => fetchAllRows<{ booking_id: string; signed_pdf_url: string | null }>((from, to) => supabase
         .from('contracts')
@@ -3026,11 +3087,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         return { data: [] }
       })
 
-      const [bookingsRes, contractsRes] = await Promise.all([bookingsPromise, contractsPromise])
+      const [bookingsRes, contractsRes, slimRes] = await Promise.all([bookingsPromise, contractsPromise, slimPromise])
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const allBookings: any[] = bookingsRes.data
-      const bookingsError: unknown = bookingsRes.error
+      const businessBookings: any[] = bookingsRes.data
+      // Tutte le prenotazioni, colonne leggere: disponibilita' e clienti derivati.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allBookings: any[] = slimRes.data
+      const bookingsError: unknown = bookingsRes.error || slimRes.error
 
       // Contratti presi a parte per evitare i problemi di join. Paginati come
       // i bookings cosi' il link "contratto firmato" non sparisce sulle
@@ -3067,7 +3131,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // (default) le escludiamo cosi' non si mescolano con le prenotazioni.
       // Su un business dedicato (Mare / Aria / Soggiorni) si mostrano SOLO le
       // sue prenotazioni; su Terra resta il filtro storico.
-      const filteredBookings = (allBookings || []).filter(b => {
+      const filteredBookings = (businessBookings || []).filter(b => {
         if (b.status === 'deleted') return false
         // 2026-08-14: le Uscite Straordinarie esistono su OGNI business e
         // condividono lo stesso service_type; il business sta su vehicle_type /
@@ -3094,7 +3158,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         contracts: contractsMap.get(b.id) || null
       }))
 
-      logger.log('[ReservationsTab] Bookings fetched (raw):', allBookings?.length)
+      logger.log('[ReservationsTab] Bookings fetched (raw):', businessBookings?.length, 'leggere:', allBookings?.length)
       logger.log('[ReservationsTab] Bookings after filter:', filteredBookings.length)
 
       if (filteredBookings.length > 0) {

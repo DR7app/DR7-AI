@@ -3,6 +3,7 @@ import { authFetch } from '../../../utils/authFetch'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import Paginazione from './Paginazione'
 
 interface SiteUser {
   id: string
@@ -393,6 +394,19 @@ export default function SiteUsersTab() {
     })
   }, [users, searchQuery, sortField, sortDir])
 
+  // 05/10/2026 — la tabella disegnava TUTTI gli iscritti filtrati (916 in
+  // produzione, 22.000 sulla demo) a ogni apertura e a ogni tasto nella
+  // ricerca. Ora a schermo va una pagina da 25; statistiche, sidebar e
+  // pulsanti di massa restano calcolati su tutto l'elenco.
+  const ISCRITTI_PER_PAGINA = 25
+  const [pagina, setPagina] = useState(1)
+  useEffect(() => { setPagina(1) }, [searchQuery, sortField, sortDir])
+  const paginaCorrente = Math.min(pagina, Math.max(1, Math.ceil(filtered.length / ISCRITTI_PER_PAGINA)))
+  const inPagina = useMemo(
+    () => filtered.slice((paginaCorrente - 1) * ISCRITTI_PER_PAGINA, paginaCorrente * ISCRITTI_PER_PAGINA),
+    [filtered, paginaCorrente],
+  )
+
   const fmtDate = (d: string) =>
     new Date(d).toLocaleString('it-IT', {
       day: '2-digit', month: '2-digit', year: '2-digit',
@@ -530,7 +544,7 @@ export default function SiteUsersTab() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => {
+                {inPagina.map(u => {
                   const fullName = nomeVisibile(u) || '-'
                   const aperto = apertoId === u.id
                   const residenzaBreve = [u.citta_residenza, u.provincia_residenza ? `(${u.provincia_residenza})` : '']
@@ -595,6 +609,13 @@ export default function SiteUsersTab() {
               </tbody>
             </table>
           </div>
+          <Paginazione
+            pagina={paginaCorrente}
+            totale={filtered.length}
+            perPagina={ISCRITTI_PER_PAGINA}
+            onChange={setPagina}
+            etichetta="iscritti"
+          />
           {filtered.length === 0 && (
             <p className="text-center text-theme-text-muted py-8 text-sm">Nessun utente trovato</p>
           )}

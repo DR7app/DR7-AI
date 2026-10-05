@@ -21,14 +21,23 @@ export const handler: Handler = async (event) => {
         return jsonResponse(405, { error: 'Method not allowed' }, origin)
     }
 
+    // 05/10/2026: il calcolo (solo letture) parte insieme al controllo del
+    // token invece di aspettarlo: requireAuth costa due giri di rete. Nessun
+    // dato esce se l'auth fallisce: la risposta si costruisce dopo.
+    let calcolo: Promise<Aggregated[]>
+    try {
+        calcolo = raccogliClientiConDanni(getServiceSupabase())
+    } catch (err) {
+        calcolo = Promise.reject(err)
+    }
+    calcolo.catch(() => { /* gestita sotto, evita l'unhandled rejection */ })
+
     const { error: authErr } = await requireAuth(event)
     if (authErr) return authErr
 
-    const sb = getServiceSupabase()
-
     let clients: Aggregated[]
     try {
-        clients = await raccogliClientiConDanni(sb)
+        clients = await calcolo
     } catch (err) {
         return jsonResponse(500, { error: (err as Error).message }, origin)
     }

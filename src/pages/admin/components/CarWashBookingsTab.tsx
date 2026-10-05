@@ -22,6 +22,7 @@ import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
 import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock, type LavaggioBlock } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
@@ -1133,6 +1134,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   useEffect(() => {
     loadData()
 
+    // 2026-10-05: il canale ascolta TUTTA la tabella bookings (anche i
+    // noleggi) e ogni evento rileggeva prenotazioni lavaggio + clienti +
+    // catalogo (~2,3 MB). Un salvataggio ne genera spesso diversi di fila
+    // (riga principale, blocchi cortesia/supercar, fattura): ora gli eventi
+    // ravvicinati si raccolgono in UNA sola rilettura dopo 800 ms. Stessi
+    // dati a video, solo meno giri ripetuti.
+    let ricaricaTimer: ReturnType<typeof setTimeout> | null = null
+    const ricaricaRaggruppata = () => {
+      if (ricaricaTimer) clearTimeout(ricaricaTimer)
+      ricaricaTimer = setTimeout(() => { ricaricaTimer = null; loadData() }, 800)
+    }
+
     // Real-time subscription for new bookings, catalog price changes, AND new customers
     const subscription = supabase
       .channel('carwash-bookings-updates')
@@ -1140,23 +1153,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         { event: '*', schema: 'public', table: 'bookings' },
         (payload) => {
           logger.log('🔄 CarWashBookingsTab: Real-time update received', payload)
-          loadData()
+          ricaricaRaggruppata()
         }
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'car_wash_services' },
         (payload) => {
           logger.log('🔄 CarWashBookingsTab: Catalog price update received', payload)
-          loadData()
+          ricaricaRaggruppata()
         }
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'customers_extended' },
-        () => loadData()
+        () => ricaricaRaggruppata()
       )
       .subscribe()
 
     return () => {
+      if (ricaricaTimer) clearTimeout(ricaricaTimer)
       subscription.unsubscribe()
     }
   }, [])
@@ -1361,13 +1375,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       //
       // `.then(r => r)` fa partire davvero la query: senza, supabase-js la
       // tiene ferma fino all'await e le letture tornerebbero in fila.
-      const bookingsPromise = supabase
+      // 2026-10-05: paginata (fetchAllRows). Oggi sono 535 righe, ma senza
+      // range() a quota 1000 PostgREST avrebbe tagliato in silenzio i lavaggi
+      // piu' vecchi. `id` come secondo ordinamento rende stabili le pagine.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bookingsPromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
-        .then(r => r)
+        .order('id', { ascending: true })
+        .range(from, to))
 
       // Load customers via Netlify function (bypasses RLS, paginates beyond 1000 limit)
       //

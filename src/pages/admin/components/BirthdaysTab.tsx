@@ -220,29 +220,74 @@ export default function BirthdaysTab() {
     async function loadData() {
         setLoading(true)
         try {
+            // 05/10/2026 — le cinque letture qui sotto partivano UNA DOPO
+            // L'ALTRA (config, template, clienti, invii, consensi): la tab
+            // aspettava la somma di cinque giri di rete. Non dipendono l'una
+            // dall'altra, quindi ora partono insieme e si elaborano nello
+            // stesso ordine di prima.
+            //
+            // Della config si legge solo `marketing.website_url`: prima
+            // arrivava l'intera Centralina Pro (oltre 100 KB) per un URL.
+            const configPromise = (async () => {
+                try {
+                    const { data: cfgRow } = await supabase
+                        .from('centralina_pro_config')
+                        .select('website_url:config->marketing->website_url')
+                        .eq('id', 'main')
+                        .maybeSingle()
+                    return (cfgRow as { website_url?: unknown } | null)?.website_url
+                } catch {
+                    return undefined
+                }
+            })()
+            // `.then()` subito: le query Supabase partono solo quando qualcuno
+            // le aspetta, senza questo resterebbero in fila come prima.
+            const templatePromise = supabase
+                .from('system_messages')
+                .select('id, message_key, message_body, is_enabled, label, trigger_offset_hours')
+                .then(r => r)
+            // 05/10/2026 — PostgREST restituisce al massimo 1000 righe: i
+            // clienti con data di nascita sono gia' 929, oltre il millesimo
+            // sarebbero spariti in silenzio. Si legge a blocchi da 1000, con
+            // un ordine fisso (id) perche' i blocchi non si sovrappongano.
+            const customersPromise = (async () => {
+                const righe: unknown[] = []
+                for (let da = 0; ; da += 1000) {
+                    const { data, error } = await supabase
+                        .from('customers_extended')
+                        .select('id, nome, cognome, email, telefono, data_nascita, ragione_sociale, denominazione, tipo_cliente, status')
+                        .not('data_nascita', 'is', null)
+                        .or('status.is.null,status.neq.blacklist')
+                        .order('id', { ascending: true })
+                        .range(da, da + 999)
+                    if (error) return { data: null, error }
+                    righe.push(...(data || []))
+                    if (!data || data.length < 1000) break
+                }
+                return { data: righe, error: null }
+            })()
+            const sentPromise = supabase
+                .from('birthday_messages')
+                .select('customer_id, year, sent_at')
+                .eq('year', currentYear)
+                .then(r => r)
+            const consentsPromise = supabase
+                .from('user_consents')
+                .select('user_id')
+                .eq('consent_type', 'marketing')
+                .eq('status', 'active')
+                .then(r => r)
+
             // Carica l'URL del sito impostato in admin → Marketing →
             // Social Links (UI). Storage: centralina_pro_config.config.marketing.
             // Cade su https://dr7.app solo se il setting non c'è.
-            try {
-                const { data: cfgRow } = await supabase
-                    .from('centralina_pro_config')
-                    .select('config')
-                    .eq('id', 'main')
-                    .maybeSingle()
-                const cfg = (cfgRow?.config ?? null) as Record<string, unknown> | null
-                const marketing = cfg?.marketing as Record<string, unknown> | undefined
-                const url = marketing?.website_url
-                if (typeof url === 'string' && url.trim()) setWebsiteUrl(url.trim())
-            } catch {
-                /* fallback hardcoded già in state */
-            }
+            const url = await configPromise
+            if (typeof url === 'string' && url.trim()) setWebsiteUrl(url.trim())
 
             // Carica il template Pro "Messaggio Compleanno". Match per key
             // canonico, con fallback su label per coprire template rinominati
             // o creati con key custom (pro_custom_*).
-            const { data: rows } = await supabase
-                .from('system_messages')
-                .select('id, message_key, message_body, is_enabled, label, trigger_offset_hours')
+            const { data: rows } = await templatePromise
             const candidates = (rows || []) as Array<{ id: string; message_key: string; message_body: string | null; is_enabled: boolean | null; label: string | null; trigger_offset_hours: number | null }>
             const direct = candidates.find(r => r.message_key === 'pro_marketing_compleanno')
             const labelMatch = !direct ? candidates.find(r => {
@@ -271,19 +316,12 @@ export default function BirthdaysTab() {
             }
 
             // Load customers with birthdays
-            const { data: customersData, error: customersError } = await supabase
-                .from('customers_extended')
-                .select('id, nome, cognome, email, telefono, data_nascita, ragione_sociale, denominazione, tipo_cliente, status')
-                .not('data_nascita', 'is', null)
-                .or('status.is.null,status.neq.blacklist')
+            const { data: customersData, error: customersError } = await customersPromise
 
             if (customersError) throw customersError
 
             // Load sent birthday messages for current year
-            const { data: sentData, error: sentError } = await supabase
-                .from('birthday_messages')
-                .select('customer_id, year, sent_at')
-                .eq('year', currentYear)
+            const { data: sentData, error: sentError } = await sentPromise
 
             if (sentError && sentError.code !== '42P01') {
                 logger.warn('birthday_messages table may not exist:', sentError)
@@ -293,11 +331,7 @@ export default function BirthdaysTab() {
             setSentRecords(sentData || [])
 
             // Load marketing consents
-            const { data: consentsData } = await supabase
-                .from('user_consents')
-                .select('user_id')
-                .eq('consent_type', 'marketing')
-                .eq('status', 'active')
+            const { data: consentsData } = await consentsPromise
 
             const consentSet = new Set((consentsData || []).map(c => c.user_id))
 

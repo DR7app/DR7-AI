@@ -167,13 +167,13 @@ export function statusExists(defs: ClientStatusDef[], key: string | null | undef
  */
 export async function loadClientStatusConfig(): Promise<ClientStatusDef[]> {
   try {
+    // 05/10/2026: si chiede solo il ramo letto qui, non tutta la riga (204 KB a ogni apertura).
     const { data } = await supabase
       .from('centralina_pro_config')
-      .select('config')
+      .select(`stored:config->${CLIENT_STATUS_CONFIG_KEY}`)
       .eq('id', CONFIG_ROW)
       .maybeSingle()
-    const cfg = (data?.config || {}) as Record<string, unknown>
-    const stored = cfg[CLIENT_STATUS_CONFIG_KEY]
+    const stored = (data as { stored?: unknown } | null)?.stored
     if (Array.isArray(stored) && stored.length > 0) return normalizeClientStatus(stored)
   } catch { /* rete KO: si prosegue con i fallback */ }
 

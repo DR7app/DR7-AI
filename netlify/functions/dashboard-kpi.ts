@@ -5,6 +5,10 @@ import { requireAuth } from './require-auth'
 // System Control: misura la funzione e registra da solo gli errori 500.
 // Registra SOLO le chiamate lente o fallite, per non pesare sulle altre.
 import { conSystemControl } from './utils/systemControl'
+// 05/10/2026: report canonici calcolati qui dentro (niente giro HTTP) e cache
+// CDN breve per operatore (token nella chiave, vedi utils/cacheReport.ts).
+import { calcolaReportMensile } from './monthly-report'
+import { intestazioniCacheReportPrivata, chiedeRicalcolo, INTESTAZIONI_NESSUNA_CACHE } from './utils/cacheReport'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -130,6 +134,125 @@ const handlerInterno: Handler = async (event) => {
   else daysElapsed = daysBetween(monthStartISO, todayISO)
 
   try {
+    // Helper: settle and extract or fall back
+    const safe = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await fn()
+      } catch (e) {
+        console.error(`[dashboard-kpi] ${label} failed:`, (e as Error).message)
+        return fallback
+      }
+    }
+
+    // ============================================================
+    // MONTHLY REPORTS — rollup for the "Riassunto Mensile" view.
+    // CANONICAL: call the same monthly-report endpoint that ReportsTab
+    // and ReportLavaggioTab use, so Dashboard and Reports always agree
+    // on the totals. If the call fails we fall back to the locally
+    // computed numbers so the dashboard never goes blank.
+    // ============================================================
+    // 05/10/2026: tutto questo blocco parte SUBITO, in parallelo alle query
+    // del Dashboard, invece che per ultimo dopo di loro: era il tratto piu'
+    // lungo e stava in coda. Non rigetta mai (safe e caricaOverrides
+    // ripiegano da soli), quindi puo' restare in attesa senza rischi.
+    const reportsPromise = (async () => {
+      // 05/10/2026: monthly-report non si chiama piu' via HTTP (cinque giri di
+      // rete + cinque avvii di funzione, ~3 s): si esegue lo STESSO calcolo qui
+      // dentro con calcolaReportMensile, stessi parametri, stessa risposta.
+      // Il vecchio inoltro dell'header Authorization (senza il quale la chiamata
+      // interna andava in 401 e i numeri divergevano dal Report Noleggio) non
+      // serve piu': il chiamante e' gia' passato da requireAuth qui sopra.
+      const leggiReport = async (etichetta: string, qs: Record<string, string>) => {
+        const r = await calcolaReportMensile(qs)
+        if (r.statusCode < 200 || r.statusCode >= 300) {
+          console.warn(`[dashboard-kpi] ${etichetta} returned ${r.statusCode}`)
+          return null
+        }
+        return JSON.parse(r.body)
+      }
+
+      // 2026-08-24: il Dashboard chiamava monthly-report SENZA `business`, cioe'
+      // solo Noleggio Terra. Mare, Aria e Soggiorni non entravano MAI nelle
+      // Entrate: mancavano all'appello interi business. Ora si chiede un report
+      // per ciascuno, con la stessa funzione del Report Noleggio.
+      // 2026-08-27: si chiedeva sempre il MESE INTERO anche quando il Dashboard
+      // era su una plage piu' stretta ("ultimi 7 giorni"), quindi il Noleggio non
+      // corrispondeva mai al periodo scelto. Ora si passa la stessa finestra, con
+      // gli stessi parametri from/to che usa il Report Noleggio.
+      const rangeQS = { from: monthStartISO, to: monthEndISO }
+
+      const altriBusiness = ['boat_rental', 'heli_rental', 'stay_rental'] as const
+      const chiediBusiness = (biz: string) => safe(`monthly-report:${biz}`, async () => {
+        return await leggiReport(`monthly-report:${biz}`, { type: 'vehicles', ...rangeQS, business: biz }) as { totalRevenue?: number; totalBookingsFound?: number; vehicles?: unknown[] } | null
+      }, null as null | Record<string, unknown>)
+
+      const [noleggioCanonical, lavaggioCanonical, mareCanonical, ariaCanonical, soggiorniCanonical] = await Promise.all([
+        safe('monthly-report:vehicles', async () => {
+          return await leggiReport('monthly-report:vehicles', { type: 'vehicles', ...rangeQS }) as {
+            totalRevenue?: number
+            totalRentalRevenue?: number
+            totalPenaltyRevenue?: number
+            totalDanniRevenue?: number
+            totalAnticipatedRevenue?: number
+            totalDaSaldare?: number
+            vehicleCount?: number
+            totalBookingsFound?: number
+            vehicles?: unknown[]
+          }
+        }, null as null | Record<string, unknown>),
+        safe('monthly-report:washes', async () => {
+          return await leggiReport('monthly-report:washes', { type: 'washes', ...rangeQS }) as {
+            washRevenue?: number
+            billableWashesCount?: number
+            avgWashesPerDay?: number
+            internalWashesCount?: number
+            byType?: unknown[]
+          }
+        }, null as null | Record<string, unknown>),
+        ...altriBusiness.map(chiediBusiness),
+      ])
+
+      // 2026-08-27 (richiesta direzione): il Dashboard mostrava un Noleggio Terra
+      // piu' basso del Report Terra. Ora legge le stesse voci — anticipato e da
+      // saldare — e applica le stesse correzioni manuali, con la matematica
+      // condivisa di utils/reportTotals.ts. Vedi anche il commento la' sopra.
+      const caricaOverrides = async (reportType: string): Promise<OverrideIndex> => {
+        const vuoto: OverrideIndex = { removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() }
+        try {
+          const { data, error } = await supabase
+            .from('report_overrides')
+            .select('*')
+            .eq('report_type', reportType)
+            .order('created_at', { ascending: true })
+          if (error || !data) return vuoto
+          const idx: OverrideIndex = { removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() }
+          for (const o of data as Array<Record<string, unknown>>) {
+            const rowKey = String(o.row_key || '')
+            if (o.note) idx.notesByRow.set(rowKey, String(o.note))
+            if (o.action === 'remove') idx.removed.add(rowKey)
+            else if (o.action === 'edit' && o.field != null && o.value_num != null) idx.edits.set(`${rowKey}::${String(o.field)}`, Number(o.value_num))
+            else if (o.action === 'add') idx.added.push({ id: String(o.id), row: o.value_json || {}, note: o.note ? String(o.note) : null })
+          }
+          return idx
+        } catch (e) {
+          console.warn('[dashboard-kpi] report_overrides non leggibili:', e)
+          return vuoto
+        }
+      }
+
+      const [ovTerra, ovMare, ovAria, ovStay, ovLavaggio] = await Promise.all([
+        caricaOverrides('noleggio'),
+        caricaOverrides('noleggio_boat_rental'),
+        caricaOverrides('noleggio_heli_rental'),
+        caricaOverrides('noleggio_stay_rental'),
+        caricaOverrides('lavaggio'),
+      ])
+      return {
+        noleggioCanonical, lavaggioCanonical, mareCanonical, ariaCanonical, soggiorniCanonical,
+        ovTerra, ovMare, ovAria, ovStay, ovLavaggio,
+      }
+    })()
+
     // Parallel data fetches
     const [
       vehiclesRes,
@@ -137,7 +260,10 @@ const handlerInterno: Handler = async (event) => {
       prevBookingsRes,
       customersRes,
       cauzioniRes,
-      fattureRes
+      fattureRes,
+      totalCustomersRes,
+      overlapBookingsRes,
+      prevOverlapBookingsRes,
     ] = await Promise.all([
       // 1. All active vehicles
       supabase.from('vehicles').select('id, display_name, plate, status, daily_rate, category, metadata')
@@ -177,7 +303,29 @@ const handlerInterno: Handler = async (event) => {
         .select('id, importo_totale, stato, data_emissione, booking_id')
         .gte('data_emissione', monthStartISO)
         .lte('data_emissione', monthEndISO)
-        .range(da, a))
+        .range(da, a)),
+      // 05/10/2026: le tre letture qui sotto aspettavano in fila dopo il
+      // lotto parallelo. Stesse query, entrate nel lotto.
+      // 7. Exact total customer count (not capped at 1000 like array selects)
+      supabase
+        .from('customers_extended')
+        .select('id', { count: 'exact', head: true }),
+      // 8. Bookings that started BEFORE this month but overlap (still active)
+      tutteLeRighe((da, a) => supabase
+        .from('bookings')
+        .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status')
+        .lt('pickup_date', monthStartISO + 'T00:00:00')
+        .gte('dropoff_date', monthStartISO + 'T00:00:00')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+        .not('vehicle_plate', 'in', '("TEST000","TEST002")')
+        .range(da, a)),
+      // 9. Previous month overlap bookings (for prev occupation rate)
+      supabase
+        .from('bookings')
+        .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, status, service_type, booking_details')
+        .lt('pickup_date', prevMonthStartISO + 'T00:00:00')
+        .gte('dropoff_date', prevMonthStartISO + 'T00:00:00')
+        .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active']),
     ])
 
     if (vehiclesRes.error) throw vehiclesRes.error
@@ -185,9 +333,8 @@ const handlerInterno: Handler = async (event) => {
     if (prevBookingsRes.error) throw prevBookingsRes.error
 
     // Exact total customer count (not capped at 1000 like array selects)
-    const { count: totalCustomersCount } = await supabase
-      .from('customers_extended')
-      .select('id', { count: 'exact', head: true })
+    // (05/10/2026: letta nel lotto parallelo qui sopra)
+    const { count: totalCustomersCount } = totalCustomersRes
 
     const vehicles = vehiclesRes.data || []
     // Apply test-plate filter in JS so NULL plates (admin-created bookings,
@@ -201,14 +348,8 @@ const handlerInterno: Handler = async (event) => {
     const fatture = fattureRes.data || []
 
     // Also fetch bookings that started BEFORE this month but overlap (still active)
-    const { data: overlapBookings } = await tutteLeRighe((da, a) => supabase
-      .from('bookings')
-      .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status')
-      .lt('pickup_date', monthStartISO + 'T00:00:00')
-      .gte('dropoff_date', monthStartISO + 'T00:00:00')
-      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
-      .not('vehicle_plate', 'in', '("TEST000","TEST002")')
-      .range(da, a))
+    // (05/10/2026: letta nel lotto parallelo qui sopra)
+    const { data: overlapBookings } = overlapBookingsRes
 
     // Filter rental bookings helper
     const filterRentals = (bookings: any[]) => bookings.filter(b => {
@@ -393,12 +534,8 @@ const handlerInterno: Handler = async (event) => {
     const monthlyOccupationRate = calcMonthlyOccupation(monthRentals, vehicles, monthStartISO, monthEndISO, daysInMonth)
 
     // Previous month rate - fetch overlap bookings for prev month too
-    const { data: prevOverlapBookings } = await supabase
-      .from('bookings')
-      .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, status, service_type, booking_details')
-      .lt('pickup_date', prevMonthStartISO + 'T00:00:00')
-      .gte('dropoff_date', prevMonthStartISO + 'T00:00:00')
-      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+    // (05/10/2026: letta nel lotto parallelo qui sopra)
+    const { data: prevOverlapBookings } = prevOverlapBookingsRes
 
     const prevMonthRentals = [...prevRentals, ...filterRentals(prevOverlapBookings || [])]
     const prevMonthlyOccupationRate = calcMonthlyOccupation(prevMonthRentals, vehicles, prevMonthStartISO, prevMonthEndISO, prevDaysInMonth)
@@ -718,26 +855,13 @@ const handlerInterno: Handler = async (event) => {
     const thirtyDaysFromNowISO = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     const thirtyDaysAgoISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-    // Helper: settle and extract or fall back
-    const safe = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
-      try {
-        return await fn()
-      } catch (e) {
-        console.error(`[dashboard-kpi] ${label} failed:`, (e as Error).message)
-        return fallback
-      }
-    }
+    // Helper `safe`: spostato in cima all'handler il 05/10/2026 (lo usano i
+    // report canonici, che ora partono per primi).
 
-    const [
-      primeWashSection,
-      cauzioniSection,
-      recensioniSection,
-      walletSection,
-      referralSection,
-      dr7ClubSection,
-      speseSection,
-      fornitoriCashFlowSection,
-    ] = await Promise.all([
+    // 05/10/2026: il lotto delle sezioni parte senza aspettare; il rollup
+    // preventivi qui sotto gira in parallelo invece che dopo. Ogni voce e'
+    // dentro `safe`, quindi il lotto non rigetta mai.
+    const sezioniPromise = Promise.all([
       // -------- PRIME WASH (lavaggi + meccanica from bookings) --------
       safe('primeWash', async () => {
         const [curr, prev] = await Promise.all([
@@ -1061,7 +1185,7 @@ const handlerInterno: Handler = async (event) => {
     // PREVENTIVI rollup for the month — Overview/Domanda/Conversione/Perdite/Azioni
     // Built from existing fields only (no event tracking yet).
     // ============================================================
-    const preventiviSummary = await safe('preventivi', async () => {
+    const preventiviPromise = safe('preventivi', async () => {
       // Exclude preventivi created by test/dev accounts (operator entries,
       // not real customer demand). List is admin-editable via
       // centralina_pro_config.config.kpi.excluded_operator_emails; default
@@ -1256,120 +1380,27 @@ const handlerInterno: Handler = async (event) => {
       azioniSuggerite: [] as string[],
     })
 
-    // ============================================================
-    // MONTHLY REPORTS — rollup for the "Riassunto Mensile" view.
-    // CANONICAL: call the same monthly-report endpoint that ReportsTab
-    // and ReportLavaggioTab use, so Dashboard and Reports always agree
-    // on the totals. If the call fails we fall back to the locally
-    // computed numbers so the dashboard never goes blank.
-    // ============================================================
-    const reportOrigin = event.headers['x-forwarded-proto'] && event.headers.host
-      ? `${event.headers['x-forwarded-proto']}://${event.headers.host}`
-      : process.env.URL || ''
+    const [
+      [
+        primeWashSection,
+        cauzioniSection,
+        recensioniSection,
+        walletSection,
+        referralSection,
+        dr7ClubSection,
+        speseSection,
+        fornitoriCashFlowSection,
+      ],
+      preventiviSummary,
+    ] = await Promise.all([sezioniPromise, preventiviPromise])
 
-    // Forward the caller's Authorization header so the monthly-report endpoint
-    // (which has requireAuth) lets us through. Without this the internal call
-    // 401's, dashboard falls back to its own calc, and the numbers drift from
-    // what Report Noleggio shows. THIS WAS THE BUG.
-    const authHeader = event.headers.authorization || event.headers.Authorization || ''
-
-    // 2026-08-24: il Dashboard chiamava monthly-report SENZA `business`, cioe'
-    // solo Noleggio Terra. Mare, Aria e Soggiorni non entravano MAI nelle
-    // Entrate: mancavano all'appello interi business. Ora si chiede un report
-    // per ciascuno, con la stessa funzione del Report Noleggio.
-    // 2026-08-27: si chiedeva sempre il MESE INTERO anche quando il Dashboard
-    // era su una plage piu' stretta ("ultimi 7 giorni"), quindi il Noleggio non
-    // corrispondeva mai al periodo scelto. Ora si passa la stessa finestra, con
-    // gli stessi parametri from/to che usa il Report Noleggio.
-    const rangeQS = `from=${monthStartISO}&to=${monthEndISO}`
-
-    const altriBusiness = ['boat_rental', 'heli_rental', 'stay_rental'] as const
-    const chiediBusiness = (biz: string) => safe(`monthly-report:${biz}`, async () => {
-      const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&${rangeQS}&business=${biz}`, {
-        headers: { Authorization: authHeader },
-      })
-      if (!r.ok) {
-        console.warn(`[dashboard-kpi] monthly-report:${biz} returned ${r.status}`)
-        return null
-      }
-      return await r.json() as { totalRevenue?: number; totalBookingsFound?: number; vehicles?: unknown[] }
-    }, null as null | Record<string, unknown>)
-
-    const [noleggioCanonical, lavaggioCanonical, mareCanonical, ariaCanonical, soggiorniCanonical] = await Promise.all([
-      safe('monthly-report:vehicles', async () => {
-        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&${rangeQS}`, {
-          headers: { Authorization: authHeader },
-        })
-        if (!r.ok) {
-          console.warn(`[dashboard-kpi] monthly-report:vehicles returned ${r.status}`)
-          return null
-        }
-        return await r.json() as {
-          totalRevenue?: number
-          totalRentalRevenue?: number
-          totalPenaltyRevenue?: number
-          totalDanniRevenue?: number
-          totalAnticipatedRevenue?: number
-          totalDaSaldare?: number
-          vehicleCount?: number
-          totalBookingsFound?: number
-          vehicles?: unknown[]
-        }
-      }, null as null | Record<string, unknown>),
-      safe('monthly-report:washes', async () => {
-        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=washes&${rangeQS}`, {
-          headers: { Authorization: authHeader },
-        })
-        if (!r.ok) {
-          console.warn(`[dashboard-kpi] monthly-report:washes returned ${r.status}`)
-          return null
-        }
-        return await r.json() as {
-          washRevenue?: number
-          billableWashesCount?: number
-          avgWashesPerDay?: number
-          internalWashesCount?: number
-          byType?: unknown[]
-        }
-      }, null as null | Record<string, unknown>),
-      ...altriBusiness.map(chiediBusiness),
-    ])
-
-    // 2026-08-27 (richiesta direzione): il Dashboard mostrava un Noleggio Terra
-    // piu' basso del Report Terra. Ora legge le stesse voci — anticipato e da
-    // saldare — e applica le stesse correzioni manuali, con la matematica
-    // condivisa di utils/reportTotals.ts. Vedi anche il commento la' sopra.
-    const caricaOverrides = async (reportType: string): Promise<OverrideIndex> => {
-      const vuoto: OverrideIndex = { removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() }
-      try {
-        const { data, error } = await supabase
-          .from('report_overrides')
-          .select('*')
-          .eq('report_type', reportType)
-          .order('created_at', { ascending: true })
-        if (error || !data) return vuoto
-        const idx: OverrideIndex = { removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() }
-        for (const o of data as Array<Record<string, unknown>>) {
-          const rowKey = String(o.row_key || '')
-          if (o.note) idx.notesByRow.set(rowKey, String(o.note))
-          if (o.action === 'remove') idx.removed.add(rowKey)
-          else if (o.action === 'edit' && o.field != null && o.value_num != null) idx.edits.set(`${rowKey}::${String(o.field)}`, Number(o.value_num))
-          else if (o.action === 'add') idx.added.push({ id: String(o.id), row: o.value_json || {}, note: o.note ? String(o.note) : null })
-        }
-        return idx
-      } catch (e) {
-        console.warn('[dashboard-kpi] report_overrides non leggibili:', e)
-        return vuoto
-      }
-    }
-
-    const [ovTerra, ovMare, ovAria, ovStay, ovLavaggio] = await Promise.all([
-      caricaOverrides('noleggio'),
-      caricaOverrides('noleggio_boat_rental'),
-      caricaOverrides('noleggio_heli_rental'),
-      caricaOverrides('noleggio_stay_rental'),
-      caricaOverrides('lavaggio'),
-    ])
+    // 05/10/2026: i report canonici sono partiti in cima all'handler
+    // (reportsPromise) e lavorano mentre girano tutte le altre query: qui si
+    // raccoglie soltanto il risultato.
+    const {
+      noleggioCanonical, lavaggioCanonical, mareCanonical, ariaCanonical, soggiorniCanonical,
+      ovTerra, ovMare, ovAria, ovStay, ovLavaggio,
+    } = await reportsPromise
 
     // La chiave di periodo degli override e' il MESE, la stessa che usa il
     // Report (`customFrom.slice(0,7)`); qui `month` e' gia' YYYY-MM.
@@ -1519,6 +1550,9 @@ const handlerInterno: Handler = async (event) => {
 
     return {
       statusCode: 200,
+      // 05/10/2026: 60 s sulla CDN, una copia per token. Il pulsante Aggiorna
+      // passa ?refresh=1: ricalcolo vero e risposta mai messa in cache.
+      headers: chiedeRicalcolo(params) ? INTESTAZIONI_NESSUNA_CACHE : intestazioniCacheReportPrivata('dashboard-kpi'),
       body: JSON.stringify(fullResponse)
     }
   } catch (error: any) {

@@ -195,41 +195,90 @@ export async function raccogliClientiConDanni(sb: SupabaseClient): Promise<Aggre
 
     // PostgREST restituisce al massimo 1000 righe per richiesta: si legge a
     // pagine finche' una pagina torna corta.
-    async function tutteLeRighe<T>(pagina: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>): Promise<T[]> {
-        const out: T[] = []
-        for (let page = 0; page < 50; page++) {
-            const { data, error } = await pagina(page * 1000, page * 1000 + 999)
-            if (error) throw new Error(error.message)
-            const got = (data || []) as T[]
-            out.push(...got)
-            if (got.length < 1000) break
+    //
+    // 05/10/2026: le pagine partivano UNA DOPO L'ALTRA (bookings = 3 giri,
+    // clienti = 2). Ora la prima pagina chiede anche il conteggio e le altre
+    // partono tutte insieme: stesso ordine, stesse righe, stesso tetto di 50
+    // pagine. Il tempo e' il massimo delle richieste, non la somma.
+    async function tutteLeRighe<T>(pagina: (from: number, to: number, conConteggio: boolean) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null; count?: number | null }>): Promise<T[]> {
+        const prima = await pagina(0, 999, true)
+        if (prima.error) throw new Error(prima.error.message)
+        const out: T[] = [...((prima.data || []) as T[])]
+        if (out.length < 1000) return out
+        const totale = prima.count ?? 0
+        const inizi: number[] = []
+        for (let page = 1; page < 50 && page * 1000 < totale; page++) inizi.push(page * 1000)
+        if (inizi.length === 0) {
+            // Conteggio non disponibile: si torna alla lettura in fila.
+            for (let page = 1; page < 50; page++) {
+                const { data, error } = await pagina(page * 1000, page * 1000 + 999, false)
+                if (error) throw new Error(error.message)
+                const got = (data || []) as T[]
+                out.push(...got)
+                if (got.length < 1000) break
+            }
+            return out
+        }
+        const resto = await Promise.all(inizi.map(start => pagina(start, start + 999, false)))
+        for (const r of resto) {
+            if (r.error) throw new Error(r.error.message)
+            out.push(...((r.data || []) as T[]))
         }
         return out
+    }
+
+    // 05/10/2026: di `booking_details` (2,7 MB su tutte le prenotazioni) qui
+    // si leggono SOLO danni, penalties, extension_history e il codice
+    // fiscale (4 posizioni possibili): ~70 KB. Si estraggono in Postgres e si
+    // ricompone lo stesso oggetto, cosi' il resto del calcolo non cambia.
+    type BookingGrezza = Omit<BookingRow, 'booking_details'> & {
+        bd_danni?: unknown; bd_penalties?: unknown; bd_extension_history?: unknown
+        bd_cf?: unknown; bd_cf2?: unknown; bd_cust_cf?: unknown; bd_cust_cf2?: unknown
+    }
+    const ricomponi = (r: BookingGrezza): BookingRow => {
+        // Una colonna null diventa un oggetto vuoto: ogni lettura qui sotto
+        // passa da `?.`, quindi null e {} danno lo stesso risultato.
+        const { bd_danni, bd_penalties, bd_extension_history, bd_cf, bd_cf2, bd_cust_cf, bd_cust_cf2, ...resto } = r
+        const bd: Record<string, unknown> = {}
+        if (bd_danni !== null && bd_danni !== undefined) bd.danni = bd_danni
+        if (bd_penalties !== null && bd_penalties !== undefined) bd.penalties = bd_penalties
+        if (bd_extension_history !== null && bd_extension_history !== undefined) bd.extension_history = bd_extension_history
+        if (bd_cf !== null && bd_cf !== undefined) bd.codice_fiscale = bd_cf
+        if (bd_cf2 !== null && bd_cf2 !== undefined) bd.codiceFiscale = bd_cf2
+        if ((bd_cust_cf !== null && bd_cust_cf !== undefined) || (bd_cust_cf2 !== null && bd_cust_cf2 !== undefined)) {
+            const cu: Record<string, unknown> = {}
+            if (bd_cust_cf !== null && bd_cust_cf !== undefined) cu.codice_fiscale = bd_cust_cf
+            if (bd_cust_cf2 !== null && bd_cust_cf2 !== undefined) cu.codiceFiscale = bd_cust_cf2
+            bd.customer = cu
+        }
+        return { ...resto, booking_details: bd as BookingRow['booking_details'] }
     }
 
     let rows: BookingRow[]
     let fattureTutte: FatturaRow[]
     let allWithCf: (CustomerProfile & { id?: string | null; telefono?: string | null })[]
     try {
-        [rows, fattureTutte, allWithCf] = await Promise.all([
-            tutteLeRighe<BookingRow>((from, to) => sb
+        let grezze: BookingGrezza[]
+        ;[grezze, fattureTutte, allWithCf] = await Promise.all([
+            tutteLeRighe<BookingGrezza>((from, to, conConteggio) => sb
                 .from('bookings')
-                .select('id, pickup_date, appointment_date, user_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, status, payment_status, price_total, amount_paid, created_at, booking_details')
+                .select('id, pickup_date, appointment_date, user_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, status, payment_status, price_total, amount_paid, created_at, bd_danni:booking_details->danni, bd_penalties:booking_details->penalties, bd_extension_history:booking_details->extension_history, bd_cf:booking_details->codice_fiscale, bd_cf2:booking_details->codiceFiscale, bd_cust_cf:booking_details->customer->codice_fiscale, bd_cust_cf2:booking_details->customer->codiceFiscale', conConteggio ? { count: 'exact' } : undefined)
                 .order('pickup_date', { ascending: false })
                 .order('id', { ascending: true })
                 .range(from, to)),
-            tutteLeRighe<FatturaRow>((from, to) => sb
+            tutteLeRighe<FatturaRow>((from, to, conConteggio) => sb
                 .from('fatture')
-                .select('id, booking_id, stato, data_emissione, created_at, items, numero_fattura, customer_name, customer_email, tipo_fattura, related_invoice_id')
+                .select('id, booking_id, stato, data_emissione, created_at, items, numero_fattura, customer_name, customer_email, tipo_fattura, related_invoice_id', conConteggio ? { count: 'exact' } : undefined)
                 .order('id', { ascending: true })
                 .range(from, to)),
-            tutteLeRighe<CustomerProfile & { id?: string | null; telefono?: string | null }>((from, to) => sb
+            tutteLeRighe<CustomerProfile & { id?: string | null; telefono?: string | null }>((from, to, conConteggio) => sb
                 .from('customers_extended')
-                .select('user_id, id, email, codice_fiscale, nome, cognome, telefono')
+                .select('user_id, id, email, codice_fiscale, nome, cognome, telefono', conConteggio ? { count: 'exact' } : undefined)
                 .not('codice_fiscale', 'is', null)
                 .order('id', { ascending: true })
                 .range(from, to)),
         ])
+        rows = grezze.map(ricomponi)
     } catch (err) {
         throw err
     }

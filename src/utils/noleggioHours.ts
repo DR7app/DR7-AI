@@ -71,11 +71,12 @@ function configFor(serviceType?: string | null): NoleggioHoursConfig {
 
 ;(async () => {
     try {
+        // 05/10/2026: si chiede solo il ramo letto qui, non tutta la riga (204 KB a ogni apertura).
         const { data } = await supabase
             .from('centralina_pro_config')
-            .select('id, config')
-        for (const riga of (data || []) as { id: string; config: Record<string, unknown> }[]) {
-            const nh = riga.config?.noleggio_hours as Partial<NoleggioHoursConfig> | undefined
+            .select('id, nh:config->noleggio_hours')
+        for (const riga of (data || []) as unknown as { id: string; nh: Partial<NoleggioHoursConfig> | null }[]) {
+            const nh = riga.nh ?? undefined
             if (!nh || !(nh.hours_pickup || nh.hours_return)) continue
             const slot = typeof nh.slot_minutes === 'number' && nh.slot_minutes > 0 ? nh.slot_minutes : DEFAULT_CONFIG.slot_minutes
             CONFIGS.set(riga.id, {

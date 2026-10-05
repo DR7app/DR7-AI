@@ -10,6 +10,7 @@ import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { getDayBlock, getSlotBlock, lavaggioHoursPronto } from '../../../utils/lavaggioHours'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { logger } from '../../../utils/logger'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
@@ -306,8 +307,24 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     return parts.join(' + ')
   }
 
+  // 2026-10-05: la rilettura dipendeva da `currentDate` intero, quindi in
+  // vista Giorno/Settimana ogni freccia (un giorno avanti) riscaricava lo
+  // stesso mese e ricreava il canale realtime. I dati dipendono solo da anno
+  // e mese (finestra e filtro qui sotto), quindi si ricarica quando cambia
+  // il MESE, come diceva gia' il commento.
+  const meseCaricato = `${currentDate.getFullYear()}-${currentDate.getMonth()}`
+
   useEffect(() => {
     loadData()
+
+    // 2026-10-05: il canale ascolta TUTTE le prenotazioni e i veicoli, e un
+    // salvataggio ne genera spesso diversi di fila: gli eventi ravvicinati si
+    // raccolgono in UNA sola rilettura dopo 800 ms. Stessi dati a video.
+    let ricaricaTimer: ReturnType<typeof setTimeout> | null = null
+    const ricaricaRaggruppata = () => {
+      if (ricaricaTimer) clearTimeout(ricaricaTimer)
+      ricaricaTimer = setTimeout(() => { ricaricaTimer = null; loadData() }, 800)
+    }
 
     // Realtime: bookings (creazione/modifica/cancellazione lavaggio) +
     // car_wash_services (toggle attivo/inattivo, modifica prezzo/durata)
@@ -318,23 +335,24 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       .channel('carwash-calendar-realtime')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        () => loadData()
+        () => ricaricaRaggruppata()
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'car_wash_services' },
-        () => loadData()
+        () => ricaricaRaggruppata()
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'vehicles' },
-        () => loadData()
+        () => ricaricaRaggruppata()
       )
       .subscribe()
 
     return () => {
+      if (ricaricaTimer) clearTimeout(ricaricaTimer)
       subscription.unsubscribe()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate]) // Reload when month changes
+  }, [meseCaricato]) // Reload when month changes
 
   async function loadData() {
     setLoading(true)
@@ -363,7 +381,41 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         + `&to=${encodeURIComponent(windowTo.toISOString())}`
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let bookingsData: any[] | null = null
-      try {
+      // 2026-10-05: list-bookings restituisce TUTTE le prenotazioni del mese
+      // (noleggi compresi: settembre 2026 = 261 righe, 1,13 MB) per tenerne
+      // solo i lavaggi (137 righe, 0,41 MB). Qui si chiede direttamente al
+      // database la STESSA finestra e gli STESSI stati della funzione, gia'
+      // ristretta a service_type = 'car_wash' (la RLS di bookings consente la
+      // lettura a ogni utente autenticato, quindi le righe sono le stesse).
+      // Il filtro qui sotto resta identico. Se la lettura diretta fallisce si
+      // torna alla funzione, poi alla query di riserva, come prima.
+      {
+        const fromIso = windowFrom.toISOString()
+        const toIso = windowTo.toISOString()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const diretta = await fetchAllRows<any>((from, to) => supabase
+          .from('bookings')
+          .select('*')
+          .eq('service_type', 'car_wash')
+          .neq('status', 'cancelled')
+          .neq('status', 'annullata')
+          .or(
+            `and(pickup_date.lt.${toIso},or(dropoff_date.is.null,dropoff_date.gte.${fromIso})),`
+            + `and(appointment_date.gte.${fromIso},appointment_date.lt.${toIso})`
+          )
+          .order('pickup_date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to))
+        if (!diretta.error) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          bookingsData = diretta.data.filter((b: any) =>
+            b.service_type === 'car_wash' &&
+            b.status !== 'cancelled' && b.status !== 'annullata' && b.status !== 'expired' &&
+            b.customer_name !== 'Lavaggio Rientro'
+          )
+        }
+      }
+      if (!bookingsData) try {
         const res = await authFetch(`/.netlify/functions/list-bookings${qs}`)
         const result = await res.json()
         if (res.ok && result.bookings) {

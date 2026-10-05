@@ -215,11 +215,18 @@ export default function ReviewManagementTab() {
       )] as string[]
 
       const [bookingRows, fattureRows, cauzioniRows] = await Promise.all([
+        // 05/10/2026 — qui servono solo penalties e danni: `booking_details`
+        // intero (contratto, documenti, cliente) pesava decine di volte tanto.
+        // L'oggetto viene ricomposto con le stesse due chiavi.
         Promise.all(blocchi.map(ids => supabase
           .from('bookings')
-          .select('id, booking_details')
+          .select('id, bd_penalties:booking_details->penalties, bd_danni:booking_details->danni')
           .in('id', ids)
-          .then(r => r.data || []))).then(r => r.flat()),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .then(r => ((r.data || []) as any[]).map(b => ({
+            id: b.id,
+            booking_details: { penalties: b.bd_penalties ?? undefined, danni: b.bd_danni ?? undefined },
+          }))))).then(r => r.flat()),
         Promise.all(blocchi.map(ids => supabase
           .from('fatture')
           .select('booking_id')
@@ -349,10 +356,25 @@ export default function ReviewManagementTab() {
       // Chi e' gia' valutato continua a essere controllato da
       // autoFixEligibility, che legge penali, danni e cauzioni in blocco e
       // sposta fra Pronti ed Esclusi.
-      const { data: giaValutati } = await supabase
+      //
+      // 05/10/2026 — gli id andavano in UNA sola richiesta: 220 id oggi sono
+      // gia' ~8,5 KB di URL, e oltre il limite la lettura fallisce in silenzio
+      // (`data` null): allora TUTTE le prenotazioni sembravano nuove e
+      // ripartiva la raffica di POST a review-evaluate-candidate (21 s
+      // misurati). Ora a blocchi da 150, tutti insieme. Un blocco che fallisce
+      // si comporta come prima: i suoi id passano alla valutazione (che per
+      // chi ha gia' un candidato risponde "duplicate" senza riscrivere nulla).
+      const idsDaControllare = allRecords.map(r => r.id).slice(0, 1000)
+      const blocchiIds: string[][] = []
+      for (let i = 0; i < idsDaControllare.length; i += 150) blocchiIds.push(idsDaControllare.slice(i, i + 150))
+      const risposte = await Promise.all(blocchiIds.map(ids => supabase
         .from('review_candidates')
         .select('source_record_id')
-        .in('source_record_id', allRecords.map(r => r.id).slice(0, 1000))
+        .in('source_record_id', ids)))
+      if (risposte.some(r => r.error)) {
+        console.warn('[Recensioni] controllo candidati esistenti non riuscito su qualche blocco')
+      }
+      const giaValutati = risposte.flatMap(r => r.data || [])
       const noti = new Set((giaValutati || []).map((c: { source_record_id: string }) => c.source_record_id))
       const nuovi = allRecords.filter(r => !noti.has(r.id))
 
@@ -415,7 +437,36 @@ export default function ReviewManagementTab() {
         setCandidates(Array.from(byId.values()))
       }
 
+      // 05/10/2026 — le tre letture passavano da `review-candidates` (una
+      // function Netlify per bucket, 0,8-1,7 s l'una, quasi tutto avvio della
+      // function) per fare una sola SELECT. La tabella e' gia' letta e scritta
+      // da qui (autoFixEligibility), quindi la stessa SELECT — stesse colonne,
+      // stessi filtri, stesso ordine — parte direttamente dal browser. Se il
+      // database rifiuta, si torna alla function come prima.
+      const COLONNE = 'id, source_record_id, customer_name, customer_email, customer_phone, ' +
+        'service_type, eligibility_status, review_risk, send_status, exclusion_reason_code, ' +
+        'exclusion_reason_text, contact_available_email, contact_available_whatsapp, ' +
+        'is_internal_record, recipient_role, created_at, updated_at'
+      const leggiDiretto = async (b: TabKey, page: number): Promise<ReviewCandidate[] | null> => {
+        let q = supabase
+          .from('review_candidates')
+          .select(COLONNE)
+          .eq('eligibility_status', b)
+        if (filterServiceType !== 'ALL') q = q.eq('service_type', filterServiceType)
+        const { data, error } = await q
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+        if (error) {
+          console.warn('[Recensioni] lettura diretta non riuscita, si usa la function:', error.message)
+          return null
+        }
+        return (data || []) as unknown as ReviewCandidate[]
+      }
+
       const leggi = async (b: TabKey, page: number): Promise<ReviewCandidate[]> => {
+        const diretto = await leggiDiretto(b, page)
+        if (diretto) return diretto
         const qs = new URLSearchParams({
           eligibility_status: b,
           service_type: filterServiceType,

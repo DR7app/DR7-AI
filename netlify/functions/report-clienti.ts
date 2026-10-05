@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { requireAuth } from './require-auth'
 import { addebitiFattura, fattureDaIgnorare, penaliDanniPerPrenotazione, type RigaFatturaAddebito } from './utils/addebitiCliente'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -105,6 +106,13 @@ export const handler: Handler = async (event) => {
   const periodoFromMs = periodoFrom ? new Date(periodoFrom + 'T00:00:00').getTime() : null
   const periodoToMs = periodoTo ? new Date(periodoTo + 'T23:59:59.999').getTime() : null
 
+  // 05/10/2026 — la function non controllava chi chiamava: nomi, email,
+  // telefoni e spesa di tutti i clienti a chiunque conoscesse l'URL. Ora serve
+  // un operatore del gestionale (stessa regola delle altre function). Il
+  // controllo parte INSIEME alle letture e si aspetta prima di rispondere,
+  // cosi' non aggiunge tempo all'apertura del report.
+  const autorizzazione = requireAuth(event as unknown as { headers: Record<string, string> })
+
   try {
     // 0) Anagrafica + attivita': tutte le tabelle partono insieme.
     //    Prima l'anagrafica veniva letta per intera PRIMA di far partire le
@@ -113,7 +121,7 @@ export const handler: Handler = async (event) => {
     //    prenotato compare nel report.
     const dodiciMesiFa = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [allCustomers, bookingsAll, vehiclesAll, cauzioniAll, fattureAll, clubAll, walletAll, rechargeAll] = await Promise.all([
+    const letture = Promise.all([
       (async () => fetchAll<any>(
         'customers_extended',
         await soloColonneEsistenti(
@@ -121,7 +129,28 @@ export const handler: Handler = async (event) => {
           'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
         ),
       ))(),
-      fetchAll<any>('bookings', 'id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, vehicle_plate, booked_at, created_at, updated_at'),
+      // 05/10/2026 — `booking_details` intero pesava 2,7 MB (2.539 prenotazioni)
+      // e qui se ne leggono solo sette chiavi: il resto viaggiava dal database
+      // alla function per essere buttato. Ora si chiedono solo quelle (circa
+      // 300 KB) e `booking_details` viene ricomposto subito sotto con le stesse
+      // chiavi, quindi tutto il codice che segue legge gli stessi valori.
+      fetchAll<any>('bookings', 'id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, '
+        + 'bd_customer:booking_details->customer, bd_internal:booking_details->internal, bd_created_by:booking_details->createdBy, '
+        + 'bd_vehicle_id:booking_details->vehicle_id, bd_nexi_paid_at:booking_details->nexi_paid_at, '
+        + 'bd_penalties:booking_details->penalties, bd_danni:booking_details->danni, '
+        + 'pickup_date, dropoff_date, appointment_date, vehicle_id, vehicle_plate, booked_at, created_at, updated_at')
+        .then(righe => righe.map(({ bd_customer, bd_internal, bd_created_by, bd_vehicle_id, bd_nexi_paid_at, bd_penalties, bd_danni, ...b }) => ({
+          ...b,
+          booking_details: {
+            customer: bd_customer ?? undefined,
+            internal: bd_internal ?? undefined,
+            createdBy: bd_created_by ?? undefined,
+            vehicle_id: bd_vehicle_id ?? undefined,
+            nexi_paid_at: bd_nexi_paid_at ?? undefined,
+            penalties: bd_penalties ?? undefined,
+            danni: bd_danni ?? undefined,
+          },
+        }))),
       fetchAll<any>('vehicles', 'id, category'),
       fetchAll<any>('cauzioni', 'cliente_id, importo, stato, riferimento_contratto_id'),
       // tipo_fattura/stato/related_invoice_id servono a scartare le note di
@@ -137,6 +166,10 @@ export const handler: Handler = async (event) => {
         q => q.in('payment_status', ['succeeded', 'paid', 'completed'])
               .or(`created_at.gte.${dodiciMesiFa},created_at.is.null`)),
     ])
+    letture.catch(() => { /* gestito nel catch, dopo il controllo operatore */ })
+    const { error: authErr } = await autorizzazione
+    if (authErr) return authErr
+    const [allCustomers, bookingsAll, vehiclesAll, cauzioniAll, fattureAll, clubAll, walletAll, rechargeAll] = await letture
     /* eslint-enable @typescript-eslint/no-explicit-any */
     const bookingsRes = { data: bookingsAll }
     const vehiclesRes = { data: vehiclesAll }
@@ -569,6 +602,8 @@ export const handler: Handler = async (event) => {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
+    const { error: authErr } = await autorizzazione
+    if (authErr) return authErr
     console.error('Report clienti error:', error)
     return { statusCode: 500, body: JSON.stringify({ error: 'Internal server error', details: error.message }) }
   }

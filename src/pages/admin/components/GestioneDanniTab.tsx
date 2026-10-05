@@ -10,6 +10,7 @@ import { corrispondeRicerca } from '../../../utils/ricerca'
 import { sanitizeMoney, parseMoney } from '../../../utils/money'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, type Business } from '../../../utils/businessScope'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
@@ -173,45 +174,53 @@ export default function GestioneDanniTab({ business = 'rental' }: { business?: B
       //     incontrata, in ordine arbitrario. Ordinando per pickup_date
       //     decrescente la prima incontrata e' davvero la piu' recente, che e'
       //     la prenotazione a cui va agganciata una nuova penale/danno.
+      // 2026-10-05: booking_details pesava 2,7 MB su 2.539 prenotazioni, ma qui
+      // se ne leggono solo tre rami: `penalties`, `danni` (le voci) e `uscita`
+      // (serve a bookingBelongsTo per le Uscite Straordinarie). Si scaricano
+      // solo quelli (~74 KB) e si ricompone un booking_details ridotto, cosi'
+      // il resto del codice non cambia. Le scritture rileggono sempre la riga
+      // intera dal database prima di aggiornarla (vedi sotto), quindi nessun
+      // altro ramo viene perso. Prenotazioni e fatture partono insieme e le
+      // pagine sono parallele (fetchAllRows); `id` come secondo ordinamento
+      // rende stabile la paginazione a parita' di pickup_date.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bookings: any[] = []
-      for (let page = 0; page < 30; page++) {
-        const { data: batch, error: bErrPage } = await supabase
+      const [bookingsRes, fattureRes] = await Promise.all([
+        fetchAllRows<any>((from, to) => supabase
           .from('bookings')
-          .select('id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, pickup_date, booking_details, booked_at, service_type, vehicle_type')
+          .select('id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, pickup_date, booked_at, service_type, vehicle_type, bd_penalties:booking_details->penalties, bd_danni:booking_details->danni, bd_uscita:booking_details->uscita')
           .order('pickup_date', { ascending: false })
-          .range(page * 1000, page * 1000 + 999)
-        if (bErrPage) throw bErrPage
+          .order('id', { ascending: true })
+          .range(from, to)),
+        // 2. Fetch penalty/damage fatture
+        // 2026-09-17: paginata come le prenotazioni (810 fatture oggi, il tetto
+        // PostgREST e' 1000) e con `stato`, che dice se la fattura e' pagata.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const got = (batch || []) as any[]
-        bookings.push(...got)
-        if (got.length < 1000) break
-      }
-      // Solo le prenotazioni di QUESTO business: una penale del Noleggio Terra
-      // non ha niente da fare nella tab del Mare (e viceversa).
-      const businessBookings = bookings.filter(b => bookingBelongsTo(b, biz))
-      const businessBookingIds = new Set<string>(businessBookings.map(b => String(b.id)))
-
-      // 2. Fetch penalty/damage fatture
-      // 2026-09-17: paginata come le prenotazioni (810 fatture oggi, il tetto
-      // PostgREST e' 1000) e con `stato`, che dice se la fattura e' pagata.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fatture: any[] = []
-      for (let page = 0; page < 30; page++) {
-        const { data: batch, error: fErr } = await supabase
+        fetchAllRows<any>((from, to) => supabase
           .from('fatture')
           // 2026-08-24: serve `data_emissione`. Senza, ogni voce fatturata nasceva
           // con date:'' e il filtro periodo (Mese/Trimestre) la scartava, facendo
           // sparire quasi tutto appena si sceglieva un preset.
           .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email, data_emissione, stato, tipo_fattura, related_invoice_id')
           .order('id', { ascending: true })
-          .range(page * 1000, page * 1000 + 999)
-        if (fErr) throw fErr
+          .range(from, to)),
+      ])
+      if (bookingsRes.error) throw bookingsRes.error
+      if (fattureRes.error) throw fattureRes.error
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bookings: any[] = bookingsRes.data.map(({ bd_penalties, bd_danni, bd_uscita, ...b }) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const got = (batch || []) as any[]
-        fatture.push(...got)
-        if (got.length < 1000) break
-      }
+        const booking_details: Record<string, any> = {}
+        if (bd_penalties != null) booking_details.penalties = bd_penalties
+        if (bd_danni != null) booking_details.danni = bd_danni
+        if (bd_uscita != null) booking_details.uscita = bd_uscita
+        return { ...b, booking_details }
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fatture: any[] = fattureRes.data
+      // Solo le prenotazioni di QUESTO business: una penale del Noleggio Terra
+      // non ha niente da fare nella tab del Mare (e viceversa).
+      const businessBookings = bookings.filter(b => bookingBelongsTo(b, biz))
+      const businessBookingIds = new Set<string>(businessBookings.map(b => String(b.id)))
 
       // Build a booking lookup for fatture
       const bookingMap = new Map<string, { customer_name: string; customer_email: string; vehicle_name: string; pickup_date: string }>()

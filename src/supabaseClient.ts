@@ -45,3 +45,49 @@ supabase.auth.onAuthStateChange((event, session) => {
 })
 
 supabase.auth.getSession().then(({ data }) => proteggiOperatore(data.session?.user?.email))
+
+// 05/10/2026 — getUser() in coda bloccava tutte le query.
+//
+// `supabase.auth.getUser()` prende il LUCCHETTO di auth-js e lo tiene per un
+// intero giro di rete verso /auth/v1/user. Ogni query al database chiede lo
+// stesso lucchetto per leggere il token, quindi resta ferma finche' getUser non
+// torna. Il codice lo chiama in 28 punti: all'apertura di Prenotazioni sei
+// chiamate una dopo l'altra = mezzo secondo prima che parta una sola lettura.
+//
+// Ora le chiamate contemporanee condividono la stessa risposta, e una risposta
+// riuscita vale 60 secondi. La copia si butta a ogni cambio di sessione (login,
+// cambio account, rinnovo token, utente aggiornato, uscita), quindi non si
+// risponde mai con l'utente di prima. Con un jwt esplicito si va diretti.
+{
+  const getUserOriginale = supabase.auth.getUser.bind(supabase.auth)
+  let inCorso: ReturnType<typeof getUserOriginale> | null = null
+  let copia: { quando: number; esito: Awaited<ReturnType<typeof getUserOriginale>> } | null = null
+  let generazione = 0
+  const VALIDITA_MS = 60_000
+
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'INITIAL_SESSION') return
+    generazione++
+    inCorso = null
+    copia = null
+  })
+
+  supabase.auth.getUser = ((jwt?: string) => {
+    if (jwt) return getUserOriginale(jwt)
+    if (copia && Date.now() - copia.quando < VALIDITA_MS) return Promise.resolve(copia.esito)
+    if (inCorso) return inCorso
+    const gen = generazione
+    const p = getUserOriginale().then(esito => {
+      if (gen === generazione) {
+        if (!esito.error && esito.data?.user) copia = { quando: Date.now(), esito }
+        inCorso = null
+      }
+      return esito
+    }, err => {
+      if (gen === generazione) inCorso = null
+      throw err
+    })
+    inCorso = p
+    return p
+  }) as typeof supabase.auth.getUser
+}
