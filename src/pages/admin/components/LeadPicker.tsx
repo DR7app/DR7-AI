@@ -13,6 +13,8 @@ export interface Lead {
   // 02/10/2026: solo per la ricerca (nome/cognome separati, ragione sociale,
   // CF, P.IVA, altri numeri). Non cambiano cio' che onPick restituisce.
   cercabili?: string[]
+  // 06/10/2026: per chi deve compilare un'anagrafica (Investitori).
+  tipoCliente?: string; codiceFiscale?: string; partitaIva?: string
 }
 // Stessa sorgente della tab Clienti: customers_extended via /.netlify/functions/
 // list-customers (service role, bypassa RLS, paginato = TUTTI i clienti). Niente
@@ -28,14 +30,15 @@ export async function fetchLeads(): Promise<Lead[]> {
       const phone = g('telefono') || g('phone') || g('mobile') || g('cellulare')
       const cercabili = ['nome', 'cognome', 'first_name', 'last_name', 'ragione_sociale', 'denominazione',
         'codice_fiscale', 'partita_iva', 'telefono', 'phone', 'mobile', 'cellulare'].map(g).filter(Boolean)
-      return { id: g('id') || g('user_id') || `lead-${i}`, name, phone, email: g('email'), cercabili }
+      return { id: g('id') || g('user_id') || `lead-${i}`, name, phone, email: g('email'), cercabili,
+        tipoCliente: g('tipo_cliente'), codiceFiscale: g('codice_fiscale'), partitaIva: g('partita_iva') }
     }).filter(l => l.name || l.phone || l.email)
   } catch {
     return []
   }
 }
 
-export function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead', placeholder = 'Cerca un cliente per nome, telefono, email, CF o P.IVA…', onQueryChange }: { onPick: (name: string, phone: string, id?: string) => void; initialQuery?: string; label?: string; placeholder?: string; onQueryChange?: (q: string) => void }) {
+export function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead', placeholder = 'Cerca un cliente per nome, telefono, email, CF o P.IVA…', onQueryChange }: { onPick: (name: string, phone: string, id?: string, lead?: Lead) => void; initialQuery?: string; label?: string; placeholder?: string; onQueryChange?: (q: string) => void }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [query, setQuery] = useState(initialQuery)
   const [open, setOpen] = useState(false)
@@ -68,7 +71,7 @@ export function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona clien
             <button
               key={`${l.id}-${i}`}
               type="button"
-              onMouseDown={e => { e.preventDefault(); onPick(l.name, l.phone, l.id); setQuery(l.name); setOpen(false) }}
+              onMouseDown={e => { e.preventDefault(); onPick(l.name, l.phone, l.id, l); setQuery(l.name); setOpen(false) }}
               className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border last:border-0"
             >
               <div className="text-sm text-theme-text-primary">{l.name || '(senza nome)'}</div>

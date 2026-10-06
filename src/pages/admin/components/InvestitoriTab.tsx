@@ -4,6 +4,8 @@
 // (tabelle investitori + investitori_versamenti, mig 20261006_investitori).
 // Dato riservato: la RLS (dr7_puo_vedere_investitori) apre solo alla direzione
 // e a chi ha la tab `investitori` spuntata — stessa regola di hasPermission.
+// Valutazione azienda + costo di un'azione (investitori_valutazione, una riga):
+// dato l'importo, quota % = importo / valutazione e azioni = importo / costo azione.
 import { useEffect, useMemo, useState } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
@@ -11,6 +13,7 @@ import { supabase } from '../../../supabaseClient'
 import MoneyInput from '../../../components/MoneyInput'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { parseMoney } from '../../../utils/money'
+import { LeadPicker } from './LeadPicker'
 
 interface Investitore {
   id: string
@@ -53,6 +56,16 @@ function parseAzioni(v: string): number | null {
   const d = v.replace(/\D/g, '')
   return d ? Number(d) : null
 }
+// Arrotondo a 4 decimali (colonna numeric(7,4)) e non supero mai il 100%.
+function quotaDa(importo: number, valutazione: number | null): number | null {
+  if (!(importo > 0) || !valutazione || !(valutazione > 0)) return null
+  return Math.min(100, Math.round((importo / valutazione) * 100 * 10000) / 10000)
+}
+// Azioni intere: si arrotonda per difetto, mai piu' azioni di quelle pagate.
+function azioniDa(importo: number, costoAzione: number | null): number | null {
+  if (!(importo > 0) || !costoAzione || !(costoAzione > 0)) return null
+  return Math.floor(importo / costoAzione + 1e-9)
+}
 // Ricerca per nome senza badare a maiuscole e accenti.
 function normalizza(v: string): string {
   return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -73,13 +86,23 @@ export default function InvestitoriTab() {
   const [versamento, setVersamento] = useState({ importo: '', data: todayRome(), strumento: 'Bonifico', note: '' })
   const [cerca, setCerca] = useState('')
   const [azioniEdit, setAzioniEdit] = useState('')
+  const [valutazione, setValutazione] = useState<{ valutazione: number | null; costo_azione: number | null }>({ valutazione: null, costo_azione: null })
+  const [valEdit, setValEdit] = useState({ valutazione: '', costo: '' })
 
   async function carica() {
     setLoading(true)
-    const [inv, ver] = await Promise.all([
+    const [inv, ver, val] = await Promise.all([
       supabase.from('investitori').select('*').order('nome'),
       supabase.from('investitori_versamenti').select('*').order('data_versamento', { ascending: false }),
+      supabase.from('investitori_valutazione').select('valutazione, costo_azione').eq('id', 1).maybeSingle(),
     ])
+    // La valutazione e' un di piu': se manca (o la tabella non c'e' ancora) la tab funziona lo stesso.
+    const v = {
+      valutazione: val.data?.valutazione != null ? Number(val.data.valutazione) : null,
+      costo_azione: val.data?.costo_azione != null ? Number(val.data.costo_azione) : null,
+    }
+    setValutazione(v)
+    setValEdit({ valutazione: v.valutazione != null ? String(v.valutazione) : '', costo: v.costo_azione != null ? String(v.costo_azione) : '' })
     if (inv.error || ver.error) {
       toast.error('Errore nel caricamento degli investitori: ' + (inv.error || ver.error)?.message)
     }
@@ -112,6 +135,33 @@ export default function InvestitoriTab() {
     return ordinati.filter(i => normalizza(i.nome).includes(q))
   }, [ordinati, cerca])
   const totaleAzioni = useMemo(() => investitori.reduce((s, i) => s + (Number(i.numero_azioni) || 0), 0), [investitori])
+
+  // Importo digitato nel nuovo investitore: quota e azioni si compilano da sole
+  // (restano modificabili a mano).
+  function cambiaImportoNuovo(v: string) {
+    const importo = parseMoney(v)
+    const q = quotaDa(importo, valutazione.valutazione)
+    const a = azioniDa(importo, valutazione.costo_azione)
+    setNuovo(n => ({
+      ...n,
+      importo: v,
+      quota: valutazione.valutazione ? (q != null ? String(q) : '') : n.quota,
+      azioni: valutazione.costo_azione ? (a != null ? String(a) : '') : n.azioni,
+    }))
+  }
+
+  async function salvaValutazione() {
+    const val = valEdit.valutazione.trim() ? parseMoney(valEdit.valutazione) : null
+    const costo = valEdit.costo.trim() ? parseMoney(valEdit.costo) : null
+    if (val != null && !(val > 0)) { toast.error('La valutazione deve essere maggiore di zero'); return }
+    if (costo != null && !(costo > 0)) { toast.error('Il costo dell\'azione deve essere maggiore di zero'); return }
+    setSaving(true)
+    const { error } = await supabase.from('investitori_valutazione').upsert({ id: 1, valutazione: val, costo_azione: costo, updated_at: new Date().toISOString() })
+    setSaving(false)
+    if (error) { toast.error('Valutazione non salvata: ' + error.message); return }
+    toast.success('Valutazione aggiornata')
+    carica()
+  }
 
   async function creaInvestitore() {
     if (!nuovo.nome.trim()) { toast.error('Inserisci il nome dell\'investitore'); return }
@@ -160,8 +210,20 @@ export default function InvestitoriTab() {
       strumento: versamento.strumento,
       note: versamento.note.trim() || null,
     })
+    if (error) { setSaving(false); toast.error('Versamento non salvato: ' + error.message); return }
+    // Con valutazione e costo azione impostati, il versamento aggiunge le sue azioni
+    // e ricalcola la quota sul nuovo totale investito.
+    const inv = investitori.find(x => x.id === investitoreId)
+    const nuoveAzioni = azioniDa(importo, valutazione.costo_azione)
+    const nuovaQuota = quotaDa(totaleDi(investitoreId) + importo, valutazione.valutazione)
+    const patch: Record<string, unknown> = {}
+    if (nuoveAzioni != null) patch.numero_azioni = (Number(inv?.numero_azioni) || 0) + nuoveAzioni
+    if (nuovaQuota != null) patch.quota_percentuale = nuovaQuota
+    if (Object.keys(patch).length) {
+      const { error: uErr } = await supabase.from('investitori').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', investitoreId)
+      if (uErr) toast.error('Versamento salvato, ma quota/azioni no: ' + uErr.message)
+    }
     setSaving(false)
-    if (error) { toast.error('Versamento non salvato: ' + error.message); return }
     toast.success('Versamento registrato')
     setVersamento({ importo: '', data: todayRome(), strumento: 'Bonifico', note: '' })
     carica()
@@ -204,12 +266,57 @@ export default function InvestitoriTab() {
         </button>
       </div>
 
+      <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-theme-text-primary">Valutazione azienda</h2>
+          <p className="text-xs text-theme-text-muted mt-0.5">Con questi due valori, inserendo l'importo di un investitore la quota % e il numero di azioni si calcolano da soli.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+          <label className="text-xs text-theme-text-muted">Valutazione azienda €
+            <MoneyInput value={valEdit.valutazione} onChange={v => setValEdit({ ...valEdit, valutazione: v })} placeholder="0,00" className={`${inputCls} text-right tabular-nums`} />
+          </label>
+          <label className="text-xs text-theme-text-muted">Costo di un'azione €
+            <MoneyInput value={valEdit.costo} onChange={v => setValEdit({ ...valEdit, costo: v })} placeholder="0,00" className={`${inputCls} text-right tabular-nums`} />
+          </label>
+          <div className="text-xs text-theme-text-muted">
+            Azioni dell'azienda
+            <p className="mt-1 py-2 text-sm font-semibold text-theme-text-primary tabular-nums">
+              {parseMoney(valEdit.valutazione) > 0 && parseMoney(valEdit.costo) > 0 ? azioniFmt(Math.floor(parseMoney(valEdit.valutazione) / parseMoney(valEdit.costo) + 1e-9)) : '—'}
+            </p>
+          </div>
+          <button
+            onClick={salvaValutazione}
+            disabled={saving || (valEdit.valutazione === (valutazione.valutazione != null ? String(valutazione.valutazione) : '') && valEdit.costo === (valutazione.costo_azione != null ? String(valutazione.costo_azione) : ''))}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-40"
+          >Salva valutazione</button>
+        </div>
+      </div>
+
       {mostraNuovo && (
         <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 space-y-3">
           <h2 className="text-sm font-semibold text-theme-text-primary">Nuovo investitore</h2>
           <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
             <label className="text-xs text-theme-text-muted sm:col-span-2">Nome / Ragione sociale *
-              <input value={nuovo.nome} onChange={e => setNuovo({ ...nuovo, nome: e.target.value })} className={inputCls} />
+              {/* Si cerca tra i Clienti/Lead: scegliendone uno si compilano tipo, CF/P.IVA, email e telefono. Si puo' anche scrivere un nome nuovo. */}
+              <div className="mt-1">
+                <LeadPicker
+                  label=""
+                  placeholder="Cerca tra i clienti o scrivi un nome…"
+                  initialQuery={nuovo.nome}
+                  onQueryChange={q => setNuovo(n => ({ ...n, nome: q }))}
+                  onPick={(name, phone, _id, l) => {
+                    const societa = l?.tipoCliente === 'azienda' || (!!l?.partitaIva && !l?.codiceFiscale)
+                    setNuovo(n => ({
+                      ...n,
+                      nome: name || n.nome,
+                      tipo: l ? (societa ? 'societa' : 'persona') : n.tipo,
+                      codice_fiscale: ((societa ? l?.partitaIva || l?.codiceFiscale : l?.codiceFiscale || l?.partitaIva) || n.codice_fiscale).toUpperCase(),
+                      email: l?.email || n.email,
+                      telefono: phone || n.telefono,
+                    }))
+                  }}
+                />
+              </div>
             </label>
             <label className="text-xs text-theme-text-muted">Tipo
               <select value={nuovo.tipo} onChange={e => setNuovo({ ...nuovo, tipo: e.target.value as 'persona' | 'societa' })} className={inputCls}>
@@ -227,7 +334,7 @@ export default function InvestitoriTab() {
               <input value={nuovo.telefono} onChange={e => setNuovo({ ...nuovo, telefono: e.target.value })} className={inputCls} />
             </label>
             <label className="text-xs text-theme-text-muted">Importo investito €
-              <MoneyInput value={nuovo.importo} onChange={v => setNuovo({ ...nuovo, importo: v })} placeholder="0,00" className={`${inputCls} text-right tabular-nums`} />
+              <MoneyInput value={nuovo.importo} onChange={cambiaImportoNuovo} placeholder="0,00" className={`${inputCls} text-right tabular-nums`} />
             </label>
             <label className="text-xs text-theme-text-muted">Data versamento
               <EuropeanDateInput value={nuovo.data} onChange={v => setNuovo({ ...nuovo, data: v })} className={inputCls} />
@@ -238,10 +345,10 @@ export default function InvestitoriTab() {
               </select>
             </label>
             <label className="text-xs text-theme-text-muted">Quota %
-              <MoneyInput value={nuovo.quota} onChange={v => setNuovo({ ...nuovo, quota: v })} placeholder="facoltativa" className={`${inputCls} text-right tabular-nums`} />
+              <MoneyInput value={nuovo.quota} onChange={v => setNuovo({ ...nuovo, quota: v })} placeholder={valutazione.valutazione ? 'automatica' : 'facoltativa'} className={`${inputCls} text-right tabular-nums`} />
             </label>
             <label className="text-xs text-theme-text-muted">N. azioni
-              <input value={nuovo.azioni} inputMode="numeric" onChange={e => setNuovo({ ...nuovo, azioni: e.target.value.replace(/[^\d.]/g, '') })} placeholder="facoltativo" className={`${inputCls} text-right tabular-nums`} />
+              <input value={nuovo.azioni} inputMode="numeric" onChange={e => setNuovo({ ...nuovo, azioni: e.target.value.replace(/[^\d.]/g, '') })} placeholder={valutazione.costo_azione ? 'automatico' : 'facoltativo'} className={`${inputCls} text-right tabular-nums`} />
             </label>
             <label className="text-xs text-theme-text-muted">Note
               <input value={nuovo.note} onChange={e => setNuovo({ ...nuovo, note: e.target.value })} className={inputCls} />
@@ -342,6 +449,13 @@ export default function InvestitoriTab() {
                       <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
                         <label className="text-xs text-theme-text-muted">Importo €
                           <MoneyInput value={versamento.importo} onChange={v => setVersamento({ ...versamento, importo: v })} placeholder="0,00" className={`${inputCls} text-right tabular-nums`} />
+                          {(() => {
+                            const imp = parseMoney(versamento.importo)
+                            const a = azioniDa(imp, valutazione.costo_azione)
+                            const q = quotaDa(tot + (imp > 0 ? imp : 0), valutazione.valutazione)
+                            if (!(imp > 0) || (a == null && q == null)) return null
+                            return <span className="block mt-1 text-[11px] text-theme-text-muted tabular-nums">{[a != null ? `+${azioniFmt(a)} azioni` : '', q != null ? `quota ${q.toLocaleString('it-IT')}%` : ''].filter(Boolean).join(' · ')}</span>
+                          })()}
                         </label>
                         <label className="text-xs text-theme-text-muted">Data
                           <EuropeanDateInput value={versamento.data} onChange={v => setVersamento({ ...versamento, data: v })} className={inputCls} />
