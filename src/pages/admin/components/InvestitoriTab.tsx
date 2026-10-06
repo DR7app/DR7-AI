@@ -20,6 +20,7 @@ interface Investitore {
   email: string | null
   telefono: string | null
   quota_percentuale: number | null
+  numero_azioni: number | null
   note: string | null
   created_at: string
 }
@@ -44,10 +45,22 @@ function eur(n: number): string {
 function itDate(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString('it-IT')
 }
+function azioniFmt(n: number): string {
+  return Number(n).toLocaleString('it-IT', { maximumFractionDigits: 0 })
+}
+// Solo cifre: "1.500" o "1500" diventano 1500; vuoto = null.
+function parseAzioni(v: string): number | null {
+  const d = v.replace(/\D/g, '')
+  return d ? Number(d) : null
+}
+// Ricerca per nome senza badare a maiuscole e accenti.
+function normalizza(v: string): string {
+  return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+}
 
 const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm'
 
-const NUOVO_VUOTO = { nome: '', tipo: 'persona' as const, codice_fiscale: '', email: '', telefono: '', quota: '', note: '', importo: '', data: todayRome(), strumento: 'Bonifico' }
+const NUOVO_VUOTO = { nome: '', tipo: 'persona' as const, codice_fiscale: '', email: '', telefono: '', quota: '', azioni: '', note: '', importo: '', data: todayRome(), strumento: 'Bonifico' }
 
 export default function InvestitoriTab() {
   const [investitori, setInvestitori] = useState<Investitore[]>([])
@@ -55,9 +68,11 @@ export default function InvestitoriTab() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [mostraNuovo, setMostraNuovo] = useState(false)
-  const [nuovo, setNuovo] = useState<{ nome: string; tipo: 'persona' | 'societa'; codice_fiscale: string; email: string; telefono: string; quota: string; note: string; importo: string; data: string; strumento: string }>(NUOVO_VUOTO)
+  const [nuovo, setNuovo] = useState<{ nome: string; tipo: 'persona' | 'societa'; codice_fiscale: string; email: string; telefono: string; quota: string; azioni: string; note: string; importo: string; data: string; strumento: string }>(NUOVO_VUOTO)
   const [aperto, setAperto] = useState<string | null>(null)
   const [versamento, setVersamento] = useState({ importo: '', data: todayRome(), strumento: 'Bonifico', note: '' })
+  const [cerca, setCerca] = useState('')
+  const [azioniEdit, setAzioniEdit] = useState('')
 
   async function carica() {
     setLoading(true)
@@ -91,6 +106,12 @@ export default function InvestitoriTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [investitori, perInvestitore]
   )
+  const filtrati = useMemo(() => {
+    const q = normalizza(cerca)
+    if (!q) return ordinati
+    return ordinati.filter(i => normalizza(i.nome).includes(q))
+  }, [ordinati, cerca])
+  const totaleAzioni = useMemo(() => investitori.reduce((s, i) => s + (Number(i.numero_azioni) || 0), 0), [investitori])
 
   async function creaInvestitore() {
     if (!nuovo.nome.trim()) { toast.error('Inserisci il nome dell\'investitore'); return }
@@ -104,6 +125,7 @@ export default function InvestitoriTab() {
       email: nuovo.email.trim() || null,
       telefono: nuovo.telefono.trim() || null,
       quota_percentuale: quota,
+      numero_azioni: parseAzioni(nuovo.azioni),
       note: nuovo.note.trim() || null,
     }).select('id').single()
     if (error || !data) {
@@ -142,6 +164,15 @@ export default function InvestitoriTab() {
     if (error) { toast.error('Versamento non salvato: ' + error.message); return }
     toast.success('Versamento registrato')
     setVersamento({ importo: '', data: todayRome(), strumento: 'Bonifico', note: '' })
+    carica()
+  }
+
+  async function salvaAzioni(i: Investitore) {
+    setSaving(true)
+    const { error } = await supabase.from('investitori').update({ numero_azioni: parseAzioni(azioniEdit), updated_at: new Date().toISOString() }).eq('id', i.id)
+    setSaving(false)
+    if (error) { toast.error('Numero di azioni non salvato: ' + error.message); return }
+    toast.success('Numero di azioni aggiornato')
     carica()
   }
 
@@ -209,7 +240,10 @@ export default function InvestitoriTab() {
             <label className="text-xs text-theme-text-muted">Quota %
               <MoneyInput value={nuovo.quota} onChange={v => setNuovo({ ...nuovo, quota: v })} placeholder="facoltativa" className={`${inputCls} text-right tabular-nums`} />
             </label>
-            <label className="text-xs text-theme-text-muted sm:col-span-2">Note
+            <label className="text-xs text-theme-text-muted">N. azioni
+              <input value={nuovo.azioni} inputMode="numeric" onChange={e => setNuovo({ ...nuovo, azioni: e.target.value.replace(/[^\d.]/g, '') })} placeholder="facoltativo" className={`${inputCls} text-right tabular-nums`} />
+            </label>
+            <label className="text-xs text-theme-text-muted">Note
               <input value={nuovo.note} onChange={e => setNuovo({ ...nuovo, note: e.target.value })} className={inputCls} />
             </label>
           </div>
@@ -219,7 +253,7 @@ export default function InvestitoriTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
           <p className="text-xs text-theme-text-muted">Totale investito</p>
           <p className="text-2xl font-bold text-dr7-gold tabular-nums">{eur(totale)}</p>
@@ -233,30 +267,44 @@ export default function InvestitoriTab() {
           <p className="text-xs text-theme-text-muted">Investimento medio</p>
           <p className="text-2xl font-bold text-theme-text-primary tabular-nums">{eur(investitori.length ? totale / investitori.length : 0)}</p>
         </div>
+        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+          <p className="text-xs text-theme-text-muted">Azioni totali</p>
+          <p className="text-2xl font-bold text-theme-text-primary tabular-nums">{azioniFmt(totaleAzioni)}</p>
+        </div>
       </div>
 
       <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
-        <div className="px-4 py-3 border-b border-theme-border">
+        <div className="px-4 py-3 border-b border-theme-border flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-theme-text-primary">Elenco investitori</h2>
+          <input
+            type="search"
+            value={cerca}
+            onChange={e => setCerca(e.target.value)}
+            placeholder="Cerca per nome…"
+            className="w-full sm:w-64 px-3 py-1.5 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+          />
         </div>
         {loading ? (
           <div className="p-4"><ScheletroTabella righe={5} colonne={4} /></div>
         ) : ordinati.length === 0 ? (
           <p className="p-4 text-sm text-theme-text-muted">Nessun investitore registrato.</p>
+        ) : filtrati.length === 0 ? (
+          <p className="p-4 text-sm text-theme-text-muted">Nessun investitore trovato per "{cerca.trim()}".</p>
         ) : (
           <div className="divide-y divide-theme-border">
-            {ordinati.map(i => {
+            {filtrati.map(i => {
               const suoi = perInvestitore.get(i.id) || []
               const tot = totaleDi(i.id)
               const isOpen = aperto === i.id
               return (
                 <div key={i.id}>
-                  <button onClick={() => setAperto(isOpen ? null : i.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-theme-bg-hover">
+                  <button onClick={() => { setAperto(isOpen ? null : i.id); setAzioniEdit(i.numero_azioni != null ? String(i.numero_azioni) : '') }} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-theme-bg-hover">
                     <div className="min-w-0">
                       <p className="text-sm text-theme-text-primary font-medium truncate">
                         {i.nome}
                         <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] border border-theme-border text-theme-text-muted">{i.tipo === 'societa' ? 'Società' : 'Persona'}</span>
                         {i.quota_percentuale != null && <span className="ml-2 text-xs text-theme-text-muted">quota {Number(i.quota_percentuale).toLocaleString('it-IT')}%</span>}
+                        {i.numero_azioni != null && <span className="ml-2 text-xs text-theme-text-muted">{azioniFmt(i.numero_azioni)} azioni</span>}
                       </p>
                       <p className="text-xs text-theme-text-muted truncate">
                         {suoi.length} versamento/i{suoi[0] ? ` · ultimo il ${itDate(suoi[0].data_versamento)}` : ''}{[i.email, i.telefono].filter(Boolean).length ? ` · ${[i.email, i.telefono].filter(Boolean).join(' · ')}` : ''}
@@ -272,6 +320,12 @@ export default function InvestitoriTab() {
                       {(i.codice_fiscale || i.note) && (
                         <p className="pt-3 text-xs text-theme-text-muted">{[i.codice_fiscale, i.note].filter(Boolean).join(' · ')}</p>
                       )}
+                      <div className="pt-3 flex flex-wrap items-end gap-3">
+                        <label className="text-xs text-theme-text-muted">N. azioni
+                          <input value={azioniEdit} inputMode="numeric" onChange={e => setAzioniEdit(e.target.value.replace(/[^\d.]/g, ''))} placeholder="non indicato" className={`${inputCls} w-40 text-right tabular-nums`} />
+                        </label>
+                        <button onClick={() => salvaAzioni(i)} disabled={saving || parseAzioni(azioniEdit) === (i.numero_azioni != null ? Number(i.numero_azioni) : null)} className="px-3 py-2 rounded-lg text-sm font-semibold border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-40">Salva azioni</button>
+                      </div>
                       <div className="pt-3 rounded-lg border border-theme-border divide-y divide-theme-border bg-theme-bg-primary">
                         {suoi.length === 0 ? (
                           <p className="px-3 py-2 text-xs text-theme-text-muted">Nessun versamento.</p>
