@@ -18,6 +18,23 @@ interface ImmondiziaRule {
   note: string | null
 }
 
+// Messaggio WhatsApp del ritiro: e' una ricorrenza di Messaggi di Sistema Pro
+// (trigger on_schedule). Qui si modifica la stessa riga, senza passare dalla
+// tab Pro: testo, giorni, ora, destinatari e acceso/spento.
+interface MessaggioRitiro {
+  id: string
+  label: string
+  message_body: string
+  is_enabled: boolean
+  target_days_of_week: string | null
+  send_hour: number | null
+  send_minute: number | null
+  recipient_phones: string | null
+}
+
+// Lunedi' per primo, come in un calendario; il valore resta 0 = domenica.
+const ORDINE_GIORNI = [1, 2, 3, 4, 5, 6, 0]
+
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 const TIPI_RIFIUTO = ['Organico', 'Plastica/Lattine', 'Carta/Cartone', 'Vetro', 'Secco/Indifferenziato', 'Ingombranti', 'Verde/Sfalci']
 
@@ -45,6 +62,56 @@ export default function ImmondiziaTab() {
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  const [messaggi, setMessaggi] = useState<MessaggioRitiro[]>([])
+  const [salvataggioMsg, setSalvataggioMsg] = useState<string | null>(null)
+  const caricaMessaggi = async () => {
+    const { data, error } = await supabase
+      .from('system_messages')
+      .select('id, label, message_body, is_enabled, target_days_of_week, send_hour, send_minute, recipient_phones')
+      .eq('trigger_event', 'on_schedule')
+      .or('label.ilike.%spazzatura%,label.ilike.%immondizia%,label.ilike.%rifiut%,message_key.ilike.%spazzatura%,message_key.ilike.%immondizia%')
+      .order('label', { ascending: true })
+    if (error) { toast.error('Errore caricamento messaggio: ' + error.message); return }
+    setMessaggi((data || []) as MessaggioRitiro[])
+  }
+  useEffect(() => { caricaMessaggi() }, [])
+
+  const modificaMsg = (id: string, campi: Partial<MessaggioRitiro>) =>
+    setMessaggi(prev => prev.map(m => m.id === id ? { ...m, ...campi } : m))
+
+  const giorniDi = (m: MessaggioRitiro) =>
+    String(m.target_days_of_week ?? '').split(',').map(x => x.trim()).filter(x => x !== '').map(Number)
+
+  const toggleGiorno = (m: MessaggioRitiro, g: number) => {
+    const attuali = giorniDi(m)
+    const nuovi = attuali.includes(g) ? attuali.filter(x => x !== g) : [...attuali, g]
+    modificaMsg(m.id, { target_days_of_week: nuovi.sort((a, b) => a - b).join(',') })
+  }
+
+  const salvaMessaggio = async (m: MessaggioRitiro) => {
+    if (!m.message_body.trim()) { toast.error('Il testo del messaggio non puo\' essere vuoto'); return }
+    if (giorniDi(m).length === 0) { toast.error('Seleziona almeno un giorno'); return }
+    setSalvataggioMsg(m.id)
+    const { data, error } = await supabase
+      .from('system_messages')
+      .update({
+        message_body: m.message_body,
+        is_enabled: m.is_enabled,
+        target_days_of_week: m.target_days_of_week,
+        send_hour: m.send_hour ?? 9,
+        send_minute: m.send_minute ?? 0,
+        recipient_phones: (m.recipient_phones || '').trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', m.id)
+      .select('id')
+    setSalvataggioMsg(null)
+    if (error) { toast.error('Errore: ' + error.message); return }
+    if (!data || data.length === 0) { toast.error('Nessuna riga aggiornata (permessi?)'); return }
+    toast.success('Messaggio salvato')
+    caricaMessaggi()
+  }
 
   const add = async () => {
     if (mode === 'date' && !date) { toast.error('Seleziona una data'); return }
@@ -152,6 +219,71 @@ export default function ImmondiziaTab() {
         <button onClick={add} disabled={saving} className="px-4 py-2 rounded-lg bg-dr7-gold text-black text-sm font-semibold disabled:opacity-50">
           {saving ? 'Salvataggio…' : '+ Aggiungi ritiro'}
         </button>
+      </div>
+
+      {/* Messaggio WhatsApp del ritiro */}
+      <div className="p-4 rounded-xl border border-theme-border bg-theme-bg-secondary space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-theme-text-primary">Messaggio WhatsApp del ritiro</h3>
+          <p className="text-xs text-theme-text-muted mt-0.5">Lo stesso messaggio di Messaggi di Sistema Pro: le modifiche fatte qui valgono anche li'.</p>
+        </div>
+        {messaggi.length === 0 ? (
+          <p className="text-xs text-theme-text-muted">Nessun messaggio programmato collegato. Crealo in Messaggi di Sistema Pro come ricorrenza con "spazzatura" nel titolo.</p>
+        ) : messaggi.map(m => (
+          <div key={m.id} className="space-y-3 p-3 rounded-lg border border-theme-border bg-theme-bg-tertiary/40">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-theme-text-primary truncate">{m.label}</div>
+              <button onClick={() => modificaMsg(m.id, { is_enabled: !m.is_enabled })} title={m.is_enabled ? 'Invio attivo' : 'Invio spento'}
+                className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${m.is_enabled ? 'bg-green-500' : 'bg-gray-600'}`}>
+                <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${m.is_enabled ? 'left-5' : 'left-0.5'}`} />
+              </button>
+            </div>
+            <div>
+              <label className="text-xs text-theme-text-muted block mb-1">Testo</label>
+              <textarea value={m.message_body} onChange={e => modificaMsg(m.id, { message_body: e.target.value })} rows={7}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
+            </div>
+            <div>
+              <label className="text-xs text-theme-text-muted block mb-1">Giorni di invio</label>
+              <div className="flex flex-wrap gap-1.5">
+                {ORDINE_GIORNI.map(g => {
+                  const on = giorniDi(m).includes(g)
+                  return (
+                    <button key={g} onClick={() => toggleGiorno(m, g)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium border ${on ? 'bg-dr7-gold text-black border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}>
+                      {GIORNI[g]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-theme-text-muted block mb-1">Ora di invio (Roma)</label>
+                <div className="flex items-center gap-1">
+                  <select value={m.send_hour ?? 9} onChange={e => modificaMsg(m.id, { send_hour: Number(e.target.value) })}
+                    className="bg-theme-bg-tertiary border border-theme-border rounded-lg px-2 py-2 text-sm text-theme-text-primary">
+                    {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}</option>)}
+                  </select>
+                  <span className="text-sm text-theme-text-muted">:</span>
+                  <select value={m.send_minute ?? 0} onChange={e => modificaMsg(m.id, { send_minute: Number(e.target.value) })}
+                    className="bg-theme-bg-tertiary border border-theme-border rounded-lg px-2 py-2 text-sm text-theme-text-primary">
+                    {Array.from({ length: 12 }, (_, i) => i * 5).map(x => <option key={x} value={x}>{String(x).padStart(2, '0')}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted block mb-1">Destinatari (telefoni, separati da virgola)</label>
+                <input value={m.recipient_phones ?? ''} onChange={e => modificaMsg(m.id, { recipient_phones: e.target.value })}
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
+              </div>
+            </div>
+            <button onClick={() => salvaMessaggio(m)} disabled={salvataggioMsg === m.id}
+              className="px-4 py-2 rounded-lg bg-dr7-gold text-black text-sm font-semibold disabled:opacity-50">
+              {salvataggioMsg === m.id ? 'Salvataggio…' : 'Salva messaggio'}
+            </button>
+          </div>
+        ))}
       </div>
 
       {loading ? (
