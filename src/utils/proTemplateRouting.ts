@@ -120,6 +120,11 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Diverso da review_discount_code, che manda i DUE codici post-recensione.
   discount_code_created: 'pro_marketing_invio_codice_sconto',
   discount_code_manual_send: 'pro_marketing_invio_codice_sconto',
+  // 06/10/2026 (direzione): due WhatsApp a ogni nuovo investitore salvato in
+  // Amministrazione > Investitori (prima il benvenuto, poi la richiesta di
+  // pubblicare il nome sul sito). Inviati da utils/messaggiInvestitori.ts.
+  investor_welcome: 'pro_investitore_benvenuto',
+  investor_name_publication: 'pro_investitore_autorizzazione_nome',
   promo_incassi_whatsapp: 'pro_promo_incassi',
   maxi_promo_gap_whatsapp: 'pro_maxi_promo_gap_1gg',
 
@@ -229,6 +234,8 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   review_discount_code: 'Invio codice sconto post-recensione (Review Management)',
   discount_code_created: 'Codice sconto creato e intestato a un cliente: invio automatico al suo numero (solo se un template e\' assegnato a questo evento)',
   discount_code_manual_send: 'Invio di un codice sconto al cliente dal tab Codice Sconto (WhatsApp, invio manuale)',
+  investor_welcome: 'Nuovo investitore salvato in Amministrazione > Investitori: messaggio di benvenuto (primo dei due)',
+  investor_name_publication: 'Nuovo investitore salvato: richiesta di autorizzazione a pubblicare nome e cognome sul sito (secondo dei due)',
   promo_incassi_whatsapp: 'Promo incassi: invio WhatsApp al cliente quando un veicolo è sotto soglia (cron mensile)',
   maxi_promo_gap_whatsapp: 'Maxi Promo Gap: invio quando un veicolo ha 1 giorno libero tra prenotazioni (cron giornaliero)',
 
@@ -1395,6 +1402,14 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
   pro_marketing_invio_codice_sconto: [
     ['invio', 'codice', 'sconto'],
     ['codice', 'sconto', 'cliente'],
+  ],
+  pro_investitore_benvenuto: [
+    ['investitore', 'benvenuto'],
+    ['welcome', 'investitore'],
+  ],
+  pro_investitore_autorizzazione_nome: [
+    ['investitore', 'autorizzazione'],
+    ['investitore', 'pubblicazione'],
   ],
   pro_checkin_digitale: [
     ['check', 'in', 'digitale'],

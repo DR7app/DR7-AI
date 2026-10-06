@@ -14,6 +14,8 @@ import MoneyInput from '../../../components/MoneyInput'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { parseMoney } from '../../../utils/money'
 import { LeadPicker } from './LeadPicker'
+import { inviaMessaggiInvestitore } from '../../../utils/messaggiInvestitori'
+import { pubblicaInvestitoreSulSito, togliInvestitoreDalSito } from '../../../utils/investitoriSito'
 
 interface Investitore {
   id: string
@@ -24,6 +26,8 @@ interface Investitore {
   telefono: string | null
   quota_percentuale: number | null
   numero_azioni: number | null
+  // 06/10/2026: risposta al WhatsApp di autorizzazione (null = nessuna risposta).
+  pubblicazione_nome: 'autorizzato' | 'riservato' | null
   note: string | null
   created_at: string
 }
@@ -194,9 +198,24 @@ export default function InvestitoriTab() {
     }
     setSaving(false)
     toast.success('Investitore aggiunto')
+    const salvato = { nome: nuovo.nome.trim(), tipo: nuovo.tipo, telefono: nuovo.telefono.trim() || null }
     setNuovo({ ...NUOVO_VUOTO, data: todayRome() })
     setMostraNuovo(false)
     carica()
+    // 06/10/2026 (direzione): al nuovo investitore partono i due WhatsApp di
+    // Messaggi di Sistema Pro > Investitori (benvenuto, poi autorizzazione nome).
+    mandaMessaggi(salvato)
+  }
+
+  async function mandaMessaggi(inv: { nome: string; tipo: 'persona' | 'societa'; telefono: string | null }) {
+    if (!inv.telefono) { toast('Nessun telefono: messaggi di benvenuto non inviati'); return }
+    const id = toast.loading('Invio messaggi all\'investitore…')
+    const esiti = await inviaMessaggiInvestitore(inv)
+    toast.dismiss(id)
+    for (const e of esiti) {
+      if (e.inviato) toast.success(`WhatsApp "${e.etichetta}" inviato`)
+      else toast.error(`WhatsApp "${e.etichetta}" non inviato: ${e.motivo}`)
+    }
   }
 
   async function aggiungiVersamento(investitoreId: string) {
@@ -251,7 +270,40 @@ export default function InvestitoriTab() {
     const { error } = await supabase.from('investitori').delete().eq('id', i.id)
     if (error) { toast.error('Investitore non eliminato: ' + error.message); return }
     if (aperto === i.id) setAperto(null)
+    // Un investitore eliminato non resta nell'elenco azionisti del sito.
+    if (i.pubblicazione_nome === 'autorizzato') {
+      try { await togliInvestitoreDalSito(i) } catch (e) { toast.error('Investitore eliminato, ma il nome resta sul sito: toglilo da Sito > Investitori (' + (e instanceof Error ? e.message : String(e)) + ')') }
+    }
     carica()
+  }
+
+  // 06/10/2026 (direzione): l'investitore risponde AUTORIZZO / RISERVATO al
+  // WhatsApp; l'admin preme il pulsante e il sito si aggiorna da solo.
+  async function impostaPubblicazione(i: Investitore, scelta: 'autorizzato' | 'riservato' | null) {
+    const testo = scelta === 'autorizzato'
+      ? `Pubblicare il nome "${i.nome}" nell'elenco azionisti del sito DR7?`
+      : scelta === 'riservato'
+        ? `${i.nome} preferisce restare riservato: il nome non comparira' sul sito. Confermi?`
+        : `Togliere "${i.nome}" dal sito e tornare a "nessuna risposta"?`
+    if (!window.confirm(testo)) return
+    setSaving(true)
+    try {
+      if (scelta === 'autorizzato') {
+        const suoi = perInvestitore.get(i.id) || []
+        const primo = suoi.length ? suoi[suoi.length - 1].data_versamento : i.created_at
+        await pubblicaInvestitoreSulSito({ id: i.id, nome: i.nome, tipo: i.tipo, anno: Number(String(primo).slice(0, 4)) })
+      } else {
+        await togliInvestitoreDalSito(i)
+      }
+      const { error } = await supabase.from('investitori').update({ pubblicazione_nome: scelta, updated_at: new Date().toISOString() }).eq('id', i.id)
+      if (error) throw error
+      toast.success(scelta === 'autorizzato' ? 'Nome pubblicato sul sito' : scelta === 'riservato' ? 'Segnato come riservato: non compare sul sito' : 'Tolto dal sito')
+    } catch (e) {
+      toast.error('Non salvato: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setSaving(false)
+      carica()
+    }
   }
 
   return (
@@ -405,7 +457,8 @@ export default function InvestitoriTab() {
               const isOpen = aperto === i.id
               return (
                 <div key={i.id}>
-                  <button onClick={() => { setAperto(isOpen ? null : i.id); setAzioniEdit(i.numero_azioni != null ? String(i.numero_azioni) : '') }} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-theme-bg-hover">
+                  <div className="flex items-center hover:bg-theme-bg-hover">
+                  <button onClick={() => { setAperto(isOpen ? null : i.id); setAzioniEdit(i.numero_azioni != null ? String(i.numero_azioni) : '') }} className="flex-1 min-w-0 flex items-center justify-between gap-3 px-4 py-3 text-left">
                     <div className="min-w-0">
                       <p className="text-sm text-theme-text-primary font-medium truncate">
                         {i.nome}
@@ -422,6 +475,26 @@ export default function InvestitoriTab() {
                       <p className="text-[11px] text-theme-text-muted tabular-nums">{totale > 0 ? `${((tot / totale) * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 })}% del totale` : '—'}</p>
                     </div>
                   </button>
+                  {/* Nome sul sito: AUTORIZZO / RISERVATO risposto su WhatsApp. */}
+                  <div className="shrink-0 flex items-center gap-1.5 pr-4">
+                    {i.pubblicazione_nome === 'autorizzato' ? (
+                      <>
+                        <span className="px-2 py-1 rounded text-[11px] font-semibold border border-green-500/40 text-green-600 dark:text-green-400">Sul sito</span>
+                        <button onClick={() => impostaPubblicazione(i, null)} disabled={saving} className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-muted hover:bg-theme-bg-tertiary disabled:opacity-50">Togli</button>
+                      </>
+                    ) : i.pubblicazione_nome === 'riservato' ? (
+                      <>
+                        <span className="px-2 py-1 rounded text-[11px] font-semibold border border-theme-border text-theme-text-muted">Riservato</span>
+                        <button onClick={() => impostaPubblicazione(i, 'autorizzato')} disabled={saving} className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-50">Autorizza</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => impostaPubblicazione(i, 'autorizzato')} disabled={saving} className="text-[11px] px-2 py-1 rounded font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50">Autorizza</button>
+                        <button onClick={() => impostaPubblicazione(i, 'riservato')} disabled={saving} className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-50">Riservato</button>
+                      </>
+                    )}
+                  </div>
+                  </div>
                   {isOpen && (
                     <div className="px-4 pb-4 space-y-3 bg-theme-bg-tertiary/40">
                       {(i.codice_fiscale || i.note) && (
@@ -470,7 +543,13 @@ export default function InvestitoriTab() {
                         </label>
                         <button onClick={() => aggiungiVersamento(i.id)} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50">Aggiungi versamento</button>
                       </div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => { if (window.confirm(`Rimandare a ${i.nome} i due WhatsApp (benvenuto e autorizzazione nome)?`)) mandaMessaggi({ nome: i.nome, tipo: i.tipo, telefono: i.telefono }) }}
+                          disabled={!i.telefono}
+                          title={i.telefono ? '' : 'Telefono mancante'}
+                          className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-40"
+                        >Rimanda messaggi WhatsApp</button>
                         <button onClick={() => eliminaInvestitore(i)} className="text-[11px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10">Elimina investitore</button>
                       </div>
                     </div>

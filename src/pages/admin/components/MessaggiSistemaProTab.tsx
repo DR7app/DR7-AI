@@ -374,6 +374,15 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     area: 'marketing',
     keys: ['discount_code_created', 'discount_code_manual_send'],
   },
+  // ── INVESTITORI (06/10/2026) ────────────────────────────────────────────
+  // Amministrazione > Investitori: al salvataggio di un nuovo investitore
+  // partono due WhatsApp, in quest'ordine.
+  {
+    label: 'Investitori',
+    color: 'amber',
+    area: 'amministrazione',
+    keys: ['investor_welcome', 'investor_name_publication'],
+  },
   // ── MARKETING > COMPLEANNI ──────────────────────────────────────────────
   {
     label: 'Marketing — Compleanni',
@@ -2639,6 +2648,15 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_annullamento_cliente', label: 'Annullamento al Cliente', description: 'Comunicazione annullamento prenotazione al cliente' },
       { key: 'pro_rimborso_iniziato',    label: 'Rimborso Iniziato',       description: 'Notifica al cliente che il rimborso è in lavorazione' },
       { key: 'pro_rimborso_completato',  label: 'Rimborso Completato',     description: 'Notifica al cliente a rimborso completato' },
+    ],
+  },
+  {
+    // 06/10/2026 (direzione): partono da soli, in quest'ordine, quando si salva
+    // un nuovo investitore con il telefono (Amministrazione > Investitori).
+    label: 'Investitori',
+    templates: [
+      { key: 'pro_investitore_benvenuto', label: 'Investitore: Benvenuto', description: 'Primo WhatsApp al nuovo investitore, appena salvato — token: {nome} (nome di battesimo), {nome_completo}' },
+      { key: 'pro_investitore_autorizzazione_nome', label: 'Investitore: Autorizzazione nome sul sito', description: 'Secondo WhatsApp: chiede se pubblicare nome e cognome nell\'elenco investitori del sito (AUTORIZZO / RISERVATO) — token: {nome}, {nome_completo}' },
     ],
   },
   {
