@@ -15,7 +15,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { parseMoney } from '../../../utils/money'
 import { LeadPicker } from './LeadPicker'
 import { inviaMessaggiInvestitore } from '../../../utils/messaggiInvestitori'
-import { pubblicaInvestitoreSulSito, togliInvestitoreDalSito } from '../../../utils/investitoriSito'
+import { allineaSitoInvestitori } from '../../../utils/investitoriSito'
 
 interface Investitore {
   id: string
@@ -110,9 +110,32 @@ export default function InvestitoriTab() {
     if (inv.error || ver.error) {
       toast.error('Errore nel caricamento degli investitori: ' + (inv.error || ver.error)?.message)
     }
-    setInvestitori((inv.data as Investitore[]) || [])
-    setVersamenti(((ver.data as Versamento[]) || []).map(v => ({ ...v, importo: Number(v.importo) })))
+    const listaInv = (inv.data as Investitore[]) || []
+    const listaVer = ((ver.data as Versamento[]) || []).map(v => ({ ...v, importo: Number(v.importo) }))
+    setInvestitori(listaInv)
+    setVersamenti(listaVer)
     setLoading(false)
+    // 06/10/2026 (direzione): la pagina /investitori del sito segue il
+    // gestionale (capitale raccolto, numero investitori, lista azionisti con
+    // il nome solo di chi ha autorizzato). Mai su dati caricati a meta'.
+    if (!inv.error && !ver.error) allineaSito(listaInv, listaVer)
+  }
+
+  async function allineaSito(listaInv: Investitore[], listaVer: Versamento[]) {
+    try {
+      const perSito = listaInv.map(i => {
+        const suoi = listaVer.filter(v => v.investitore_id === i.id)
+        const primo = suoi.reduce<string | null>((m, v) => (!m || v.data_versamento < m ? v.data_versamento : m), null) || i.created_at
+        return {
+          id: i.id, nome: i.nome, tipo: i.tipo, pubblicazione_nome: i.pubblicazione_nome,
+          totale: suoi.reduce((s, v) => s + v.importo, 0),
+          anno: Number(String(primo).slice(0, 4)),
+        }
+      })
+      if (await allineaSitoInvestitori(perSito)) toast.success('Pagina Investitori del sito aggiornata')
+    } catch (e) {
+      toast.error('Sito non aggiornato: ' + (e instanceof Error ? e.message : String(e)))
+    }
   }
 
   useEffect(() => { carica() }, [])
@@ -270,10 +293,7 @@ export default function InvestitoriTab() {
     const { error } = await supabase.from('investitori').delete().eq('id', i.id)
     if (error) { toast.error('Investitore non eliminato: ' + error.message); return }
     if (aperto === i.id) setAperto(null)
-    // Un investitore eliminato non resta nell'elenco azionisti del sito.
-    if (i.pubblicazione_nome === 'autorizzato') {
-      try { await togliInvestitoreDalSito(i) } catch (e) { toast.error('Investitore eliminato, ma il nome resta sul sito: toglilo da Sito > Investitori (' + (e instanceof Error ? e.message : String(e)) + ')') }
-    }
+    // carica() riallinea il sito: l'investitore eliminato ne esce.
     carica()
   }
 
@@ -283,21 +303,15 @@ export default function InvestitoriTab() {
     const testo = scelta === 'autorizzato'
       ? `Pubblicare il nome "${i.nome}" nell'elenco azionisti del sito DR7?`
       : scelta === 'riservato'
-        ? `${i.nome} preferisce restare riservato: il nome non comparira' sul sito. Confermi?`
-        : `Togliere "${i.nome}" dal sito e tornare a "nessuna risposta"?`
+        ? `${i.nome} preferisce restare riservato: sul sito comparira' come investitore privato, senza nome ne' cognome. Confermi?`
+        : `Togliere il nome "${i.nome}" dal sito? Restera' come investitore privato, senza nome.`
     if (!window.confirm(testo)) return
     setSaving(true)
     try {
-      if (scelta === 'autorizzato') {
-        const suoi = perInvestitore.get(i.id) || []
-        const primo = suoi.length ? suoi[suoi.length - 1].data_versamento : i.created_at
-        await pubblicaInvestitoreSulSito({ id: i.id, nome: i.nome, tipo: i.tipo, anno: Number(String(primo).slice(0, 4)) })
-      } else {
-        await togliInvestitoreDalSito(i)
-      }
+      // Il sito si aggiorna in carica() (allineaSito), qui solo la scelta.
       const { error } = await supabase.from('investitori').update({ pubblicazione_nome: scelta, updated_at: new Date().toISOString() }).eq('id', i.id)
       if (error) throw error
-      toast.success(scelta === 'autorizzato' ? 'Nome pubblicato sul sito' : scelta === 'riservato' ? 'Segnato come riservato: non compare sul sito' : 'Tolto dal sito')
+      toast.success(scelta === 'autorizzato' ? 'Nome pubblicato sul sito' : scelta === 'riservato' ? 'Riservato: sul sito senza nome' : 'Nome tolto dal sito')
     } catch (e) {
       toast.error('Non salvato: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
