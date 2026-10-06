@@ -290,18 +290,17 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators,
     .filter(v => v === 'acconti' ? canSeeAcconti : canSeeOperatori)
   if (VIEWS.length <= 1) return null
   return (
-    <div className="flex justify-end">
-      <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-        {VIEWS.map(v => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`px-3 py-1.5 rounded-full ${view === v ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
-          >
-            {LABELS[v]}
-          </button>
-        ))}
-      </div>
+    // 06/10/2026: sotto-tab a sinistra, senza cornice (solo testo).
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+      {VIEWS.map(v => (
+        <button
+          key={v}
+          onClick={() => setView(v)}
+          className={`py-1 transition-colors ${view === v ? 'text-dr7-gold font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
+        >
+          {LABELS[v]}
+        </button>
+      ))}
     </div>
   )
 }
@@ -385,12 +384,22 @@ export default function OperatoriTab({ vistaIniziale }: { vistaIniziale?: Operat
     // Stessa schermata di "Gestione & Permessi", ma sugli ARCHIVIATI: cosi' lo
     // storico di un ex operatore (profilo, log, statistiche) resta consultabile
     // esattamente come prima, senza duplicare una riga di codice.
-    return <AuditLogView key="storico" onSwitchView={() => setView('dashboard')} archived />
+    return (
+      <div className="space-y-3">
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeAcconti={canSeeAcconti} />
+        <AuditLogView key="storico" archived />
+      </div>
+    )
   }
-  return <AuditLogView key="attivi" onSwitchView={() => setView('dashboard')} />
+  return (
+    <div className="space-y-3">
+      <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeAcconti={canSeeAcconti} />
+      <AuditLogView key="attivi" />
+    </div>
+  )
 }
 
-function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => void; archived?: boolean }) {
+function AuditLogView({ archived = false }: { archived?: boolean }) {
   const { hasRole, adminEmail, adminId, role: myRole } = useAdminRole()
   // 2026-05-27: chi puo' flippare il toggle OTP per-operatore e'
   // ora un RUOLO (role:otp-admin) — non piu' una lista hardcoded di
@@ -1000,10 +1009,6 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
             conTutto={false}
             compact
           />
-          <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-            <button onClick={onSwitchView} className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Dashboard</button>
-            <button className="px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold">Audit log</button>
-          </div>
           <button onClick={exportCSV} disabled={!selected || aggLogs.length === 0} className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-medium hover:opacity-90 disabled:opacity-30 transition-opacity">Esporta CSV</button>
           <button onClick={() => window.print()} disabled={!selected} className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-30">Stampa / PDF</button>
         </div>
