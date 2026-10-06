@@ -63,6 +63,8 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
     { key: 'scadenze', label: 'Scadenze' },
     { key: 'fattura', label: 'Fattura' },
     { key: 'fornitori', label: 'Fornitori' },
+    // 06/10/2026: dato riservato — la RLS (dr7_puo_vedere_investitori) legge la stessa spunta.
+    { key: 'investitori', label: 'Investitori' },
     { key: 'nexi', label: 'Nexi' },
     { key: 'gestione-otp', label: 'Gestione OTP' },
     { key: 'verifica-documenti', label: 'Verifica Documenti' },

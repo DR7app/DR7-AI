@@ -17,6 +17,10 @@ import { percorsoStorage } from '../../../utils/percorsoStorage'
 // Prima era una top-level tab "Rilevazione Orari" — ora vive insieme
 // al Report Orari (Dashboard) e a Contratti, logicamente raggruppata.
 const RilevazioneOrariTab = lazy(() => import('./RilevazioneOrariTab'))
+// 06/10/2026 (direzione): anche gli Acconti vivono dentro Operatori (sub-view).
+// Restano self-service per TUTTI (UNIVERSAL_TABS): chi non ha la tab Operatori
+// vede qui SOLO gli Acconti, nessun'altra sotto-tab.
+const AccontiTab = lazy(() => import('./AccontiTab'))
 
 // Per-row display: which admin emails get the "Amministratore" label in the
 // roster. Email-only failsafe (matches useAdminRole.ROLE_FAILSAFE); when a
@@ -261,9 +265,9 @@ function previousMonthRange(): { from: string; to: string } {
 
 const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
-type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti' | 'storico'
+type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti' | 'storico' | 'acconti'
 
-function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators }: { view: OperatoriView; setView: (v: OperatoriView) => void; canSeePayroll: boolean; canManageOperators: boolean }) {
+function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators, canSeeOperatori = true, canSeeAcconti = true }: { view: OperatoriView; setView: (v: OperatoriView) => void; canSeePayroll: boolean; canManageOperators: boolean; canSeeOperatori?: boolean; canSeeAcconti?: boolean }) {
   const LABELS: Record<OperatoriView, string> = {
     dashboard: 'Report Orari',
     rilevazione: 'Rilevazione Orari',
@@ -271,6 +275,7 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators 
     contratti: 'Contratti',
     audit: 'Gestione & Permessi',
     storico: 'Storico',
+    acconti: 'Acconti',
   }
   // 2026-06-05: "Buste Paga" visibile SOLO ai ruoli autorizzati alle paghe
   // (direzione / developer / stipendio-editor). I lavaggisti (car wash) e gli
@@ -279,9 +284,11 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators 
   // 2026-08-18 (richiesta direzione): "Gestione & Permessi" e "Storico" sono
   // roba di amministrazione — permessi, ruoli, archiviazione, ex operatori. Un
   // operatore non deve nemmeno vederle nella barra.
-  const VIEWS = (['dashboard', 'rilevazione', 'payroll', 'contratti', 'audit', 'storico'] as const)
+  const VIEWS = (['dashboard', 'rilevazione', 'payroll', 'contratti', 'acconti', 'audit', 'storico'] as const)
     .filter(v => v !== 'payroll' || canSeePayroll)
     .filter(v => (v !== 'audit' && v !== 'storico') || canManageOperators)
+    .filter(v => v === 'acconti' ? canSeeAcconti : canSeeOperatori)
+  if (VIEWS.length <= 1) return null
   return (
     <div className="flex justify-end">
       <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
@@ -301,8 +308,12 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators 
 
 // 2026-05-20: V1 (OperatoriReportDashboard) rimossa. Resta solo V2.
 
-export default function OperatoriTab() {
-  const { hasRole, role: myRole } = useAdminRole()
+export default function OperatoriTab({ vistaIniziale }: { vistaIniziale?: OperatoriView } = {}) {
+  const { hasRole, hasPermission, role: myRole } = useAdminRole()
+  // 06/10/2026: la tab Operatori si apre anche a chi ha solo gli Acconti
+  // (self-service): in quel caso vede solo la sotto-tab Acconti.
+  const canSeeOperatori = hasPermission('operatori')
+  const canSeeAcconti = hasPermission('acconti')
   // Solo i ruoli abilitati alle paghe possono vedere le Buste Paga; i lavaggisti
   // (car wash) e gli altri operatori no (mostrava paghe con default errati).
   const canSeePayroll = hasRole('direzione') || hasRole('developer') || hasRole('stipendio-editor')
@@ -313,19 +324,33 @@ export default function OperatoriTab() {
   // ne' l'archivio — su un dispositivo funzionava e sull'altro no, a seconda del
   // conto usato. Ora frontend e database dicono la stessa cosa.
   const canManageOperators = hasRole('direzione') || hasRole('developer') || myRole === 'superadmin'
-  const [view, setView] = useState<OperatoriView>('dashboard')
+  const [view, setView] = useState<OperatoriView>(vistaIniziale || 'dashboard')
   // Se un non autorizzato è su payroll (es. stato vecchio o link diretto),
   // riportalo alla dashboard: niente busta paga per i non abilitati.
   const effectiveView: OperatoriView =
-    (view === 'payroll' && !canSeePayroll) ||
-    ((view === 'audit' || view === 'storico') && !canManageOperators)
-      ? 'dashboard'
-      : view
+    !canSeeOperatori
+      ? 'acconti'
+      : (view === 'payroll' && !canSeePayroll) ||
+        ((view === 'audit' || view === 'storico') && !canManageOperators) ||
+        (view === 'acconti' && !canSeeAcconti)
+        ? 'dashboard'
+        : view
+
+  if (effectiveView === 'acconti') {
+    return (
+      <div className="space-y-3">
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeOperatori={canSeeOperatori} canSeeAcconti={canSeeAcconti} />
+        <Suspense fallback={<ScheletroPagina righe={6} colonne={5} />}>
+          <AccontiTab />
+        </Suspense>
+      </div>
+    )
+  }
 
   if (effectiveView === 'dashboard') {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeAcconti={canSeeAcconti} />
         <OperatoriReportDashboardV2 onSwitchView={setView} />
       </div>
     )
@@ -333,7 +358,7 @@ export default function OperatoriTab() {
   if (effectiveView === 'rilevazione') {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeAcconti={canSeeAcconti} />
         <Suspense fallback={<ScheletroPagina righe={8} colonne={6} />}>
           <RilevazioneOrariTab />
         </Suspense>
@@ -343,7 +368,7 @@ export default function OperatoriTab() {
   if (effectiveView === 'payroll' && canSeePayroll) {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeAcconti={canSeeAcconti} />
         <PayrollPeriodoView />
       </div>
     )
@@ -351,7 +376,7 @@ export default function OperatoriTab() {
   if (effectiveView === 'contratti') {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} canSeeAcconti={canSeeAcconti} />
         <ContrattiOperatoreView />
       </div>
     )

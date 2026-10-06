@@ -90,7 +90,7 @@ const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProT
 const InterruttoriTab = lazyWithRetry(() => import('./components/InterruttoriTab'))
 const SystemControlTab = lazyWithRetry(() => import('./components/SystemControlTab'))
 
-const AccontiTab = lazyWithRetry(() => import('./components/AccontiTab'))
+const InvestitoriTab = lazyWithRetry(() => import('./components/InvestitoriTab'))
 const SitoTab = lazyWithRetry(() => import('./components/SitoTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 const DocumentsVerificationTab = lazyWithRetry(() => import('./components/DocumentsVerificationTab'))
@@ -101,7 +101,7 @@ const GpsKeylessTab = lazyWithRetry(() => import('./components/GpsKeylessTab'))
 // una rotella. Con il precarico al passaggio del mouse quasi non si vede.
 const TabLoader = () => <ScheletroPagina card={4} righe={8} />
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'prevendite' | 'prevendite-vendute' | 'prevendite-popup' | 'marketing-wallet' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'system-control'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'prevendite' | 'prevendite-vendute' | 'prevendite-popup' | 'marketing-wallet' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'investitori' | 'system-control'
 
 /**
  * Chunk di ogni tab, per poterlo scaricare PRIMA del clic.
@@ -206,7 +206,7 @@ const CHUNK_TAB: Partial<Record<TabType, { preload: () => void }>> = {
   'centralina-pro': CentralinaProTab,
   'interruttori': InterruttoriTab,
   'system-control': SystemControlTab,
-  'acconti': AccontiTab,
+  'investitori': InvestitoriTab,
   'sito': SitoTab,
   'gestione-otp': GestioneOtpTab,
   'verifica-documenti': DocumentsVerificationTab,
@@ -385,11 +385,17 @@ export default function AdminDashboard() {
     } catch { /* ignore */ }
     try {
       const saved = sessionStorage.getItem(ACTIVE_TAB_KEY)
+      // 06/10/2026: gli Acconti sono una sotto-tab di Operatori.
+      if (saved === 'acconti') return 'operatori'
       if (saved) return saved as TabType
     } catch { /* sessionStorage may be blocked */ }
     return 'reservations'
   }
   const [activeTab, _setActiveTab] = useState<TabType>(readSavedTab)
+  // Sotto-tab di Operatori da aprire quando si arriva da un link ad 'acconti'.
+  const [operatoriVista, setOperatoriVista] = useState<'acconti' | undefined>(() => {
+    try { return sessionStorage.getItem(ACTIVE_TAB_KEY) === 'acconti' ? 'acconti' : undefined } catch { return undefined }
+  })
   // Contenuto della tab: il PDF dei Report si costruisce da qui.
   const contenutoTabRef = useRef<HTMLDivElement>(null)
   const [tabHistory, setTabHistory] = useState<TabType[]>([])
@@ -404,7 +410,10 @@ export default function AdminDashboard() {
     window.addEventListener('admin:sotto-pagina', handleSotto)
     return () => window.removeEventListener('admin:sotto-pagina', handleSotto)
   }, [])
-  const setActiveTab = (tab: TabType) => {
+  const setActiveTab = (richiesta: TabType) => {
+    // 06/10/2026: 'acconti' non e' piu' una voce di menu — vive in Operatori.
+    setOperatoriVista(richiesta === 'acconti' ? 'acconti' : undefined)
+    const tab: TabType = richiesta === 'acconti' ? 'operatori' : richiesta
     setTabHistory(prev => [...prev.slice(-19), activeTab])
     setSottoPagina(false)
     _setActiveTab(tab)
@@ -456,7 +465,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio, disableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, hasRole, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
+  const { role: adminRole, hasPermission: hasTabPermission, hasRole, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
   // 2026-05-19: isElevated rimosso (era declared but never read). Quando
   // serve in futuro, riaggiungerlo qui basato su:
   // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -477,6 +486,10 @@ export default function AdminDashboard() {
   // doesn't include it (and isn't '*' / direzione / superadmin).
   // useAdminRole.hasPermission encapsulates that logic and stays optimistic
   // while loading so we don't flash "Accesso non autorizzato" on mount.
+  // 06/10/2026: gli Acconti (self-service, di tutti) stanno dentro Operatori,
+  // quindi la voce Operatori compare anche a chi ha solo gli Acconti — dentro
+  // vede solo quella sotto-tab (OperatoriTab).
+  const hasPermission = (tab: string) => hasTabPermission(tab) || (tab === 'operatori' && hasTabPermission('acconti'))
   const isTabRestricted = (tab: TabType) => !hasPermission(tab)
   // Scarica PDF / Excel: solo amministratori (superadmin, direzione, developer).
   const puoEsportare = adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -892,8 +905,8 @@ export default function AdminDashboard() {
       { tab: 'operatori', label: 'Operatori' },
       { tab: 'immondizia', label: 'Immondizia' },
       { tab: 'ticket', label: 'Ticket' },
-      { tab: 'acconti', label: 'Acconti' },
       { tab: 'fornitori', label: 'Fornitori' },
+      { tab: 'investitori', label: 'Investitori' },
       { tab: 'nexi', label: 'Nexi' },
       // 05/10/2026 (direzione): Gestione OTP spostata in Centralina Pro > Gestione OTP.
       { tab: 'verifica-documenti', label: 'Verifica Documenti' },
@@ -1007,6 +1020,7 @@ export default function AdminDashboard() {
     'interruttori': 'Interruttori ON/OFF',
     'system-control': 'DR7 A.I System Control',
     'acconti': 'Acconti Giornalieri',
+    'investitori': 'Investitori',
     'verifica-documenti': 'Verifica Documenti',
     'fornitori': 'Fornitori',
     'carwash': 'Prenotazioni Lavaggio',
@@ -1815,13 +1829,13 @@ export default function AdminDashboard() {
           {activeTab === 'report-traffic' && (isTabRestricted('report-traffic') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportTrafficTab />)}
           {activeTab === 'report-gmb' && (isTabRestricted('report-gmb') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportGoogleBusinessTab />)}
           {activeTab === 'report-penali-danni' && <ReportPenaliDanniTab />}
-          {activeTab === 'operatori' && <OperatoriTab />}
+          {activeTab === 'operatori' && <OperatoriTab key={operatoriVista || 'operatori'} vistaIniziale={operatoriVista} />}
           {activeTab === 'rilevazione-orari' && <RilevazioneOrariTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           {activeTab === 'interruttori' && <InterruttoriTab />}
           {activeTab === 'system-control' && <SystemControlTab />}
-          {activeTab === 'acconti' && <AccontiTab />}
+          {activeTab === 'investitori' && (isTabRestricted('investitori') ? <PlaceholderTab title="Accesso non autorizzato" /> : <InvestitoriTab />)}
           {activeTab === 'sito' && <SitoTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
           {activeTab === 'verifica-documenti' && <DocumentsVerificationTab />}
