@@ -69,6 +69,7 @@ const ReportAutistiTab = lazyWithRetry(() => import('./components/ReportAutistiT
 const ReportTrafficTab = lazyWithRetry(() => import('./components/ReportTrafficTab'))
 const ReportGoogleBusinessTab = lazyWithRetry(() => import('./components/ReportGoogleBusinessTab'))
 const ReportPenaliDanniTab = lazyWithRetry(() => import('./components/ReportPenaliDanniTab'))
+const ReportInvestitoriTab = lazyWithRetry(() => import('./components/ReportInvestitoriTab'))
 const ReferralProgramTab = lazyWithRetry(() => import('./components/ReferralProgramTab'))
 const CodiciScontoTab = lazyWithRetry(() => import('./components/CodiciScontoTab'))
 const PrevenditeTab = lazyWithRetry(() => import('./components/PrevenditeTab'))
@@ -101,7 +102,7 @@ const GpsKeylessTab = lazyWithRetry(() => import('./components/GpsKeylessTab'))
 // una rotella. Con il precarico al passaggio del mouse quasi non si vede.
 const TabLoader = () => <ScheletroPagina card={4} righe={8} />
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'prevendite' | 'prevendite-vendute' | 'prevendite-popup' | 'marketing-wallet' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'investitori' | 'system-control'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'prevendite' | 'prevendite-vendute' | 'prevendite-popup' | 'marketing-wallet' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti' | 'investitori' | 'report-investitori' | 'system-control'
 
 /**
  * Chunk di ogni tab, per poterlo scaricare PRIMA del clic.
@@ -200,6 +201,7 @@ const CHUNK_TAB: Partial<Record<TabType, { preload: () => void }>> = {
   'report-traffic': ReportTrafficTab,
   'report-gmb': ReportGoogleBusinessTab,
   'report-penali-danni': ReportPenaliDanniTab,
+  'report-investitori': ReportInvestitoriTab,
   'operatori': OperatoriTab,
   'rilevazione-orari': RilevazioneOrariTab,
   'dashboard-kpi': DashboardTab,
@@ -489,7 +491,9 @@ export default function AdminDashboard() {
   // 06/10/2026: gli Acconti (self-service, di tutti) stanno dentro Operatori,
   // quindi la voce Operatori compare anche a chi ha solo gli Acconti — dentro
   // vede solo quella sotto-tab (OperatoriTab).
-  const hasPermission = (tab: string) => hasTabPermission(tab) || (tab === 'operatori' && hasTabPermission('acconti'))
+  // 06/10/2026: Report > Investitori legge gli stessi dati riservati della tab
+  // Investitori: stessa spunta, stessa RLS (dr7_puo_vedere_investitori).
+  const hasPermission = (tab: string) => hasTabPermission(tab) || (tab === 'operatori' && hasTabPermission('acconti')) || (tab === 'report-investitori' && hasTabPermission('investitori'))
   const isTabRestricted = (tab: TabType) => !hasPermission(tab)
   // Scarica PDF / Excel: solo amministratori (superadmin, direzione, developer).
   const puoEsportare = adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -866,6 +870,7 @@ export default function AdminDashboard() {
       { tab: 'report-autisti', label: 'Autisti' },
       { tab: 'report-penali-danni', label: 'Penali & Danni' },
       { tab: 'report-preventivi', label: 'Preventivi' },
+      { tab: 'report-investitori', label: 'Investitori', permKey: 'investitori' },
       { tab: 'report-traffic', label: 'Rendimento Sito' },
       { tab: 'report-gmb', label: 'Rendimento Google My Business' },
       // 2026-05-18: 'rilevazione-orari' rimossa dal menu — adesso e' una
@@ -1070,6 +1075,7 @@ export default function AdminDashboard() {
     'report-traffic': 'Rendimento Sito',
     'report-gmb': 'Rendimento Google My Business',
     'report-penali-danni': 'Report Penali & Danni',
+    'report-investitori': 'Report Investitori',
     'customer-wallet': 'Credit Wallet',
     'site-users': 'Iscritti al Sito',
     'reports': 'Report',
@@ -1829,6 +1835,7 @@ export default function AdminDashboard() {
           {activeTab === 'report-traffic' && (isTabRestricted('report-traffic') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportTrafficTab />)}
           {activeTab === 'report-gmb' && (isTabRestricted('report-gmb') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportGoogleBusinessTab />)}
           {activeTab === 'report-penali-danni' && <ReportPenaliDanniTab />}
+          {activeTab === 'report-investitori' && (isTabRestricted('report-investitori') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportInvestitoriTab />)}
           {activeTab === 'operatori' && <OperatoriTab key={operatoriVista || 'operatori'} vistaIniziale={operatoriVista} />}
           {activeTab === 'rilevazione-orari' && <RilevazioneOrariTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
