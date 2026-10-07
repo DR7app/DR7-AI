@@ -15,6 +15,7 @@ import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { useAutorizzazioneWallet, perBookingDetails } from '../../../hooks/useAutorizzazioneWallet'
+import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { isCreditWallet as isMetodoCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { leggiMovimentoWallet } from '../../../utils/walletCliente'
 import MoneyInput from '../../../components/MoneyInput'
@@ -1401,6 +1402,11 @@ export default function UnpaidBookingsTab() {
       toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
+
+  // 07/10/2026: "Si" sulla X partiva due volte (Pauciulo, 06/10 12:40:34 e
+  // 12:40:42). Il lucchetto a ref blocca il secondo click finche' il primo
+  // non e' finito.
+  const [eliminaPrenotazione, eliminazioneInCorso] = useSingleFlight(deleteSingleBooking)
 
   async function handleFatturaItemPayment(fi: FatturaItem, paymentAmount: number) {
     try {
@@ -3102,12 +3108,12 @@ export default function UnpaidBookingsTab() {
 
   // ── Confirm delete helper ──────────────────────────────────────────────────
 
-  function ConfirmDelete({ itemKey, onConfirm, onCancel }: { itemKey: string; onConfirm: () => void; onCancel: () => void }) {
+  function ConfirmDelete({ itemKey, onConfirm, onCancel, disabled }: { itemKey: string; onConfirm: () => void; onCancel: () => void; disabled?: boolean }) {
     if (confirmDeleteKey !== itemKey) return null
     return (
       <div className="flex items-center gap-1 mt-1 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
         <span className="text-xs text-red-400">Confermi?</span>
-        <button onClick={onConfirm} className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold">Si</button>
+        <button onClick={onConfirm} disabled={disabled} className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-40">Si</button>
         <button onClick={onCancel} className="px-2 py-0.5 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">No</button>
       </div>
     )
@@ -3347,7 +3353,10 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
                   >Modifica</button>
                 )}
-                {confirmDeleteKey !== bkKey && (
+                {/* 07/10/2026: una prenotazione gia' annullata e' qui solo per
+                    penali/danni aperti. La X la riannullava senza togliere
+                    nulla: la riga restava e l'operatore ricliccava. */}
+                {confirmDeleteKey !== bkKey && !/cancell|annull/i.test(booking.status || '') && (
                   <button
                     onClick={() => setConfirmDeleteKey(bkKey)}
                     className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
@@ -3368,8 +3377,9 @@ export default function UnpaidBookingsTab() {
               />
               <ConfirmDelete
                 itemKey={bkKey}
-                onConfirm={() => deleteSingleBooking(booking.id)}
+                onConfirm={() => eliminaPrenotazione(booking.id)}
                 onCancel={() => setConfirmDeleteKey(null)}
+                disabled={eliminazioneInCorso}
               />
             </div>
           )
@@ -3458,7 +3468,10 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
                   >Modifica</button>
                 )}
-                {confirmDeleteKey !== bkKey && (
+                {/* 07/10/2026: una prenotazione gia' annullata e' qui solo per
+                    penali/danni aperti. La X la riannullava senza togliere
+                    nulla: la riga restava e l'operatore ricliccava. */}
+                {confirmDeleteKey !== bkKey && !/cancell|annull/i.test(booking.status || '') && (
                   <button
                     onClick={() => setConfirmDeleteKey(bkKey)}
                     className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
@@ -3479,8 +3492,9 @@ export default function UnpaidBookingsTab() {
               />
               <ConfirmDelete
                 itemKey={bkKey}
-                onConfirm={() => deleteSingleBooking(booking.id)}
+                onConfirm={() => eliminaPrenotazione(booking.id)}
                 onCancel={() => setConfirmDeleteKey(null)}
+                disabled={eliminazioneInCorso}
               />
             </div>
           )

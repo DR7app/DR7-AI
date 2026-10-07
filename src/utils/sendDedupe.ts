@@ -79,6 +79,8 @@ const GUARDED_ENDPOINTS = [
   'submit-customer-invite',
   'invite-operator',
   'create-calendar-event',
+  // 07/10/2026: la X di Da Saldare annullava due volte la stessa prenotazione.
+  'delete-booking',
   'create-vehicle-unavailability-event',
   'emtn-event-create',
   'emtn-event-document',
