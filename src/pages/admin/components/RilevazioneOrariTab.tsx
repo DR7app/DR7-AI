@@ -968,7 +968,7 @@ export default function RilevazioneOrariTab() {
                 <AddOperatoreModal onClose={() => setShowAddOp(false)} onSaved={() => { setShowAddOp(false); load(); toast.success('Operatore aggiunto') }} />
             )}
             {profileOp && (
-                <OperatorProfileModal operatore={profileOp} onClose={() => setProfileOp(null)} />
+                <OperatorProfileModal operatore={profileOp} periodo={view === 'giornaliera' ? undefined : { from: periodRange.start, to: periodRange.end }} onClose={() => setProfileOp(null)} />
             )}
 
             {editMyDay && me && (

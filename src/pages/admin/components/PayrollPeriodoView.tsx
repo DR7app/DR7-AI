@@ -580,6 +580,7 @@ export default function PayrollPeriodoView() {
             {profileOp && (
                 <OperatorProfileModal
                     operatore={profileOp}
+                    periodo={{ from, to }}
                     onClose={() => { setProfileOp(null); load() }}
                 />
             )}

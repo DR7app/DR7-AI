@@ -30,6 +30,7 @@ import {
 import { MyDayEditorModal } from './RilevazioneOrariTab'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import SceltaMese from '../../../components/admin/SceltaMese'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import MoneyInput from '../../../components/MoneyInput'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
@@ -104,21 +105,28 @@ function avatarTone(seed: string): string {
 export default function OperatorProfileModal({
     operatore,
     onClose,
+    periodo,
 }: {
     operatore: Operatore
     onClose: () => void
+    /** 08/10/2026: il periodo della schermata da cui si apre la scheda
+     *  (Buste Paga, Report Operatori, Rilevazione). Senza, la scheda ripartiva
+     *  dagli ultimi 30 giorni: settembre scelto in Buste Paga diventava 08/09 -> 07/10. */
+    periodo?: { from: string; to: string }
 }) {
     // 2026-06-06: il periodo di default di "Calcola Paga" deve rispecchiare la
     // frequenza di stipendio del contratto: operatore pagato a SETTIMANA
     // (stipendio_frequenza='settimanale', es. Ophelie) → default 7 giorni, non
     // 30. Applicato UNA sola volta al caricamento del contratto; dopo l'utente
     // puo' cambiare liberamente i pulsanti periodo.
-    const autoPeriodApplied = useRef(false)
+    // Con un periodo passato dal chiamante non si applica nessun default.
+    const autoPeriodApplied = useRef(!!(periodo?.from && periodo?.to))
+    // 08/10/2026: default = mese corrente (1 del mese -> oggi), come Buste Paga.
     const [customFrom, setCustomFrom] = useState<string>(() => {
-        const d = new Date(); d.setDate(d.getDate() - 29)
-        return toRomeDate(d)
+        if (periodo?.from && periodo?.to) return periodo.from
+        const t = new Date(); return toRomeDate(new Date(t.getFullYear(), t.getMonth(), 1))
     })
-    const [customTo, setCustomTo] = useState<string>(() => toRomeDate(new Date()))
+    const [customTo, setCustomTo] = useState<string>(() => (periodo?.from && periodo?.to) ? periodo.to : toRomeDate(new Date()))
     const [days, setDays] = useState<DayBreakdown[]>([])
     const [loading, setLoading] = useState(true)
     // 2026-05-22: clicking a day OR "Aggiungi giornata" opens the
@@ -154,7 +162,7 @@ export default function OperatorProfileModal({
             const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null } | null
             setPauseConfig(cfgPause)
             // 2026-06-06: default periodo Calcola Paga dalla frequenza stipendio.
-            // settimanale → 7gg, mensile → 30gg (default gia' impostato). Solo
+            // settimanale → 7gg, mensile → mese corrente (default gia' impostato). Solo
             // al primo caricamento, cosi' non sovrascrive le scelte dell'utente.
             if (!autoPeriodApplied.current) {
                 autoPeriodApplied.current = true
@@ -1755,7 +1763,9 @@ function CalcolaPagaSection({
                     read-only "12 apr → 22 mag". Cambiando una delle due
                     date cambia il periodo del parent (stessa barra). rangeLabel resta
                     come fallback per accessibility / debug. */}
-                <div className="flex items-center gap-1.5" aria-label={rangeLabel}>
+                <div className="flex flex-wrap items-center gap-1.5" aria-label={rangeLabel}>
+                    {/* 08/10/2026: menu dei mesi come sulla barra Periodo. */}
+                    <SceltaMese da={customFrom} a={customTo} onChange={(da, a) => { onChangeFrom(da); onChangeTo(a) }} />
                     <EuropeanDateInput
                       value={customFrom}
                       onChange={(__v: string) => onChangeFrom(__v)}

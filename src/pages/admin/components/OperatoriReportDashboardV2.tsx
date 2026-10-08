@@ -1195,6 +1195,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             {profileOp && (
                 <OperatorProfileModal
                     operatore={profileOp}
+                    periodo={{ from: rangeFrom, to: rangeTo }}
                     onClose={() => setProfileOp(null)}
                 />
             )}
