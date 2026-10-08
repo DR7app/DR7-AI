@@ -24,6 +24,7 @@ import CardDeleteButton from './CardDeleteButton'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import { logger } from '../../../utils/logger'
 
 interface ReportClienteProps {
   customerId: string
@@ -64,12 +65,66 @@ interface WalletTx { id: string; amount: number; type?: string; transaction_type
 
 interface WalletRecharge { id: string; recharge_amount: number | string; payment_status: string; created_at: string; excluded_from_tier?: boolean | null }
 
+// 08/10/2026 (direzione): lo score della scheda e' quello di EMTN, non un
+// calcolo locale. Lo calcola emtn-search, lo stesso che usa la tab EMTN.
+interface ScoreEMTN {
+  score: number
+  livello: 'Very Low' | 'Low' | 'Moderate' | 'High' | 'Critical'
+  band: 'green' | 'yellow' | 'red'
+}
+const LIVELLI_EMTN: Record<ScoreEMTN['livello'], string> = {
+  'Very Low': 'Rischio molto basso',
+  Low: 'Rischio basso',
+  Moderate: 'Rischio moderato',
+  High: 'Rischio alto',
+  Critical: 'Rischio critico',
+}
+const COLORE_BANDA: Record<ScoreEMTN['band'], string> = { green: '#10b981', yellow: '#f59e0b', red: '#ef4444' }
+
+// Corpo per emtn-search: codice fiscale, oppure documento per lo straniero.
+// null = non c'e' abbastanza per identificarlo su EMTN.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function richiestaEMTN(c: any): Record<string, unknown> | null {
+  const cf = String(c?.codice_fiscale || '').replace(/\s+/g, '').toUpperCase()
+  if (/^[A-Z0-9]{16}$/.test(cf)) return { codiceFiscale: cf }
+  const tipo = String(c?.documento_tipo || '').toLowerCase()
+  const documentoTipo = tipo.includes('passap') ? 'passaporto' : (tipo.includes('identit') || tipo.includes('carta')) ? 'carta_identita' : ''
+  const nazionalita = String(c?.nazionalita || c?.nazione || '').trim()
+  if (!documentoTipo || !c?.documento_numero || !c?.nome || !c?.cognome || !c?.data_nascita || !nazionalita) return null
+  return {
+    estero: true, nome: c.nome, cognome: c.cognome, dataNascita: String(c.data_nascita).slice(0, 10),
+    nazionalita, documentoTipo, documentoNumero: c.documento_numero,
+  }
+}
+
+function AnelloScoreEMTN({ score, stato }: { score: ScoreEMTN | null; stato: 'caricamento' | 'ok' | 'non_identificato' | 'errore' }) {
+  if (!score) {
+    const testo = stato === 'caricamento' ? 'Calcolo…' : stato === 'non_identificato' ? 'Manca il codice fiscale' : 'EMTN non raggiungibile'
+    return <div className="text-xs text-theme-text-muted mt-2 leading-tight">{testo}</div>
+  }
+  const colore = COLORE_BANDA[score.band]
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <div className="relative w-11 h-11 shrink-0">
+        <svg className="w-11 h-11 -rotate-90" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="15.91549" fill="none" stroke="currentColor" strokeWidth="3" className="text-theme-bg-tertiary" />
+          <circle cx="18" cy="18" r="15.91549" fill="none" strokeWidth="3" strokeLinecap="round" stroke={colore} strokeDasharray={`${score.score}, 100`} />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums" style={{ color: colore }}>{score.score}</div>
+      </div>
+      <div className="text-xs font-semibold leading-tight" style={{ color: colore }}>{LIVELLI_EMTN[score.livello] || score.livello}</div>
+    </div>
+  )
+}
+
 interface DocRecord { id: string; document_type: string; status: string; uploaded_at: string }
 
 type TabId = 'stato' | 'anagrafica' | 'storico' | 'economica'
 
 export default function ReportClienteModal({ customerId, onClose }: ReportClienteProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null)
+  const [scoreEmtn, setScoreEmtn] = useState<ScoreEMTN | null>(null)
+  const [scoreEmtnStato, setScoreEmtnStato] = useState<'caricamento' | 'ok' | 'non_identificato' | 'errore'>('caricamento')
   const [uploadingFoto, setUploadingFoto] = useState(false)
   // Status clienti personalizzabili: nome/descrizione/colore/avvertenza da
   // Centralina Pro > Status Clienti (utils/clientStatusConfig).
@@ -161,6 +216,34 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     loadAll()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId])
+
+  useEffect(() => {
+    if (!customer) return
+    const corpo = richiestaEMTN(customer)
+    if (!corpo) { setScoreEmtn(null); setScoreEmtnStato('non_identificato'); return }
+    let annullato = false
+    setScoreEmtnStato('caricamento')
+    authFetch('/.netlify/functions/emtn-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    })
+      .then(async res => {
+        const body = await res.json()
+        if (!res.ok || !body?.score) throw new Error(body?.error || 'EMTN non disponibile')
+        if (annullato) return
+        setScoreEmtn({ score: body.score.score, livello: body.score.livello, band: body.score.band })
+        setScoreEmtnStato('ok')
+      })
+      .catch(err => {
+        if (annullato) return
+        logger.warn('[Scheda cliente] score EMTN:', err)
+        setScoreEmtn(null)
+        setScoreEmtnStato('errore')
+      })
+    return () => { annullato = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.id])
 
   async function loadAll() {
     setLoading(true)
@@ -463,16 +546,6 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     }
   }, [bookings, walletRecharges, customer?.user_id, clubTiers])
 
-  // Risk / reliability score (0-10)
-  const riskScore = useMemo(() => {
-    let score = 10
-    if (kpis.danniCount > 0) score -= Math.min(kpis.danniCount * 1.5, 4)
-    if (kpis.penaliCount > 0) score -= Math.min(kpis.penaliCount, 2)
-    if (kpis.cancelled > 2) score -= 1
-    if (kpis.unpaidTotal > 100) score -= 1
-    if (kpis.punctuality < 80) score -= 1
-    return Math.max(0, Math.round(score * 10) / 10)
-  }, [kpis])
 
   // Insight
   const insight = useMemo(() => {
@@ -483,10 +556,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       const cls = statusColorClasses(c.colore)
       return { label: c.descrizione ? `${c.label} — ${c.descrizione}` : c.label, color: cls.text, bg: cls.bg }
     }
-    if (riskScore >= 8 && kpis.totalSpent > 1000) return { label: 'Cliente affidabile con alto valore', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/30' }
-    if (riskScore < 5) return { label: 'Attenzione: rischio elevato', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' }
+    if (scoreEmtn?.band === 'green' && kpis.totalSpent > 1000) return { label: 'Cliente affidabile con alto valore', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/30' }
+    if (scoreEmtn?.band === 'red') return { label: 'Attenzione: rischio elevato', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' }
     return { label: 'Cliente standard', color: 'text-theme-text-muted', bg: 'bg-theme-bg-tertiary border-theme-border' }
-  }, [customer, riskScore, kpis, statusCfg])
+  }, [customer, scoreEmtn, kpis, statusCfg])
 
   // Sezione Economica — intervallo attivo. I preset 3/6/12 mesi partono dal
   // primo giorno del mese piu' vecchio della finestra (mese corrente incluso);
@@ -573,14 +646,6 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
   const chartMax = Math.max(...monthlyData.map(m => m.total), 1)
 
-  // Client Score: 0-100 derivato da riskScore (0-10)
-  const clientScore = useMemo(() => Math.round(riskScore * 10), [riskScore])
-  const clientScoreLabel = useMemo(() => {
-    if (clientScore >= 90) return { label: 'Eccellente', color: '#22C55E' }
-    if (clientScore >= 75) return { label: 'Ottimo', color: '#3B82F6' }
-    if (clientScore >= 50) return { label: 'Discreto', color: '#F59E0B' }
-    return { label: 'Critico', color: '#EF4444' }
-  }, [clientScore])
 
   // Veicoli utilizzati — deduplicati da bookings (per plate quando presente,
   // altrimenti per nome). Conta utilizzi e tiene l'ultima data.
@@ -758,7 +823,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         <div className="relative shrink-0 border-b border-theme-border">
           <div className="absolute -top-12 -right-12 w-56 h-56 bg-dr7-gold/10 rounded-full blur-3xl pointer-events-none"/>
           <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"/>
-          <div className="relative p-6 flex flex-col xl:flex-row xl:items-center gap-5 xl:gap-6">
+          <div className="relative px-5 py-4 flex flex-col xl:flex-row xl:items-center gap-4">
             {/* Identità cliente */}
             <div className="flex items-start gap-4 flex-1 min-w-0">
               <div className="relative shrink-0">
@@ -849,26 +914,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
             {/* KPI cards a destra */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 xl:w-[640px] xl:shrink-0">
-              {/* Client Score con anello */}
-              <div className="relative rounded-xl border border-theme-border bg-theme-bg-secondary p-3 overflow-hidden">
-                <div className="text-[9px] uppercase tracking-wider text-theme-text-muted font-semibold">Client Score</div>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="relative w-12 h-12 shrink-0">
-                    <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
-                      <circle cx="18" cy="18" r="15.91549" fill="none" stroke="currentColor" strokeWidth="3" className="text-theme-bg-tertiary"/>
-                      <circle
-                        cx="18" cy="18" r="15.91549" fill="none" strokeWidth="3" strokeLinecap="round"
-                        stroke={clientScoreLabel.color}
-                        strokeDasharray={`${clientScore}, 100`}
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums" style={{ color: clientScoreLabel.color }}>{clientScore}</div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold" style={{ color: clientScoreLabel.color }}>{clientScoreLabel.label}</div>
-                    <div className="text-[10px] text-theme-text-muted leading-tight">{Math.round((kpis.punctuality))}% puntualità</div>
-                  </div>
-                </div>
+              {/* Score EMTN: lo stesso numero della tab EMTN. */}
+              <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-3">
+                <div className="text-[9px] uppercase tracking-wider text-theme-text-muted font-semibold">Score EMTN</div>
+                <AnelloScoreEMTN score={scoreEmtn} stato={scoreEmtnStato} />
               </div>
 
               {/* Spesa Totale */}
@@ -910,69 +959,54 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
             : 100
           const progressColor = clubTier.isTop ? 'bg-amber-400' : 'bg-dr7-gold'
           return (
-            <div className="px-6 py-4 border-b border-theme-border shrink-0">
-              <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}>
-                      {clubTier.label}
-                    </span>
-                    <div>
-                      <div className="text-sm font-semibold text-theme-text-primary">Livello {clubTier.label}</div>
-                      <div className="text-xs text-theme-text-muted">Reward: {clubTier.reward}% su ogni noleggio</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[11px] uppercase tracking-wider text-theme-text-muted">Pagato con carta · 12m</div>
-                    <div className="text-lg font-bold text-theme-text-primary tabular-nums">{fmtEur(clubTier.annualSpend)}</div>
-                    <div className="text-[11px] text-theme-text-muted tabular-nums">
-                      Prenotazioni {fmtEur(clubTier.cardBookingSpend)} · Ricariche {fmtEur(clubTier.rechargeSpend)} ({clubTier.rechargeCount})
-                    </div>
-                  </div>
+            <div className="px-5 py-2.5 border-b border-theme-border shrink-0">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${clubTier.badge}`}>{clubTier.label}</span>
+                  <span className="text-xs text-theme-text-muted">Reward {clubTier.reward}%</span>
                 </div>
-                {nextThr ? (
-                  <>
-                    <div className="flex justify-between text-[11px] text-theme-text-muted mb-1">
-                      <span>Livello {clubTier.label}</span>
-                      <span>Livello {nextLabel} ({fmtEur(nextThr)})</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-theme-bg-tertiary overflow-hidden">
-                      <div className={`h-full ${progressColor} transition-all`} style={{ width: `${progress}%` }} />
-                    </div>
-                    <div className="text-xs text-theme-text-muted mt-2 text-center">
-                      Mancano <span className="font-semibold text-theme-text-primary">{fmtEur(Math.max(0, nextThr - clubTier.annualSpend))}</span> per il livello successivo
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-xs text-amber-400 text-center font-medium">
-                    🏆 Livello massimo raggiunto
-                  </div>
-                )}
-                {/* Tutti i livelli configurati in Centralina Pro. Possono
-                    essere trenta: nel gestionale la lista sta chiusa, aperta
-                    si mangiava mezza scheda cliente. */}
-                <details className="mt-3 group">
-                  <summary className="cursor-pointer select-none list-none text-[10px] uppercase tracking-wider font-semibold text-theme-text-muted hover:text-theme-text-primary">
-                    <span className="group-open:hidden">Mostra</span><span className="hidden group-open:inline">Nascondi</span> tutti i livelli ({clubTiers.length})
-                  </summary>
-                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 mt-2">
-                    {clubTiers.map((t) => (
-                      <div key={t.tier} className={`rounded-md border px-1.5 py-1 text-center ${clubTier.tier === t.tier ? 'border-dr7-gold/60 bg-dr7-gold/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}
-                        title={`${t.label} · ${t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)} – ${fmtEur(t.max)}`} · ${t.rewardPercent}% reward`}>
-                        <div className="text-[10px] font-semibold text-theme-text-primary truncate">{t.label}</div>
-                        <div className="text-[9px] text-theme-text-muted tabular-nums truncate">{t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)}–${fmtEur(t.max)}`}</div>
-                        <div className="text-[9px] text-theme-text-muted">{t.rewardPercent}%</div>
+                <div className="flex-1 min-w-[200px]">
+                  {nextThr ? (
+                    <>
+                      <div className="h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                        <div className={`h-full ${progressColor} transition-all`} style={{ width: `${progress}%` }} />
                       </div>
-                    ))}
-                  </div>
-                </details>
+                      <div className="text-[11px] text-theme-text-muted mt-1">
+                        Mancano <span className="font-semibold text-theme-text-primary">{fmtEur(Math.max(0, nextThr - clubTier.annualSpend))}</span> per {nextLabel} ({fmtEur(nextThr)})
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xs text-amber-400 font-medium">Livello massimo raggiunto</div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-bold text-theme-text-primary tabular-nums">{fmtEur(clubTier.annualSpend)} <span className="text-[10px] font-normal uppercase tracking-wider text-theme-text-muted">carta · 12m</span></div>
+                  <div className="text-[11px] text-theme-text-muted tabular-nums">Prenotazioni {fmtEur(clubTier.cardBookingSpend)} · Ricariche {fmtEur(clubTier.rechargeSpend)} ({clubTier.rechargeCount})</div>
+                </div>
               </div>
+              {/* Tutti i livelli configurati in Centralina Pro. Possono
+                  essere trenta: nel gestionale la lista sta chiusa. */}
+              <details className="mt-1.5 group">
+                <summary className="cursor-pointer select-none list-none text-[10px] uppercase tracking-wider font-semibold text-theme-text-muted hover:text-theme-text-primary">
+                  <span className="group-open:hidden">Mostra</span><span className="hidden group-open:inline">Nascondi</span> tutti i livelli ({clubTiers.length})
+                </summary>
+                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 mt-2">
+                  {clubTiers.map((t) => (
+                    <div key={t.tier} className={`rounded-md border px-1.5 py-1 text-center ${clubTier.tier === t.tier ? 'border-dr7-gold/60 bg-dr7-gold/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}
+                      title={`${t.label} · ${t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)} – ${fmtEur(t.max)}`} · ${t.rewardPercent}% reward`}>
+                      <div className="text-[10px] font-semibold text-theme-text-primary truncate">{t.label}</div>
+                      <div className="text-[9px] text-theme-text-muted tabular-nums truncate">{t.max === Infinity ? `da ${fmtEur(t.min)}` : `${fmtEur(t.min)}–${fmtEur(t.max)}`}</div>
+                      <div className="text-[9px] text-theme-text-muted">{t.rewardPercent}%</div>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )
         })()}
 
         {/* Secondary stats — wallet, debiti, penali, danni, annullate */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 px-6 py-3 border-b border-theme-border shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 px-5 py-2 border-b border-theme-border shrink-0">
           <div className="flex items-center gap-2 text-xs">
             <span className="text-theme-text-muted">Wallet:</span>
             <span className="font-bold text-dr7-gold tabular-nums">{fmtEur(walletBalance)}</span>
@@ -996,22 +1030,22 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-theme-border px-6 shrink-0">
+        <div className="flex border-b border-theme-border px-5 shrink-0 overflow-x-auto">
           {([['stato', 'Stato Cliente'], ['anagrafica', 'Dati Anagrafici'], ['storico', 'Storico Attivita'], ['economica', 'Sezione Economica']] as [TabId, string][]).map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === id ? 'border-dr7-gold text-dr7-gold' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`px-3 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${activeTab === id ? 'border-dr7-gold text-dr7-gold' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`}
             >{label}</button>
           ))}
         </div>
 
         {/* Tab Content + Right Sidebar */}
         {/* Una sola barra di scorrimento: scorre la scheda intera, non le colonne. */}
-        <div className="flex">
-        <div className="flex-1 p-6 min-w-0">
+        <div className="flex flex-col xl:flex-row">
+        <div className="flex-1 p-4 min-w-0">
 
           {/* STATO CLIENTE */}
           {activeTab === 'stato' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Distribuzione Spesa per Servizio + Veicoli Utilizzati */}
               {(serviceBreakdown.total > 0 || uniqueVehicles.length > 0) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1113,9 +1147,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left: Activity table */}
-              <div className="lg:col-span-2 space-y-4">
+              <div className="space-y-3">
                 {/* DR7 Club daily interest accrual — visible at the TOP for
                     every club member so admin sees it without digging into
                     the Storico tab. Shows a placeholder when the cron
@@ -1221,7 +1253,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                       </tr>
                     </thead>
                     <tbody>
-                      {(storicoAperto ? bookings : bookings.slice(0, 3)).map(b => (
+                      {(storicoAperto ? bookings : bookings.slice(0, 5)).map(b => (
                         <tr key={b.id} className="border-b border-theme-border/50 hover:bg-theme-bg-tertiary/50">
                           <td className="px-3 py-2 text-theme-text-muted whitespace-nowrap">{fmtDate(b.appointment_date || b.pickup_date || b.created_at)}</td>
                           <td className="px-3 py-2 text-theme-text-primary">
@@ -1249,7 +1281,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                       )}
                     </tbody>
                   </table>
-                  {bookings.length > 3 && (
+                  {bookings.length > 5 && (
                     <button
                       type="button"
                       onClick={() => setStoricoAperto(v => !v)}
@@ -1264,107 +1296,13 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
               </div>
 
-              {/* Right: Documents + Risk + Insight */}
-              <div className="space-y-4">
-                {/* Carta Tokenizzata Nexi — mirrors the "Carte Tokenizzate" block in Tab Nexi,
-                    filtered to this single customer. Source: customers_extended.metadata. */}
-                {(() => {
-                  const m = customer.metadata || {}
-                  const contractId: string = m.nexi_contract_id || ''
-                  if (!contractId) {
-                    return (
-                      <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
-                        <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2">Carta Tokenizzata</h4>
-                        <p className="text-xs text-theme-text-muted">Nessuna carta tokenizzata su file</p>
-                      </div>
-                    )
-                  }
-                  const maskedPan: string = m.nexi_card_masked_pan || ''
-                  const circuit: string = m.nexi_card_circuit || ''
-                  const cardType: string = m.nexi_card_type || ''
-                  const updated: string = m.nexi_contract_updated || ''
-                  return (
-                    <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
-                      <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Carta Tokenizzata</h4>
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        {maskedPan && (
-                          <span className="font-mono text-sm text-theme-text-primary">{maskedPan}</span>
-                        )}
-                        {circuit && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
-                            {circuit}
-                          </span>
-                        )}
-                        {cardType && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                            cardType === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
-                            cardType === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
-                            cardType === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
-                            'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
-                          }`}>
-                            {cardType}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-theme-text-muted">
-                        <span className="font-mono">ID: ...{contractId.slice(-8)}</span>
-                        {updated && <span className="ml-2">{fmtDate(updated)}</span>}
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* Documenti */}
-                <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
-                  <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Documenti</h4>
-                  <div className="space-y-2">
-                    {[
-                      { type: 'identity_document_front', label: 'Carta Identita Fronte', legacy: 'identity_document' },
-                      { type: 'identity_document_back', label: 'Carta Identita Retro' },
-                      { type: 'drivers_license_front', label: 'Patente Fronte', legacy: 'drivers_license' },
-                      { type: 'drivers_license_back', label: 'Patente Retro' },
-                      { type: 'codice_fiscale_front', label: 'Codice Fiscale Fronte' },
-                      { type: 'codice_fiscale_back', label: 'Codice Fiscale Retro' },
-                      { type: 'libretto_front', label: 'Libretto Fronte', optional: true },
-                      { type: 'libretto_back', label: 'Libretto Retro', optional: true },
-                    ].map(({ type, label, legacy, optional }: { type: string; label: string; legacy?: string; optional?: boolean }) => {
-                      const s = docStatus(type, legacy, optional)
-                      return (
-                        <div key={type} className="flex items-center justify-between text-sm">
-                          <span className="text-theme-text-primary">{label}</span>
-                          <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Affidabilita / Rischio */}
-                <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
-                  <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Affidabilita / Rischio</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Punteggio</span><span className={`font-bold ${riskScore >= 7 ? 'text-green-400' : riskScore >= 4 ? 'text-yellow-400' : 'text-red-400'}`}>{riskScore}/10</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Puntualita Pagamenti</span><span className="text-theme-text-primary font-medium">{kpis.punctuality}%</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Danni Generati</span><span className="text-theme-text-primary font-medium">{kpis.danniCount}</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Penali Pagate</span><span className="text-theme-text-primary font-medium">{kpis.penaliCount}</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Totale Annullate</span><span className="text-theme-text-primary font-medium">{kpis.cancelled}</span></div>
-                  </div>
-                </div>
-
-                {/* Insight */}
-                <div className={`rounded-xl border p-4 ${insight.bg}`}>
-                  <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2">Insight</h4>
-                  <p className={`text-sm font-medium ${insight.color}`}>{insight.label}</p>
-                </div>
-              </div>
-            </div>
             </div>
           )}
 
           {/* DATI ANAGRAFICI */}
           {activeTab === 'anagrafica' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4 space-y-2">
                 <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2">Anagrafica</h4>
                 {customer.tipo_cliente === 'persona_fisica' && (
                   <>
@@ -1397,12 +1335,36 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 <Row label="Origine" value={customer.source === 'admin' ? 'Admin' : 'Website'} />
                 <Row label="Tipo" value={customer.tipo_cliente?.replace('_', ' ') || '-'} />
               </div>
+              {/* Dettaglio fronte/retro: il riepilogo sta nella colonna destra. */}
+              <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4 md:col-span-2">
+                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2">Documenti ({documents.length} archiviati)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                  {[
+                    { type: 'identity_document_front', label: 'Carta Identita Fronte', legacy: 'identity_document' },
+                    { type: 'identity_document_back', label: 'Carta Identita Retro' },
+                    { type: 'drivers_license_front', label: 'Patente Fronte', legacy: 'drivers_license' },
+                    { type: 'drivers_license_back', label: 'Patente Retro' },
+                    { type: 'codice_fiscale_front', label: 'Codice Fiscale Fronte' },
+                    { type: 'codice_fiscale_back', label: 'Codice Fiscale Retro' },
+                    { type: 'libretto_front', label: 'Libretto Fronte', optional: true },
+                    { type: 'libretto_back', label: 'Libretto Retro', optional: true },
+                  ].map(({ type, label, legacy, optional }: { type: string; label: string; legacy?: string; optional?: boolean }) => {
+                    const st = docStatus(type, legacy, optional)
+                    return (
+                      <div key={type} className="flex items-center justify-between text-sm">
+                        <span className="text-theme-text-primary">{label}</span>
+                        <span className={`text-xs font-medium ${st.color}`}>{st.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
           {/* STORICO ATTIVITA */}
           {activeTab === 'storico' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* DR7 Club — interest accruals (0.1%/giorno) */}
               {isDR7Club && interestAccruals.length > 0 && (() => {
                 const totalUnpaid = interestAccruals.filter(a => !a.paid_out_at).reduce((s, a) => s + Number(a.accrual_eur || 0), 0)
@@ -1544,7 +1506,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Chart */}
               <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
                 <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-4">Fatturato — {econRangeLabel}</h4>
@@ -1600,8 +1562,11 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         </div>
 
           {/* Right Sidebar — Azioni / Alert / Insight / Documenti */}
-          <aside className="hidden xl:flex flex-col w-80 shrink-0 border-l border-theme-border bg-theme-bg-secondary/30">
-            <div className="p-4 space-y-4">
+          {/* 08/10/2026: sotto i 1280px la colonna andava in fondo invece di
+              sparire (azioni, carte e Addebito erano irraggiungibili e per
+              questo erano state copiate nella colonna centrale). */}
+          <aside className="flex flex-col w-full xl:w-80 shrink-0 border-t xl:border-t-0 xl:border-l border-theme-border bg-theme-bg-secondary/30">
+            <div className="p-4 space-y-3 grid sm:grid-cols-2 sm:gap-3 sm:space-y-0 xl:block xl:space-y-3">
               {/* Azioni Rapide */}
               <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
                 <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider mb-2.5">Azioni Rapide</h3>
@@ -1674,15 +1639,17 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 )}
               </div>
 
-              {/* Insight */}
+              {/* Affidabilita': score EMTN + i fatti che lo spiegano. */}
               <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
-                <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider mb-2.5">Insight</h3>
-                <div className={`rounded-lg border p-2.5 ${insight.bg}`}>
-                  <div className={`text-xs font-semibold ${insight.color}`}>{insight.label}</div>
-                  <div className="text-[10px] text-theme-text-muted mt-1">
-                    Risk score {riskScore}/10 · Punctuality {kpis.punctuality}%
-                  </div>
+                <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider mb-1">Affidabilita'</h3>
+                <AnelloScoreEMTN score={scoreEmtn} stato={scoreEmtnStato} />
+                <div className="mt-2.5 space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-theme-text-muted">Puntualita' pagamenti</span><span className="font-medium text-theme-text-primary tabular-nums">{kpis.punctuality}%</span></div>
+                  <div className="flex justify-between"><span className="text-theme-text-muted">Danni</span><span className="font-medium text-theme-text-primary tabular-nums">{kpis.danniCount}</span></div>
+                  <div className="flex justify-between"><span className="text-theme-text-muted">Penali</span><span className="font-medium text-theme-text-primary tabular-nums">{kpis.penaliCount}</span></div>
+                  <div className="flex justify-between"><span className="text-theme-text-muted">Annullate</span><span className="font-medium text-theme-text-primary tabular-nums">{kpis.cancelled}</span></div>
                 </div>
+                <div className={`mt-2.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${insight.bg} ${insight.color}`}>{insight.label}</div>
               </div>
 
               {/* Documenti */}
