@@ -3194,9 +3194,10 @@ export default function UnpaidBookingsTab() {
     )
   }
 
-  // Pannello sotto "Segna Pagato": scelta del ritmo (24h / 48h / Settimana,
-  // il click invia subito il primo sollecito) e "Blocca sollecito".
-  function SollecitoPanel({ group }: { group: CustomerGroup }) {
+  // Pannello sollecito (menu "..." su desktop, corpo della carta su mobile):
+  // scelta del ritmo (24h / 48h / Settimana, il click invia subito il primo
+  // sollecito) e "Blocca sollecito".
+  function SollecitoPanel({ group, onAzione }: { group: CustomerGroup; onAzione?: () => void }) {
     const sending = sollecitoSendingKey === group.customerKey
     const { lastSentAt, intervalHours, blocked } = statoSollecito(group)
     const attivo = !!lastSentAt && !blocked
@@ -3206,11 +3207,12 @@ export default function UnpaidBookingsTab() {
         <div className="text-[10px] text-theme-text-muted">Invia Sollecito</div>
         <div className="flex gap-1">
           {SOLLECITO_INTERVALLI.map(i => {
-            const scelto = attivo && intervalHours === i.ore
+            // Solleciti partiti prima della scelta del ritmo: il cron li tratta a 48h.
+            const scelto = attivo && (intervalHours || 48) === i.ore
             return (
               <button
                 key={i.ore}
-                onClick={() => handleSendSollecito(group, i.ore)}
+                onClick={() => { onAzione?.(); handleSendSollecito(group, i.ore) }}
                 disabled={sending}
                 title={`Invia ora e ripeti ogni ${i.label === 'Settimana' ? 'settimana' : i.label} finche' non paga`}
                 className={`flex-1 px-1.5 py-1 rounded text-[10px] font-semibold border transition-colors disabled:opacity-50 ${scelto ? 'bg-amber-600 border-amber-600 text-white' : 'border-amber-500/40 text-amber-400 hover:bg-amber-600/15'}`}
@@ -3220,7 +3222,7 @@ export default function UnpaidBookingsTab() {
         </div>
         {attivo && (
           <button
-            onClick={() => handleBloccaSollecito(group)}
+            onClick={() => { onAzione?.(); handleBloccaSollecito(group) }}
             disabled={sending}
             className="w-full px-1.5 py-1 rounded text-[10px] font-semibold bg-red-600/80 hover:bg-red-700 text-white disabled:opacity-50"
           >Blocca sollecito</button>
@@ -3375,6 +3377,7 @@ export default function UnpaidBookingsTab() {
                               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                             >Parziale</button>
                           )}
+                          <SollecitoButton group={group} />
                           {confirmDeleteKey !== extPartialKey ? (
                             <button
                               onClick={() => setConfirmDeleteKey(extPartialKey)}
@@ -3462,7 +3465,7 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                   >Parziale</button>
                 )}
-                {isPending && <SollecitoButton group={group} />}
+                <SollecitoButton group={group} />
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
@@ -4456,7 +4459,6 @@ export default function UnpaidBookingsTab() {
                     visibile direttamente sulla riga (uscito dal menu 3-dots
                     perche' troppo nascosto). Il menu 3-dots rimane per
                     azioni secondarie (Pay by Link, Nexi addebito, ecc.). */}
-                <div className="flex flex-col items-end gap-1.5">
                 <div className="relative flex justify-end items-center gap-1">
                   {remainingEur > 0 && (
                     <button
@@ -4540,17 +4542,13 @@ export default function UnpaidBookingsTab() {
                           onClick={() => { setOpenActionsRowKey(null); openAddebitoNexi(group) }}
                           className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-orange-400"
                         >Addebito MIT</button>
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); handleSendSollecito(group) }}
-                          disabled={sollecitoSendingKey === group.customerKey}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-amber-400 disabled:opacity-50"
-                        >{sollecitoSendingKey === group.customerKey ? 'Invio…' : 'Invia Sollecito'}</button>
+                        <div className="px-3 py-2 border-t border-theme-border/50" style={{ breakInside: 'avoid' }}>
+                          <SollecitoPanel group={group} onAzione={() => setOpenActionsRowKey(null)} />
+                        </div>
                       </div>
                     </>,
                     document.body
                   )}
-                </div>
-                {remainingEur > 0 && <SollecitoPanel group={group} />}
                 </div>
               </div>
 

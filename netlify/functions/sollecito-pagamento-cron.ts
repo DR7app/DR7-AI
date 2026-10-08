@@ -35,7 +35,6 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const DEFAULT_INTERVAL_HOURS = 48
 const MAX_SOLLECITI_SENZA_RITMO = 3
-const PAID_STATUSES = new Set(['paid', 'completed', 'succeeded'])
 const CANCELLED_STATUSES = new Set(['cancelled', 'annullata'])
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,7 +121,8 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     interface Candidate { booking: Booking; phone: string; remainingCents: number; count: number }
     const candidates: Candidate[] = []
     for (const b of (rows || [])) {
-        if (PAID_STATUSES.has(String(b.payment_status || '').toLowerCase())) continue
+        // Niente skip su payment_status 'paid': la prenotazione puo' essere
+        // saldata con un'estensione o penali ancora aperte. Decide il residuo.
         const sollecito = b.booking_details?.sollecito
         const lastSentAt = sollecito?.last_sent_at
         if (!lastSentAt) continue                         // primo invio è manuale
