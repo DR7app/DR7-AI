@@ -1581,19 +1581,73 @@ export default function UnpaidBookingsTab() {
   // ── Sollecito pagamento ─────────────────────────────────────────────────
   // Invia un promemoria WhatsApp (template Pro "pro_promemoria_pagamento")
   // al cliente con debito ancora aperto. Stampa booking_details.sollecito su
-  // OGNI booking del gruppo (last_sent_at + count) così l'auto-resend ogni 48h
-  // (sollecito-pagamento-cron) può continuare il follow-up fino a max 3 invii.
-  async function handleSendSollecito(group: CustomerGroup) {
+  // OGNI booking del gruppo: last_sent_at + count + interval_hours (24 / 48 /
+  // 168) scelto dall'operatore. sollecito-pagamento-cron ripete l'invio a quel
+  // ritmo finche' il cliente non paga o finche' l'operatore non preme
+  // "Blocca sollecito" (blocked = true).
+  const SOLLECITO_INTERVALLI: Array<{ ore: number; label: string }> = [
+    { ore: 24, label: '24h' },
+    { ore: 48, label: '48h' },
+    { ore: 168, label: 'Settimana' },
+  ]
+
+  function bookingsDelGruppo(group: CustomerGroup): UnpaidBooking[] {
+    const visti = new Set<string>()
+    const out: UnpaidBooking[] = []
+    for (const b of [
+      ...group.noleggioBookings,
+      ...group.primeWashBookings,
+      ...group.penaliItems.map(i => i.booking),
+      ...group.danniItems.map(i => i.booking),
+    ]) {
+      if (b?.id && !visti.has(b.id)) { visti.add(b.id); out.push(b) }
+    }
+    return out
+  }
+
+  function statoSollecito(group: CustomerGroup) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sollecitiStampati = bookingsDelGruppo(group).map(b => b.booking_details?.sollecito as any).filter(Boolean)
+    const lastSentAt = sollecitiStampati.map(x => x.last_sent_at).filter(Boolean).sort().pop() as string | undefined
+    const recente = sollecitiStampati.find(x => x.last_sent_at === lastSentAt) || sollecitiStampati[0]
+    return {
+      lastSentAt,
+      intervalHours: recente?.interval_hours ? Number(recente.interval_hours) : null,
+      blocked: sollecitiStampati.some(x => x.blocked === true),
+    }
+  }
+
+  // Rilegge booking_details dal DB prima del merge: lo stato in memoria puo'
+  // essere vecchio e sovrascriverebbe chiavi scritte nel frattempo.
+  async function stampaSollecito(group: CustomerGroup, patch: (prev: Record<string, unknown>) => Record<string, unknown>) {
+    const ids = bookingsDelGruppo(group).map(b => b.id)
+    if (ids.length === 0) return
+    const { data, error } = await supabase.from('bookings').select('id, booking_details').in('id', ids)
+    if (error) throw error
+    for (const row of data || []) {
+      const existing = row.booking_details || {}
+      const { error: upErr } = await supabase
+        .from('bookings')
+        .update({ booking_details: { ...existing, sollecito: patch(existing.sollecito || {}) } })
+        .eq('id', row.id)
+      if (upErr) throw upErr
+    }
+  }
+
+  async function handleSendSollecito(group: CustomerGroup, intervalHours?: number) {
     if (sollecitoSendingKey) return
     const phone =
       group.noleggioBookings[0]?.customer_phone
       || group.primeWashBookings[0]?.customer_phone
       || group.noleggioBookings[0]?.booking_details?.customer?.phone
       || group.primeWashBookings[0]?.booking_details?.customer?.phone
+      || group.penaliItems[0]?.booking?.customer_phone
+      || group.danniItems[0]?.booking?.customer_phone
     if (!phone) {
       toast.error('Nessun numero di telefono per questo cliente')
       return
     }
+    const ore = intervalHours || statoSollecito(group).intervalHours || 48
     const customerName = group.customerName || 'Cliente'
     const firstName = customerName.split(' ')[0] || 'Cliente'
     const amountStr = (group.totalRemaining / 100).toFixed(2)
@@ -1625,29 +1679,36 @@ export default function UnpaidBookingsTab() {
         return
       }
 
-      // Stamp the sollecito on every booking of the group (merge, don't clobber
-      // other booking_details keys). last_sent_at + incremented count drive the
-      // 48h auto-resend cron.
       const nowIso = new Date().toISOString()
-      const allBookings = [...group.noleggioBookings, ...group.primeWashBookings]
-      for (const b of allBookings) {
-        const existing = b.booking_details || {}
-        const prevCount = Number(existing?.sollecito?.count || 0)
-        await supabase
-          .from('bookings')
-          .update({
-            booking_details: {
-              ...existing,
-              sollecito: { last_sent_at: nowIso, count: prevCount + 1 },
-            },
-          })
-          .eq('id', b.id)
-      }
-      toast.success('Sollecito inviato')
+      await stampaSollecito(group, prev => ({
+        ...prev,
+        last_sent_at: nowIso,
+        count: Number(prev.count || 0) + 1,
+        interval_hours: ore,
+        blocked: false,
+        blocked_at: null,
+      }))
+      const label = SOLLECITO_INTERVALLI.find(i => i.ore === ore)?.label || `${ore}h`
+      toast.success(`Sollecito inviato — prossimo tra ${label === 'Settimana' ? 'una settimana' : label}, fino al pagamento`)
       loadUnpaidBookings()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Invio sollecito fallito'
       toast.error(msg)
+    } finally {
+      setSollecitoSendingKey(null)
+    }
+  }
+
+  async function handleBloccaSollecito(group: CustomerGroup) {
+    if (sollecitoSendingKey) return
+    setSollecitoSendingKey(group.customerKey)
+    try {
+      const nowIso = new Date().toISOString()
+      await stampaSollecito(group, prev => ({ ...prev, blocked: true, blocked_at: nowIso }))
+      toast.success('Sollecito bloccato: nessun altro promemoria automatico')
+      loadUnpaidBookings()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Blocco sollecito fallito')
     } finally {
       setSollecitoSendingKey(null)
     }
@@ -3119,6 +3180,60 @@ export default function UnpaidBookingsTab() {
     )
   }
 
+  // Invia Sollecito dentro la riga di bottoni della carta (accanto a
+  // Pagato / Invia Link / Parziale). Il sollecito resta per cliente: stesso
+  // handler del bottone in testa al gruppo.
+  function SollecitoButton({ group }: { group: CustomerGroup }) {
+    const sending = sollecitoSendingKey === group.customerKey
+    return (
+      <button
+        onClick={() => handleSendSollecito(group)}
+        disabled={sending}
+        className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+      >{sending ? 'Invio...' : 'Invia Sollecito'}</button>
+    )
+  }
+
+  // Pannello sotto "Segna Pagato": scelta del ritmo (24h / 48h / Settimana,
+  // il click invia subito il primo sollecito) e "Blocca sollecito".
+  function SollecitoPanel({ group }: { group: CustomerGroup }) {
+    const sending = sollecitoSendingKey === group.customerKey
+    const { lastSentAt, intervalHours, blocked } = statoSollecito(group)
+    const attivo = !!lastSentAt && !blocked
+    const hoursAgo = lastSentAt ? Math.floor((Date.now() - new Date(lastSentAt).getTime()) / 3600000) : null
+    return (
+      <div className="w-full space-y-1" onClick={(e) => e.stopPropagation()}>
+        <div className="text-[10px] text-theme-text-muted">Invia Sollecito</div>
+        <div className="flex gap-1">
+          {SOLLECITO_INTERVALLI.map(i => {
+            const scelto = attivo && intervalHours === i.ore
+            return (
+              <button
+                key={i.ore}
+                onClick={() => handleSendSollecito(group, i.ore)}
+                disabled={sending}
+                title={`Invia ora e ripeti ogni ${i.label === 'Settimana' ? 'settimana' : i.label} finche' non paga`}
+                className={`flex-1 px-1.5 py-1 rounded text-[10px] font-semibold border transition-colors disabled:opacity-50 ${scelto ? 'bg-amber-600 border-amber-600 text-white' : 'border-amber-500/40 text-amber-400 hover:bg-amber-600/15'}`}
+              >{i.label}</button>
+            )
+          })}
+        </div>
+        {attivo && (
+          <button
+            onClick={() => handleBloccaSollecito(group)}
+            disabled={sending}
+            className="w-full px-1.5 py-1 rounded text-[10px] font-semibold bg-red-600/80 hover:bg-red-700 text-white disabled:opacity-50"
+          >Blocca sollecito</button>
+        )}
+        {hoursAgo != null && (
+          <div className="text-[10px] text-theme-text-muted">
+            {blocked ? 'Bloccato · ' : ''}ultimo {hoursAgo <= 0 ? 'poco fa' : `${hoursAgo}h fa`}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // ── Render: Noleggio cell content ──────────────────────────────────────────
 
   function NoleggioCell({ group }: { group: CustomerGroup }) {
@@ -3347,6 +3462,7 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                   >Parziale</button>
                 )}
+                {isPending && <SollecitoButton group={group} />}
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
@@ -3462,6 +3578,7 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
                   >Parziale</button>
                 )}
+                <SollecitoButton group={group} />
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
@@ -3505,7 +3622,7 @@ export default function UnpaidBookingsTab() {
 
   // ── Render: Penali/Danni cell content (shared) ─────────────────────────────
 
-  function PendingItemsCell({ items, type, onMarkAllPaid, onAddebito, onAddebitoItem, chargedViaMit }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void; onAddebito?: () => void; onAddebitoItem?: (amountCents: number, label: string) => void; chargedViaMit?: number }) {
+  function PendingItemsCell({ items, type, onMarkAllPaid, onAddebito, onAddebitoItem, chargedViaMit, sollecitoGroup }: { items: PendingItem[]; type: 'penalties' | 'danni'; onMarkAllPaid?: () => void; onAddebito?: () => void; onAddebitoItem?: (amountCents: number, label: string) => void; chargedViaMit?: number; sollecitoGroup?: CustomerGroup }) {
     if (items.length === 0) return <span className="text-theme-text-muted text-sm italic">-</span>
 
     const colorClasses = type === 'penalties'
@@ -3612,6 +3729,7 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
                       >Addebito</button>
                     )}
+                    {sollecitoGroup && <SollecitoButton group={sollecitoGroup} />}
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
@@ -3644,6 +3762,7 @@ export default function UnpaidBookingsTab() {
                         className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
                       >Addebito</button>
                     )}
+                    {sollecitoGroup && <SollecitoButton group={sollecitoGroup} />}
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
@@ -4149,32 +4268,8 @@ export default function UnpaidBookingsTab() {
                     className="w-full px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors"
                   >Addebito (auto-retry -10%)</button>
 
-                  {/* Invia Sollecito — promemoria pagamento WhatsApp (auto-resend 48h, max 3) */}
-                  {(() => {
-                    const sending = sollecitoSendingKey === group.customerKey
-                    const lastSentAt = [...group.noleggioBookings, ...group.primeWashBookings]
-                      .map(b => b.booking_details?.sollecito?.last_sent_at)
-                      .filter(Boolean)
-                      .sort()
-                      .pop() as string | undefined
-                    const hoursAgo = lastSentAt
-                      ? Math.floor((Date.now() - new Date(lastSentAt).getTime()) / 3600000)
-                      : null
-                    return (
-                      <>
-                        <button
-                          onClick={() => handleSendSollecito(group)}
-                          disabled={sending}
-                          className="w-full px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >{sending ? 'Invio...' : 'Invia Sollecito'}</button>
-                        {hoursAgo != null && (
-                          <p className="text-xs text-theme-text-muted text-center -mt-1">
-                            Sollecito inviato {hoursAgo <= 0 ? 'poco fa' : `${hoursAgo}h fa`}
-                          </p>
-                        )}
-                      </>
-                    )
-                  })()}
+                  {/* Invia Sollecito — ritmo 24h / 48h / Settimana finche' non paga, o Blocca */}
+                  <SollecitoPanel group={group} />
 
                   {/* Noleggio section */}
                   {hasNoleggio && (
@@ -4196,7 +4291,7 @@ export default function UnpaidBookingsTab() {
                   {hasPenali && (
                     <div>
                       <div className="text-xs font-bold text-yellow-400 uppercase mb-1.5">Penali</div>
-                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
+                      <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} sollecitoGroup={group} />
                     </div>
                   )}
 
@@ -4204,7 +4299,7 @@ export default function UnpaidBookingsTab() {
                   {hasDanni && (
                     <div>
                       <div className="text-xs font-bold text-red-400 uppercase mb-1.5">Danni</div>
-                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
+                      <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} sollecitoGroup={group} />
                     </div>
                   )}
                 </div>
@@ -4361,6 +4456,7 @@ export default function UnpaidBookingsTab() {
                     visibile direttamente sulla riga (uscito dal menu 3-dots
                     perche' troppo nascosto). Il menu 3-dots rimane per
                     azioni secondarie (Pay by Link, Nexi addebito, ecc.). */}
+                <div className="flex flex-col items-end gap-1.5">
                 <div className="relative flex justify-end items-center gap-1">
                   {remainingEur > 0 && (
                     <button
@@ -4454,6 +4550,8 @@ export default function UnpaidBookingsTab() {
                     document.body
                   )}
                 </div>
+                {remainingEur > 0 && <SollecitoPanel group={group} />}
+                </div>
               </div>
 
               {/* Inline detail — sempre visibile. Riusa i componenti
@@ -4474,11 +4572,11 @@ export default function UnpaidBookingsTab() {
                   </div>
                   <div>
                     <div className="text-[10px] uppercase tracking-wider text-yellow-400 font-semibold mb-1">Penali</div>
-                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} sollecitoGroup={group} />
                   </div>
                   <div>
                     <div className="text-[10px] uppercase tracking-wider text-red-400 font-semibold mb-1">Danni</div>
-                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} sollecitoGroup={group} />
                   </div>
                 </div>
               )}

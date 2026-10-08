@@ -10,8 +10,11 @@
  *   - solo booking ancora NON pagati (status non cancelled/annullata,
  *     payment_status non in paid/completed/succeeded) con importo residuo > 0;
  *   - solo se un primo sollecito è già partito (sollecito.last_sent_at set);
- *   - solo se sollecito.count < 3 (MAX 3 solleciti totali per debito);
- *   - solo se sono passate >= 48h dall'ultimo invio.
+ *   - mai se l'operatore ha premuto "Blocca sollecito" (sollecito.blocked);
+ *   - ritmo = sollecito.interval_hours scelto dall'operatore (24 / 48 / 168):
+ *     si ripete finche' il cliente non paga, senza tetto. I solleciti vecchi
+ *     senza interval_hours restano a 48h e MAX 3 invii;
+ *   - le prenotazioni annullate contano solo per penali/danni aperti.
  *
  * Ogni invio passa per /.netlify/functions/send-whatsapp-notification con
  * templateKey 'sollecito_pagamento' → risolve al template Pro
@@ -30,8 +33,8 @@ import { conSystemControl, funzioneFerma } from './utils/systemControl'
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-const RESEND_AFTER_MS = 48 * 60 * 60 * 1000 // 48h
-const MAX_SOLLECITI = 3
+const DEFAULT_INTERVAL_HOURS = 48
+const MAX_SOLLECITI_SENZA_RITMO = 3
 const PAID_STATUSES = new Set(['paid', 'completed', 'succeeded'])
 const CANCELLED_STATUSES = new Set(['cancelled', 'annullata'])
 
@@ -46,8 +49,11 @@ type Booking = any
 function getRemainingCents(b: Booking): number {
     let remaining = 0
     const bd = b.booking_details || {}
+    const annullata = CANCELLED_STATUSES.has(String(b.status || '').toLowerCase())
 
-    if (b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial') {
+    if (annullata) {
+        // Prenotazione annullata: resta solo il debito di penali/danni.
+    } else if (b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial') {
         const total = b.price_total || 0
         const paid = bd.amountPaid || 0
         remaining += Math.max(0, total - paid)
@@ -106,7 +112,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     const { data: rows, error } = await supabase
         .from('bookings')
         .select('id, customer_name, customer_phone, service_type, status, payment_status, price_total, booking_details')
-        .not('status', 'in', `(${[...CANCELLED_STATUSES].join(',')})`)
+        .not('booking_details->sollecito->>last_sent_at', 'is', null)
 
     if (error) return skip(`query error: ${error.message}`)
 
@@ -120,11 +126,15 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
         const sollecito = b.booking_details?.sollecito
         const lastSentAt = sollecito?.last_sent_at
         if (!lastSentAt) continue                         // primo invio è manuale
+        if (sollecito?.blocked === true) continue         // "Blocca sollecito"
         const count = Number(sollecito?.count || 0)
-        if (count >= MAX_SOLLECITI) continue              // max 3 totali
+        const intervalHours = Number(sollecito?.interval_hours) || 0
+        if (!intervalHours && count >= MAX_SOLLECITI_SENZA_RITMO) continue
         const lastMs = new Date(lastSentAt).getTime()
         if (!Number.isFinite(lastMs)) continue
-        if (now - lastMs < RESEND_AFTER_MS) continue      // non ancora 48h
+        // -30 min: il cron gira ogni 6h, senza margine un "24h" scivolerebbe a 30h.
+        const resendAfterMs = ((intervalHours || DEFAULT_INTERVAL_HOURS) * 60 - 30) * 60 * 1000
+        if (now - lastMs < resendAfterMs) continue
         const remainingCents = getRemainingCents(b)
         if (remainingCents <= 0) continue                 // niente da incassare
         const phone = b.customer_phone || b.booking_details?.customer?.phone
@@ -199,7 +209,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                         .update({
                             booking_details: {
                                 ...existing,
-                                sollecito: { last_sent_at: nowIso, count: c.count + 1 },
+                                sollecito: { ...(existing.sollecito || {}), last_sent_at: nowIso, count: c.count + 1 },
                             },
                         })
                         .eq('id', c.booking.id)
@@ -224,6 +234,6 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 }
 
-// Ogni 6 ore. La finestra 48h è enforced dentro l'handler, quindi più run
+// Ogni 6 ore. Il ritmo (24h / 48h / settimana) è enforced dentro l'handler, quindi più run
 // ravvicinati non causano doppi invii.
 export const handler = schedule('0 */6 * * *', conSystemControl('sollecito-pagamento-cron', cronHandler, { cron: true }))
