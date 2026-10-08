@@ -81,6 +81,7 @@ export default function CarWashCatalogTab() {
   const [newService, setNewService] = useState({
     name: '', price: '', duration: '', description: '', features: '', badge: '',
     category: 'urban', main_tab: 'lavaggio' as 'lavaggio' | 'meccanica',
+    price_options: [] as PriceOption[],
   })
 
   const primeFlexLockRef = useRef(false)
@@ -223,8 +224,13 @@ export default function CarWashCatalogTab() {
         price_unit: editPriceUnit.trim() || null,
       }
 
-      if (service.price_options && service.price_options.length > 0) {
-        updates.price_options = editPriceOptions
+      const opzioni = pulisciOpzioni(editPriceOptions)
+      if (opzioni.length > 0) {
+        updates.price_options = opzioni
+        // Il prezzo base resta il "da": il piu' basso del listino.
+        updates.price = Math.min(...opzioni.map(o => o.price))
+      } else if (service.price_options && service.price_options.length > 0) {
+        updates.price_options = null
       }
 
       const { error } = await supabase
@@ -288,6 +294,11 @@ export default function CarWashCatalogTab() {
         display_order: maxOrder + 10,
         is_active: true,
       }
+      const opzioniNuove = pulisciOpzioni(newService.price_options)
+      if (opzioniNuove.length > 0) {
+        riga.price_options = opzioniNuove
+        riga.price = Math.min(...opzioniNuove.map(o => o.price))
+      }
 
       const { error } = await supabase.from('car_wash_services').insert(riga)
       // Vedi la nota in saveEditing: senza la colonna `badge` l'inserimento
@@ -301,7 +312,7 @@ export default function CarWashCatalogTab() {
         throw error
       }
       setShowNewForm(false)
-      setNewService({ name: '', price: '', duration: '', description: '', features: '', badge: '', category: 'urban', main_tab: 'lavaggio' })
+      setNewService({ name: '', price: '', duration: '', description: '', features: '', badge: '', category: 'urban', main_tab: 'lavaggio', price_options: [] })
       await loadServices()
     } catch (err: unknown) {
       alert('Errore: ' + (err as Error).message)
@@ -480,6 +491,14 @@ export default function CarWashCatalogTab() {
             <textarea value={newService.features} onChange={e => setNewService(prev => ({ ...prev, features: e.target.value }))} rows={3}
               className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm font-mono focus:outline-none focus:border-dr7-gold" />
           </div>
+          <div>
+            <label className="block text-xs text-theme-text-muted mb-1">Opzioni Prezzo (facoltative)</label>
+            <PriceOptionsEditor
+              options={newService.price_options}
+              onChange={v => setNewService(prev => ({ ...prev, price_options: v }))}
+            />
+            <p className="text-[11px] text-theme-text-muted mt-1">Es. 1 ora / 2 ore / 3 ore. Con un listino il prezzo base diventa il piu' basso.</p>
+          </div>
           <div className="flex gap-2">
             <button onClick={addNewService} disabled={saving || !newService.name.trim()}
               className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50">
@@ -545,6 +564,67 @@ export default function CarWashCatalogTab() {
         )
       })}
 
+    </div>
+  )
+}
+
+/**
+ * Una listino (es. 1h / 2h / 3h) si poteva solo MODIFICARE: l'editor compariva
+ * se il servizio aveva gia' delle opzioni e non c'era modo di aggiungerne o
+ * toglierne. Una card nuova restava per sempre a prezzo unico.
+ * Righe senza etichetta non si salvano. Lista vuota = prezzo unico.
+ */
+function pulisciOpzioni(opzioni: PriceOption[]): PriceOption[] {
+  return opzioni
+    .map(o => ({ label: o.label.trim(), price: Number(o.price) || 0 }))
+    .filter(o => o.label)
+}
+
+function PriceOptionsEditor({ options, onChange }: { options: PriceOption[]; onChange: (v: PriceOption[]) => void }) {
+  return (
+    <div className="space-y-2">
+      {options.map((opt, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            type="text"
+            value={opt.label}
+            placeholder="Es. 2 ore"
+            onChange={e => {
+              const updated = [...options]
+              updated[i] = { ...updated[i], label: e.target.value }
+              onChange(updated)
+            }}
+            className="flex-1 min-w-[80px] px-2 py-1 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+          />
+          <div className="flex items-center gap-1">
+            <MoneyInput
+              value={opt.price}
+              onChange={(__v: string) => {
+                const updated = [...options]
+                updated[i] = { ...updated[i], price: parseFloat(__v) || 0 }
+                onChange(updated)
+              }}
+              className="w-24 px-2 py-1 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm text-right focus:outline-none focus:border-dr7-gold"
+            />
+            <span className="text-xs text-theme-text-muted">&euro;</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onChange(options.filter((_, j) => j !== i))}
+            className="px-2 py-1 text-xs text-red-500 hover:text-red-400"
+            title="Rimuovi opzione"
+          >
+            Rimuovi
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...options, { label: '', price: 0 }])}
+        className="px-3 py-1 text-xs border border-theme-border-light rounded-full text-theme-text-secondary hover:border-dr7-gold"
+      >
+        + Aggiungi opzione prezzo
+      </button>
     </div>
   )
 }
@@ -652,39 +732,7 @@ function ServiceCard({
         </div>
 
         {/* Price */}
-        {service.price_options && service.price_options.length > 0 ? (
-          <div className="mb-3">
-            <label className="block text-xs text-theme-text-muted mb-1">Opzioni Prezzo</label>
-            <div className="space-y-2">
-              {editPriceOptions.map((opt, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={opt.label}
-                    onChange={e => {
-                      const updated = [...editPriceOptions]
-                      updated[i] = { ...updated[i], label: e.target.value }
-                      onEditPriceOptions(updated)
-                    }}
-                    className="flex-1 min-w-[80px] px-2 py-1 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                  />
-                  <div className="flex items-center gap-1">
-                    <MoneyInput
-                      value={opt.price}
-                      onChange={(__v: string) => {
-                        const updated = [...editPriceOptions]
-                        updated[i] = { ...updated[i], price: parseFloat(__v) || 0 }
-                        onEditPriceOptions(updated)
-                      }}
-                      className="w-24 px-2 py-1 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm text-right focus:outline-none focus:border-dr7-gold"
-                    />
-                    <span className="text-xs text-theme-text-muted">&euro;</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
+        {editPriceOptions.length === 0 && (
           <div className="mb-3">
             <label className="block text-xs text-theme-text-muted mb-1">Prezzo (&euro;)</label>
             <MoneyInput
@@ -694,6 +742,10 @@ function ServiceCard({
             />
           </div>
         )}
+        <div className="mb-3">
+          <label className="block text-xs text-theme-text-muted mb-1">Opzioni Prezzo (listino)</label>
+          <PriceOptionsEditor options={editPriceOptions} onChange={onEditPriceOptions} />
+        </div>
 
         {/* Unita' di prezzo: la parolina accanto al prezzo sul sito. */}
         <div className="mb-3">
