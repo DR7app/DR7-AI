@@ -2615,6 +2615,13 @@ function HomeEditor({
                         Svuotare la lista <strong>non</strong> toglie la fascia: il sito ricade sui numeri di
                         fabbrica. Un salvataggio fatto con la lista vuota li aveva fatti sparire dal sito vivo.
                     </p>
+                    <p className="text-[12px] text-theme-text-secondary">
+                        Numeri calcolati dal gestionale (scrivere il segnaposto nel campo Numero):{' '}
+                        <code>{'{contrattiFirmati}'}</code>, <code>{'{clientiServiti}'}</code>, <code>{'{fatturatoGenerato}'}</code>,{' '}
+                        <code>{'{valoreFlotta}'}</code>, <code>{'{reviewCount}'}</code>, <code>{'{totaleInvestitori}'}</code>,{' '}
+                        <code>{'{capitaleRaccolto}'}</code> (somma dei versamenti in Amministrazione &gt; Investitori).
+                        Gli stessi numeri compaiono anche sulla pagina /investitori.
+                    </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Riga sopra i numeri (IT)" value={copy.metrics_eyebrow_it} onChange={v => setCopy({ ...copy, metrics_eyebrow_it: v })} />

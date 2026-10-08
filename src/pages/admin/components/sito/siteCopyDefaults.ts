@@ -3801,6 +3801,10 @@ export const INITIAL_HOME: HomeCopy = {
     { id: 'fatturato',  value: '{fatturatoGenerato}',  label_it: 'Fatturato lordo complessivo',       label_en: 'Total gross revenue' },
     { id: 'parco',      value: '{valoreFlotta}', label_it: 'Valore del parco auto',            label_en: 'Fleet value' },
     { id: 'patrimonio', value: '\u20ac6M+',    label_it: 'Patrimonio netto',                 label_en: 'Net equity' },
+    // 08/10/2026 — dal gestionale (Amministrazione > Investitori): stesse cifre
+    // su Home e /investitori. Senza investitori la scheda non si mostra.
+    { id: 'investitori', value: '{totaleInvestitori}', label_it: 'Investitori',         label_en: 'Investors' },
+    { id: 'raccolto',   value: '{capitaleRaccolto}', label_it: 'Capitale raccolto',      label_en: 'Capital raised' },
     { id: 'capitale',   value: '\u20ac1M',     label_it: 'Capitale sociale',                 label_en: 'Share capital' },
     // 14/09/2026 — qui c'era "317+" scritto a mano: le recensioni salivano e
     // il sito continuava a dirne 317. `{reviewCount}` lo riempie la pagina col
