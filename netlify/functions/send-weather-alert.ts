@@ -123,6 +123,11 @@ const TEMPLATE_LABELS: Record<string, string> = {
   [TEMPLATE_MARE]: 'Allerta Meteo Mare',
 }
 
+/** Giorno di calendario a Roma (YYYY-MM-DD). */
+function giornoRoma(d: Date | string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d))
+}
+
 // Phone normalization — stessa logica di send-whatsapp-notification.ts.
 function normalizePhone(raw: string): string | null {
   let phone = String(raw || '').replace(/\D/g, '')
@@ -221,6 +226,8 @@ export async function runWeatherAlert(
     testOnly?: boolean
     templateKey?: string
     oreAvanti?: number
+    /** Cron: salta chi ha gia' ricevuto un'allerta meteo oggi (qualunque business). */
+    unoAlGiorno?: boolean
   } = {},
 ): Promise<{ recipients: Recipient[]; sent: number; failed: number; count: number; templateKey: string; business: Channel }> {
   const business = toMeteoBusiness(opts.business ?? opts.channel ?? 'terra')
@@ -283,6 +290,27 @@ export async function runWeatherAlert(
       plate,
       dropoff: String((r as { dropoff_date?: string }).dropoff_date || ''),
     })
+  }
+
+  // 08/10/2026 — un'allerta meteo al giorno per telefono. La guardia del cron
+  // e' per business: lo stesso cliente con un noleggio e un lavaggio, o uno
+  // stato perso in Centralina, ne avrebbe ricevute due. Il registro degli
+  // invii e' la verita' su cosa e' gia' partito oggi.
+  if (opts.unoAlGiorno && recipients.length > 0) {
+    const oggi = giornoRoma(now)
+    const { data: giaInviati } = await supabase
+      .from('sent_messages_log')
+      .select('customer_phone, created_at')
+      .ilike('template_label', 'Allerta Meteo%')
+      .gte('created_at', new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString())
+    const oggiInviati = new Set(
+      (giaInviati || [])
+        .filter((r: { created_at?: string }) => r.created_at && giornoRoma(r.created_at) === oggi)
+        .map((r: { customer_phone?: string }) => normalizePhone(r.customer_phone || '')),
+    )
+    for (let i = recipients.length - 1; i >= 0; i--) {
+      if (oggiInviati.has(recipients[i].phone)) recipients.splice(i, 1)
+    }
   }
 
   if (preview) return { recipients, sent: 0, failed: 0, count: recipients.length, templateKey, business }

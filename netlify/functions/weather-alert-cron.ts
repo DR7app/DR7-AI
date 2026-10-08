@@ -67,6 +67,11 @@ async function isTemplateEnabled(supabase: SupabaseClient, templateKey: string):
   return data.some((r: { is_enabled?: boolean }) => r.is_enabled !== false)
 }
 
+/** Giorno di calendario a Roma (YYYY-MM-DD). */
+function giornoRoma(d: Date | string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d))
+}
+
 const handler: Handler = async () => {
   // Interruttore System Control: messaggi automatici spenti = il giro salta
   // (il battito resta registrato: il cron e' vivo, ha solo saltato).
@@ -149,6 +154,16 @@ const handler: Handler = async () => {
       continue
     }
 
+    // 08/10/2026 — UN avviso al giorno per business, sempre. "Una volta per
+    // episodio" non bastava: la pioggia che si ferma un'ora e riprende apriva
+    // un episodio nuovo, e i clienti ricevevano l'allerta alle 10 e alle 12.
+    // Vale anche per "riavvisa se peggiora": il secondo avviso aspetta domani.
+    if (chState.last_sent_at && giornoRoma(chState.last_sent_at) === giornoRoma(nowIso)) {
+      state[business] = { ...chState, active: true }
+      results[business] = { ...base, esito: 'gia_inviato_oggi', last_sent_at: chState.last_sent_at }
+      continue
+    }
+
     // Fuori fascia: si resta con active=false, così l'avviso parte appena la
     // fascia riapre se il maltempo persiste (niente messaggi di notte).
     if (!dentroFascia(cfg, romeHour)) {
@@ -161,6 +176,7 @@ const handler: Handler = async () => {
         business,
         templateKey: cfg.template_key,
         oreAvanti: cfg.ore_avanti,
+        unoAlGiorno: true,
       })
       state[business] = { active: true, livello: valutazione.livello, last_sent_at: nowIso }
       results[business] = {
