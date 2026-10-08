@@ -133,7 +133,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
             return inizio && fine ? { inizio, fine } : null
         })
         .filter((x): x is { inizio: string; fine: string } => x !== null)
-    const liveCombo = combinaPauseGiorno(dataRef, liveManualiISO, pausaObbl)
+    const liveCombo = combinaPauseGiorno(dataRef, liveManualiISO, pausaObbl, hhmmToISO(uscita, dataRef))
     const livePausaMin = liveCombo.mostrateMin
     const livePausaScalataMin = liveCombo.scalateMin
     const liveEntrataMin = hhmmToMinutes(entrata)

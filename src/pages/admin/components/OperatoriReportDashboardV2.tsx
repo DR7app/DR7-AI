@@ -460,7 +460,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     // 2026-08-04 (#32, modello PER-FASCIA): coerente con Rilevazione
                     // Orari e buste paga. La pausa a mano sostituisce solo la fascia
                     // che sovrappone; le altre fasce di contratto restano.
-                    const combo = combinaPauseGiorno(today, manualiISO, pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), today))
+                    const combo = combinaPauseGiorno(today, manualiISO, pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), today), t.uscita)
                     minPausa = combo.mostrateMin
                     minLav = Math.max(0, rawWorked - combo.scalateMin)
                 }
@@ -559,7 +559,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         if (t.pf[i]) manualiISO.push({ inizio: t.pi[i], fine: t.pf[i] })
                     }
                     // 2026-08-04 (#32, PER-FASCIA): coerente con le altre viste.
-                    const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbligatoriaDelGiorno(pauseCfg, dataKey))
+                    const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbligatoriaDelGiorno(pauseCfg, dataKey), t.uscita)
                     opTot += Math.max(0, rawWorked - combo.scalateMin)
                 })
                 perOpMin.set(opId, opTot)

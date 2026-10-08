@@ -261,10 +261,19 @@ export interface FinestraPausaISO { inizio: string; fine: string; fonte: 'timbra
  *                  per le viste dove i minuti arrivano gia' al netto delle pause
  *                  timbrate (RPC operatore_minuti_lavorati).
  */
+/*
+ * 2026-10-08: una fascia di contratto conta SOLO se l'operatore e' uscito DOPO
+ * la fine della fascia. Le fasce di default della sera (es. 19:30-19:40)
+ * venivano mostrate e scalate anche a chi era uscito alle 19:20. `uscitaISO`
+ * = ultima uscita del giorno; null/assente (ancora in servizio o nessuna
+ * timbratura) = tutte le fasce restano, come prima. Le pause a mano e la
+ * durata senza fascia non cambiano.
+ */
 export function combinaPauseGiorno(
     dataISO: string,
     manualiISO: { inizio: string; fine: string }[],
     pausa: PausaObbligatoria,
+    uscitaISO?: string | null,
 ): { finestre: FinestraPausaISO[]; mostrateMin: number; scalateMin: number; extraContrattoMin: number } {
     const overlap = (x: { da: number; a: number }, y: { da: number; a: number }) => x.da < y.a && y.da < x.a
     // Pause a mano -> minuti-del-giorno per il confronto di sovrapposizione.
@@ -275,8 +284,16 @@ export function combinaPauseGiorno(
     const fasce = pausa.fasce
         .map(f => ({ da: hhmmToMinuti(f.da) ?? -1, a: hhmmToMinuti(f.a) ?? -1, hhmm: f }))
         .filter(w => w.da >= 0 && w.a > w.da)
+    // Fasce che finiscono DOPO l'uscita: l'operatore non c'era, non contano.
+    const uscitaMs = uscitaISO ? new Date(uscitaISO).getTime() : NaN
+    const fasceDentroTurno = Number.isNaN(uscitaMs)
+        ? fasce
+        : fasce.filter(w => {
+            const fineISO = romeHHMMToISO(w.hhmm.a, dataISO)
+            return !fineISO || new Date(fineISO).getTime() <= uscitaMs
+        })
     // Fasce NON sovrapposte da nessuna pausa a mano: restano.
-    const fasceKept = fasce.filter(cw => !man.some(mw => overlap(mw, cw)))
+    const fasceKept = fasceDentroTurno.filter(cw => !man.some(mw => overlap(mw, cw)))
 
     const manualiMin = man.reduce((s, w) => s + (w.a - w.da), 0)
     const fasceKeptMin = fasceKept.reduce((s, w) => s + (w.a - w.da), 0)

@@ -361,7 +361,7 @@ export default function RilevazioneOrariTab() {
                             manualiISO.push({ inizio: data.pi[i], fine: data.pf[i] })
                         }
                     }
-                    const combo = combinaPauseGiorno(d, manualiISO, pausaObbl)
+                    const combo = combinaPauseGiorno(d, manualiISO, pausaObbl, data?.uscita)
                     if (data) {
                         const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
                         minuti = Number(m) || 0
@@ -408,17 +408,20 @@ export default function RilevazioneOrariTab() {
                 // (non solo il totale) per poter combinare per-fascia con le fasce di
                 // contratto.
                 const pauseWinByOpDay = new Map<string, { inizio: string; fine: string }[]>()
+                const uscitaByOpDay = new Map<string, string>()
                 if (periodRange.days.length > 0) {
                     const { data: pauseEntries } = await supabase
                         .from('timesheet_entries')
                         .select('operatore_id, tipo, timestamp, data')
                         .gte('data', periodRange.days[0])
                         .lte('data', periodRange.days[periodRange.days.length - 1])
-                        .in('tipo', ['pausa_inizio', 'pausa_fine'])
+                        .in('tipo', ['pausa_inizio', 'pausa_fine', 'uscita'])
                         .order('timestamp', { ascending: true })
                     const aperte = new Map<string, string[]>()
                     for (const e of (pauseEntries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
                         const key = `${e.operatore_id}|${e.data}`
+                        // 2026-10-08: ultima uscita del giorno, per non contare le fasce dopo l'uscita.
+                        if (e.tipo === 'uscita') { uscitaByOpDay.set(key, e.timestamp); continue }
                         if (e.tipo === 'pausa_inizio') {
                             aperte.set(key, [...(aperte.get(key) || []), e.timestamp])
                         } else {
@@ -442,7 +445,7 @@ export default function RilevazioneOrariTab() {
                         const windows = pauseWinByOpDay.get(`${op.id}|${d}`) || []
                         // `min` (RPC) e' gia' al netto delle pause timbrate: tolgo solo la
                         // parte di contratto che eccede (fasce non toccate + flat, non pagata).
-                        const combo = combinaPauseGiorno(d, windows, pausaObbl)
+                        const combo = combinaPauseGiorno(d, windows, pausaObbl, uscitaByOpDay.get(`${op.id}|${d}`))
                         map.set(d, Math.max(0, min - combo.extraContrattoMin))
                     }
                     rows.push({ operatore: op, daysData: map })

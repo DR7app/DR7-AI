@@ -294,7 +294,7 @@ export default function OperatorProfileModal({
             const manualiISO = pauseWindows
                 .filter(p => p.end)
                 .map(p => ({ inizio: p.start, fine: p.end as string }))
-            const combo = combinaPauseGiorno(d, manualiISO, pausaObbl)
+            const combo = combinaPauseGiorno(d, manualiISO, pausaObbl, uscita)
             const displayWindows = combo.finestre.map(f => ({
                 start: f.inizio,
                 end: f.fine,

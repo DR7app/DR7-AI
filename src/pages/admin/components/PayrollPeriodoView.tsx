@@ -278,7 +278,7 @@ export default function PayrollPeriodoView() {
                         // scalateMin = pause a mano (sempre) + contratto non-sovrapposto
                         // (solo se non pagata).
                         const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfg, dataKey)
-                        const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbl)
+                        const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbl, t.uscita)
                         const m = Math.max(0, lordo - combo.scalateMin)
                         totalMinLav += m
                         if (m <= 0) return
