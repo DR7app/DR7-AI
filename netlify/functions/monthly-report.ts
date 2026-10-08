@@ -1552,11 +1552,40 @@ async function generateWashReport(
 
   const internalWashes = (washBookings || []).filter(booking => isInternalWash(booking))
 
+  // 08/10/2026 (direzione): i nomi dei servizi si leggono dal Catalogo
+  // Lavaggio (car_wash_services), non da quello scritto nella prenotazione al
+  // momento dell'acquisto. Rinominato un servizio nel catalogo, il report
+  // mostra subito il nome nuovo anche per i lavaggi gia' fatti. Il legame e'
+  // `serviceId` del carrello; senza carrello si passa dal vecchio nome, che
+  // le altre prenotazioni del periodo collegano al loro serviceId.
+  const { data: catalogo } = await supabase.from('car_wash_services').select('id, name')
+  const nomePerId = new Map<string, string>()
+  for (const s of catalogo || []) if (s.id && s.name) nomePerId.set(String(s.id), String(s.name))
+  const idPerVecchioNome = new Map<string, string>()
+  for (const s of catalogo || []) if (s.id && s.name) idPerVecchioNome.set(String(s.name).trim().toLowerCase(), String(s.id))
+  for (const w of billableWashes) {
+    const righe = (w.booking_details || {}).cartItems ?? (w.booking_details || {}).cart_items
+    if (!Array.isArray(righe)) continue
+    for (const item of righe) {
+      if (item?.serviceId && item?.serviceName) idPerVecchioNome.set(String(item.serviceName).trim().toLowerCase(), String(item.serviceId))
+    }
+  }
+  const nomeAttuale = (serviceId: unknown, nomeScritto: unknown): string => {
+    if (serviceId && nomePerId.has(String(serviceId))) return nomePerId.get(String(serviceId))!
+    const scritto = String(nomeScritto || '').trim()
+    if (!scritto) return 'Altro'
+    // "A, B, C" (vecchie prenotazioni senza carrello): ogni pezzo col suo nome.
+    return scritto.split(',').map(p => {
+      const id = idPerVecchioNome.get(p.trim().toLowerCase())
+      return (id && nomePerId.get(id)) || p.trim()
+    }).join(', ')
+  }
+
   // Billable washes by type
   const byType: Record<string, { count: number; revenue: number }> = {}
 
   billableWashes.forEach(wash => {
-    let serviceName = wash.service_name || 'Altro'
+    const serviceName = nomeAttuale(null, wash.service_name)
     const details = wash.booking_details || {}
     // Il sito ha scritto a lungo `cart_items` invece di `cartItems`: senza
     // la seconda chiave i lavaggi prenotati dal sito finivano tutti sotto un
@@ -1564,7 +1593,7 @@ async function generateWashReport(
     const righeCarrello = details.cartItems ?? details.cart_items
     if (Array.isArray(righeCarrello) && righeCarrello.length > 0) {
       righeCarrello.forEach((item: any) => {
-        const name = item.serviceName || serviceName
+        const name = nomeAttuale(item.serviceId, item.serviceName || wash.service_name)
         if (!byType[name]) byType[name] = { count: 0, revenue: 0 }
         byType[name].count += (item.quantity || 1)
         byType[name].revenue += ((item.price || 0) * (item.quantity || 1))
