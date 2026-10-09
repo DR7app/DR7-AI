@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
 import { AlarmSoundPlayer, type AlarmSoundKey } from '../utils/alarmSounds'
 import { giroAllarmi, type EsitoGiro, type AlarmEventRow } from '../utils/alarmEngine'
+import { allarmePerOperatore } from '../utils/motoreAllarmi'
 import { PRIORITY_RANK } from '../data/alarmCatalog'
 
 interface AlarmBooking {
@@ -1180,6 +1181,10 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         try { catalogoPlayerRef.current?.stop() } catch { /* ignore */ }
     }
     const catalogoPlayerRef = useRef<AlarmSoundPlayer | null>(null)
+    // 09/10/2026: l'utente collegato, letto da un ref perche' avvisaCatalogo
+    // gira dentro il polling (closure del primo render).
+    const userIdCatalogoRef = useRef<string | null>(null)
+    userIdCatalogoRef.current = session?.user?.id || null
     const avvisaCatalogo = (esito: EsitoGiro) => {
         const eventi = esito.eventiAperti || []
         const cfgs = esito.configurazioni
@@ -1202,6 +1207,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         for (const e of eventi) {
             const cfg = cfgs.get(e.alarm_id)
             if (!cfg || cfg.notifica_gestionale === false) continue
+            // 09/10/2026: allarme destinato a operatori scelti in Centralina
+            // Pro (es. Nuova prenotazione Lavaggio -> personale del lavaggio).
+            if (!allarmePerOperatore(cfg, userIdCatalogoRef.current)) continue
             const ultimo = suonati.get(e.id)
             if (ultimo === undefined) {
                 // 01/10/2026: niente piu' "gia' visto" al primo giro. Chi apre

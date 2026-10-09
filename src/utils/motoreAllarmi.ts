@@ -75,15 +75,41 @@ export interface AlarmCfgMotore extends AlarmCfgLite {
     notifica_gestionale?: boolean | null
     ripeti_finche_non_risolto?: boolean | null
     ripeti_ogni_minuti?: number | null
+    /**
+     * 09/10/2026: user_id degli operatori che ricevono la finestra di questo
+     * allarme (es. "Nuova prenotazione Lavaggio" solo al personale del
+     * lavaggio). Vuoto o assente = tutti, come prima.
+     */
+    riceventi?: string[] | null
+}
+
+/**
+ * 09/10/2026: questo operatore deve ricevere l'allarme? Lista vuota = tutti.
+ * Solo la FINESTRA e il suono sono filtrati: l'occorrenza resta in
+ * alarm_events e nel pannello "Aperti" per tutti.
+ */
+export function allarmePerOperatore(cfg: Pick<AlarmCfgMotore, 'riceventi'> | undefined, userId: string | null | undefined): boolean {
+    const lista = Array.isArray(cfg?.riceventi) ? cfg!.riceventi!.filter(Boolean) : []
+    if (lista.length === 0) return true
+    return !!userId && lista.includes(userId)
 }
 
 /** Le righe del catalogo che oggi possono davvero suonare. */
 export async function caricaConfigurazioni(sb: ClienteAllarmi): Promise<AlarmCfgMotore[]> {
+    // 09/10/2026: `riceventi` arriva con la migration 20261009: senza, si
+    // rilegge come prima (tutti ricevono tutto).
     let { data, error }: { data: unknown[] | null; error: { code?: string; message?: string } | null } = await sb
         .from('system_alarms')
-        .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, suono_continuo, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti')
+        .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, suono_continuo, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti, riceventi')
         .eq('is_enabled', true)
         .eq('stato_rilevamento', 'attivo')
+    if (error && isColonnaMancante(error)) {
+        ;({ data, error } = await sb
+            .from('system_alarms')
+            .select('id, label, detector, threshold_value, threshold_unit, priority, is_enabled, stato_rilevamento, sound_key, suono_continuo, notifica_gestionale, ripeti_finche_non_risolto, ripeti_ogni_minuti')
+            .eq('is_enabled', true)
+            .eq('stato_rilevamento', 'attivo'))
+    }
     // 03/10/2026: `suono_continuo` arriva con la migration 20261003 (a mano).
     // Finche' non c'e', si rilegge senza: gli allarmi non devono tacere per
     // una colonna mancante.

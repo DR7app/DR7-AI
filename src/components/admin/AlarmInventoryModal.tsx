@@ -74,6 +74,8 @@ interface AlarmRow {
     notifica_whatsapp_interna: boolean
     notifica_email_interna: boolean
     destinatari: Destinatario[] | null
+    /** 09/10/2026: user_id degli operatori che ricevono la finestra; vuoto = tutti. */
+    riceventi?: string[] | null
     sort_order: number
     message_key: string | null
     messaggio_cliente_auto?: boolean | null
@@ -104,6 +106,8 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
     // Elenco dei messaggi disponibili: stessa tabella di Messaggi di Sistema
     // Pro, nessun elenco parallelo da tenere allineato a mano.
     const [templates, setTemplates] = useState<{ key: string; label: string }[]>([])
+    // 09/10/2026: operatori attivi per "Chi riceve l'allarme".
+    const [operatori, setOperatori] = useState<{ userId: string; nome: string }[]>([])
 
     useEffect(() => {
         if (!isOpen && !embedded) return
@@ -119,6 +123,18 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                 setAlarms((data || []) as AlarmRow[])
             }
             setLoading(false)
+        })()
+        ;(async () => {
+            const { data } = await supabase
+                .from('admins')
+                .select('user_id, nome, email, archived_at')
+                .is('archived_at', null)
+            const visti = new Set<string>()
+            const lista = ((data || []) as { user_id: string | null; nome: string | null; email: string | null }[])
+                .filter(a => a.user_id && !visti.has(a.user_id) && visti.add(a.user_id))
+                .map(a => ({ userId: String(a.user_id), nome: String(a.nome || a.email || 'Operatore') }))
+                .sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
+            setOperatori(lista)
         })()
         ;(async () => {
             const [{ data }, { data: varsCustom }] = await Promise.all([
@@ -589,6 +605,34 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                                         <span className="text-theme-text-secondary">{lbl}</span>
                                                                     </label>
                                                                 ))}
+                                                            </div>
+
+                                                            {/* 09/10/2026: chi vede la finestra e sente il suono. Nessuno spuntato = tutti. */}
+                                                            <span className="text-theme-text-muted">Chi riceve l&apos;allarme</span>
+                                                            <div>
+                                                                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                                                                    {operatori.map(op => {
+                                                                        const scelti = valueOf(row, 'riceventi') || []
+                                                                        const dentro = scelti.includes(op.userId)
+                                                                        return (
+                                                                            <label key={op.userId} className="flex items-center gap-1.5 cursor-pointer">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={dentro}
+                                                                                    onChange={() => setField(row.id, 'riceventi', dentro
+                                                                                        ? scelti.filter(id => id !== op.userId)
+                                                                                        : [...scelti, op.userId])}
+                                                                                />
+                                                                                <span className="text-theme-text-secondary">{op.nome}</span>
+                                                                            </label>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                                <p className="mt-1 text-[10px] text-theme-text-muted">
+                                                                    {(valueOf(row, 'riceventi') || []).length === 0
+                                                                        ? 'Nessuno spuntato: la ricevono tutti gli operatori.'
+                                                                        : 'Solo gli operatori spuntati vedono la finestra e sentono il suono.'}
+                                                                </p>
                                                             </div>
 
                                                             {/* Destinatari interni: servono solo se un canale interno e' acceso */}
