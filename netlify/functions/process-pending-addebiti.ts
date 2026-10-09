@@ -6,6 +6,7 @@ import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFrom } from './utils/emailFrom'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
+import { cascataScalini, normalizzaScalini } from './utils/cascataScalini'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -319,7 +320,40 @@ const processHandler: Handler = async () => {
             let collectedCents = 0
             const usedCards: string[] = []
 
-            for (const cid of cascadeCards) {
+            // 09/10/2026: piu' scalini scelti all'addebito (es. 10.000 / 5.000 /
+            // 2.000). Senza, resta la cascata a scalino unico qui sotto.
+            const scalini = normalizzaScalini(addebito.cascade_steps_cents)
+            if (scalini.length > 0) {
+                const r = await cascataScalini({
+                    cards: cascadeCards,
+                    amountCents: remainingCents,
+                    stepsCents: scalini,
+                    minAmountCents,
+                    maxAttempts,
+                    pausa: () => new Promise(res => setTimeout(res, 200)),
+                    charge: async (cid, cents) => {
+                        const amountEur = cents / 100
+                        console.log(`[process-pending-addebiti] Scalini: €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} for addebito ${addebito.id}`)
+                        const r = await chargeMit({
+                            contractId: cid,
+                            amount: amountEur,
+                            description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
+                            bookingId: addebito.booking_id || null,
+                            customerEmail: addebito.customer_email,
+                            customerName: addebito.customer_name,
+                        })
+                        if (!r.success) console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} rifiutato: ${r.error || 'DECLINED'}`)
+                        return { ok: !!r.success, error: r.error }
+                    },
+                })
+                collectedCents = r.collectedCents
+                remainingCents = r.remainingCents
+                usedCards.push(...r.usedCards)
+                attempts = r.attempts
+                lastError = r.lastError
+            }
+
+            for (const cid of (scalini.length > 0 ? [] : cascadeCards)) {
                 if (remainingCents < minAmountCents) break
                 if (attempts >= maxAttempts) break // tetto tentativi raggiunto → stop
                 let amount = remainingCents
@@ -386,6 +420,7 @@ const processHandler: Handler = async () => {
                         contract_number: addebito.contract_number,
                         contract_id: cascadeCards[0],
                         ...(addebito.cascade_contract_ids ? { cascade_contract_ids: addebito.cascade_contract_ids } : {}),
+                        ...(scalini.length > 0 ? { cascade_steps_cents: scalini } : {}),
                         amount_cents: remainingCents,
                         causale: `Rimanente da addebito parziale — €${(remainingCents / 100).toFixed(2)}`,
                         status: 'second_email_sent', // skip emails, go straight to charge phase

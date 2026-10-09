@@ -46,7 +46,11 @@ export default function CustomerAddebitoButton({
     const [causale, setCausale] = useState('')
     // Parametri cascata scelti al momento dell'addebito (per-transazione).
     const [maxAttempts, setMaxAttempts] = useState('')      // vuoto = illimitato
-    const [cascadeStepEur, setCascadeStepEur] = useState('300') // scalino €, default 300
+    // 09/10/2026: piu' scalini (es. 10.000 / 5.000 / 2.000): finito uno si
+    // passa al successivo. Uno solo = come prima, default €300.
+    const [scalini, setScalini] = useState<string[]>(['300'])
+    const scaliniValidi = Array.from(new Set(scalini.map(v => parseFloat(v)).filter(v => v > 0))).sort((a, b) => b - a)
+    const fmtEur = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 2 })
     // Carte selezionate per l'addebito. Default: la carta predefinita. Si
     // possono selezionare piu' carte (o tutte): la cascata le prova in ordine.
     const [selected, setSelected] = useState<Record<string, boolean>>(defaultCid ? { [defaultCid]: true } : {})
@@ -90,7 +94,8 @@ export default function CustomerAddebitoButton({
                     contractIds: orderedSelected.length > 1 ? orderedSelected : undefined,
                     // Cascata scelta per-transazione. Vuoto = default (illimitato / €300).
                     maxAttempts: parseInt(maxAttempts) > 0 ? parseInt(maxAttempts) : undefined,
-                    cascadeStepEur: parseFloat(cascadeStepEur) > 0 ? parseFloat(cascadeStepEur) : undefined,
+                    cascadeStepEur: scaliniValidi.length > 0 ? scaliniValidi[scaliniValidi.length - 1] : undefined,
+                    cascadeStepsEur: scaliniValidi.length > 0 ? scaliniValidi : undefined,
                 }),
             })
             const data = await res.json().catch(() => ({}))
@@ -181,39 +186,66 @@ export default function CustomerAddebitoButton({
                 </div>
                 {orderedSelected.length > 1 && (
                     <div className="text-[10px] text-theme-text-muted mt-1">
-                        Cascata: prova in ordine dall'alto e si ferma alla prima carta che accetta (per ogni carta: importo pieno, poi −€{cascadeStepEur || '300'}, e giù di quel passo).
+                        Cascata: prova le carte in ordine dall'alto; quello che la prima non paga lo chiede alla successiva.
                     </div>
                 )}
             </div>
 
-            {/* 3) Cascata: scalino + max tentativi (per-transazione) */}
-            <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] text-theme-text-muted">
-                    Scalino cascata
-                    <div className="relative mt-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm pointer-events-none">€</span>
-                        <input
-                            type="number" min="1" step="50" inputMode="decimal"
-                            value={cascadeStepEur}
-                            onChange={e => setCascadeStepEur(e.target.value)}
-                            placeholder="300"
-                            className="w-full pl-6 pr-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:border-dr7-gold"
-                        />
-                    </div>
-                </label>
-                <label className="text-[11px] text-theme-text-muted">
-                    Max tentativi
-                    <input
-                        type="number" min="1" step="1" inputMode="numeric"
-                        value={maxAttempts}
-                        onChange={e => setMaxAttempts(e.target.value)}
-                        placeholder="illimitato"
-                        className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:border-dr7-gold"
-                    />
-                </label>
+            {/* 3) Cascata: scalini + max tentativi (per-transazione) */}
+            <div>
+                <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-theme-text-muted">Scalini cascata</label>
+                    <button
+                        type="button"
+                        onClick={() => setScalini(s => [...s, ''])}
+                        className="text-[11px] text-dr7-gold hover:underline"
+                    >
+                        + Aggiungi scalino
+                    </button>
+                </div>
+                <div className="mt-1 space-y-1">
+                    {scalini.map((v, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                            <span className="text-[11px] text-theme-text-muted w-5 tabular-nums">{i + 1}.</span>
+                            <div className="relative flex-1">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm pointer-events-none">€</span>
+                                <MoneyInput
+                                    min="0"
+                                    value={v}
+                                    onChange={(__v: string) => setScalini(s => s.map((x, j) => (j === i ? __v : x)))}
+                                    placeholder={i === 0 ? '300' : 'es. 2000'}
+                                    className="w-full pl-6 pr-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:border-dr7-gold"
+                                />
+                            </div>
+                            {scalini.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setScalini(s => s.filter((_, j) => j !== i))}
+                                    className="px-2 py-1 rounded-md text-xs text-theme-text-muted hover:text-red-500 border border-theme-border"
+                                    title="Togli scalino"
+                                >
+                                    ×
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
             </div>
+            <label className="block text-[11px] text-theme-text-muted">
+                Max tentativi
+                <input
+                    type="number" min="1" step="1" inputMode="numeric"
+                    value={maxAttempts}
+                    onChange={e => setMaxAttempts(e.target.value)}
+                    placeholder="illimitato"
+                    className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:border-dr7-gold"
+                />
+            </label>
             <div className="text-[10px] text-theme-text-muted -mt-1">
-                Prova a scendere di €{cascadeStepEur || '300'} ad ogni rifiuto{parseInt(maxAttempts) > 0 ? `, per max ${parseInt(maxAttempts)} tentativi, poi si ferma` : ' (nessun limite di tentativi)'}.
+                {scaliniValidi.length > 1
+                    ? `Parte dall'importo pieno e scende di €${fmtEur(scaliniValidi[0])}; quando non passa piu' continua con ${scaliniValidi.slice(1).map(v => '€' + fmtEur(v)).join(', poi ')}. Dopo un addebito riuscito riprova lo stesso importo sulla stessa carta`
+                    : `Prova a scendere di €${fmtEur(scaliniValidi[0] || 300)} ad ogni rifiuto; dopo un addebito riuscito riprova lo stesso importo sulla stessa carta`}
+                {parseInt(maxAttempts) > 0 ? `, per max ${parseInt(maxAttempts)} tentativi, poi si ferma.` : ' (nessun limite di tentativi).'}
             </div>
 
             {/* 4) Causale */}

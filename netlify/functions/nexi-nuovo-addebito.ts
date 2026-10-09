@@ -6,6 +6,7 @@ import { requireAuth } from './require-auth'
 import { renderTemplate } from './utils/messageTemplates'
 import { getEmailFrom } from './utils/emailFrom'
 import { funzioneFerma } from './utils/systemControl'
+import { normalizzaScalini } from './utils/cascataScalini'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -47,6 +48,7 @@ export const handler: Handler = async (event) => {
             sendEmail,
             maxAttempts,      // tetto tentativi per-transazione (undefined = illimitato)
             cascadeStepEur,   // scalino cascata in € per-transazione (undefined = default €300)
+            cascadeStepsEur,  // 09/10/2026: piu' scalini in € (es. [10000, 5000, 2000]); vince su cascadeStepEur
         } = JSON.parse(event.body || '{}')
 
         // Normalizza i parametri per-transazione della cascata.
@@ -54,6 +56,8 @@ export const handler: Handler = async (event) => {
             ? Math.floor(Number(maxAttempts)) : null
         const cascadeStepCents = Number.isFinite(Number(cascadeStepEur)) && Number(cascadeStepEur) > 0
             ? Math.round(Number(cascadeStepEur) * 100) : null
+        const cascadeStepsCents = normalizzaScalini(
+            Array.isArray(cascadeStepsEur) ? cascadeStepsEur.map((v: unknown) => Number(v) * 100) : null)
 
         // NESSUNA email per default: l'addebito va diretto alla fase di charge.
         // L'email parte SOLO se il chiamante passa esplicitamente sendEmail=true.
@@ -131,6 +135,7 @@ export const handler: Handler = async (event) => {
             // gli addebiti funzionano anche se le colonne non esistono ancora.
             ...(maxAttemptsInt != null ? { max_attempts: maxAttemptsInt } : {}),
             ...(cascadeStepCents != null ? { cascade_step_cents: cascadeStepCents } : {}),
+            ...(cascadeStepsCents.length > 0 ? { cascade_steps_cents: cascadeStepsCents } : {}),
             amount_cents: Math.round(parseFloat(amount) * 100),
             causale: causale,
             // Con email: parte dal flusso email. Senza email (default): salta
