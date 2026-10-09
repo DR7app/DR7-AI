@@ -1566,15 +1566,22 @@ async function savePersisted(snap: PersistedSnapshot, rowId: string = 'main') {
   // in questo snapshot (booking_form_off e booking_mode scritte dagli
   // Interruttori ON/OFF): l'upsert secco della sola snapshot le cancellava a
   // ogni salvataggio della Centralina.
+  // 09/10/2026: una lettura fallita NON vuol dire riga assente. Il 08/10 la
+  // lettura e' andata a vuoto e il salvataggio ha riscritto la riga col solo
+  // snapshot: site_copy (tutto il CMS del sito), notifications, cargos,
+  // multe_config... cancellati. Se la lettura fallisce non si scrive nulla.
   let existing: Record<string, unknown> = {}
-  try {
-    const { data } = await supabase
-      .from('centralina_pro_config')
-      .select('config')
-      .eq('id', rowId)
-      .maybeSingle()
-    if (data?.config && typeof data.config === 'object') existing = data.config as Record<string, unknown>
-  } catch { /* riga assente o rete KO: si salva comunque lo snapshot */ }
+  const { data: rigaAttuale, error: erroreLettura } = await supabase
+    .from('centralina_pro_config')
+    .select('config')
+    .eq('id', rowId)
+    .maybeSingle()
+  if (erroreLettura) {
+    console.error('[CentralinaPro] lettura prima del salvataggio fallita:', erroreLettura)
+    toast.error('Salvataggio annullato: impossibile rileggere la configurazione. Riprova.')
+    return
+  }
+  if (rigaAttuale?.config && typeof rigaAttuale.config === 'object') existing = rigaAttuale.config as Record<string, unknown>
   // Use upsert so a missing row is created, not silently ignored.
   const { error } = await supabase
     .from('centralina_pro_config')
@@ -2156,6 +2163,11 @@ export default function CentralinaProTab() {
         applyRemoteSnapshot(remote)
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
+        // null arriva anche da una lettura FALLITA: si semina solo se la riga
+        // manca davvero (09/10/2026, vedi savePersisted).
+        const { data: riga, error: erroreRiga } = await supabase
+          .from('centralina_pro_config').select('id').eq('id', 'main').maybeSingle()
+        if (cancelled || erroreRiga || riga) return
         // Supabase is empty — seed with initial/localStorage values
         const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours }
         savePersisted(seed)

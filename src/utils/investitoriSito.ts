@@ -7,7 +7,7 @@
  * centralina_pro_config.site_copy.investitori (la stessa che si modifica in
  * Sito > Investitori): qui si riscrivono solo la lista azionisti e i numeri
  * del blocco investitori, il resto del CMS non si tocca.
- * Sul sito va al massimo il nome: nessun importo personale, telefono o CF.
+ * Sul sito: nome (solo se autorizzato) e importo investito; mai telefono o CF.
  */
 import { supabase } from '../supabaseClient'
 
@@ -66,12 +66,16 @@ function schedeAzionisti(investitori: InvestitorePerSito[], prima: SchedaAzionis
             const societa = i.tipo === 'societa'
             const pubblico = i.pubblicazione_nome === 'autorizzato'
             const id = idScheda(i.id)
+            // 09/10/2026 (direzione): l'importo si vede sempre, anche sulle
+            // schede riservate (senza nome ma col montante investito).
+            const euroIt = `${Math.round(i.totale).toLocaleString('it-IT')} €`
+            const euroEn = `€${Math.round(i.totale).toLocaleString('en-US')}`
             const scheda: SchedaAzionista = pubblico
                 ? {
                     id,
                     nome: i.nome.trim(),
-                    ruolo_it: societa ? 'Società' : 'Investitore privato',
-                    ruolo_en: societa ? 'Company' : 'Private investor',
+                    ruolo_it: `${societa ? 'Società' : 'Investitore privato'} · ${euroIt}`,
+                    ruolo_en: `${societa ? 'Company' : 'Private investor'} · ${euroEn}`,
                     da_it: `Azionista dal ${i.anno}`,
                     da_en: `Shareholder since ${i.anno}`,
                     // La foto caricata nel CMS resta.
@@ -81,7 +85,7 @@ function schedeAzionisti(investitori: InvestitorePerSito[], prima: SchedaAzionis
                     id,
                     // Vuoto = il sito scrive "Investitore privato" col lucchetto.
                     nome: societa ? 'Società privata' : '',
-                    ruolo_it: '', ruolo_en: '',
+                    ruolo_it: euroIt, ruolo_en: euroEn,
                     da_it: `Azionista dal ${i.anno}`,
                     da_en: `Shareholder since ${i.anno}`,
                     foto: '',
