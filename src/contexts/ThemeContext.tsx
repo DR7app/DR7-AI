@@ -21,7 +21,7 @@ import type { ReactNode } from 'react'
  * call sites that only know about dark/light don't break.
  */
 
-export type Palette = 'dr7' | 'dr7ai' | 'graphite' | 'slate' | 'mono' | 'obsidian' | 'frost' | 'tesla'
+export type Palette = 'dr7' | 'dr7ai' | 'marmoverde' | 'marmooro' | 'graphite' | 'slate' | 'mono' | 'obsidian' | 'frost' | 'tesla'
 export type Mode = 'dark' | 'light'
 
 /**
@@ -36,6 +36,9 @@ export const PALETTES: { id: Palette; label: string; description: string; inspir
     // 2026-10-05 (direzione): il marmo NON e' piu' su tutta la piattaforma;
     // e' il tema DR7 AI, marmo nero solo in modo scuro. In chiaro niente marmo.
     { id: 'dr7ai',    label: 'DR7 AI',           description: 'Marmo nero, venature ciano del logo. Solo in modo scuro.', inspiration: 'DR7 A.I.' },
+    // 2026-10-09 (direzione): altri due marmi, stesse regole del DR7 AI.
+    { id: 'marmoverde', label: 'Marmo Verde',    description: 'Marmo verde, venature bianche. Solo in modo scuro.', inspiration: 'Verde Guatemala' },
+    { id: 'marmooro',   label: 'Marmo Oro',      description: 'Nero portoro, venature e accento oro. Marmo solo in modo scuro.', inspiration: 'Nero Portoro' },
     { id: 'graphite', label: 'Graphite Pro',     description: 'Monocromatico esecutivo, ultra clean.', inspiration: 'Apple Pro Apps · Linear' },
     { id: 'slate',    label: 'Slate Enterprise', description: 'Fintech AI, blu professionale.', inspiration: 'Stripe · Bloomberg' },
     { id: 'mono',     label: 'Mono Minimal',     description: 'Bianco e nero puro, timeless.', inspiration: 'Apple · Nothing Tech' },

@@ -1155,23 +1155,107 @@ html[data-oscura] img[src*="signature"] {
 ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-track { border-radius: 0 !important; }
 .leaflet-popup-content-wrapper, .leaflet-bar, .leaflet-bar a, .leaflet-control-layers { border-radius: 0 !important; }
 
-/* Tema DR7 AI (05/10/2026, direzione): marmo NERO con venature ciano del
-   logo, SOLO con palette "DR7 AI" in modo scuro. Tutti gli altri temi e il
-   modo chiaro restano senza marmo (prima era acceso ovunque, anche in chiaro).
-   Texture: public/marmo-dr7ai.webp (scripts/genera-marmo-dr7ai.py). Il velo
-   scuro sopra tiene leggibile il contenuto; carte, header e menu restano pieni
-   e il marmo si vede negli spazi della pagina. */
+/* Temi marmo (05/10/2026, direzione; verde e oro 09/10/2026): SOLO con la
+   palette scelta e in modo scuro. Tutti gli altri temi e il modo chiaro
+   restano senza marmo (prima era acceso ovunque, anche in chiaro).
+     DR7 AI      -> marmo nero, venature ciano del logo  (public/marmo-dr7ai.webp)
+     Marmo Verde -> marmo verde, venature bianche        (public/marmo-verde.webp)
+     Marmo Oro   -> nero portoro, venature oro           (public/marmo-oro.webp)
+   Texture generate da scripts/genera-marmo.py. Nel fondo pagina il velo scuro
+   tiene leggibile il contenuto e carte/header restano pieni; il menu laterale
+   (.menu-marmo) invece e' marmo pieno, quasi senza velo. */
 html[data-palette="dr7ai"].dark body,
 html[data-palette="dr7ai"].dark .fondo-marmo {
-  background-color: #030405;
   background-image:
     linear-gradient(rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.30)),
     url('/marmo-dr7ai.webp');
+}
+html[data-palette="marmoverde"].dark body,
+html[data-palette="marmoverde"].dark .fondo-marmo {
+  background-image:
+    linear-gradient(rgba(2, 12, 13, 0.55), rgba(2, 12, 13, 0.55)),
+    url('/marmo-verde.webp');
+}
+html[data-palette="marmooro"].dark body,
+html[data-palette="marmooro"].dark .fondo-marmo {
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.30)),
+    url('/marmo-oro.webp');
+}
+html:is([data-palette="dr7ai"], [data-palette="marmoverde"], [data-palette="marmooro"]).dark body,
+html:is([data-palette="dr7ai"], [data-palette="marmoverde"], [data-palette="marmooro"]).dark .fondo-marmo {
+  background-color: #030405;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
 }
-html[data-palette="dr7ai"].dark .contenuto-admin {
+html:is([data-palette="dr7ai"], [data-palette="marmoverde"], [data-palette="marmooro"]).dark .contenuto-admin {
   background-color: transparent;
+}
+
+/* Menu laterale nei temi marmo: la lastra intera, appena scurita in basso
+   per le voci. Voci senza fondo pieno (l'hover e' un vetro), testo con ombra
+   per staccarsi dalle venature. */
+html[data-palette="dr7ai"].dark .menu-marmo {
+  background-image: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.35)), url('/marmo-dr7ai.webp');
+}
+html[data-palette="marmoverde"].dark .menu-marmo {
+  background-image: linear-gradient(rgba(2, 10, 12, 0.10), rgba(2, 10, 12, 0.45)), url('/marmo-verde.webp');
+}
+html[data-palette="marmooro"].dark .menu-marmo {
+  background-image: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.35)), url('/marmo-oro.webp');
+  outline: 1px solid rgba(214, 170, 86, 0.45);
+  outline-offset: -1px;
+}
+html:is([data-palette="dr7ai"], [data-palette="marmoverde"], [data-palette="marmooro"]).dark .menu-marmo {
+  background-size: cover;
+  background-position: center;
+  --color-theme-text-primary: #FFFFFF;
+  --color-theme-text-secondary: #E4ECEE;
+  --color-theme-text-muted: #AEBFC4;
+  --color-theme-bg-hover: rgba(255, 255, 255, 0.10);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+html:is([data-palette="dr7ai"], [data-palette="marmoverde"], [data-palette="marmooro"]).dark .menu-marmo nav button {
+  backdrop-filter: blur(1px);
+}
+/* Marmo Oro: la voce attiva in oro invece del ciano del logo. */
+html[data-palette="marmooro"].dark .menu-marmo .text-cyan-300 { color: #F2D58E; }
+html[data-palette="marmooro"].dark .menu-marmo .bg-cyan-500\/10 { background-color: rgba(214, 170, 86, 0.16); }
+html[data-palette="marmooro"].dark .menu-marmo .ring-cyan-500\/40 { --tw-ring-color: rgba(214, 170, 86, 0.55); }
+html[data-palette="marmooro"].dark .menu-marmo .bg-cyan-500\/20 { background-color: rgba(214, 170, 86, 0.25); }
+
+/* Marmo Oro: accento oro al posto del ciano (in scuro e in chiaro). */
+html[data-palette="marmooro"].dark {
+  --color-primary: #D6AA56;
+  --color-primary-light: #F2D58E;
+  --color-primary-dark: #A9803A;
+  --color-dr7-gold: #D6AA56;
+  --color-dr7-gold-light: #F2D58E;
+  --color-dr7-gold-dark: #A9803A;
+  --color-theme-border-active: #D6AA56;
+  --color-theme-input-border-focus: #D6AA56;
+  --button-primary-bg: #D6AA56;
+  --button-primary-hover: #F2D58E;
+  --button-primary-active: #A9803A;
+  --button-primary-text: #0A0805;
+  --sidebar-item-active-border: #D6AA56;
+  --gradient-primary: linear-gradient(135deg, #F2D58E 0%, #D6AA56 50%, #A9803A 100%);
+}
+html[data-palette="marmooro"].light {
+  --color-primary: #8A6A1F;
+  --color-primary-light: #A9853A;
+  --color-primary-dark: #6B5115;
+  --color-dr7-gold: #8A6A1F;
+  --color-dr7-gold-light: #A9853A;
+  --color-dr7-gold-dark: #6B5115;
+  --color-theme-border-active: #8A6A1F;
+  --color-theme-input-border-focus: #8A6A1F;
+  --button-primary-bg: #8A6A1F;
+  --button-primary-hover: #A9853A;
+  --button-primary-active: #6B5115;
+  --button-primary-text: #FFFFFF;
+  --sidebar-item-active-border: #8A6A1F;
+  --gradient-primary: linear-gradient(135deg, #A9853A 0%, #8A6A1F 50%, #6B5115 100%);
 }

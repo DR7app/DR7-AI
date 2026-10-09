@@ -1098,7 +1098,7 @@ export default function AdminDashboard() {
           notch + home indicator don't eat the close button or bottom
           action row. */}
       <aside
-        className={`fixed left-3 z-[70] w-[72vw] max-w-[244px] bg-theme-bg-primary flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}
+        className={`fixed left-3 z-[70] w-[72vw] max-w-[244px] bg-theme-bg-primary menu-marmo flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}
         style={{
           top: 'max(0.75rem, env(safe-area-inset-top))',
           maxHeight: 'calc(100vh - max(1.5rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)))',
@@ -2002,6 +2002,8 @@ function PalettePreview({ palette }: { palette: Palette }) {
     const swatch: Record<Palette, { bg: string; surface: string; border: string; accent: string; text: string }> = {
         dr7:      { bg: '#050708', surface: '#12171B', border: '#1E262C', accent: '#19C2D6', text: '#F5F7FA' },
         dr7ai:    { bg: '#030405', surface: '#12171B', border: '#2A3236', accent: '#19C2D6', text: '#F5F7FA' },
+        marmoverde: { bg: '#062826', surface: '#12171B', border: '#2A3E3C', accent: '#19C2D6', text: '#F5F7FA' },
+        marmooro: { bg: '#0A0805', surface: '#15120C', border: '#3A2F1C', accent: '#D6AA56', text: '#F5F0E6' },
         graphite: { bg: '#090909', surface: '#141414', border: '#1F1F1F', accent: '#8BA3B8', text: '#F5F5F5' },
         slate:    { bg: '#0B1220', surface: '#131C2E', border: '#1F2A3F', accent: '#5E7CE2', text: '#E5EAF2' },
         mono:     { bg: '#000000', surface: '#111111', border: '#2A2A2A', accent: '#FFFFFF', text: '#FFFFFF' },
