@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
+import { nuovoTokenFirma } from './utils/tokenFirma'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 import { langFromPhone, nellaLinguaDelTelefono } from './utils/i18n'
 
@@ -519,7 +520,7 @@ export const handler: Handler = async (event) => {
                 continue
             }
 
-            const token = crypto.randomBytes(32).toString('hex')
+            const token = nuovoTokenFirma()
 
             // Create signature request
             const { data: sigRequest, error: insertError } = await supabase
@@ -564,7 +565,7 @@ export const handler: Handler = async (event) => {
             // 2026-05-30: link di firma SOLO via WhatsApp (Green API). Nessun
             // fallback email, per scelta della direzione — anche se il firmatario
             // non ha WhatsApp, NON gli si invia nulla via email.
-            const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
+            const signingUrl = `${SIGNING_BASE_URL}/f/${token}`
             const sent = await sendWhatsAppSigningLink(
                 signer.phone,
                 signer.name,

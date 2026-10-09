@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import { renderTemplate } from './utils/messageTemplates'
+import { nuovoTokenFirma } from './utils/tokenFirma'
 import { getEmailFromSmtp } from './utils/emailFrom'
 import { funzioneFerma } from './utils/systemControl'
 import { nellaLinguaDelTelefono } from './utils/i18n'
@@ -66,7 +67,7 @@ export const handler: Handler = async (event) => {
         }
 
         // Generate unique token
-        const token = crypto.randomBytes(32).toString('hex')
+        const token = nuovoTokenFirma()
         const tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000)
 
         // Hash the original PDF
@@ -119,7 +120,7 @@ export const handler: Handler = async (event) => {
         })
 
         // Build signing URL
-        const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
+        const signingUrl = `${SIGNING_BASE_URL}/f/${token}`
 
         // Link di firma: WhatsApp se c'e' il telefono; email se non c'e' il
         // telefono o se WhatsApp non e' partito. Il testo e' lo stesso
