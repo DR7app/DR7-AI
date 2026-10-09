@@ -245,6 +245,26 @@ async function lookupBin(bin: string): Promise<{ type: string; brand: string } |
     return { type: r.type, brand: r.brand };
 }
 
+// 09/10/2026: numero mascherato, circuito e tipo della carta di un pagamento,
+// letti da Nexi. Senza questi campi la carta finiva sulla scheda cliente come
+// "Mastercard" senza numero e non si poteva capire se due carte erano la
+// stessa (caso Michele Concas: 5 voci, in realta' 2 carte).
+async function leggiCartaNexi(operationId: string, orderId: string, paymentCircuit: string): Promise<Record<string, string>> {
+    const card = await fetchNexiCardInfo(NEXI_API_KEY, { operationId, orderId });
+    if (!card) return {};
+    const bin = card.bin
+        || (card.maskedPan && /^\d{6}/.test(card.maskedPan.trim()) ? card.maskedPan.trim().substring(0, 6) : '');
+    const binResult = bin && bin.length >= 4 ? await lookupBin(bin) : null;
+    return {
+        nexi_card_masked_pan: card.maskedPan,
+        nexi_card_circuit: card.circuit || paymentCircuit || '',
+        nexi_card_type: card.cardType || binResult?.type || '',
+        nexi_card_brand: binResult?.brand || card.circuit || paymentCircuit || '',
+        nexi_card_bin: bin || '',
+        nexi_card_updated: new Date().toISOString(),
+    };
+}
+
 const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
@@ -776,8 +796,35 @@ const handler: Handler = async (event) => {
 
                 // Save contractId on customer
                 if (contractId) {
+                    // 09/10/2026: anche il saldo salva il numero della carta,
+                    // e cerca la scheda prima per id cliente (come il
+                    // pagamento principale): senza email la carta non arrivava
+                    // mai sulla scheda.
+                    const cartaTopup = await leggiCartaNexi(operationId, transaction.order_id, paymentCircuit);
+                    if (Object.keys(cartaTopup).length > 0) {
+                        await supabase.from('nexi_transactions').update({
+                            metadata: { ...(transaction.metadata || {}), ...cartaTopup },
+                            updated_at: new Date().toISOString(),
+                        }).eq('id', transaction.id);
+                    }
+                    const aggiornamentoCarta = {
+                        nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString(), ...cartaTopup,
+                        ...(transaction.metadata?.tokenization_requested === false ? { nexi_card_non_addebitabile: true } : {}),
+                    };
+                    const topupCustId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
+                    let salvataSuScheda = false;
+                    if (topupCustId) {
+                        const { data: custById } = await supabase.from('customers_extended').select('id, metadata').eq('id', topupCustId).maybeSingle();
+                        if (custById) {
+                            await supabase.from('customers_extended').update({
+                                metadata: applyTokenizedCardUpdate(custById.metadata, aggiornamentoCarta),
+                                updated_at: new Date().toISOString()
+                            }).eq('id', custById.id);
+                            salvataSuScheda = true;
+                        }
+                    }
                     const custEmail = (booking.customer_email || transaction.customer_email || '').toLowerCase().trim();
-                    if (custEmail) {
+                    if (!salvataSuScheda && custEmail) {
                         // ilike + limit(1): l'email era confrontata con eq (case
                         // sensitive) e maybeSingle() ANDAVA IN ERRORE quando due
                         // schede condividono la stessa email -> la carta non
@@ -791,7 +838,7 @@ const handler: Handler = async (event) => {
                         const custByEmail = byEmailRows?.[0];
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
-                                metadata: applyTokenizedCardUpdate(custByEmail.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
+                                metadata: applyTokenizedCardUpdate(custByEmail.metadata, aggiornamentoCarta),
                                 updated_at: new Date().toISOString()
                             }).eq('id', custByEmail.id);
                         }
@@ -1502,6 +1549,9 @@ const handler: Handler = async (event) => {
                         ...(contractId ? { nexi_contract_id: contractId } : {}),
                         nexi_contract_updated: new Date().toISOString(),
                         ...cardInfo,
+                        // 09/10/2026: link senza tokenizzazione = nessun token su
+                        // Nexi; la carta resta visibile ma non e' addebitabile.
+                        ...(transaction.metadata?.tokenization_requested === false ? { nexi_card_non_addebitabile: true } : {}),
                     }
 
                     // Also stamp the card info on the nexi_transactions row

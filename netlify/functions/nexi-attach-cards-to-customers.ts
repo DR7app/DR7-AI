@@ -121,7 +121,7 @@ const handler: Handler = async (event) => {
         const workingMeta = new Map<string, Row>()
 
         for (const c of customers) {
-            for (const card of listCards(c.metadata)) attached.add(card.contractId)
+            for (const card of listCards(c.metadata)) for (const cid of [card.contractId, ...(card.altContractIds || [])]) attached.add(cid)
             if (c.id) byId.set(String(c.id), c)
             if (c.user_id) byUserId.set(String(c.user_id), c)
             const em = normEmail(c.email)

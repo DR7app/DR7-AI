@@ -171,7 +171,7 @@ export const handler: Handler = async (event) => {
         // nell'array nexi_cards del cliente — va aggiunta anche se i campi flat
         // sono già pieni per un'ALTRA carta. (Caso Fofana: piu' carte usate, ma
         // solo l'ultima salvata sul profilo perche' prima si sovrascriveva.)
-        const inArray = !cust || listCards(cust.metadata).some(c => c.contractId === tx.contract_id)
+        const inArray = !cust || listCards(cust.metadata).some(c => (c.contractId === tx.contract_id || (c.altContractIds || []).includes(tx.contract_id)))
         const fullyPopulated = (!cust || (existingContract && custMeta.nexi_card_masked_pan && custHasType && custHasBrand))
             && txAlreadyHasPan && txHasType && txHasBrand && inArray
         if (fullyPopulated) {
@@ -193,7 +193,7 @@ export const handler: Handler = async (event) => {
             // la carta e' selezionabile per l'addebito anche senza PAN). Usa i
             // dati gia' presenti sulla transazione (circuito/tipo).
             const cidOnly = typeof tx.contract_id === 'string' ? tx.contract_id : ''
-            if (cust && cidOnly && !listCards(cust.metadata).some(c => c.contractId === cidOnly)) {
+            if (cust && cidOnly && !listCards(cust.metadata).some(c => (c.contractId === cidOnly || (c.altContractIds || []).includes(cidOnly)))) {
                 if (!dryRun) {
                     const m2 = applyTokenizedCardUpdate(cust.metadata, {
                         nexi_contract_id: cidOnly,

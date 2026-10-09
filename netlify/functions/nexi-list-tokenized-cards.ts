@@ -28,6 +28,9 @@ interface CardPayment {
 
 interface TokenizedCard {
     id: string
+    // Altri contratti Nexi della stessa carta (vedi raggruppaCarte): i loro
+    // pagamenti finiscono sotto questa carta invece di diventare carte nuove.
+    alt_contract_ids: string[]
     // Scheda cliente su cui la carta e' salvata. null = la carta esiste solo
     // nelle transazioni Nexi e NON e' su nessuna scheda: il tab la mostra ma
     // la fiche cliente dice "Non tokenizzata" (caso Chiara Loy 27/08/2026).
@@ -113,6 +116,7 @@ const handler: Handler = async (event) => {
             const fullName = [c.nome, c.cognome].filter(Boolean).join(' ') || ''
             return listCards(meta).map(card => ({
                 id: `${String(c.id || '')}:${card.contractId}`,
+                alt_contract_ids: card.altContractIds || [],
                 customer_id: String(c.id || '') || null,
                 full_name: fullName,
                 email: String(c.email || ''),
@@ -135,7 +139,7 @@ const handler: Handler = async (event) => {
         // have a customers_extended row AND to attach the payment history
         // to every card (Source 1 too). amount_cents/description/status come
         // from here. (Letta piu' sopra, in parallelo.)
-        const knownContractIds = new Set(cards.map(c => c.contract_id).filter(Boolean))
+        const knownContractIds = new Set(cards.flatMap(c => [c.contract_id, ...c.alt_contract_ids]).filter(Boolean))
 
         for (const tx of (txs || []) as Record<string, unknown>[]) {
             const cid = String(tx.contract_id || '')
@@ -150,6 +154,7 @@ const handler: Handler = async (event) => {
                 knownContractIds.add(cid)
                 cards.push({
                     id: `tx:${tx.id}`,
+                    alt_contract_ids: [],
                     customer_id: null,
                     full_name: String(meta.customer_name || booking.customer_name || String(tx.customer_email || '').split('@')[0] || 'Cliente'),
                     email: String(tx.customer_email || ''),
@@ -186,7 +191,7 @@ const handler: Handler = async (event) => {
             txByContract.set(cid, list)
         }
         for (const card of cards) {
-            const list = txByContract.get(card.contract_id) || []
+            const list = [card.contract_id, ...card.alt_contract_ids].flatMap(cid => txByContract.get(cid) || [])
             card.payments = list
             card.paid_count = list.length
             card.paid_total_cents = list.reduce((sum, p) => sum + (Number.isFinite(p.amount_cents) ? p.amount_cents : 0), 0)
