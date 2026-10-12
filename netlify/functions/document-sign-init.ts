@@ -144,7 +144,7 @@ export const handler: Handler = async (event) => {
                 } else {
                     const cleanedPhone = cleanPhone(signerPhone)
                     const chatId = `${cleanedPhone}@c.us`
-                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+                    const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
                     const waResponse = await fetch(greenApiUrl, {
                         method: 'POST',

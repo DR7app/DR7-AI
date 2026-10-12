@@ -569,7 +569,7 @@ async function reconductSignedContract(params: {
                         .split('{data}').join(dataRiconsegna)
                 }
             } catch (e: any) { console.warn('[reconduct] template caption fallback:', e?.message) }
-            await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
+            await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption: await nellaLinguaDelTelefono(cleanPhone, caption) }),
             })

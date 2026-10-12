@@ -57,7 +57,7 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
   try {
     const { header, footer } = await loadWrapper();
     const wrappedMessage = [header, message, footer].filter(Boolean).join('\n\n');
-    const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${token}`;
+    const url = `https://api.greenapi.com/waInstance${instanceId}/sendMessage/${token}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

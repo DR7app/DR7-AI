@@ -429,7 +429,7 @@ export const handler: Handler = async (event) => {
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
-                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
                     const waResponse = await fetch(greenApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

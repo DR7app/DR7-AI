@@ -871,7 +871,7 @@ const handler: Handler = async (event) => {
                     if (adminMsg === null) {
                         console.log('[nexi-payment-callback] Template "payment_received_damages_admin" missing/disabled — skipping send');
                     } else {
-                        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                        await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1098,7 +1098,7 @@ const handler: Handler = async (event) => {
                     if (adminMsg === null) {
                         console.log('[nexi-payment-callback] Template "payment_received_extension_admin" missing/disabled — skipping send');
                     } else {
-                        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                        await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1993,7 +1993,7 @@ const handler: Handler = async (event) => {
                                 if (adminBonusMsg === null) {
                                     console.log('[nexi-payment-callback] Template "wallet_bonus_credit_admin" missing/disabled — skipping send');
                                 } else {
-                                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                                    await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({

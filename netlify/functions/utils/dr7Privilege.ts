@@ -63,7 +63,7 @@ async function sendGreenApi(phone: string, message: string): Promise<void> {
     if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
         throw new Error("Green API not configured")
     }
-    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+    const url = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
     const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

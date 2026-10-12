@@ -73,7 +73,7 @@ export async function testaConnessione(chiave: string): Promise<EsitoTest> {
           const id = process.env.GREEN_API_INSTANCE_ID
           const token = process.env.GREEN_API_TOKEN
           if (!id || !token) return { ok: false, messaggio: 'Credenziali WhatsApp non configurate.', latenzaMs: durata() }
-          const res = await fetch(`https://api.green-api.com/waInstance${id}/getStateInstance/${token}`, { signal: AbortSignal.timeout(TEMPO_MASSIMO_MS) })
+          const res = await fetch(`https://api.greenapi.com/waInstance${id}/getStateInstance/${token}`, { signal: AbortSignal.timeout(TEMPO_MASSIMO_MS) })
           const stato = res.ok ? ((await res.json()) as { stateInstance?: string })?.stateInstance : null
           return {
             ok: res.ok && stato === 'authorized',

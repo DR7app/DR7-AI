@@ -199,7 +199,7 @@ const handler: Handler = async (event) => {
     }
 
     try {
-      const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+      const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
       // Add wrapper from Messaggi di Sistema Pro — no hardcoded fallback.
       let wrappedMsg = message;

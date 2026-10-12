@@ -30,7 +30,7 @@ function normalizePhone(raw: string | null | undefined): string {
 }
 
 async function greenApiSendMessage(phone: string, message: string): Promise<void> {
-    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+    const url = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
     const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,7 +41,7 @@ async function greenApiSendMessage(phone: string, message: string): Promise<void
 }
 
 async function greenApiSendFile(phone: string, urlFile: string, fileName: string, caption?: string): Promise<void> {
-    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`;
+    const url = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`;
     const body: Record<string, string> = { chatId: `${phone}@c.us`, urlFile, fileName };
     if (caption) body.caption = caption;
     const res = await fetch(url, {

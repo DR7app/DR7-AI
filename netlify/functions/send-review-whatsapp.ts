@@ -155,7 +155,7 @@ const reviewHandler: Handler = async (event) => {
         }
 
         // Send via Green API
-        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+        const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
         const response = await fetch(greenApiUrl, {
           method: 'POST',

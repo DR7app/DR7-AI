@@ -46,7 +46,7 @@ export const handler: Handler = async (event) => {
         return { statusCode: 503, body: JSON.stringify({ success: false, skipped: true, reason: 'invio_whatsapp_off', message: fermaWa, error: fermaWa }) };
     }
 
-    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+    const url = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
     let sent = 0;
     const errors: string[] = [];
 

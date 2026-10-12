@@ -359,7 +359,7 @@ export async function runWeatherAlert(
     throw new InvioSpentoError(fermaWa)
   }
 
-  const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+  const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
   let sent = 0
   let failed = 0

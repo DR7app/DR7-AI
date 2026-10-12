@@ -188,7 +188,7 @@ async function sendWhatsAppMessage(chatId: string, message: string): Promise<boo
   const fermaWa = await funzioneFerma('invio_whatsapp');
   if (fermaWa) { console.warn('[whatsapp-ai-webhook] invio saltato: ' + fermaWa); return false; }
   try {
-    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+    const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
     const response = await fetch(greenApiUrl, {
       method: "POST",

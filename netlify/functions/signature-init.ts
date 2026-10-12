@@ -45,7 +45,7 @@ async function sendWhatsAppSigningLink(
     try {
         const cleanedPhone = cleanPhone(phone)
         const chatId = `${cleanedPhone}@c.us`
-        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+        const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
         const sigMessage = await renderTemplate('signature_request_link', { signerName, contractNumber, signingUrl })
         if (sigMessage === null) {

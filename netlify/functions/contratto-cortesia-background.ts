@@ -88,7 +88,7 @@ export const handler: Handler = async (event) => {
                 `Copia di cortesia del contratto ${numero} nella tua lingua, solo per informazione. Il contratto da firmare e' quello in italiano che hai ricevuto con il link: fa fede esclusivamente il testo in lingua italiana.`)
             let esito: EsitoGreenApi
             try {
-                const wa = await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
+                const wa = await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chatId: `${d.phone}@c.us`, urlFile: url, fileName: `${numero || 'contratto'}_${lang}.pdf`, caption }),

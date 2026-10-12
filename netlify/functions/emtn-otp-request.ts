@@ -123,7 +123,7 @@ export const handler: Handler = async (event) => {
             const normPhone = phone.replace(/\D/g, '').replace(/^00/, '')
             const chatId = `${normPhone.length === 10 ? '39' + normPhone : normPhone}@c.us`
             // Esente dagli interruttori System Control: codice di sicurezza, senza si resta chiusi fuori.
-            const url = `https://api.green-api.com/waInstance${greenInstance}/sendMessage/${greenToken}`
+            const url = `https://api.greenapi.com/waInstance${greenInstance}/sendMessage/${greenToken}`
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

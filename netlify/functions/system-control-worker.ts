@@ -136,7 +136,7 @@ async function preparaAvvisi(): Promise<number> {
       if (idInstance && token) {
         for (const tel of telefoni) {
           try {
-            await fetch(`https://api.green-api.com/waInstance${idInstance}/sendMessage/${token}`, {
+            await fetch(`https://api.greenapi.com/waInstance${idInstance}/sendMessage/${token}`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ chatId: `${tel}@c.us`, message: messaggio }),
             })

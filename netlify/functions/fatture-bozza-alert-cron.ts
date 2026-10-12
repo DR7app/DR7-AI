@@ -95,7 +95,7 @@ const handler: Handler = async () => {
 
     try {
         const adminPhone = await getAdminNotificationPhone()
-        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+        await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chatId: `${adminPhone}@c.us`, message: lines.join('\n') }),

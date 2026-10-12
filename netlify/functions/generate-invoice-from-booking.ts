@@ -1468,7 +1468,7 @@ export const handler: Handler = async (event) => {
                         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
-                        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                        const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
                         const caption = await nellaLinguaDelTelefono(cleanPhone, (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? '')
                         let waEsito: EsitoGreenApi
                         try {
@@ -2283,7 +2283,7 @@ async function sendWalletFatturaPdfAndWhatsApp(
         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
-        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+        const greenApiUrl = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
         const caption = await nellaLinguaDelTelefono(cleanPhone, (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? '')
         let waEsito: EsitoGreenApi
         try {
