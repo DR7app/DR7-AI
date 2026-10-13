@@ -65,7 +65,10 @@ export default function CustomerAddebitoButton({
     // Carte selezionate NELL'ORDINE della lista (la cascata parte dalla prima).
     const orderedSelected = cards.filter(c => selected[c.contractId]).map(c => c.contractId)
     const allSelected = cards.length > 0 && orderedSelected.length === cards.length
-    const canSubmit = orderedSelected.length > 0 && !!customerEmail && parseFloat(amount) > 0 && !sending
+    // 13/10/2026: il bottone non si spegne piu' in silenzio (restava grigio
+    // per i clienti senza email, che il server non chiede). Si spegne solo
+    // durante l'invio; il motivo di un blocco lo dice submit() con un toast.
+    const canSubmit = !sending
 
     const toggleCard = (cid: string) => setSelected(s => ({ ...s, [cid]: !s[cid] }))
     const toggleAll = () => {
@@ -74,7 +77,6 @@ export default function CustomerAddebitoButton({
     }
 
     async function submit() {
-        if (!customerEmail) { toast.error('Email cliente mancante'); return }
         if (orderedSelected.length === 0) { toast.error('Seleziona almeno una carta'); return }
         const amt = parseFloat(amount)
         if (!amt || amt <= 0) { toast.error('Inserisci un importo valido'); return }
@@ -89,7 +91,7 @@ export default function CustomerAddebitoButton({
                     customerName: customerName || '',
                     customerEmail,
                     amount: amt.toFixed(2),
-                    causale: causale.trim() || `Addebito - ${customerName || customerEmail}`,
+                    causale: causale.trim() || `Addebito - ${customerName || customerEmail || 'cliente'}`,
                     contractId: orderedSelected[0],
                     contractIds: orderedSelected.length > 1 ? orderedSelected : undefined,
                     // Cascata scelta per-transazione. Vuoto = default (illimitato / €300).
