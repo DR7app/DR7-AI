@@ -18,6 +18,7 @@ import { schedule } from '@netlify/functions'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { conSystemControl } from './utils/systemControl'
 import { inviaMessaggioAllarme } from './utils/messaggioAllarme'
+import { inviaBuoniFidelity } from './utils/buoniFidelity'
 import {
     CatalogoNonInstallato,
     eseguiGiro,
@@ -84,6 +85,13 @@ const giro = async () => {
             } catch (e) {
                 console.warn('[alarm-engine-cron] messaggio non inviato:', inv.eventId, e)
             }
+        }
+
+        // 12/10/2026: buoni Fidelity lavaggio (250 punti) emessi dal database.
+        try {
+            inviati += await inviaBuoniFidelity(sb, now, Math.max(0, BUDGET_MESSAGGI_MS - (Date.now() - t0)))
+        } catch (e) {
+            console.warn('[alarm-engine-cron] buoni fidelity non inviati:', e)
         }
 
         const durata = Date.now() - t0
