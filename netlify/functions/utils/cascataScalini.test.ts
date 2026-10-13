@@ -105,6 +105,45 @@ describe('cascataScalini', () => {
         expect(r.attempts).toBe(0)
     })
 
+    it('13/10: Concas 280k, carte con 2k e 0: si ferma dopo il no a 1.000, mai in loop', async () => {
+        const c = carte({ A: EUR(2000), B: 0 })
+        const steps = [50000, 40000, 30000, 20000, 10000, 5000, 1000].map(EUR)
+        const r = await cascataScalini({ ...base, cards: ['A', 'B'], amountCents: EUR(280000), stepsCents: steps, charge: c.charge })
+        expect(r.finita).toBe(true)
+        expect(r.collectedCents).toBe(EUR(2000))
+        expect(c.log.filter(l => l.startsWith('A:')).slice(-3)).toEqual(['A:2000:si', 'A:2000:no', 'A:1000:no'])
+        expect(c.log[c.log.length - 1]).toBe('B:1000:no')
+        expect(r.attempts).toBeLessThan(40)
+    })
+
+    it('13/10: interrotta per tempo riprende dal punto giusto, stessi tentativi di un giro solo', async () => {
+        const steps = [50000, 10000, 1000].map(EUR)
+        const intera = carte({ A: EUR(7000), B: EUR(3000) })
+        await cascataScalini({ ...base, cards: ['A', 'B'], amountCents: EUR(120000), stepsCents: steps, charge: intera.charge })
+
+        const aRate = carte({ A: EUR(7000), B: EUR(3000) })
+        let rimanente = EUR(120000)
+        let stato = null
+        let giri = 0
+        let incassatoSalvato = 0
+        for (;;) {
+            giri++
+            let n = 0
+            const r = await cascataScalini({
+                ...base, cards: ['A', 'B'], amountCents: rimanente, stepsCents: steps, charge: aRate.charge,
+                stato, tempoScaduto: () => n++ >= 3,
+                onIncasso: async (_c, cents) => { incassatoSalvato += cents },
+            })
+            rimanente = r.remainingCents
+            if (r.finita) break
+            stato = r.stato
+            expect(giri).toBeLessThan(50)
+        }
+        expect(aRate.log).toEqual(intera.log)
+        expect(incassatoSalvato).toBe(EUR(10000))
+        expect(giri).toBeGreaterThan(1)
+    })
+
     it('normalizzaScalini ordina, toglie doppioni e valori non validi', () => {
         expect(normalizzaScalini([200000, 1000000, 500000, 500000, 0, -5, 'x', '300000'])).toEqual([1000000, 500000, 300000, 200000])
         expect(normalizzaScalini(null)).toEqual([])

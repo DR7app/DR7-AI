@@ -2187,7 +2187,8 @@ export default function NexiTab() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-theme-text-primary font-semibold text-sm">{a.customer_name || a.customer_email}</span>
-                                            {a.status === 'charged' && a.charged_amount_cents != null && a.charged_amount_cents < a.amount_cents ? (
+                                            {/* 13/10/2026: anche un addebito Fermato/fallito puo' aver gia' incassato una parte (Concas: 2.000 di 280.000). */}
+                                            {['charged', 'stopped', 'charge_failed', 'second_email_sent'].includes(a.status) && a.charged_amount_cents != null && a.charged_amount_cents > 0 && a.charged_amount_cents < a.amount_cents ? (
                                                 <>
                                                     <span className="font-mono text-theme-text-muted text-sm line-through">{formatEUR(a.amount_cents)}</span>
                                                     <span className="text-[11px] px-2 py-0.5 rounded bg-green-900/30 text-green-300 border border-green-700/50 font-bold">

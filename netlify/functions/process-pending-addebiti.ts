@@ -14,6 +14,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const NEXI_API_KEY = process.env.NEXI_API_KEY!
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1'
+// 13/10/2026: budget di un giro (Netlify chiude a 30s) e durata del blocco
+// su una riga in lavorazione (se il giro muore, dopo questo tempo si riprende).
+const BUDGET_GIRO_MS = 20_000
+const BLOCCO_RIGA_MS = 90_000
 
 // Direct MIT charge via Nexi API (avoids HTTP roundtrip to nexi-charge-mit function)
 async function chargeMit(params: {
@@ -98,6 +102,10 @@ async function chargeMit(params: {
 
 const processHandler: Handler = async () => {
     const now = new Date().toISOString()
+    // 13/10/2026: Netlify uccide la funzione a 30s. Oltre questo budget la
+    // cascata si ferma, salva dove e' arrivata e il giro dopo riprende da li'.
+    const inizioGiro = Date.now()
+    const tempoScaduto = () => Date.now() - inizioGiro > BUDGET_GIRO_MS
 
     // 1. Find addebiti ready for second email (24h passed, status = email_sent)
     const { data: readyForSecondEmail } = await supabase
@@ -278,7 +286,22 @@ const processHandler: Handler = async () => {
         .eq('status', 'second_email_sent')
         .lte('mit_charge_after', now)
 
-    for (const addebito of (readyForCharge || [])) {
+    for (const candidato of (readyForCharge || [])) {
+        if (tempoScaduto()) break
+        // 13/10/2026: PRENOTA la riga prima di addebitare. Senza, ogni minuto
+        // un giro nuovo prendeva la stessa riga mentre il precedente era
+        // ancora in corso (Concas: 338 tentativi in parallelo). Il blocco e'
+        // mit_charge_after spostato avanti: se il giro muore, scade da solo.
+        const { data: prenotate } = await supabase
+            .from('pending_addebiti')
+            .update({ mit_charge_after: new Date(Date.now() + BLOCCO_RIGA_MS).toISOString() })
+            .eq('id', candidato.id)
+            .eq('status', 'second_email_sent')
+            .lte('mit_charge_after', now)
+            .select('*')
+        const addebito = prenotate?.[0]
+        if (!addebito) continue
+
         if (!addebito.contract_id) {
             console.warn(`[process-pending-addebiti] No contractId for addebito ${addebito.id}, skipping charge`)
             await supabase.from('pending_addebiti').update({
@@ -323,13 +346,28 @@ const processHandler: Handler = async () => {
             // 09/10/2026: piu' scalini scelti all'addebito (es. 10.000 / 5.000 /
             // 2.000). Senza, resta la cascata a scalino unico qui sotto.
             const scalini = normalizzaScalini(addebito.cascade_steps_cents)
+            // 13/10/2026: quanto e' gia' stato incassato nei giri precedenti
+            // (salvato dopo ogni SI'): non si richiede mai due volte.
+            const giaIncassatoCents = scalini.length > 0 ? Math.max(0, Number(addebito.charged_amount_cents) || 0) : 0
+            const giaTentativi = Number(addebito.charge_count) || 0
+            remainingCents = addebito.amount_cents - giaIncassatoCents
+            let incassatoSalvatoCents = giaIncassatoCents
             if (scalini.length > 0) {
                 const r = await cascataScalini({
                     cards: cascadeCards,
                     amountCents: remainingCents,
                     stepsCents: scalini,
                     minAmountCents,
-                    maxAttempts,
+                    maxAttempts: Number.isFinite(maxAttempts) ? Math.max(0, maxAttempts - giaTentativi) : maxAttempts,
+                    stato: addebito.cascade_state || null,
+                    tempoScaduto,
+                    onIncasso: async (_cid, cents) => {
+                        incassatoSalvatoCents += cents
+                        await supabase.from('pending_addebiti').update({
+                            charged_amount_cents: incassatoSalvatoCents,
+                            charged_at: new Date().toISOString(),
+                        }).eq('id', addebito.id)
+                    },
                     pausa: () => new Promise(res => setTimeout(res, 200)),
                     charge: async (cid, cents) => {
                         const amountEur = cents / 100
@@ -351,6 +389,21 @@ const processHandler: Handler = async () => {
                 usedCards.push(...r.usedCards)
                 attempts = r.attempts
                 lastError = r.lastError
+
+                if (!r.finita) {
+                    // Tempo finito: salva il punto e libera la riga per il
+                    // prossimo giro (tra un minuto riprende da qui).
+                    console.log(`[process-pending-addebiti] Giro a tempo per addebito ${addebito.id}: incassati €${(incassatoSalvatoCents / 100).toFixed(2)}, riprende al prossimo giro`)
+                    await supabase.from('pending_addebiti').update({
+                        cascade_state: r.stato,
+                        charge_count: giaTentativi + attempts,
+                        mit_charge_after: new Date().toISOString(),
+                        error_message: `In corso: incassati €${(incassatoSalvatoCents / 100).toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} dopo ${giaTentativi + attempts} tentativi`,
+                    }).eq('id', addebito.id).eq('status', 'second_email_sent')
+                    continue
+                }
+                // Cascata arrivata in fondo: conta anche l'incassato dei giri prima.
+                collectedCents = incassatoSalvatoCents
             }
 
             for (const cid of (scalini.length > 0 ? [] : cascadeCards)) {
@@ -400,13 +453,14 @@ const processHandler: Handler = async () => {
                 console.log(`[process-pending-addebiti] ✅ Totale incassato €${(collectedCents / 100).toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} su ${usedCards.length} carta/e for addebito ${addebito.id}`)
                 await supabase.from('pending_addebiti').update({
                     status: 'charged',
+                    cascade_state: null,
                     charged_at: new Date().toISOString(),
                     charge_count: (addebito.charge_count || 0) + attempts,
                     charged_amount_cents: collectedCents,
                     error_message: fully
                         ? (usedCards.length > 1 ? `Incassato €${(collectedCents / 100).toFixed(2)} su ${usedCards.length} carte` : (attempts > 1 ? `Incassato €${(collectedCents / 100).toFixed(2)} dopo ${attempts} tentativi` : null))
-                        : `Incassato €${(collectedCents / 100).toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} su ${usedCards.length} cart${usedCards.length === 1 ? 'a' : 'e'} — rimanente €${(remainingCents / 100).toFixed(2)} riprogrammato`,
-                }).eq('id', addebito.id)
+                        : `Fermato: la carta non accetta piu' (${lastError || 'rifiutato'}). Incassato €${(collectedCents / 100).toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} su ${usedCards.length} cart${usedCards.length === 1 ? 'a' : 'e'} — rimanente €${(remainingCents / 100).toFixed(2)}${hasMaxAttempts ? '' : ' riprogrammato tra 30 giorni'}`,
+                }).eq('id', addebito.id).eq('status', 'second_email_sent') // Annulla a mano vince
 
                 // Rimanente non incassato (carte esaurite): riprogramma un follow-up.
                 // Con tetto tentativi impostato NON si riprogramma: "N volte e poi stop".
@@ -444,16 +498,18 @@ const processHandler: Handler = async () => {
                     const nextRetry = new Date(Date.now() + addebito.interval_hours * 60 * 60 * 1000).toISOString()
                     await supabase.from('pending_addebiti').update({
                         status: 'second_email_sent',
+                        cascade_state: null,
                         error_message: `${attempts} tentativi falliti (min €${(minAmountCents / 100).toFixed(2)}) — ${lastError}. Prossimo ciclo: ${nextRetry}`,
                         mit_charge_after: nextRetry,
                         charge_count: (addebito.charge_count || 0) + attempts,
-                    }).eq('id', addebito.id)
+                    }).eq('id', addebito.id).eq('status', 'second_email_sent')
                 } else {
                     await supabase.from('pending_addebiti').update({
                         status: 'charge_failed',
-                        error_message: `${attempts} tentativi falliti (da €${(addebito.amount_cents / 100).toFixed(2)} a €${(minAmountCents / 100).toFixed(2)}) — ${lastError}`,
+                        cascade_state: null,
+                        error_message: `Fermato: la carta non accetta piu'. ${(addebito.charge_count || 0) + attempts} tentativi falliti (da €${(addebito.amount_cents / 100).toFixed(2)} fino allo scalino piu' piccolo) — ${lastError}`,
                         charge_count: (addebito.charge_count || 0) + attempts,
-                    }).eq('id', addebito.id)
+                    }).eq('id', addebito.id).eq('status', 'second_email_sent')
                 }
             }
         } catch (err: any) {

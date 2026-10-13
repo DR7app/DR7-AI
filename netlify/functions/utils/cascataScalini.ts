@@ -33,6 +33,28 @@ export interface RisultatoCascata {
     usedCards: string[]
     attempts: number
     lastError: string
+    /**
+     * 13/10/2026: true = la cascata e' arrivata in fondo (tutto incassato, o
+     * ogni carta ha rifiutato anche lo scalino piu' piccolo, o tetto
+     * tentativi). false = interrotta da `tempoScaduto`: `stato` dice da dove
+     * riprendere al prossimo giro.
+     */
+    finita: boolean
+    stato: StatoCascata | null
+}
+
+/**
+ * 13/10/2026: punto in cui la cascata si e' fermata per tempo (Netlify uccide
+ * la funzione a 30s). Concas 280.000 EUR: ogni giro veniva ucciso a meta',
+ * la riga restava "da addebitare" e ogni minuto ripartiva da capo in
+ * parallelo al precedente = 338 tentativi in 5 minuti.
+ */
+export interface StatoCascata {
+    cardIndex: number
+    livello: number
+    /** Prossimo importo da provare a questo livello (null = calcolalo). */
+    amount: number | null
+    ultimoRifiutato: number | null
 }
 
 /** Scalini validi, interi, senza doppioni, dal piu' grande. */
@@ -52,6 +74,12 @@ export async function cascataScalini(args: {
     maxAttempts: number
     charge: (contractId: string, amountCents: number) => Promise<EsitoTentativo>
     pausa?: () => Promise<void>
+    /** Da dove riprendere (giro precedente interrotto per tempo). */
+    stato?: StatoCascata | null
+    /** true = fermati ORA e restituisci lo stato per il prossimo giro. */
+    tempoScaduto?: () => boolean
+    /** Chiamata dopo ogni SI', per salvare subito l'incassato. */
+    onIncasso?: (contractId: string, amountCents: number) => Promise<void>
 }): Promise<RisultatoCascata> {
     const { cards, minAmountCents, maxAttempts, charge } = args
     const steps = normalizzaScalini(args.stepsCents)
@@ -60,19 +88,24 @@ export async function cascataScalini(args: {
     let attempts = 0
     let lastError = ''
     const usedCards: string[] = []
-    if (steps.length === 0) return { collectedCents, remainingCents, usedCards, attempts, lastError }
+    if (steps.length === 0) return { collectedCents, remainingCents, usedCards, attempts, lastError, finita: true, stato: null }
 
     const fermo = () => remainingCents < minAmountCents || attempts >= maxAttempts
+    const ripresa = args.stato || null
 
-    for (const cid of cards) {
+    for (let ci = ripresa ? ripresa.cardIndex : 0; ci < cards.length; ci++) {
         if (fermo()) break
+        const cid = cards[ci]
+        const stessaCarta = !!ripresa && ci === ripresa.cardIndex
         // Importo piu' basso che QUESTA carta ha rifiutato.
-        let ultimoRifiutato = Infinity
-        for (let livello = 0; livello < steps.length; livello++) {
+        let ultimoRifiutato = stessaCarta && ripresa!.ultimoRifiutato !== null ? ripresa!.ultimoRifiutato : Infinity
+        for (let livello = stessaCarta ? ripresa!.livello : 0; livello < steps.length; livello++) {
             if (fermo()) break
             const step = steps[livello]
             let amount: number
-            if (livello === 0) {
+            if (stessaCarta && livello === ripresa!.livello && ripresa!.amount !== null) {
+                amount = Math.min(ripresa!.amount, remainingCents)
+            } else if (livello === 0) {
                 amount = remainingCents
             } else {
                 const sottoRifiuto = Number.isFinite(ultimoRifiutato)
@@ -81,6 +114,12 @@ export async function cascataScalini(args: {
                 amount = Math.min(remainingCents, sottoRifiuto)
             }
             while (amount >= minAmountCents && !fermo()) {
+                if (args.tempoScaduto && args.tempoScaduto()) {
+                    return {
+                        collectedCents, remainingCents, usedCards, attempts, lastError, finita: false,
+                        stato: { cardIndex: ci, livello, amount, ultimoRifiutato: Number.isFinite(ultimoRifiutato) ? ultimoRifiutato : null },
+                    }
+                }
                 if (attempts > 0 && args.pausa) await args.pausa()
                 attempts++
                 let esito: EsitoTentativo
@@ -93,6 +132,7 @@ export async function cascataScalini(args: {
                     collectedCents += amount
                     remainingCents -= amount
                     if (!usedCards.includes(cid)) usedCards.push(cid)
+                    if (args.onIncasso) await args.onIncasso(cid, amount)
                     amount = Math.min(amount, remainingCents)
                 } else {
                     lastError = esito.error || 'DECLINED'
@@ -102,5 +142,5 @@ export async function cascataScalini(args: {
             }
         }
     }
-    return { collectedCents, remainingCents, usedCards, attempts, lastError }
+    return { collectedCents, remainingCents, usedCards, attempts, lastError, finita: true, stato: null }
 }
