@@ -328,8 +328,16 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       if (walletUserId) {
         const { data: bal } = await supabase.from('user_credit_balance').select('balance').eq('user_id', walletUserId).single()
         setWalletBalance(bal?.balance || 0)
-        const { data: txs } = await supabase.from('credit_transactions').select('*').eq('user_id', walletUserId).order('created_at', { ascending: false }).limit(50)
-        setWalletTxs(txs || [])
+        // 13/10/2026: tutti i movimenti, non solo gli ultimi 50 (Runchina ne
+        // ha 78: i piu' vecchi sparivano dallo storico). Pagine da 1000.
+        const txs: WalletTx[] = []
+        for (let da = 0; ; da += 1000) {
+          const { data: pagina } = await supabase.from('credit_transactions').select('*').eq('user_id', walletUserId)
+            .order('created_at', { ascending: false }).range(da, da + 999)
+          if (pagina) txs.push(...(pagina as WalletTx[]))
+          if (!pagina || pagina.length < 1000) break
+        }
+        setWalletTxs(txs)
 
         // DR7 Club daily interest accruals (last 90 days). The cron
         // accrue-club-wallet-interest writes a row per day with 0.1% of
@@ -488,7 +496,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     const totalSpent = Math.round((serviziSpesa + totalPenali + totalDanni) * 100) / 100
 
     // Unpaid
-    const unpaid = bookings.filter(b => b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial')
+    // 13/10/2026: un link Nexi mai pagato su una prenotazione ANNULLATA non e'
+    // un debito (Runchina: 1.432,91 EUR mostrati per due link annullati).
+    const unpaid = bookings.filter(b => b.status !== 'cancelled' && b.status !== 'annullata')
+      .filter(b => b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial')
     const unpaidTotal = unpaid.reduce((s, b) => s + (b.price_total || 0), 0) / 100
 
     // Last activity
@@ -595,6 +606,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   // globali: pagato = paid/succeeded/completed, penali/danni al prezzo finale).
   const econKpis = useMemo(() => {
     const unpaidTotal = econBookings
+      .filter(b => b.status !== 'cancelled' && b.status !== 'annullata')
       .filter(b => b.payment_status === 'pending' || b.payment_status === 'unpaid' || b.payment_status === 'partial')
       .reduce((s, b) => s + (b.price_total || 0), 0) / 100
     // Stessa regola dei KPI globali: penali e danni presi una volta sola dalle
@@ -670,6 +682,9 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     let noleggio = 0, lavaggio = 0, meccanica = 0
     for (const b of bookings) {
       if (b.payment_status !== 'paid' && b.payment_status !== 'succeeded' && b.payment_status !== 'completed') continue
+      // 13/10/2026: le annullate (rimborsate sul wallet) non sono servizi
+      // goduti; contarle faceva dire alla torta piu' della Spesa totale.
+      if (b.status === 'cancelled' || b.status === 'annullata') continue
       const amt = (b.price_total || 0) / 100
       if (b.service_type === 'car_wash') lavaggio += amt
       else if (b.service_type === 'mechanical_service' || b.service_type === 'mechanical') meccanica += amt
@@ -1531,7 +1546,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                   <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Economico — {econRangeLabel}</h4>
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between"><span className="text-theme-text-muted">Totale Fatturato</span><span className="font-bold text-green-400">{fmtEur(econKpis.totalSpent)}</span></div>
-                    <div className="flex justify-between"><span className="text-theme-text-muted">Wallet Creditato</span><span className="font-bold text-dr7-gold">{fmtEur(walletBalance)}</span></div>
+                    <div className="flex justify-between"><span className="text-theme-text-muted">Saldo Wallet</span><span className="font-bold text-dr7-gold">{fmtEur(walletBalance)}</span></div>
                     <div className="flex justify-between"><span className="text-theme-text-muted">Debiti in Sospeso</span><span className={`font-bold ${econKpis.unpaidTotal > 0 ? 'text-red-400' : 'text-green-400'}`}>{fmtEur(econKpis.unpaidTotal)}</span></div>
                     <div className="flex justify-between"><span className="text-theme-text-muted">Penali Totali</span><span className="font-bold text-yellow-400">{fmtEur(econKpis.totalPenali)}</span></div>
                     <div className="flex justify-between"><span className="text-theme-text-muted">Danni Totali</span><span className="font-bold text-red-400">{fmtEur(econKpis.totalDanni)}</span></div>
