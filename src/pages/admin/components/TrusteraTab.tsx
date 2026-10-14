@@ -244,11 +244,9 @@ function DocumentiSubTab() {
       return
     }
 
-    const { data } = await supabase
-      .from('customers_extended')
-      .select('id, nome, cognome, email, telefono, denominazione')
-      .or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,denominazione.ilike.%${query}%,email.ilike.%${query}%,telefono.ilike.%${query}%`)
-      .limit(10)
+    // 14/10/2026: "valerio saja" non trovava nessuno (nome e cognome sono
+    // due colonne): stessa ricerca a parole del campo Nome dei firmatari.
+    const data = await cercaClientiFirmatario(query)
 
     // Risposta superata da una ricerca piu' recente: ignorala.
     if (ultimaRicercaClienteRef.current !== query) return
@@ -270,15 +268,43 @@ function DocumentiSubTab() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pickerResults, setPickerResults] = useState<any[]>([])
 
-  async function searchForPicker(query: string) {
-    setPickerSearch(query)
-    if (query.length < 2) { setPickerResults([]); return }
+  // 14/10/2026: ricerca clienti per un firmatario. "Mario Rossi" non
+  // trovava nessuno (nome e cognome sono due colonne): il database filtra
+  // sulla parola piu' lunga, poi tutte le parole devono corrispondere.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function cercaClientiFirmatario(query: string): Promise<any[]> {
+    const parole = query.trim().split(/\s+/).filter(Boolean)
+    const chiave = [...parole].sort((a, b) => b.length - a.length)[0]?.replace(/[%,()]/g, '') || ''
+    if (chiave.length < 2) return []
     const { data } = await supabase
       .from('customers_extended')
       .select('id, nome, cognome, email, telefono, denominazione')
-      .or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,denominazione.ilike.%${query}%,email.ilike.%${query}%`)
-      .limit(10)
-    setPickerResults(data || [])
+      .or(`nome.ilike.%${chiave}%,cognome.ilike.%${chiave}%,denominazione.ilike.%${chiave}%,email.ilike.%${chiave}%,telefono.ilike.%${chiave}%`)
+      .limit(50)
+    return (data || [])
+      .filter(c => corrispondeRicerca(query, [c.nome, c.cognome, c.denominazione, c.email, c.telefono]))
+      .slice(0, 10)
+  }
+
+  async function searchForPicker(query: string) {
+    setPickerSearch(query)
+    if (query.length < 2) { setPickerResults([]); return }
+    setPickerResults(await cercaClientiFirmatario(query))
+  }
+
+  // 14/10/2026: si cerca tra i clienti direttamente scrivendo nel campo Nome
+  // del firmatario; la tendina propone i clienti, il click riempie la riga.
+  const [suggerisciIdx, setSuggerisciIdx] = useState<number | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [suggerimenti, setSuggerimenti] = useState<any[]>([])
+  const ultimaRicercaNomeRef = useRef('')
+  async function cercaDaNome(idx: number, testo: string) {
+    ultimaRicercaNomeRef.current = testo
+    if (testo.trim().length < 2) { setSuggerimenti([]); setSuggerisciIdx(null); return }
+    const trovati = await cercaClientiFirmatario(testo)
+    if (ultimaRicercaNomeRef.current !== testo) return
+    setSuggerimenti(trovati)
+    setSuggerisciIdx(trovati.length ? idx : null)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -814,10 +840,31 @@ function DocumentiSubTab() {
                     <input
                       type="text"
                       value={s.name}
-                      onChange={(e) => updateSigner(idx, { name: e.target.value })}
-                      placeholder="Nome *"
+                      onChange={(e) => { updateSigner(idx, { name: e.target.value }); cercaDaNome(idx, e.target.value) }}
+                      onBlur={() => setTimeout(() => setSuggerisciIdx(cur => cur === idx ? null : cur), 150)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setSuggerisciIdx(null) }}
+                      autoComplete="off"
+                      placeholder="Nome o cerca cliente *"
                       className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 pr-9 text-theme-text-primary text-sm"
                     />
+                    {suggerisciIdx === idx && suggerimenti.length > 0 && (
+                      <div className="absolute z-30 left-0 right-0 mt-1 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                        {suggerimenti.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { pickCustomerForSigner(idx, c); setSuggerisciIdx(null); setSuggerimenti([]) }}
+                            className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover text-theme-text-primary text-sm border-b border-theme-border/30 last:border-0"
+                          >
+                            <div className="font-semibold">{c.denominazione || [c.nome, c.cognome].filter(Boolean).join(' ') || c.email}</div>
+                            <div className="text-[11px] text-theme-text-muted">
+                              {c.email || '—'}{c.telefono ? ` · ${c.telefono}` : ''}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
