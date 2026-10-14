@@ -319,7 +319,15 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                 const ts = hhmmToISO(entrata, dataRef)
                 if (ts) inserts.push({ operatore_id: me.id, tipo: 'entrata', timestamp: ts })
             }
+            // 2026-10-14: le fasce del contratto sono pre-inserite tutte; quelle
+            // che iniziano dopo l'uscita non si salvano (uscito alle 18:00,
+            // le pause delle 18:30 e 19:30 finivano scalate dalle ore).
+            const uscitaMin = uscita ? hhmmToMinutes(uscita) : null
             for (const p of pause) {
+                if (uscitaMin != null && p.pausa_inizio) {
+                    const inizioMin = hhmmToMinutes(p.pausa_inizio)
+                    if (inizioMin != null && inizioMin >= uscitaMin) continue
+                }
                 if (p.pausa_inizio) {
                     const ts = hhmmToISO(p.pausa_inizio, dataRef)
                     if (ts) inserts.push({ operatore_id: me.id, tipo: 'pausa_inizio', timestamp: ts })

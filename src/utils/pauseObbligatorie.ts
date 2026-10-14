@@ -276,8 +276,20 @@ export function combinaPauseGiorno(
     uscitaISO?: string | null,
 ): { finestre: FinestraPausaISO[]; mostrateMin: number; scalateMin: number; extraContrattoMin: number } {
     const overlap = (x: { da: number; a: number }, y: { da: number; a: number }) => x.da < y.a && y.da < x.a
+    const uscitaMs = uscitaISO ? new Date(uscitaISO).getTime() : NaN
+    // 2026-10-14: anche le pause a mano si tagliano all'uscita. L'editor
+    // pre-riempie TUTTE le fasce del contratto e le salva come pause vere:
+    // uscito alle 18:00, le pause 18:30 e 19:30 venivano scalate lo stesso.
+    const manualiDentroTurno = Number.isNaN(uscitaMs)
+        ? manualiISO
+        : manualiISO.flatMap(w => {
+            const inizioMs = new Date(w.inizio).getTime()
+            const fineMs = new Date(w.fine).getTime()
+            if (inizioMs >= uscitaMs) return []
+            return [fineMs > uscitaMs ? { inizio: w.inizio, fine: new Date(uscitaMs).toISOString() } : w]
+        })
     // Pause a mano -> minuti-del-giorno per il confronto di sovrapposizione.
-    const man = manualiISO
+    const man = manualiDentroTurno
         .map(w => ({ da: isoToRomeMinuti(w.inizio), a: isoToRomeMinuti(w.fine), iso: w }))
         .filter(w => w.da >= 0 && w.a > w.da)
     // Fasce di contratto -> minuti-del-giorno.
@@ -285,7 +297,6 @@ export function combinaPauseGiorno(
         .map(f => ({ da: hhmmToMinuti(f.da) ?? -1, a: hhmmToMinuti(f.a) ?? -1, hhmm: f }))
         .filter(w => w.da >= 0 && w.a > w.da)
     // Fasce che finiscono DOPO l'uscita: l'operatore non c'era, non contano.
-    const uscitaMs = uscitaISO ? new Date(uscitaISO).getTime() : NaN
     const fasceDentroTurno = Number.isNaN(uscitaMs)
         ? fasce
         : fasce.filter(w => {
