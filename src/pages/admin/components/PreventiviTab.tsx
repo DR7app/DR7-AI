@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import GestisciMenu from './GestisciMenu'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
@@ -511,8 +512,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   // per esteso perche' Tailwind non genera i valori arbitrari costruiti a
   // runtime.
   const colonneListaPreventivi = puoEliminare
-    ? 'grid-cols-[32px_2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_116px]'
-    : 'grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_88px]'
+    ? 'grid-cols-[32px_2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_136px]'
+    : 'grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_136px]'
   // Hide-key esplicito: admin puo' spuntare "Nascondi richieste no cauzione"
   // nella modale invito per togliere il subtab anche a chi non e' collaboratore.
   const hideRichiesteNoCauzione = Array.isArray(permissions) && permissions.includes('hide:richieste-no-cauzione')
@@ -5409,70 +5410,28 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                             </button>
-                            {canEdit && (
-                              <button
-                                type="button"
-                                onClick={() => handleEdit(p)}
-                                title="Modifica"
-                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                              </button>
-                            )}
-                            {canSend && (
-                              <button
-                                type="button"
-                                onClick={openSendModal}
-                                title={p.status === 'bozza' ? 'Invia preventivo' : 'Reinvia'}
-                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                              </button>
-                            )}
-                            {canAccept && (
-                              <button
-                                type="button"
-                                onClick={() => openAcceptModal(p)}
-                                title="Accetta"
-                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/></svg>
-                              </button>
-                            )}
-                            {canReject && (
-                              <button
-                                type="button"
-                                onClick={() => isNoCauzione ? handleRejectNoCauzionePreventivo(p) : openRejectModal(p)}
-                                title={isNoCauzione ? 'Rifiuta + Sconto 5%' : 'Rifiuta'}
-                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
-                              </button>
-                            )}
-                            {p.status === 'rifiutato' && (
-                              <button
-                                type="button"
-                                onClick={() => openRejectModal(p)}
-                                title={p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo rifiuto'}
-                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
-                              </button>
-                            )}
-                            {puoEliminare && (
-                              <button
-                                type="button"
-                                onClick={() => chiediEliminazione(
+                            {/* 14/10/2026: le icone Modifica / Invia / Accetta /
+                                Rifiuta / Motivo / Elimina stanno in Gestisci,
+                                come in Prenotazioni. Stessi handler e stesse
+                                condizioni di prima. */}
+                            <GestisciMenu sections={[
+                              { title: 'Gestione', actions: [
+                                { label: 'Modifica', visible: canEdit, onClick: () => handleEdit(p) },
+                                { label: p.status === 'bozza' ? 'Invia preventivo' : 'Reinvia', visible: canSend, onClick: openSendModal },
+                              ] },
+                              { title: 'Esito', actions: [
+                                { label: 'Accetta', visible: canAccept, onClick: () => openAcceptModal(p) },
+                                { label: isNoCauzione ? 'Rifiuta + Sconto 5%' : 'Rifiuta', visible: canReject, onClick: () => isNoCauzione ? handleRejectNoCauzionePreventivo(p) : openRejectModal(p) },
+                                { label: p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo rifiuto', visible: p.status === 'rifiutato', onClick: () => openRejectModal(p) },
+                              ] },
+                              { title: 'Altro', actions: [
+                                { label: 'Elimina preventivo', visible: puoEliminare, onClick: () => chiediEliminazione(
                                   [p.id],
                                   'Elimina preventivo',
                                   rigaRiepilogoElim(p)
-                                )}
-                                title="Elimina preventivo"
-                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                              </button>
-                            )}
+                                ) },
+                              ] },
+                            ]} />
                           </div>
                         </div>
                       )
@@ -5616,20 +5575,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                       here regardless of other gates so it's reachable on every
                       preventivo (bozza/inviato/accettato/rifiutato/scaduto). */}
                   {(
-                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-theme-border/40">
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(p)}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-blue-600 hover:bg-blue-500 active:opacity-70 text-white text-[13px] font-semibold"
-                        >
-                          Modifica
-                        </button>
-                      )}
-                      {canSend && (
-                        <button
-                          type="button"
-                          onClick={async () => {
+                    <div className="flex justify-end mt-3 pt-3 border-t border-theme-border/40">
+                      {/* 14/10/2026: stesse azioni di prima, tutte in Gestisci. */}
+                      <GestisciMenu size="md" sections={[
+                        { title: 'Gestione', actions: [
+                          { label: 'Modifica', visible: canEdit, onClick: () => handleEdit(p) },
+                          { label: 'Invia', visible: canSend, onClick: async () => {
                             setSelectedPreventivo(p)
                             setWhatsappPhone(p.customer_phone || '')
                             setPreviewMessage('')
@@ -5642,51 +5593,19 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                             }
                             setPreviewMessage(preview)
                             setShowPhoneModal(true)
-                          }}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-green-600 hover:bg-green-500 active:opacity-70 text-white text-[13px] font-semibold"
-                        >
-                          Invia
-                        </button>
-                      )}
-                      {/* 2026-05-20: bottone "Invia coefficienti" rimosso
-                          completamente (anche dalla view card mobile). */}
-                      {canConvert && (
-                        <button
-                          type="button"
-                          onClick={() => openAcceptModal(p)}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:opacity-70 text-white text-[13px] font-semibold"
-                        >
-                          Accetta
-                        </button>
-                      )}
-                      {canReject && (
-                        <button
-                          type="button"
-                          onClick={() => openRejectModal(p)}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-red-600 hover:bg-red-500 active:opacity-70 text-white text-[13px] font-semibold"
-                        >
-                          Rifiuta
-                        </button>
-                      )}
-                      {canEditMotivo && (
-                        <button
-                          type="button"
-                          onClick={() => openRejectModal(p)}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-amber-600 hover:bg-amber-500 active:opacity-70 text-white text-[13px] font-semibold"
-                          title={p.motivo_rifiuto ? `Motivo attuale: ${p.motivo_rifiuto}` : 'Imposta motivo rifiuto'}
-                        >
-                          {p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo'}
-                        </button>
-                      )}
-                      {puoEliminare && (
-                        <button
-                          type="button"
-                          onClick={() => chiediEliminazione([p.id], 'Elimina preventivo', rigaRiepilogoElim(p))}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/40 text-rose-200 active:opacity-70 text-[13px] font-semibold"
-                        >
-                          Elimina
-                        </button>
-                      )}
+                          } },
+                          // 2026-05-20: bottone "Invia coefficienti" rimosso
+                          // completamente (anche dalla view card mobile).
+                        ] },
+                        { title: 'Esito', actions: [
+                          { label: 'Accetta', visible: canConvert, onClick: () => openAcceptModal(p) },
+                          { label: 'Rifiuta', visible: canReject, onClick: () => openRejectModal(p) },
+                          { label: p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo', visible: canEditMotivo, onClick: () => openRejectModal(p) },
+                        ] },
+                        { title: 'Altro', actions: [
+                          { label: 'Elimina', visible: puoEliminare, onClick: () => chiediEliminazione([p.id], 'Elimina preventivo', rigaRiepilogoElim(p)) },
+                        ] },
+                      ]} />
                     </div>
                   )}
                 </div>

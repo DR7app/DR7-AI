@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroPagina } from '../../../components/Scheletro'
-import { createPortal } from 'react-dom'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
@@ -19,7 +18,7 @@ import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { isCreditWallet as isMetodoCreditWallet } from '../../../utils/paymentMethodMatchers'
 import { leggiMovimentoWallet } from '../../../utils/walletCliente'
 import MoneyInput from '../../../components/MoneyInput'
-import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
+import GestisciMenu from './GestisciMenu'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
 import { nettoVoce, giaFatturato, daFatturare } from '../../../utils/fatturazioneVoci'
@@ -179,60 +178,6 @@ export default function UnpaidBookingsTab() {
   // Sollecito pagamento — chiave del gruppo per cui è in corso l'invio del
   // promemoria WhatsApp (disabilita il bottone durante l'invio).
   const [sollecitoSendingKey, setSollecitoSendingKey] = useState<string | null>(null)
-  // Per-row actions dropdown (3-dots menu on desktop row layout)
-  const [openActionsRowKey, setOpenActionsRowKey] = useState<string | null>(null)
-  // 2026-08-31: il menu "..." della riga era 'absolute' dentro la card, che
-  // ha overflow-hidden: le ultime voci restavano TAGLIATE dal bordo e si
-  // raggiungevano solo scorrendo. Stessa cura di Fatture e Gestisci: esce in
-  // un portal con position:fixed, quindi nessun antenato lo puo' ritagliare.
-  const actionsBtnRef = useRef<HTMLButtonElement | null>(null)
-  const actionsMenuRef = useRef<HTMLDivElement | null>(null)
-  const actionsBaseRef = useRef<{ w: number; h: number } | null>(null)
-  const [actionsCoords, setActionsCoords] = useState<Coords | null>(null)
-
-  function recalcActionsCoords() {
-    const btn = actionsBtnRef.current
-    if (!btn) return
-    // scrollHeight: l'altezza vera del contenuto, anche quando il maxHeight
-    // lo sta gia' tagliando. Misurata a una colonna e poi tenuta ferma.
-    if (!actionsBaseRef.current && actionsMenuRef.current) {
-      actionsBaseRef.current = {
-        w: actionsMenuRef.current.offsetWidth,
-        h: actionsMenuRef.current.scrollHeight,
-      }
-    }
-    const base = actionsBaseRef.current
-    const next = computeCoords(
-      btn.getBoundingClientRect(),
-      window.innerWidth,
-      window.innerHeight,
-      base?.w || 224,
-      base?.h || 180,
-    )
-    setActionsCoords(prev => (prev && sameCoords(prev, next)) ? prev : next)
-  }
-
-  // Senza array di dipendenze: il primo giro stima, il secondo misura sul
-  // pannello ormai montato. Converge perche' sameCoords non riscrive.
-  useLayoutEffect(() => {
-    if (openActionsRowKey) recalcActionsCoords()
-    else {
-      actionsBaseRef.current = null
-      setActionsCoords(null)
-    }
-  })
-
-  useEffect(() => {
-    if (!openActionsRowKey) return
-    const onReposition = () => recalcActionsCoords()
-    // 'true' come terzo arg: cattura anche lo scroll della lista.
-    window.addEventListener('scroll', onReposition, true)
-    window.addEventListener('resize', onReposition)
-    return () => {
-      window.removeEventListener('scroll', onReposition, true)
-      window.removeEventListener('resize', onReposition)
-    }
-  }, [openActionsRowKey])
 
   // Addebito state
   const [showAddebitoModal, setShowAddebitoModal] = useState(false)
@@ -3252,20 +3197,6 @@ export default function UnpaidBookingsTab() {
     )
   }
 
-  // Invia Sollecito dentro la riga di bottoni della carta (accanto a
-  // Pagato / Invia Link / Parziale). Il sollecito resta per cliente: stesso
-  // handler del bottone in testa al gruppo.
-  function SollecitoButton({ group }: { group: CustomerGroup }) {
-    const sending = sollecitoSendingKey === group.customerKey
-    return (
-      <button
-        onClick={() => handleSendSollecito(group)}
-        disabled={sending}
-        className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-      >{sending ? 'Invio...' : 'Invia Sollecito'}</button>
-    )
-  }
-
   // Pannello sollecito (menu "..." su desktop, corpo della carta su mobile):
   // scelta del ritmo (24h / 48h / Settimana, il click invia subito il primo
   // sollecito) e "Blocca sollecito".
@@ -3341,7 +3272,33 @@ export default function UnpaidBookingsTab() {
 
           return (
             <div key={booking.id} className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-2.5">
-              <div className="text-sm font-semibold text-theme-text-primary">{vehicle}</div>
+              <div className="flex items-start justify-between gap-1">
+                <div className="text-sm font-semibold text-theme-text-primary">{vehicle}</div>
+                {/* 14/10/2026: tutte le azioni della prenotazione in Gestisci. */}
+                <GestisciMenu sections={[
+                  { title: 'Pagamenti', actions: [
+                    // Segna Tutto Pagato — booking + extensions in one fattura
+                    { label: 'Segna Tutto Pagato (fattura unica)', visible: ((isPending ? 1 : 0) + pendingExts.length) >= 2, onClick: () => markBookingAndExtensionsPaid(booking) },
+                    { label: 'Pagato', visible: isPending, onClick: () => askPaymentMethod(
+                      `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
+                      (method) => updatePaymentStatus(booking.id, 'paid', method, remainingCents / 100)
+                    ) },
+                    { label: 'Invia Link', visible: isPending, onClick: () => sendPayByLink(booking, remainingCents / 100, `Noleggio ${booking.vehicle_name || ''}`) },
+                    { label: 'Link Parziale', visible: isPending && partialLinkKey !== bkKey, onClick: () => { setPartialLinkKey(bkKey); setPartialLinkValue('') } },
+                    { label: 'Parziale', visible: isPending && partialPayItemKey !== bkKey, onClick: () => { setPartialPayItemKey(bkKey); setPartialPayValue(''); setPartialPayMode('dato') } },
+                  ] },
+                  { title: 'Altro', actions: [
+                    { label: sollecitoSendingKey === group.customerKey ? 'Invio...' : 'Invia Sollecito', disabled: sollecitoSendingKey === group.customerKey, onClick: () => handleSendSollecito(group) },
+                  ] },
+                  { title: 'Gestione', actions: [
+                    { label: 'Modifica', visible: editAmountKey !== editKey, onClick: () => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) } },
+                    // 07/10/2026: una prenotazione gia' annullata e' qui solo per
+                    // penali/danni aperti. La X la riannullava senza togliere
+                    // nulla: la riga restava e l'operatore ricliccava.
+                    { label: 'Elimina', visible: confirmDeleteKey !== bkKey && !/cancell|annull/i.test(booking.status || ''), onClick: () => setConfirmDeleteKey(bkKey) },
+                  ] },
+                ]} />
+              </div>
               {plate && <div className="text-xs text-theme-text-muted font-mono">{plate}</div>}
               <div className="text-xs text-theme-text-muted">
                 {pickupDate && new Date(pickupDate).toLocaleDateString('it-IT')} - {dropoffDate && new Date(dropoffDate).toLocaleDateString('it-IT')}
@@ -3386,8 +3343,29 @@ export default function UnpaidBookingsTab() {
                     const extPartialKey = `ext:${booking.id}:${extIdx}`
                     return (
                       <div key={extIdx} className="bg-purple-500/10 border border-purple-500/20 rounded-lg px-2 py-1.5">
-                        <div className="text-xs text-purple-400 font-medium">
-                          Estensione +{days || '?'}gg
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="text-xs text-purple-400 font-medium">
+                            Estensione +{days || '?'}gg
+                          </div>
+                          {/* 14/10/2026: tutte le azioni della voce in Gestisci,
+                              al posto della fila di bottoni colorati. */}
+                          <GestisciMenu sections={[
+                            { title: 'Pagamenti', actions: [
+                              { label: 'Pagato', onClick: () => askPaymentMethod(
+                                `Estensione Pagata — €${extRemaining.toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
+                                (method) => markSingleExtensionPaid(booking, extIdx, method)
+                              ) },
+                              { label: 'Invia Link', onClick: () => sendPayByLink(booking, extRemaining, `Estensione ${booking.vehicle_name || ''}`) },
+                              { label: 'Link Parziale', visible: partialLinkKey !== extPartialKey, onClick: () => { setPartialLinkKey(extPartialKey); setPartialLinkValue('') } },
+                              { label: 'Parziale', visible: partialPayItemKey !== extPartialKey, onClick: () => { setPartialPayItemKey(extPartialKey); setPartialPayValue(''); setPartialPayMode('dato') } },
+                            ] },
+                            { title: 'Altro', actions: [
+                              { label: sollecitoSendingKey === group.customerKey ? 'Invio...' : 'Invia Sollecito', disabled: sollecitoSendingKey === group.customerKey, onClick: () => handleSendSollecito(group) },
+                            ] },
+                            { title: 'Gestione', actions: [
+                              { label: 'Elimina', visible: confirmDeleteKey !== extPartialKey, onClick: () => setConfirmDeleteKey(extPartialKey) },
+                            ] },
+                          ]} />
                         </div>
                         <div className="text-purple-400 font-bold text-sm">
                           €{extRemaining.toFixed(2)}
@@ -3402,72 +3380,38 @@ export default function UnpaidBookingsTab() {
                             €{extPaid.toFixed(2)} pagati
                           </div>
                         )}
-                        <div className="flex gap-1 flex-wrap mt-1 pt-1 border-t border-purple-500/10">
-                          <button
-                            onClick={() => askPaymentMethod(
-                              `Estensione Pagata — €${extRemaining.toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
-                              (method) => markSingleExtensionPaid(booking, extIdx, method)
-                            )}
-                            className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
-                          >Pagato</button>
-                          <button
-                            onClick={() => sendPayByLink(booking, extRemaining, `Estensione ${booking.vehicle_name || ''}`)}
-                            className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
-                          >Invia Link</button>
-                          {/* 2026-05-28: Link Parziale per estensioni — paritetico
-                              alla riga booking. sendPayByLink usa paymentPurpose
-                              'booking_topup' quindi la callback accumula correttamente. */}
-                          {partialLinkKey !== extPartialKey && (
+                        {partialLinkKey === extPartialKey && (
+                          <div className="flex items-center gap-1 w-full mt-1">
+                            <MoneyInput
+                              min="1"
+                              max={extRemaining}
+                              value={partialLinkValue}
+                              onChange={(__v: string) => setPartialLinkValue(__v)}
+                              placeholder={`Max €${extRemaining.toFixed(2)}`}
+                              className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                              autoFocus
+                            />
+                            <button onClick={() => {
+                              const amt = parseFloat(partialLinkValue)
+                              if (!amt || amt <= 0) return
+                              sendPayByLink(booking, Math.min(amt, extRemaining), `Estensione ${booking.vehicle_name || ''} (parziale)`)
+                              setPartialLinkKey(null)
+                            }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                            <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                          </div>
+                        )}
+                        {confirmDeleteKey === extPartialKey && (
+                          <div className="flex gap-1 items-center mt-1">
                             <button
-                              onClick={() => { setPartialLinkKey(extPartialKey); setPartialLinkValue('') }}
-                              className="px-2 py-0.5 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
-                            >Link Parziale</button>
-                          )}
-                          {partialLinkKey === extPartialKey && (
-                            <div className="flex items-center gap-1 w-full mt-1">
-                              <MoneyInput
-                                min="1"
-                                max={extRemaining}
-                                value={partialLinkValue}
-                                onChange={(__v: string) => setPartialLinkValue(__v)}
-                                placeholder={`Max €${extRemaining.toFixed(2)}`}
-                                className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
-                                autoFocus
-                              />
-                              <button onClick={() => {
-                                const amt = parseFloat(partialLinkValue)
-                                if (!amt || amt <= 0) return
-                                sendPayByLink(booking, Math.min(amt, extRemaining), `Estensione ${booking.vehicle_name || ''} (parziale)`)
-                                setPartialLinkKey(null)
-                              }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
-                              <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
-                            </div>
-                          )}
-                          {partialPayItemKey !== extPartialKey && (
+                              onClick={() => deleteSingleExtension(booking, extIdx)}
+                              className="px-2 py-0.5 bg-red-600 text-white rounded text-xs font-semibold"
+                            >Conferma</button>
                             <button
-                              onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue(''); setPartialPayMode('dato') }}
-                              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
-                            >Parziale</button>
-                          )}
-                          <SollecitoButton group={group} />
-                          {confirmDeleteKey !== extPartialKey ? (
-                            <button
-                              onClick={() => setConfirmDeleteKey(extPartialKey)}
-                              className="px-2 py-0.5 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                            >x</button>
-                          ) : (
-                            <div className="flex gap-1 items-center">
-                              <button
-                                onClick={() => deleteSingleExtension(booking, extIdx)}
-                                className="px-2 py-0.5 bg-red-600 text-white rounded text-xs font-semibold"
-                              >Conferma</button>
-                              <button
-                                onClick={() => setConfirmDeleteKey(null)}
-                                className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs font-semibold"
-                              >Annulla</button>
-                            </div>
-                          )}
-                        </div>
+                              onClick={() => setConfirmDeleteKey(null)}
+                              className="px-2 py-0.5 bg-gray-600 text-white rounded text-xs font-semibold"
+                            >Annulla</button>
+                          </div>
+                        )}
                         <PartialPayInput
                           itemKey={extPartialKey}
                           remaining={Math.max(0, extRemaining)}
@@ -3480,80 +3424,26 @@ export default function UnpaidBookingsTab() {
                 </div>
               )}
 
-              {/* Segna Tutto Pagato — booking + extensions in one fattura */}
-              {((isPending ? 1 : 0) + pendingExts.length) >= 2 && (
-                <button
-                  onClick={() => markBookingAndExtensionsPaid(booking)}
-                  className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                >Segna Tutto Pagato (fattura unica)</button>
+              {partialLinkKey === bkKey && (
+                <div className="flex items-center gap-1 w-full mt-2">
+                  <MoneyInput
+                    min="1"
+                    max={remainingCents / 100}
+                    value={partialLinkValue}
+                    onChange={(__v: string) => setPartialLinkValue(__v)}
+                    placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
+                    className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                    autoFocus
+                  />
+                  <button onClick={() => {
+                    const amt = parseFloat(partialLinkValue)
+                    if (!amt || amt <= 0) return
+                    sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Noleggio ${booking.vehicle_name || ''} (parziale)`)
+                    setPartialLinkKey(null)
+                  }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                  <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                </div>
               )}
-
-              {/* Action buttons */}
-              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-blue-500/10">
-                {isPending && (
-                  <button
-                    onClick={() => askPaymentMethod(
-                      `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
-                      (method) => updatePaymentStatus(booking.id, 'paid', method, remainingCents / 100)
-                    )}
-                    className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
-                  >Pagato</button>
-                )}
-                {isPending && (
-                  <button
-                    onClick={() => sendPayByLink(booking, remainingCents / 100, `Noleggio ${booking.vehicle_name || ''}`)}
-                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
-                  >Invia Link</button>
-                )}
-                {isPending && partialLinkKey !== bkKey && (
-                  <button
-                    onClick={() => { setPartialLinkKey(bkKey); setPartialLinkValue('') }}
-                    className="px-2 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
-                  >Link Parziale</button>
-                )}
-                {partialLinkKey === bkKey && (
-                  <div className="flex items-center gap-1 w-full mt-1">
-                    <MoneyInput
-                      min="1"
-                      max={remainingCents / 100}
-                      value={partialLinkValue}
-                      onChange={(__v: string) => setPartialLinkValue(__v)}
-                      placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
-                      className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
-                      autoFocus
-                    />
-                    <button onClick={() => {
-                      const amt = parseFloat(partialLinkValue)
-                      if (!amt || amt <= 0) return
-                      sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Noleggio ${booking.vehicle_name || ''} (parziale)`)
-                      setPartialLinkKey(null)
-                    }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
-                    <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
-                  </div>
-                )}
-                {isPending && partialPayItemKey !== bkKey && (
-                  <button
-                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue(''); setPartialPayMode('dato') }}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
-                  >Parziale</button>
-                )}
-                <SollecitoButton group={group} />
-                {editAmountKey !== editKey && (
-                  <button
-                    onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
-                    className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
-                  >Modifica</button>
-                )}
-                {/* 07/10/2026: una prenotazione gia' annullata e' qui solo per
-                    penali/danni aperti. La X la riannullava senza togliere
-                    nulla: la riga restava e l'operatore ricliccava. */}
-                {confirmDeleteKey !== bkKey && !/cancell|annull/i.test(booking.status || '') && (
-                  <button
-                    onClick={() => setConfirmDeleteKey(bkKey)}
-                    className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                  >x</button>
-                )}
-              </div>
               <PartialPayInput
                 itemKey={bkKey}
                 remaining={remainingCents / 100}
@@ -3596,7 +3486,31 @@ export default function UnpaidBookingsTab() {
 
           return (
             <div key={booking.id} className="bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2.5">
-              <div className="text-sm font-semibold text-theme-text-primary uppercase">{serviceName}</div>
+              <div className="flex items-start justify-between gap-1">
+                <div className="text-sm font-semibold text-theme-text-primary uppercase">{serviceName}</div>
+                {/* 14/10/2026: tutte le azioni della prenotazione in Gestisci. */}
+                <GestisciMenu sections={[
+                  { title: 'Pagamenti', actions: [
+                    { label: 'Pagato', onClick: () => askPaymentMethod(
+                      `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
+                      (method) => updatePaymentStatus(booking.id, 'paid', method)
+                    ) },
+                    { label: 'Invia Link', onClick: () => sendPayByLink(booking, remainingCents / 100, `Lavaggio & Meccanica ${serviceName}`) },
+                    { label: 'Link Parziale', visible: partialLinkKey !== bkKey, onClick: () => { setPartialLinkKey(bkKey); setPartialLinkValue('') } },
+                    { label: 'Parziale', visible: partialPayItemKey !== bkKey, onClick: () => { setPartialPayItemKey(bkKey); setPartialPayValue(''); setPartialPayMode('dato') } },
+                  ] },
+                  { title: 'Altro', actions: [
+                    { label: sollecitoSendingKey === group.customerKey ? 'Invio...' : 'Invia Sollecito', disabled: sollecitoSendingKey === group.customerKey, onClick: () => handleSendSollecito(group) },
+                  ] },
+                  { title: 'Gestione', actions: [
+                    { label: 'Modifica', visible: editAmountKey !== editKey, onClick: () => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) } },
+                    // 07/10/2026: una prenotazione gia' annullata e' qui solo per
+                    // penali/danni aperti. La X la riannullava senza togliere
+                    // nulla: la riga restava e l'operatore ricliccava.
+                    { label: 'Elimina', visible: confirmDeleteKey !== bkKey && !/cancell|annull/i.test(booking.status || ''), onClick: () => setConfirmDeleteKey(bkKey) },
+                  ] },
+                ]} />
+              </div>
               <div className="text-xs text-theme-text-muted">
                 {booking.appointment_date && new Date(booking.appointment_date).toLocaleDateString('it-IT')} {booking.appointment_time || ''}
               </div>
@@ -3609,67 +3523,26 @@ export default function UnpaidBookingsTab() {
                 )}
               </div>
 
-              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-cyan-500/10">
-                <button
-                  onClick={() => askPaymentMethod(
-                    `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
-                    (method) => updatePaymentStatus(booking.id, 'paid', method)
-                  )}
-                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
-                >Pagato</button>
-                <button
-                  onClick={() => sendPayByLink(booking, remainingCents / 100, `Lavaggio & Meccanica ${serviceName}`)}
-                  className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
-                >Invia Link</button>
-                {partialLinkKey !== bkKey && (
-                  <button
-                    onClick={() => { setPartialLinkKey(bkKey); setPartialLinkValue('') }}
-                    className="px-2 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
-                  >Link Parziale</button>
-                )}
-                {partialLinkKey === bkKey && (
-                  <div className="flex items-center gap-1 w-full mt-1">
-                    <MoneyInput
-                      min="1"
-                      max={remainingCents / 100}
-                      value={partialLinkValue}
-                      onChange={(__v: string) => setPartialLinkValue(__v)}
-                      placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
-                      className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
-                      autoFocus
-                    />
-                    <button onClick={() => {
-                      const amt = parseFloat(partialLinkValue)
-                      if (!amt || amt <= 0) return
-                      sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Lavaggio & Meccanica ${serviceName} (parziale)`)
-                      setPartialLinkKey(null)
-                    }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
-                    <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
-                  </div>
-                )}
-                {partialPayItemKey !== bkKey && (
-                  <button
-                    onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue(''); setPartialPayMode('dato') }}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
-                  >Parziale</button>
-                )}
-                <SollecitoButton group={group} />
-                {editAmountKey !== editKey && (
-                  <button
-                    onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
-                    className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
-                  >Modifica</button>
-                )}
-                {/* 07/10/2026: una prenotazione gia' annullata e' qui solo per
-                    penali/danni aperti. La X la riannullava senza togliere
-                    nulla: la riga restava e l'operatore ricliccava. */}
-                {confirmDeleteKey !== bkKey && !/cancell|annull/i.test(booking.status || '') && (
-                  <button
-                    onClick={() => setConfirmDeleteKey(bkKey)}
-                    className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                  >x</button>
-                )}
-              </div>
+              {partialLinkKey === bkKey && (
+                <div className="flex items-center gap-1 w-full mt-2">
+                  <MoneyInput
+                    min="1"
+                    max={remainingCents / 100}
+                    value={partialLinkValue}
+                    onChange={(__v: string) => setPartialLinkValue(__v)}
+                    placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
+                    className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                    autoFocus
+                  />
+                  <button onClick={() => {
+                    const amt = parseFloat(partialLinkValue)
+                    if (!amt || amt <= 0) return
+                    sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Lavaggio & Meccanica ${serviceName} (parziale)`)
+                    setPartialLinkKey(null)
+                  }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                  <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                </div>
+              )}
               <PartialPayInput
                 itemKey={bkKey}
                 remaining={remainingCents / 100}
@@ -3706,19 +3579,6 @@ export default function UnpaidBookingsTab() {
 
     return (
       <div className="space-y-2">
-        {items.length >= 2 && onMarkAllPaid && (
-          <button
-            onClick={onMarkAllPaid}
-            disabled={!!processingKey}
-            className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >{processingKey ? 'Elaborazione...' : `Segna Tutti Pagato (${items.length})`}</button>
-        )}
-        {onAddebito && (
-          <button
-            onClick={onAddebito}
-            className="w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
-          >Addebito</button>
-        )}
         {chargedViaMit != null && chargedViaMit > 0 && (() => {
           const totalItemsCents = Math.round(items.reduce((s, i) => s + i.remaining, 0) * 100)
           return (
@@ -3734,7 +3594,46 @@ export default function UnpaidBookingsTab() {
 
           return (
             <div key={idx} className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg p-2.5`}>
-              <div className="text-xs text-theme-text-primary font-medium">{item.label}</div>
+              <div className="flex items-start justify-between gap-1">
+                <div className="text-xs text-theme-text-primary font-medium">{item.label}</div>
+                {/* 14/10/2026: tutte le azioni della voce in Gestisci, compresi
+                    "Segna Tutti Pagato" e "Addebito" che prima stavano sopra la
+                    lista come barre a tutta larghezza. */}
+                <GestisciMenu sections={[
+                  { title: 'Pagamenti', actions: item.source === 'booking_details' ? [
+                    { label: 'Pagato', disabled: !!processingKey, onClick: () => markAllTypePaid(item.booking, type) },
+                    { label: 'Invia Link', onClick: () => sendPayByLink(item.booking, item.remaining, `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label}`, type === 'penalties' ? 'penali' : 'danni') },
+                    { label: 'Link Parziale', visible: partialLinkKey !== itemKey && partialPayItemKey !== partialKey, onClick: () => { setPartialLinkKey(itemKey); setPartialLinkValue('') } },
+                    { label: 'Parziale', visible: partialPayItemKey !== partialKey, onClick: () => { setPartialPayItemKey(partialKey); setPartialPayValue(''); setPartialPayMode('dato') } },
+                    { label: 'Addebito', visible: !!onAddebitoItem, onClick: () => onAddebitoItem?.(Math.round(item.remaining * 100), item.label) },
+                  ] : [
+                    { label: 'Pagato', onClick: () => {
+                      const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                      if (fi) markSingleFatturaItemPaid(fi)
+                    } },
+                    { label: 'Parziale', visible: partialPayItemKey !== partialKey, onClick: () => { setPartialPayItemKey(partialKey); setPartialPayValue(''); setPartialPayMode('dato') } },
+                    { label: 'Addebito', visible: !!onAddebitoItem, onClick: () => onAddebitoItem?.(Math.round(item.remaining * 100), item.label) },
+                  ] },
+                  { title: `Tutte le voci ${type === 'penalties' ? 'penali' : 'danni'}`, actions: [
+                    { label: processingKey ? 'Elaborazione...' : `Segna Tutti Pagato (${items.length})`, visible: items.length >= 2 && !!onMarkAllPaid, disabled: !!processingKey, onClick: () => onMarkAllPaid?.() },
+                    { label: 'Addebito', visible: !!onAddebito, onClick: () => onAddebito?.() },
+                  ] },
+                  { title: 'Altro', actions: [
+                    { label: sollecitoGroup && sollecitoSendingKey === sollecitoGroup.customerKey ? 'Invio...' : 'Invia Sollecito', visible: !!sollecitoGroup, disabled: !!sollecitoGroup && sollecitoSendingKey === sollecitoGroup.customerKey, onClick: () => { if (sollecitoGroup) handleSendSollecito(sollecitoGroup) } },
+                  ] },
+                  { title: 'Gestione', actions: [
+                    { label: 'Modifica', visible: editAmountKey !== editKey, onClick: () => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) } },
+                    { label: 'Elimina', onClick: () => {
+                      if (item.source === 'booking_details') {
+                        removeSinglePenaltyDanno(item.booking, type, item.originalIndex)
+                      } else {
+                        const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
+                        if (fi) deleteFatturaItem(fi)
+                      }
+                    } },
+                  ] },
+                ]} />
+              </div>
               <div className={`font-bold text-sm ${colorClasses.text}`}>
                 €{item.remaining.toFixed(2)}
                 {item.paymentStatus === 'partial' && item.amount > item.remaining && (
@@ -3754,106 +3653,26 @@ export default function UnpaidBookingsTab() {
                 </div>
               )}
 
-              <div className={`flex gap-1 flex-wrap mt-2 pt-2 border-t ${colorClasses.divider}`}>
-                {item.source === 'booking_details' ? (
-                  <>
-                    <button
-                      onClick={() => markAllTypePaid(item.booking, type)}
-                      disabled={!!processingKey}
-                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
-                    >Pagato</button>
-                    <button
-                      onClick={() => sendPayByLink(item.booking, item.remaining, `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label}`, type === 'penalties' ? 'penali' : 'danni')}
-                      className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
-                    >Invia Link</button>
-                    {partialLinkKey !== itemKey && partialPayItemKey !== partialKey && (
-                      <button
-                        onClick={() => { setPartialLinkKey(itemKey); setPartialLinkValue('') }}
-                        className="px-2 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
-                      >Link Parziale</button>
-                    )}
-                    {partialLinkKey === itemKey && (
-                      <div className="flex items-center gap-1 w-full mt-1">
-                        <MoneyInput
-                          min="1"
-                          max={item.remaining}
-                          value={partialLinkValue}
-                          onChange={(__v: string) => setPartialLinkValue(__v)}
-                          placeholder={`Max €${item.remaining.toFixed(2)}`}
-                          className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
-                          autoFocus
-                        />
-                        <button onClick={() => {
-                          const amt = parseFloat(partialLinkValue)
-                          if (!amt || amt <= 0) return
-                          sendPayByLink(item.booking, Math.min(amt, item.remaining), `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label} (parziale)`, type === 'penalties' ? 'penali' : 'danni')
-                          setPartialLinkKey(null)
-                        }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
-                        <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
-                      </div>
-                    )}
-                    {partialPayItemKey !== partialKey && (
-                      <button
-                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue(''); setPartialPayMode('dato') }}
-                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
-                      >Parziale</button>
-                    )}
-                    {onAddebitoItem && (
-                      <button
-                        onClick={() => onAddebitoItem(Math.round(item.remaining * 100), item.label)}
-                        className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
-                      >Addebito</button>
-                    )}
-                    {sollecitoGroup && <SollecitoButton group={sollecitoGroup} />}
-                    {editAmountKey !== editKey && (
-                      <button
-                        onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
-                      >Modifica</button>
-                    )}
-                    <button
-                      onClick={() => removeSinglePenaltyDanno(item.booking, type, item.originalIndex)}
-                      className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                    >x</button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => {
-                        const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
-                        if (fi) markSingleFatturaItemPaid(fi)
-                      }}
-                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
-                    >Pagato</button>
-                    {partialPayItemKey !== partialKey && (
-                      <button
-                        onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue(''); setPartialPayMode('dato') }}
-                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
-                      >Parziale</button>
-                    )}
-                    {onAddebitoItem && (
-                      <button
-                        onClick={() => onAddebitoItem(Math.round(item.remaining * 100), item.label)}
-                        className="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-semibold"
-                      >Addebito</button>
-                    )}
-                    {sollecitoGroup && <SollecitoButton group={sollecitoGroup} />}
-                    {editAmountKey !== editKey && (
-                      <button
-                        onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
-                      >Modifica</button>
-                    )}
-                    <button
-                      onClick={() => {
-                        const fi = (fatturaItemsMap[item.bookingId] || []).find(f => f.fatturaId === item.fatturaId && f.itemIndex === item.itemIndex)
-                        if (fi) deleteFatturaItem(fi)
-                      }}
-                      className="px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                    >x</button>
-                  </>
-                )}
-              </div>
+              {partialLinkKey === itemKey && (
+                <div className="flex items-center gap-1 w-full mt-2">
+                  <MoneyInput
+                    min="1"
+                    max={item.remaining}
+                    value={partialLinkValue}
+                    onChange={(__v: string) => setPartialLinkValue(__v)}
+                    placeholder={`Max €${item.remaining.toFixed(2)}`}
+                    className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                    autoFocus
+                  />
+                  <button onClick={() => {
+                    const amt = parseFloat(partialLinkValue)
+                    if (!amt || amt <= 0) return
+                    sendPayByLink(item.booking, Math.min(amt, item.remaining), `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label} (parziale)`, type === 'penalties' ? 'penali' : 'danni')
+                    setPartialLinkKey(null)
+                  }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                  <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                </div>
+              )}
 
               <PartialPayInput
                 itemKey={partialKey}
@@ -4458,7 +4277,6 @@ export default function UnpaidBookingsTab() {
           const donutDash = (probScore / 100) * donutCircum
           const donutColor = probScore >= 70 ? 'stroke-emerald-400' : probScore >= 40 ? 'stroke-amber-400' : 'stroke-red-400'
 
-          const isActionsOpen = openActionsRowKey === group.customerKey
           // Per-service detail (Noleggio/Prime Wash/Penali/Danni) is always
           // shown on desktop — user explicitly wanted the original data
           // visible inline, not behind a "Mostra dettaglio" click.
@@ -4539,108 +4357,52 @@ export default function UnpaidBookingsTab() {
                   )}
                 </div>
 
-                {/* AZIONI — bottone principale "Salda Tutto / Segna Pagato"
-                    visibile direttamente sulla riga (uscito dal menu 3-dots
-                    perche' troppo nascosto). Il menu 3-dots rimane per
-                    azioni secondarie (Pay by Link, Nexi addebito, ecc.). */}
-                <div className="relative flex justify-end items-center gap-1">
-                  {remainingEur > 0 && (
-                    <button
-                      disabled={!!processingKey}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (itemCount >= 2) {
-                          askPaymentMethod(`Salda Tutto — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => markAllCustomerPaid(group, method))
-                        } else if (group.noleggioBookings[0]) {
-                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method, remainingEur))
-                        } else if (group.primeWashBookings[0]) {
-                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.primeWashBookings[0].id, 'paid', method, remainingEur))
-                        }
-                      }}
-                      title={itemCount >= 2 ? 'Crea una fattura unica con TUTTE le voci di questo cliente' : 'Segna come pagato'}
-                      className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold whitespace-nowrap shadow-sm transition-colors"
-                    >
-                      {itemCount >= 2 ? `Salda Tutto · €${remainingEur.toFixed(0)}` : `Segna Pagato`}
-                    </button>
-                  )}
-                  <button
-                    ref={isActionsOpen ? actionsBtnRef : undefined}
-                    onClick={(e) => { e.stopPropagation(); setOpenActionsRowKey(isActionsOpen ? null : group.customerKey) }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-primary/50 transition-colors"
-                    title="Altre azioni"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
-                    </svg>
-                  </button>
-
-                  {isActionsOpen && createPortal(
-                    <>
-                      <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpenActionsRowKey(null)} />
-                      <div
-                        ref={actionsMenuRef}
-                        style={{
-                          position: 'fixed',
-                          top: actionsCoords?.top ?? -9999,
-                          right: actionsCoords?.right ?? 0,
-                          maxHeight: actionsCoords?.maxHeight,
-                          maxWidth: actionsCoords?.maxWidth,
-                          // Finestra troppo bassa per tutte le voci in fila:
-                          // il pannello si allarga invece di farsi scorrere.
-                          width: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.width : undefined,
-                          columnCount: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.columns : undefined,
-                          columnGap: 0,
-                          columnRule: (actionsCoords?.columns ?? 1) > 1 ? '1px solid rgba(128,128,128,0.25)' : undefined,
-                          overflowY: 'auto',
-                          zIndex: 9999,
-                        }}
-                        className="w-56 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-1 text-sm">
-                        {itemCount >= 2 ? (
-                          <button
-                            disabled={!!processingKey}
-                            onClick={() => {
-                              setOpenActionsRowKey(null)
-                              askPaymentMethod(`Salda Tutto — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => markAllCustomerPaid(group, method))
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-emerald-400 disabled:opacity-50"
-                          >Salda Tutto (fattura unica)</button>
-                        ) : group.noleggioBookings[0] && (
-                          <button
-                            onClick={() => {
-                              setOpenActionsRowKey(null)
+                {/* AZIONI — 14/10/2026: un solo bottone Gestisci, come in
+                    Prenotazioni. Prima c'erano "Salda Tutto / Segna Pagato"
+                    sulla riga piu' il menu "..." con le azioni secondarie:
+                    le stesse voci, con gli stessi handler, stanno ora tutte
+                    qui dentro. */}
+                <div className="flex justify-end items-center">
+                  {(() => {
+                    const sollecitoInvio = sollecitoSendingKey === group.customerKey
+                    const { lastSentAt, intervalHours, blocked } = statoSollecito(group)
+                    const sollecitoAttivo = !!lastSentAt && !blocked
+                    const oreFa = lastSentAt ? Math.floor((Date.now() - new Date(lastSentAt).getTime()) / 3600000) : null
+                    return (
+                      <GestisciMenu sections={[
+                        { title: 'Pagamenti', actions: [
+                          { label: `Salda Tutto (fattura unica) · €${remainingEur.toFixed(2)}`, visible: remainingEur > 0 && itemCount >= 2, disabled: !!processingKey, onClick: () => askPaymentMethod(`Salda Tutto — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => markAllCustomerPaid(group, method)) },
+                          { label: 'Segna Pagato', visible: remainingEur > 0 && itemCount < 2 && !!(group.noleggioBookings[0] || group.primeWashBookings[0]), disabled: !!processingKey, onClick: () => {
+                            if (group.noleggioBookings[0]) {
                               askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method, remainingEur))
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-emerald-400"
-                          >Segna Pagato</button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setOpenActionsRowKey(null)
+                            } else if (group.primeWashBookings[0]) {
+                              askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.primeWashBookings[0].id, 'paid', method, remainingEur))
+                            }
+                          } },
+                          { label: `Pay by Link — €${remainingEur.toFixed(2)}`, onClick: () => {
                             if (remainingEur <= 0) return
                             const fb = group.noleggioBookings[0] || group.primeWashBookings[0] || group.penaliItems[0]?.booking || group.danniItems[0]?.booking
                             if (fb) sendPayByLink(fb, remainingEur, `Saldo completo — ${group.customerName}`)
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-purple-400"
-                        >Pay by Link — €{remainingEur.toFixed(2)}</button>
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); setFatturaCliente({ group, parziale: false }) }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-dr7-gold"
-                        >Genera fattura</button>
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); setFatturaCliente({ group, parziale: true }) }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-dr7-gold"
-                        >Genera fattura parziale</button>
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); openAddebitoNexi(group) }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-orange-400"
-                        >Addebito MIT</button>
-                        <div className="px-3 py-2 border-t border-theme-border/50" style={{ breakInside: 'avoid' }}>
-                          <SollecitoPanel group={group} onAzione={() => setOpenActionsRowKey(null)} />
-                        </div>
-                      </div>
-                    </>,
-                    document.body
-                  )}
+                          } },
+                          { label: 'Addebito MIT', onClick: () => openAddebitoNexi(group) },
+                        ] },
+                        { title: 'Documenti', actions: [
+                          { label: 'Genera fattura', onClick: () => setFatturaCliente({ group, parziale: false }) },
+                          { label: 'Genera fattura parziale', onClick: () => setFatturaCliente({ group, parziale: true }) },
+                        ] },
+                        // Stesse scelte del pannello sollecito: il click invia
+                        // subito e ripete con quel ritmo finche' non paga.
+                        { title: oreFa != null ? `Sollecito · ${blocked ? 'bloccato · ' : ''}ultimo ${oreFa <= 0 ? 'poco fa' : `${oreFa}h fa`}` : 'Sollecito', actions: [
+                          ...SOLLECITO_INTERVALLI.map(iv => ({
+                            label: `${sollecitoAttivo && (intervalHours || 48) === iv.ore ? '• ' : ''}Invia Sollecito · ${iv.label === 'Settimana' ? 'ogni settimana' : `ogni ${iv.label}`}`,
+                            disabled: sollecitoInvio,
+                            onClick: () => handleSendSollecito(group, iv.ore),
+                          })),
+                          { label: 'Blocca sollecito', visible: sollecitoAttivo, disabled: sollecitoInvio, onClick: () => handleBloccaSollecito(group) },
+                        ] },
+                      ]} />
+                    )
+                  })()}
                 </div>
               </div>
 
