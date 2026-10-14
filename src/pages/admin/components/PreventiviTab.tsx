@@ -6693,11 +6693,42 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           </div>
         )}
         {(pricing.kmPackagesTotal ?? 0) > 0 && (
-          <div className="flex justify-between text-sm text-theme-text-muted">
-            <span>Pacchetti KM extra</span>
-            <span>{formatEur(pricing.kmPackagesTotal ?? 0)}</span>
+          <div className="text-sm text-theme-text-muted">
+            <div className="flex justify-between">
+              <span>Pacchetti KM extra</span>
+              <span>{formatEur(pricing.kmPackagesTotal ?? 0)}</span>
+            </div>
+            {/* 14/10/2026: quale pacchetto, non solo l'importo. Stessa
+                lettura di kmPackagesTotal (form.km_packages + categoria). */}
+            {(() => {
+              const kmPkgs = (form.km_packages || {}) as Record<string, number>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; price: number; label: string }>> | undefined
+              return resolvePacchetti(selectedVehicle?.category, pkgsByCat)
+                .filter(pkg => (Number(kmPkgs[pkg.id]) || 0) > 0)
+                .map(pkg => {
+                  const q = Number(kmPkgs[pkg.id]) || 0
+                  return (
+                    <div key={pkg.id} className="flex justify-between text-xs pl-2">
+                      <span>{pkg.label}{q > 1 ? ` × ${q}` : ''} · +{((Number(pkg.km) || 0) * q).toLocaleString('it-IT')} Km</span>
+                      <span>{formatEur(Math.round(Number(pkg.price || 0) * q * 100) / 100)}</span>
+                    </div>
+                  )
+                })
+            })()}
           </div>
         )}
+        {/* 14/10/2026: Km totali e cauzione subito sotto ai pacchetti, cosi'
+            si leggono senza scendere in fondo al riepilogo. La cauzione e'
+            informativa: non entra nel totale. */}
+        <div className="flex justify-between text-sm text-theme-text-primary font-semibold">
+          <span>Km totali</span>
+          <span>{pricing.kmIncluded === 'unlimited' ? 'Illimitati' : `${((Number(pricing.kmIncluded) || 0) + (pricing.kmPackagesKm ?? 0)).toLocaleString('it-IT')} Km`}</span>
+        </div>
+        <div className="flex justify-between text-sm text-theme-text-primary font-semibold">
+          <span>Cauzione{selectedDepositOption?.label ? ` (${selectedDepositOption.label})` : ''}</span>
+          <span>{selectedDepositOption ? formatEur(selectedDepositAmount) : <span className="font-normal text-theme-text-muted">Non selezionata</span>}</span>
+        </div>
 
         {/* Revenue coefficients applied to total. Lo sconto mostrato qui
             è calcolato sul subtotale "no experience / no location fees"
