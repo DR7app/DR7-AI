@@ -29,10 +29,19 @@ const transporter = nodemailer.createTransport({
 const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://dr7trust.com'
 const TOKEN_EXPIRY_HOURS = 12
 
-// 14/10/2026 — Posizione della firma scelta dallo staff (tab DR7 Trust,
-// PosizionaFirme.tsx): {pagina 1-based, x, y in frazione della pagina}.
-// Non valida o assente = null, e DR7 Trust usa la posizione automatica.
-function leggiPosizioneFirma(v: any): { pagina: number; x: number; y: number } | null {
+// 14/10/2026 — Posizioni delle firme scelte dallo staff (tab DR7 Trust,
+// PosizionaFirme.tsx): [{pagina 1-based, x, y in frazione della pagina}],
+// anche piu' di una. Nessuna valida = null, e DR7 Trust usa la posizione
+// automatica.
+type PosizioneFirma = { pagina: number; x: number; y: number }
+function leggiPosizioniFirma(v: any): PosizioneFirma[] | null {
+    const elenco = (Array.isArray(v) ? v : v ? [v] : [])
+        .map(leggiPosizioneFirma)
+        .filter((p): p is PosizioneFirma => !!p)
+        .slice(0, 50)
+    return elenco.length ? elenco : null
+}
+function leggiPosizioneFirma(v: any): PosizioneFirma | null {
     if (!v || typeof v !== 'object') return null
     const pagina = Number(v.pagina)
     const x = Number(v.x)
@@ -62,7 +71,7 @@ export const handler: Handler = async (event) => {
         // su WhatsApp. signer_email e' NOT NULL: senza email si salva ''.
         const signerEmail = String(body.signerEmail || '').trim()
         const signerPhone = String(body.signerPhone || '').trim()
-        const posizioneFirma = leggiPosizioneFirma(body.posizioneFirma)
+        const posizioniFirma = leggiPosizioniFirma(body.posizioniFirma ?? body.posizioneFirma)
 
         if (!documentUrl) {
             return { statusCode: 400, body: JSON.stringify({ error: 'URL del documento richiesto' }) }
@@ -109,7 +118,7 @@ export const handler: Handler = async (event) => {
                 original_pdf_hash: originalPdfHash,
                 document_url: documentUrl,
                 document_name: docName,
-                ...(posizioneFirma ? { posizione_firma: posizioneFirma } : {}),
+                ...(posizioniFirma ? { posizione_firma: posizioniFirma } : {}),
             })
             .select()
             .single()
@@ -131,7 +140,7 @@ export const handler: Handler = async (event) => {
                 document_url: documentUrl,
                 token_expires_at: tokenExpiresAt.toISOString(),
                 original_pdf_hash: originalPdfHash,
-                posizione_firma: posizioneFirma,
+                posizione_firma: posizioniFirma,
             }
         })
 

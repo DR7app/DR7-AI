@@ -11,8 +11,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
  *
  * Prima il sigillo di un documento libero cadeva sempre all'ultima pagina,
  * nel riquadro "1° guidatore" del contratto DR7: su qualsiasi altro PDF
- * finiva in un punto a caso. Qui lo staff sceglie pagina e punto per ogni
- * firmatario; DR7 Trust (signature-complete) stampa il sigillo esattamente li'.
+ * finiva in un punto a caso. Qui lo staff sceglie pagina e punto di ogni
+ * firma, quante ne vuole per firmatario ("Aggiungi firma"); DR7 Trust
+ * (signature-complete) stampa il sigillo esattamente li'.
  *
  * pagina = 1, 2, ... ; x/y = angolo in alto a sinistra del sigillo, in
  * frazione della pagina (0-1, origine in alto a sinistra). Il sigillo ha
@@ -26,12 +27,12 @@ export const SIGILLO_ALTEZZA_PT = 42
 
 const COLORI = ['#0A8FA3', '#d97706', '#7c3aed', '#16a34a', '#dc2626', '#2563eb']
 
-interface Firmatario { nome: string; posizione?: PosizioneFirma | null }
+interface Firmatario { nome: string; posizioni: PosizioneFirma[] }
 
 interface Props {
     url: string
     firmatari: Firmatario[]
-    onSalva: (posizioni: (PosizioneFirma | null)[]) => void
+    onSalva: (posizioni: PosizioneFirma[][]) => void
     onChiudi: () => void
 }
 
@@ -41,10 +42,16 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
     const [pagine, setPagine] = useState<Pagina[]>([])
     const [errore, setErrore] = useState('')
     const [attivo, setAttivo] = useState(0)
-    const [posizioni, setPosizioni] = useState<(PosizioneFirma | null)[]>(() => firmatari.map(f => f.posizione || null))
+    const [posizioni, setPosizioni] = useState<PosizioneFirma[][]>(() => firmatari.map(f => [...(f.posizioni || [])]))
+    // Il prossimo click sul documento aggiunge una firma: sempre se il
+    // firmatario non ne ha ancora, altrimenti dopo "Aggiungi firma".
+    const [aggiungi, setAggiungi] = useState(false)
     const pdfRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null)
     const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map())
-    const trascinamento = useRef<{ idx: number; dx: number; dy: number; pagina: number } | null>(null)
+    const trascinamento = useRef<{ idx: number; k: number; dx: number; dy: number; pagina: number } | null>(null)
+
+    const modoAggiungi = aggiungi || (posizioni[attivo]?.length || 0) === 0
+    const totaleFirme = posizioni.reduce((n, l) => n + l.length, 0)
 
     useEffect(() => {
         let annullato = false
@@ -90,31 +97,35 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
         return { fx: (e.clientX - r.left) / r.width, fy: (e.clientY - r.top) / r.height }
     }
 
-    function posa(idx: number, p: Pagina, x: number, y: number) {
+    function inPagina(p: Pagina, x: number, y: number): PosizioneFirma {
         const w = SIGILLO_LARGHEZZA_PT / p.larghezzaPt
         const h = SIGILLO_ALTEZZA_PT / p.altezzaPt
-        setPosizioni(prev => prev.map((v, i) => i === idx
-            ? { pagina: p.numero, x: limita(x, 1 - w), y: limita(y, 1 - h) }
-            : v))
+        return { pagina: p.numero, x: limita(x, 1 - w), y: limita(y, 1 - h) }
     }
 
-    // Click su un punto libero della pagina: il sigillo del firmatario attivo
-    // si centra li'.
+    // Click sul documento in modalita' "aggiungi": nuova firma del firmatario
+    // attivo, centrata sul punto cliccato.
     function clickPagina(e: React.PointerEvent<HTMLDivElement>, p: Pagina) {
-        if (trascinamento.current) return
+        if (trascinamento.current || !modoAggiungi) return
         const { fx, fy } = frazione(e, e.currentTarget)
         const w = SIGILLO_LARGHEZZA_PT / p.larghezzaPt
         const h = SIGILLO_ALTEZZA_PT / p.altezzaPt
-        posa(attivo, p, fx - w / 2, fy - h / 2)
+        const nuova = inPagina(p, fx - w / 2, fy - h / 2)
+        setPosizioni(prev => prev.map((l, i) => i === attivo ? [...l, nuova] : l))
+        setAggiungi(false)
     }
 
-    function iniziaTrascinamento(e: React.PointerEvent<HTMLDivElement>, idx: number, p: Pagina) {
+    function togli(idx: number, k: number) {
+        setPosizioni(prev => prev.map((l, i) => i === idx ? l.filter((_, j) => j !== k) : l))
+    }
+
+    function iniziaTrascinamento(e: React.PointerEvent<HTMLDivElement>, idx: number, k: number, p: Pagina) {
         e.stopPropagation()
-        const pos = posizioni[idx]
+        const pos = posizioni[idx]?.[k]
         const paginaEl = e.currentTarget.parentElement
         if (!pos || !paginaEl) return
         const { fx, fy } = frazione(e, paginaEl)
-        trascinamento.current = { idx, dx: fx - pos.x, dy: fy - pos.y, pagina: p.numero }
+        trascinamento.current = { idx, k, dx: fx - pos.x, dy: fy - pos.y, pagina: p.numero }
         setAttivo(idx)
         e.currentTarget.setPointerCapture(e.pointerId)
     }
@@ -124,11 +135,12 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
         const paginaEl = e.currentTarget.parentElement
         if (!t || t.pagina !== p.numero || !paginaEl) return
         const { fx, fy } = frazione(e, paginaEl)
-        posa(t.idx, p, fx - t.dx, fy - t.dy)
+        const nuova = inPagina(p, fx - t.dx, fy - t.dy)
+        setPosizioni(prev => prev.map((l, i) => i === t.idx ? l.map((v, j) => j === t.k ? nuova : v) : l))
     }
 
     function fineTrascinamento() {
-        // Un attimo dopo: il click che chiude il trascinamento non riposiziona.
+        // Un attimo dopo: il click che chiude il trascinamento non aggiunge firme.
         setTimeout(() => { trascinamento.current = null }, 0)
     }
 
@@ -144,32 +156,27 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                         <button onClick={onChiudi} className="text-theme-text-muted hover:text-theme-text-primary text-xl leading-none" aria-label="Chiudi">×</button>
                     </div>
                     <p className="text-xs text-theme-text-muted">
-                        Scegli il firmatario, poi clicca sul documento dove deve apparire la sua firma. Trascina il riquadro per spostarlo.
-                        Senza posizione la firma va in fondo all'ultima pagina.
+                        {modoAggiungi
+                            ? `Clicca sul documento dove deve apparire la firma di ${firmatari[attivo]?.nome || `Firmatario ${attivo + 1}`}.`
+                            : 'Trascina una firma per spostarla. "Aggiungi firma" per metterne un\'altra.'}
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                        {firmatari.map((f, i) => (
-                            <button
-                                key={i}
-                                type="button"
-                                onClick={() => setAttivo(i)}
-                                className={`text-xs px-3 py-1.5 rounded-full border inline-flex items-center gap-2 ${attivo === i ? 'text-white' : 'text-theme-text-secondary border-theme-border'}`}
-                                style={attivo === i ? { background: COLORI[i % COLORI.length], borderColor: COLORI[i % COLORI.length] } : undefined}
-                            >
-                                <span className="w-2 h-2 rounded-full" style={{ background: COLORI[i % COLORI.length] }} />
-                                {f.nome || `Firmatario ${i + 1}`}
-                                <span className="opacity-80">{posizioni[i] ? `pag. ${posizioni[i]!.pagina}` : 'non posizionata'}</span>
-                                {posizioni[i] && (
-                                    <span
-                                        role="button"
-                                        title="Togli posizione"
-                                        onClick={e => { e.stopPropagation(); setPosizioni(prev => prev.map((v, j) => j === i ? null : v)) }}
-                                        className="ml-1 opacity-80 hover:opacity-100"
-                                    >×</span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
+                    {firmatari.length > 1 && (
+                        <div className="flex flex-wrap gap-2">
+                            {firmatari.map((f, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => { setAttivo(i); setAggiungi(false) }}
+                                    className={`text-xs px-3 py-1.5 rounded-full border inline-flex items-center gap-2 ${attivo === i ? 'text-white' : 'text-theme-text-secondary border-theme-border'}`}
+                                    style={attivo === i ? { background: COLORI[i % COLORI.length], borderColor: COLORI[i % COLORI.length] } : undefined}
+                                >
+                                    <span className="w-2 h-2 rounded-full" style={{ background: COLORI[i % COLORI.length] }} />
+                                    {f.nome || `Firmatario ${i + 1}`}
+                                    <span className="opacity-80">({posizioni[i]?.length || 0})</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-theme-bg-tertiary space-y-4">
@@ -179,7 +186,7 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                         <div key={p.numero}>
                             <div className="text-[11px] text-theme-text-muted mb-1">Pagina {p.numero} di {pagine.length}</div>
                             <div
-                                className="relative bg-white shadow cursor-crosshair select-none touch-none"
+                                className={`relative bg-white shadow select-none touch-none ${modoAggiungi ? 'cursor-crosshair' : ''}`}
                                 style={{ aspectRatio: `${p.larghezzaPt} / ${p.altezzaPt}` }}
                                 onPointerUp={e => clickPagina(e, p)}
                             >
@@ -187,13 +194,13 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                                     ref={el => { if (el) canvasRefs.current.set(p.numero, el); else canvasRefs.current.delete(p.numero) }}
                                     className="absolute inset-0 w-full h-full"
                                 />
-                                {posizioni.map((pos, i) => pos && pos.pagina === p.numero && (
+                                {posizioni.map((lista, i) => lista.map((pos, k) => pos.pagina === p.numero && (
                                     <div
-                                        key={i}
-                                        onPointerDown={e => iniziaTrascinamento(e, i, p)}
+                                        key={`${i}-${k}`}
+                                        onPointerDown={e => iniziaTrascinamento(e, i, k, p)}
                                         onPointerMove={e => muovi(e, p)}
                                         onPointerUp={e => { e.stopPropagation(); fineTrascinamento() }}
-                                        className="absolute cursor-move flex flex-col justify-center px-1 overflow-hidden"
+                                        className="absolute cursor-move flex flex-col justify-center px-1"
                                         style={{
                                             left: `${pos.x * 100}%`,
                                             top: `${pos.y * 100}%`,
@@ -207,21 +214,37 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                                             {firmatari[i]?.nome || `Firmatario ${i + 1}`}
                                         </span>
                                         <span className="text-[8px] leading-tight text-gray-500">Firma DR7 Trust</span>
+                                        <button
+                                            type="button"
+                                            title="Togli firma"
+                                            aria-label="Togli firma"
+                                            onPointerDown={e => e.stopPropagation()}
+                                            onPointerUp={e => { e.stopPropagation(); togli(i, k) }}
+                                            className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] leading-none flex items-center justify-center"
+                                        >×</button>
                                     </div>
-                                ))}
+                                )))}
                             </div>
                         </div>
                     ))}
                 </div>
 
-                <div className="p-4 border-t border-theme-border flex gap-2 justify-end">
+                <div className="p-4 border-t border-theme-border flex flex-wrap gap-2 justify-end">
                     <button type="button" onClick={onChiudi} className="px-4 py-2 rounded-full border border-theme-border text-theme-text-secondary">
                         Annulla
                     </button>
                     <button
                         type="button"
+                        onClick={() => setAggiungi(true)}
+                        className={`px-4 py-2 rounded-full border font-bold ${modoAggiungi ? 'border-dr7-gold bg-dr7-gold/15 text-dr7-gold' : 'border-dr7-gold text-dr7-gold hover:bg-dr7-gold hover:text-white'}`}
+                    >
+                        + Aggiungi firma
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => onSalva(posizioni)}
-                        className="px-4 py-2 rounded-full bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold"
+                        disabled={totaleFirme === 0}
+                        className="px-4 py-2 rounded-full bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Salva posizioni
                     </button>

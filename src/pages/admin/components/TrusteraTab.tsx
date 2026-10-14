@@ -31,7 +31,7 @@ interface SignatureRequest {
   signed_at: string | null
   created_at: string
   token_expires_at: string
-  posizione_firma?: PosizioneFirma | null
+  posizione_firma?: PosizioneFirma[] | PosizioneFirma | null
   sent_by_name?: string | null
   sent_by_email?: string | null
   contract?: {
@@ -89,8 +89,8 @@ function DocumentiSubTab() {
   // 2026-05-25: supporto multi-firmatari. Lista di {name, email, phone}.
   // Il backend document-sign-init accetta un firmatario per chiamata,
   // quindi handleSend cicla l'array. Almeno un firmatario richiesto.
-  // 14/10/2026: posizione = dove DR7 Trust stampa la firma (PosizionaFirme).
-  interface Signer { name: string; email: string; phone: string; posizione?: PosizioneFirma | null }
+  // 14/10/2026: posizioni = dove DR7 Trust stampa le firme (PosizionaFirme).
+  interface Signer { name: string; email: string; phone: string; posizioni?: PosizioneFirma[] }
   const [formData, setFormData] = useState<{
     documentName: string
     signers: Signer[]
@@ -101,6 +101,9 @@ function DocumentiSubTab() {
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
   const [showPosiziona, setShowPosiziona] = useState(false)
+  // 14/10/2026: il pulsante grande e' "Posiziona firma"; diventa "Invia per
+  // Firma" solo dopo "Salva posizioni".
+  const [posizioniSalvate, setPosizioniSalvate] = useState(false)
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState('')
@@ -323,12 +326,14 @@ function DocumentiSubTab() {
   }
   function addSigner() {
     setFormData(prev => ({ ...prev, signers: [...prev.signers, { name: '', email: '', phone: '' }] }))
+    setPosizioniSalvate(false)
   }
   function removeSigner(idx: number) {
     setFormData(prev => ({
       ...prev,
       signers: prev.signers.length <= 1 ? prev.signers : prev.signers.filter((_, i) => i !== idx),
     }))
+    setPosizioniSalvate(false)
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -374,7 +379,8 @@ function DocumentiSubTab() {
       setUploadedUrl(data.url)
       setUploadedFileName(file.name)
       // PDF nuovo: le posizioni della firma valevano per quello vecchio.
-      setFormData(prev => ({ ...prev, signers: prev.signers.map(sg => ({ ...sg, posizione: null })) }))
+      setFormData(prev => ({ ...prev, signers: prev.signers.map(sg => ({ ...sg, posizioni: [] })) }))
+      setPosizioniSalvate(false)
 
       if (!formData.documentName) {
         setFormData(prev => ({ ...prev, documentName: file.name.replace('.pdf', '') }))
@@ -391,19 +397,20 @@ function DocumentiSubTab() {
   }
 
   async function handleSend() {
+    const firmatari = formData.signers
     if (!uploadedUrl) {
       toast.error('Carica un documento PDF prima')
       return
     }
     // 25/09/2026: un firmatario e' valido con il nome e UN contatto,
     // telefono (WhatsApp) oppure email. Non servono entrambi.
-    const validSigners = formData.signers.filter(s => s.name.trim() && (s.email.trim() || s.phone.trim()))
+    const validSigners = firmatari.filter(s => s.name.trim() && (s.email.trim() || s.phone.trim()))
     if (validSigners.length === 0) {
       toast.error('Compila almeno un firmatario: nome e telefono (WhatsApp) oppure email')
       return
     }
-    if (validSigners.length < formData.signers.length) {
-      const incomplete = formData.signers.length - validSigners.length
+    if (validSigners.length < firmatari.length) {
+      const incomplete = firmatari.length - validSigners.length
       const ok = confirm(`${incomplete} firmatari incompleti verranno ignorati. Procedere con ${validSigners.length}?`)
       if (!ok) return
     }
@@ -427,7 +434,7 @@ function DocumentiSubTab() {
               signerName: s.name,
               signerEmail: s.email,
               signerPhone: s.phone,
-              posizioneFirma: s.posizione || null,
+              posizioniFirma: s.posizioni || [],
             })
           })
           const data = await res.json()
@@ -478,6 +485,7 @@ function DocumentiSubTab() {
     setFormData({ documentName: '', signers: [{ name: '', email: '', phone: '' }] })
     setUploadedUrl(null)
     setUploadedFileName(null)
+    setPosizioniSalvate(false)
     setCustomerSearch('')
     setCustomerResults([])
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -539,7 +547,7 @@ function DocumentiSubTab() {
             signerName: req.signer_name,
             signerEmail: req.signer_email,
             signerPhone: req.signer_phone,
-            posizioneFirma: req.posizione_firma || null,
+            posizioniFirma: Array.isArray(req.posizione_firma) ? req.posizione_firma : req.posizione_firma ? [req.posizione_firma] : [],
           }),
         })
         const data = await res.json().catch(() => ({}))
@@ -884,43 +892,46 @@ function DocumentiSubTab() {
             ))}
           </div>
 
-          {/* 14/10/2026: posizione della firma sul documento, scelta dallo staff. */}
-          {uploadedUrl && (
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3">
-              <div className="text-sm text-theme-text-secondary">
-                <span className="font-medium text-theme-text-primary">Posizione firma: </span>
-                {formData.signers.every(sg => !sg.posizione)
-                  ? 'automatica (fondo dell\'ultima pagina)'
-                  : formData.signers.map((sg, i) => `${sg.name || `Firmatario ${i + 1}`}: ${sg.posizione ? `pag. ${sg.posizione.pagina}` : 'automatica'}`).join(' · ')}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPosiziona(true)}
-                className="text-sm px-3 py-1.5 rounded-full border border-dr7-gold text-dr7-gold hover:bg-dr7-gold hover:text-white transition-colors"
-              >
-                Posiziona firma
-              </button>
-            </div>
-          )}
+          {/* 14/10/2026: prima "Posiziona firma" (pulsante grande), poi, dopo
+              "Salva posizioni", lo stesso pulsante diventa "Invia per Firma". */}
           {showPosiziona && uploadedUrl && (
             <PosizionaFirme
               url={uploadedUrl}
-              firmatari={formData.signers.map(sg => ({ nome: sg.name, posizione: sg.posizione }))}
+              firmatari={formData.signers.map(sg => ({ nome: sg.name, posizioni: sg.posizioni || [] }))}
               onChiudi={() => setShowPosiziona(false)}
               onSalva={posizioni => {
-                setFormData(prev => ({ ...prev, signers: prev.signers.map((sg, i) => ({ ...sg, posizione: posizioni[i] || null })) }))
+                setFormData(prev => ({ ...prev, signers: prev.signers.map((sg, i) => ({ ...sg, posizioni: posizioni[i] || [] })) }))
+                setPosizioniSalvate(true)
                 setShowPosiziona(false)
               }}
             />
           )}
 
+          {posizioniSalvate && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-theme-text-secondary">
+              <span>
+                Firme posizionate: {formData.signers.map((sg, i) => `${sg.name || `Firmatario ${i + 1}`} (${sg.posizioni?.length || 0})`).join(' · ')}
+              </span>
+              <button type="button" onClick={() => setShowPosiziona(true)} className="text-dr7-gold hover:underline">
+                Modifica posizioni
+              </button>
+            </div>
+          )}
+
           {/* Send Button */}
           <button
-            onClick={handleSend}
+            onClick={() => {
+              if (posizioniSalvate) { handleSend(); return }
+              if (!formData.signers.some(sg => sg.name.trim() && (sg.email.trim() || sg.phone.trim()))) {
+                toast.error('Compila almeno un firmatario: nome e telefono (WhatsApp) oppure email')
+                return
+              }
+              setShowPosiziona(true)
+            }}
             disabled={sending || !uploadedUrl}
             className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {sending ? 'Invio in corso...' : 'Invia per Firma'}
+            {sending ? 'Invio in corso...' : posizioniSalvate ? 'Invia per Firma' : 'Posiziona firma'}
           </button>
         </div>
       )}
