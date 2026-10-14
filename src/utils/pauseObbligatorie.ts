@@ -22,7 +22,7 @@ import { supabase } from '../supabaseClient'
  *      finestrePausaVirtuali() materializza le fasce come finestre vere.
  *
  * Semantica (quella fissata dal commit c8f57f1d del 2026-08-02):
- *   - minuti obbligatori = durata_min + somma delle fasce orarie
+ *   - minuti obbligatori = somma delle fasce orarie (durata_min ignorata dal 14/10/2026)
  *   - la pausa si MOSTRA sempre, anche se pagata e anche prima della timbratura
  *   - si SCALA dalle ore solo se non pagata, prendendo il MAX tra pausa
  *     timbrata e pausa obbligatoria
@@ -171,8 +171,11 @@ export function pausaObbligatoriaDelGiorno(cfg: PauseConfig | null | undefined, 
         if (da == null || a == null || a <= da) continue
         fasce.push({ da: minutiToHHMM(da), a: minutiToHHMM(a), minuti: a - da })
     }
-    const durata = Math.max(0, Number(cfg.durata_min) || 0)
-    const totale = durata + fasce.reduce((s, f) => s + f.minuti, 0)
+    // 14/10/2026 (direzione): contano SOLO le pause che si vedono, cioe' le
+    // fasce (bordo giallo). `durata_min` ("Pausa giornaliera") non ha orario,
+    // non compare da nessuna parte e veniva scalata lo stesso: 155 min al
+    // giorno invisibili su un operatore, 60 su un altro. Non conta piu'.
+    const totale = fasce.reduce((s, f) => s + f.minuti, 0)
     if (totale <= 0) return PAUSA_NON_CONFIGURATA
 
     const pagata = cfg.pagata === true
