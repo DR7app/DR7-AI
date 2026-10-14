@@ -29,6 +29,19 @@ const transporter = nodemailer.createTransport({
 const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://dr7trust.com'
 const TOKEN_EXPIRY_HOURS = 12
 
+// 14/10/2026 — Posizione della firma scelta dallo staff (tab DR7 Trust,
+// PosizionaFirme.tsx): {pagina 1-based, x, y in frazione della pagina}.
+// Non valida o assente = null, e DR7 Trust usa la posizione automatica.
+function leggiPosizioneFirma(v: any): { pagina: number; x: number; y: number } | null {
+    if (!v || typeof v !== 'object') return null
+    const pagina = Number(v.pagina)
+    const x = Number(v.x)
+    const y = Number(v.y)
+    if (!Number.isInteger(pagina) || pagina < 1) return null
+    if (!isFinite(x) || !isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null
+    return { pagina, x, y }
+}
+
 function cleanPhone(phone: string): string {
     let cleaned = phone.replace(/\D/g, '')
     if (cleaned.startsWith('00')) cleaned = cleaned.substring(2)
@@ -49,6 +62,7 @@ export const handler: Handler = async (event) => {
         // su WhatsApp. signer_email e' NOT NULL: senza email si salva ''.
         const signerEmail = String(body.signerEmail || '').trim()
         const signerPhone = String(body.signerPhone || '').trim()
+        const posizioneFirma = leggiPosizioneFirma(body.posizioneFirma)
 
         if (!documentUrl) {
             return { statusCode: 400, body: JSON.stringify({ error: 'URL del documento richiesto' }) }
@@ -94,7 +108,8 @@ export const handler: Handler = async (event) => {
                 token_expires_at: tokenExpiresAt.toISOString(),
                 original_pdf_hash: originalPdfHash,
                 document_url: documentUrl,
-                document_name: docName
+                document_name: docName,
+                ...(posizioneFirma ? { posizione_firma: posizioneFirma } : {}),
             })
             .select()
             .single()
@@ -115,7 +130,8 @@ export const handler: Handler = async (event) => {
                 document_name: docName,
                 document_url: documentUrl,
                 token_expires_at: tokenExpiresAt.toISOString(),
-                original_pdf_hash: originalPdfHash
+                original_pdf_hash: originalPdfHash,
+                posizione_firma: posizioneFirma,
             }
         })
 

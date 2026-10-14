@@ -13,6 +13,7 @@ import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import { scaricaAuditTrailPdf } from '../../../utils/scaricaAuditTrailPdf'
 import { apriAuditFirma } from '../../../utils/apriAuditFirma'
 import PulsanteSicurezzaFirma from './SicurezzaFirma'
+import PosizionaFirme, { type PosizioneFirma } from './PosizionaFirme'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -30,6 +31,7 @@ interface SignatureRequest {
   signed_at: string | null
   created_at: string
   token_expires_at: string
+  posizione_firma?: PosizioneFirma | null
   sent_by_name?: string | null
   sent_by_email?: string | null
   contract?: {
@@ -87,7 +89,8 @@ function DocumentiSubTab() {
   // 2026-05-25: supporto multi-firmatari. Lista di {name, email, phone}.
   // Il backend document-sign-init accetta un firmatario per chiamata,
   // quindi handleSend cicla l'array. Almeno un firmatario richiesto.
-  interface Signer { name: string; email: string; phone: string }
+  // 14/10/2026: posizione = dove DR7 Trust stampa la firma (PosizionaFirme).
+  interface Signer { name: string; email: string; phone: string; posizione?: PosizioneFirma | null }
   const [formData, setFormData] = useState<{
     documentName: string
     signers: Signer[]
@@ -97,6 +100,7 @@ function DocumentiSubTab() {
   })
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
+  const [showPosiziona, setShowPosiziona] = useState(false)
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState('')
@@ -151,7 +155,7 @@ function DocumentiSubTab() {
     return () => clearTimeout(t)
   }, [ricerca])
 
-  const COLONNE_RICHIESTE = 'id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at'
+  const COLONNE_RICHIESTE = 'id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at, posizione_firma'
 
   async function cercaRichieste(testo: string): Promise<{ data: SignatureRequest[] | null; error: unknown }> {
     // PostgREST restituisce al massimo 1000 righe per volta: si legge a pagine.
@@ -280,7 +284,7 @@ function DocumentiSubTab() {
     setFormData(prev => ({
       ...prev,
       signers: prev.signers.map((s, i) => i === idx
-        ? { name, email: customer.email || '', phone: customer.telefono || '' }
+        ? { ...s, name, email: customer.email || '', phone: customer.telefono || '' }
         : s),
     }))
     setPickerOpenIdx(null)
@@ -369,6 +373,8 @@ function DocumentiSubTab() {
 
       setUploadedUrl(data.url)
       setUploadedFileName(file.name)
+      // PDF nuovo: le posizioni della firma valevano per quello vecchio.
+      setFormData(prev => ({ ...prev, signers: prev.signers.map(sg => ({ ...sg, posizione: null })) }))
 
       if (!formData.documentName) {
         setFormData(prev => ({ ...prev, documentName: file.name.replace('.pdf', '') }))
@@ -421,6 +427,7 @@ function DocumentiSubTab() {
               signerName: s.name,
               signerEmail: s.email,
               signerPhone: s.phone,
+              posizioneFirma: s.posizione || null,
             })
           })
           const data = await res.json()
@@ -532,6 +539,7 @@ function DocumentiSubTab() {
             signerName: req.signer_name,
             signerEmail: req.signer_email,
             signerPhone: req.signer_phone,
+            posizioneFirma: req.posizione_firma || null,
           }),
         })
         const data = await res.json().catch(() => ({}))
@@ -875,6 +883,36 @@ function DocumentiSubTab() {
               </div>
             ))}
           </div>
+
+          {/* 14/10/2026: posizione della firma sul documento, scelta dallo staff. */}
+          {uploadedUrl && (
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3">
+              <div className="text-sm text-theme-text-secondary">
+                <span className="font-medium text-theme-text-primary">Posizione firma: </span>
+                {formData.signers.every(sg => !sg.posizione)
+                  ? 'automatica (fondo dell\'ultima pagina)'
+                  : formData.signers.map((sg, i) => `${sg.name || `Firmatario ${i + 1}`}: ${sg.posizione ? `pag. ${sg.posizione.pagina}` : 'automatica'}`).join(' · ')}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPosiziona(true)}
+                className="text-sm px-3 py-1.5 rounded-full border border-dr7-gold text-dr7-gold hover:bg-dr7-gold hover:text-white transition-colors"
+              >
+                Posiziona firma
+              </button>
+            </div>
+          )}
+          {showPosiziona && uploadedUrl && (
+            <PosizionaFirme
+              url={uploadedUrl}
+              firmatari={formData.signers.map(sg => ({ nome: sg.name, posizione: sg.posizione }))}
+              onChiudi={() => setShowPosiziona(false)}
+              onSalva={posizioni => {
+                setFormData(prev => ({ ...prev, signers: prev.signers.map((sg, i) => ({ ...sg, posizione: posizioni[i] || null })) }))
+                setShowPosiziona(false)
+              }}
+            />
+          )}
 
           {/* Send Button */}
           <button
