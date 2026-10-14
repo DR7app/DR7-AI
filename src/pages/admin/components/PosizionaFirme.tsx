@@ -158,25 +158,8 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                     <p className="text-xs text-theme-text-muted">
                         {modoAggiungi
                             ? `Clicca sul documento dove deve apparire la firma di ${firmatari[attivo]?.nome || `Firmatario ${attivo + 1}`}.`
-                            : 'Trascina una firma per spostarla. "Aggiungi firma" per metterne un\'altra.'}
+                            : 'Trascina una firma per spostarla. "Aggiungi firma" + nome per metterne un\'altra.'}
                     </p>
-                    {firmatari.length > 1 && (
-                        <div className="flex flex-wrap gap-2">
-                            {firmatari.map((f, i) => (
-                                <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => { setAttivo(i); setAggiungi(false) }}
-                                    className={`text-xs px-3 py-1.5 rounded-full border inline-flex items-center gap-2 ${attivo === i ? 'text-white' : 'text-theme-text-secondary border-theme-border'}`}
-                                    style={attivo === i ? { background: COLORI[i % COLORI.length], borderColor: COLORI[i % COLORI.length] } : undefined}
-                                >
-                                    <span className="w-2 h-2 rounded-full" style={{ background: COLORI[i % COLORI.length] }} />
-                                    {f.nome || `Firmatario ${i + 1}`}
-                                    <span className="opacity-80">({posizioni[i]?.length || 0})</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-theme-bg-tertiary space-y-4">
@@ -233,13 +216,23 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                     <button type="button" onClick={onChiudi} className="px-4 py-2 rounded-full border border-theme-border text-theme-text-secondary">
                         Annulla
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => setAggiungi(true)}
-                        className={`px-4 py-2 rounded-full border font-bold ${modoAggiungi ? 'border-dr7-gold bg-dr7-gold/15 text-dr7-gold' : 'border-dr7-gold text-dr7-gold hover:bg-dr7-gold hover:text-white'}`}
-                    >
-                        + Aggiungi firma
-                    </button>
+                    {/* 14/10/2026: un pulsante per firmatario, col suo nome e colore. */}
+                    {firmatari.map((f, i) => {
+                        const colore = COLORI[i % COLORI.length]
+                        const scelto = modoAggiungi && attivo === i
+                        return (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => { setAttivo(i); setAggiungi(true) }}
+                                className="px-4 py-2 rounded-full border-2 font-bold text-sm"
+                                style={{ borderColor: colore, color: scelto ? '#fff' : colore, background: scelto ? colore : 'transparent' }}
+                            >
+                                + Aggiungi firma {f.nome || `Firmatario ${i + 1}`}
+                                <span className="ml-1 opacity-80 font-normal">({posizioni[i]?.length || 0})</span>
+                            </button>
+                        )
+                    })}
                     <button
                         type="button"
                         onClick={() => onSalva(posizioni)}
