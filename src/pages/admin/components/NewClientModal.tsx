@@ -64,6 +64,13 @@ interface ClientFormData {
   patente_rilascio: string
   patente_scadenza: string
 
+  // Documento d'identita' (carta d'identita' / CIE / passaporto)
+  documento_tipo: string
+  documento_numero: string
+  documento_ente: string
+  documento_rilascio: string
+  documento_scadenza: string
+
   // Patente nautica (Noleggio Mare)
   nautica_numero: string
   nautica_categoria: string
@@ -142,6 +149,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     patente_ente: '',
     patente_rilascio: '',
     patente_scadenza: '',
+    documento_tipo: '',
+    documento_numero: '',
+    documento_ente: '',
+    documento_rilascio: '',
+    documento_scadenza: '',
     nautica_numero: '',
     nautica_categoria: '',
     nautica_limite: '',
@@ -244,6 +256,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           patente_rilascio: metadata.patente?.rilascio || initialData.data_rilascio_patente || '',
           patente_scadenza: metadata.patente?.scadenza || initialData.scadenza_patente || '',
 
+          // Documento d'identita'
+          documento_tipo: initialData.documento_tipo || '',
+          documento_numero: initialData.documento_numero || '',
+          documento_ente: initialData.luogo_rilascio_documento || initialData.documento_luogo_rilascio || '',
+          documento_rilascio: initialData.data_rilascio_documento || initialData.documento_data_rilascio || '',
+          documento_scadenza: metadata.documento?.scadenza || '',
+
           // Patente nautica
           nautica_numero: metadata.patente_nautica?.numero || initialData.numero_patente_nautica || '',
           nautica_categoria: metadata.patente_nautica?.categoria || initialData.categoria_patente_nautica || '',
@@ -318,6 +337,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           patente_ente: '',
           patente_rilascio: '',
           patente_scadenza: '',
+          documento_tipo: '',
+          documento_numero: '',
+          documento_ente: '',
+          documento_rilascio: '',
+          documento_scadenza: '',
           nautica_numero: '',
           nautica_categoria: '',
           nautica_limite: '',
@@ -519,6 +543,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         if (formData.patente_ente) customerData.emessa_da = formData.patente_ente
 
+        // Documento d'identita': stesse colonne lette da CARGOS e dalla
+        // scheda Documenti. Senza numero CARGOS ripiegava sul n. patente.
+        if (formData.documento_tipo) customerData.documento_tipo = formData.documento_tipo
+        if (formData.documento_numero) customerData.documento_numero = formData.documento_numero.toUpperCase()
+        if (formData.documento_ente) customerData.luogo_rilascio_documento = formData.documento_ente
+        if (formData.documento_rilascio) customerData.data_rilascio_documento = formData.documento_rilascio
+
         // Patente nautica — colonne dedicate (migrazione 20260813000000).
         // Limite e abilitazione restano campi separati perche' decidono
         // quale unita' il cliente puo' condurre nel Noleggio Mare.
@@ -547,6 +578,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             ente: formData.patente_ente,
             rilascio: formData.patente_rilascio,
             scadenza: formData.patente_scadenza
+          },
+          // Nessuna colonna per la scadenza del documento: resta nel metadata.
+          documento: {
+            ...(initialData?.metadata?.documento || {}),
+            scadenza: formData.documento_scadenza
           },
           patente_nautica: {
             numero: formData.nautica_numero,
@@ -609,6 +645,84 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       logger.log('🔍 DEBUG: editingId state:', editingId)
       logger.log('🔍 DEBUG: Will UPDATE?', !!editingId)
 
+      // Upload documents if any were selected. Serve sia in creazione sia in
+      // modifica: prima il ramo modifica usciva prima di arrivare qui e i
+      // documenti caricati su un cliente esistente andavano persi (Perra 14/10).
+      const caricaDocumenti = async (clientId: string) => {
+        const hasAnyFile = driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack || patenteNauticaFront || patenteNauticaBack
+
+        if (hasAnyFile) {
+          logger.log('Uploading documents for client:', clientId)
+
+          const { data: { user }, error: authError } = await supabase.auth.getUser()
+          if (!user || authError) {
+            logger.warn('Cannot upload documents: user not authenticated')
+          } else {
+            // Helper function to upload a single file
+            const uploadFile = async (file: File, bucketParams: string, docType: string, suffix: string = '') => {
+              try {
+                const fileExt = file.name.split('.').pop()
+                const fileName = `${docType}${suffix}_${Date.now()}.${fileExt}`
+                const filePath = percorsoStorage(`${clientId}/${fileName}`)
+
+                const { error: uploadError } = await supabase.storage
+                  .from(bucketParams)
+                  .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: true
+                  })
+
+                if (uploadError) throw uploadError
+
+                await supabase
+                  .from('customer_documents')
+                  .insert({
+                    customer_id: clientId,
+                    // Distinct document_type per side (e.g. drivers_license_front /
+                    // drivers_license_back). Storing the same type for fronte AND
+                    // retro used to violate UNIQUE(customer_id, document_type) and
+                    // silently drop the second file — see migration
+                    // 20260529_customer_documents_multi_doc.sql.
+                    document_type: `${docType}${suffix}`,
+                    file_name: file.name,
+                    file_path: filePath,
+                    file_size: file.size,
+                    mime_type: file.type,
+                    bucket_id: bucketParams,
+                    uploaded_by: user.id
+                  })
+
+                logger.log(`✅ ${docType}${suffix} uploaded successfully`)
+                return true
+              } catch (error: unknown) {
+                const _errMsg = error instanceof Error ? error.message : String(error)
+                console.error(`Error uploading ${docType}${suffix}:`, error)
+                toast.error(`Errore caricamento ${docType}${suffix}: ${_errMsg}`)
+                return false
+              }
+            }
+
+            // Upload Drivers License
+            if (driversLicenseFront) await uploadFile(driversLicenseFront, 'driver-licenses', 'drivers_license', '_front')
+            if (driversLicenseBack) await uploadFile(driversLicenseBack, 'driver-licenses', 'drivers_license', '_back')
+
+            // Upload Identity
+            if (identityFront) await uploadFile(identityFront, 'customer-documents', 'identity_document', '_front')
+            if (identityBack) await uploadFile(identityBack, 'customer-documents', 'identity_document', '_back')
+
+            // Upload Codice Fiscale
+            if (codiceFiscaleFront) await uploadFile(codiceFiscaleFront, 'codice-fiscale', 'codice_fiscale', '_front')
+            if (codiceFiscaleBack) await uploadFile(codiceFiscaleBack, 'codice-fiscale', 'codice_fiscale', '_back')
+
+            // Patente nautica — stesso bucket della patente di guida: e' un
+            // documento di abilitazione alla guida, le policy storage sono le
+            // stesse. Il document_type la tiene distinta.
+            if (patenteNauticaFront) await uploadFile(patenteNauticaFront, 'driver-licenses', 'patente_nautica', '_front')
+            if (patenteNauticaBack) await uploadFile(patenteNauticaBack, 'driver-licenses', 'patente_nautica', '_back')
+          }
+        }
+      }
+
       if (editingId) {
         logger.log('🔄 Updating existing customer:', initialData.id)
         logger.log('📝 Customer data to save:', customerData)
@@ -660,6 +774,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         } else {
           logger.log('✅ Basic customers table updated successfully')
         }
+
+        await caricaDocumenti(editingId)
 
         svuotaCacheClienti()
         toast.success('Cliente aggiornato con successo!')
@@ -721,79 +837,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         toast.success('Cliente creato con successo!')
       }
 
-      // Upload documents if any were selected
-      const hasAnyFile = driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack || patenteNauticaFront || patenteNauticaBack
-
-      if (createdClientId && hasAnyFile) {
-        logger.log('Uploading documents for client:', createdClientId)
-
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (!user || authError) {
-          logger.warn('Cannot upload documents: user not authenticated')
-        } else {
-          // Helper function to upload a single file
-          const uploadFile = async (file: File, bucketParams: string, docType: string, suffix: string = '') => {
-            try {
-              const fileExt = file.name.split('.').pop()
-              const fileName = `${docType}${suffix}_${Date.now()}.${fileExt}`
-              const filePath = percorsoStorage(`${createdClientId}/${fileName}`)
-
-              const { error: uploadError } = await supabase.storage
-                .from(bucketParams)
-                .upload(filePath, file, {
-                  cacheControl: '3600',
-                  upsert: true
-                })
-
-              if (uploadError) throw uploadError
-
-              await supabase
-                .from('customer_documents')
-                .insert({
-                  customer_id: createdClientId,
-                  // Distinct document_type per side (e.g. drivers_license_front /
-                  // drivers_license_back). Storing the same type for fronte AND
-                  // retro used to violate UNIQUE(customer_id, document_type) and
-                  // silently drop the second file — see migration
-                  // 20260529_customer_documents_multi_doc.sql.
-                  document_type: `${docType}${suffix}`,
-                  file_name: file.name,
-                  file_path: filePath,
-                  file_size: file.size,
-                  mime_type: file.type,
-                  bucket_id: bucketParams,
-                  uploaded_by: user.id
-                })
-
-              logger.log(`✅ ${docType}${suffix} uploaded successfully`)
-              return true
-            } catch (error: unknown) {
-              const _errMsg = error instanceof Error ? error.message : String(error)
-              console.error(`Error uploading ${docType}${suffix}:`, error)
-              toast.error(`Errore caricamento ${docType}${suffix}: ${_errMsg}`)
-              return false
-            }
-          }
-
-          // Upload Drivers License
-          if (driversLicenseFront) await uploadFile(driversLicenseFront, 'driver-licenses', 'drivers_license', '_front')
-          if (driversLicenseBack) await uploadFile(driversLicenseBack, 'driver-licenses', 'drivers_license', '_back')
-
-          // Upload Identity
-          if (identityFront) await uploadFile(identityFront, 'customer-documents', 'identity_document', '_front')
-          if (identityBack) await uploadFile(identityBack, 'customer-documents', 'identity_document', '_back')
-
-          // Upload Codice Fiscale
-          if (codiceFiscaleFront) await uploadFile(codiceFiscaleFront, 'codice-fiscale', 'codice_fiscale', '_front')
-          if (codiceFiscaleBack) await uploadFile(codiceFiscaleBack, 'codice-fiscale', 'codice_fiscale', '_back')
-
-          // Patente nautica — stesso bucket della patente di guida: e' un
-          // documento di abilitazione alla guida, le policy storage sono le
-          // stesse. Il document_type la tiene distinta.
-          if (patenteNauticaFront) await uploadFile(patenteNauticaFront, 'driver-licenses', 'patente_nautica', '_front')
-          if (patenteNauticaBack) await uploadFile(patenteNauticaBack, 'driver-licenses', 'patente_nautica', '_back')
-        }
-      }
+      if (createdClientId) await caricaDocumenti(createdClientId)
 
       // [FIX] LINK BOOKINGS TO NEW/UPDATED CUSTOMER
       // Now that we have a valid createdClientId (UUID), we must find any bookings 
@@ -930,6 +974,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
       patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
       patente_ente: 'Ente patente',
+      documento_tipo: 'Tipo documento', documento_numero: 'N. documento',
+      documento_ente: 'Rilasciato da', documento_rilascio: 'Rilascio documento',
+      documento_scadenza: 'Scadenza documento',
       nautica_numero: 'N. patente nautica', nautica_categoria: 'Categoria nautica',
       nautica_limite: 'Limite dalla costa', nautica_abilitazione: 'Abilitazione nautica',
       nautica_rilascio: 'Rilascio patente nautica', nautica_scadenza: 'Scadenza patente nautica',
@@ -945,6 +992,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     pushIf('codice_postale', data.codice_postale); pushIf('citta_residenza', data.citta_residenza); pushIf('provincia_residenza', data.provincia_residenza)
     pushIf('patente_numero', data.patente_numero); pushIf('patente_tipo', data.patente_tipo)
     pushIf('patente_rilascio', data.patente_rilascio); pushIf('patente_scadenza', data.patente_scadenza); pushIf('patente_ente', data.patente_ente)
+    // L'OCR scrive il tipo in chiaro ("Carta d'Identità Elettronica"): qui
+    // diventa la chiave che CARGOS ed EMTN sanno tradurre.
+    const tipoDoc = tipoDocumentoDaOcr(data.documento_tipo)
+    pushIf('documento_tipo', tipoDoc ? ETICHETTE_TIPO_DOCUMENTO[tipoDoc] : undefined); pushIf('documento_numero', data.documento_numero)
+    pushIf('documento_ente', data.documento_ente); pushIf('documento_rilascio', data.documento_rilascio); pushIf('documento_scadenza', data.documento_scadenza)
     pushIf('nautica_numero', data.nautica_numero); pushIf('nautica_categoria', data.nautica_categoria)
     pushIf('nautica_limite', data.nautica_limite); pushIf('nautica_abilitazione', data.nautica_abilitazione)
     pushIf('nautica_rilascio', data.nautica_rilascio); pushIf('nautica_scadenza', data.nautica_scadenza); pushIf('nautica_ente', data.nautica_ente)
@@ -967,6 +1019,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
       ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
       ...(data.patente_ente && { patente_ente: data.patente_ente }),
+      ...(tipoDoc && { documento_tipo: tipoDoc }),
+      ...(data.documento_numero && { documento_numero: data.documento_numero.toUpperCase() }),
+      ...(data.documento_ente && { documento_ente: data.documento_ente }),
+      ...(data.documento_rilascio && { documento_rilascio: data.documento_rilascio }),
+      ...(data.documento_scadenza && { documento_scadenza: data.documento_scadenza }),
       ...(data.nautica_numero && { nautica_numero: data.nautica_numero }),
       ...(data.nautica_categoria && { nautica_categoria: data.nautica_categoria }),
       ...(data.nautica_limite && { nautica_limite: data.nautica_limite }),
@@ -1622,7 +1679,45 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
               {formData.tipo_cliente === 'persona_fisica' && (
                 <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Documento d'identità</label>
+                      <select value={formData.documento_tipo} onChange={(e) => setFormData({ ...formData, documento_tipo: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none">
+                        <option value="">—</option>
+                        {Object.entries(ETICHETTE_TIPO_DOCUMENTO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Numero</label>
+                      <input type="text" value={formData.documento_numero} onChange={(e) => setFormData({ ...formData, documento_numero: e.target.value.toUpperCase() })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                    </div>
+                  </div>
                   <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Rilasciato da</label>
+                    <input type="text" value={formData.documento_ente} onChange={(e) => setFormData({ ...formData, documento_ente: e.target.value })} placeholder="Comune di Cagliari"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data rilascio</label>
+                      <EuropeanDateInput
+                        value={formData.documento_rilascio || ''}
+                        onChange={(__v: string) => setFormData({ ...formData, documento_rilascio: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Scadenza</label>
+                      <EuropeanDateInput
+                        value={formData.documento_scadenza || ''}
+                        onChange={(__v: string) => setFormData({ ...formData, documento_scadenza: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-theme-border">
                     <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Patente n.</label>
                     <input type="text" value={formData.patente_numero} onChange={(e) => setFormData({ ...formData, patente_numero: e.target.value.toUpperCase() })}
                       className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
@@ -2019,6 +2114,22 @@ function DocUploadGroup({ label, children }: { label: string; children: React.Re
       <div className="grid grid-cols-2 gap-2">{children}</div>
     </div>
   )
+}
+
+// Chiavi gia' usate da CargosTab (DOC_TYPE_MAP) ed EMTNTab.
+const ETICHETTE_TIPO_DOCUMENTO: Record<string, string> = {
+  carta_identita: "Carta d'identita'",
+  carta_identita_elettronica: "Carta d'identita' elettronica",
+  passaporto: 'Passaporto',
+}
+
+function tipoDocumentoDaOcr(valore: string | undefined): string {
+  const v = (valore || '').toLowerCase()
+  if (!v) return ''
+  if (v.includes('passaport')) return 'passaporto'
+  if (v.includes('elettronic') || v === 'cie') return 'carta_identita_elettronica'
+  if (v.includes('identit') || v === 'ci') return 'carta_identita'
+  return ''
 }
 
 function DocFileInput({ value, onChange, placeholder }: { value: File | null; onChange: (f: File | null) => void; placeholder: string }) {

@@ -159,6 +159,9 @@ function findConflicts(
   for (const [key, extractedValue] of Object.entries(extracted)) {
     if (!extractedValue) continue
     if (['document_type', 'confidence', 'notes', 'raw_text'].includes(key)) continue
+    // Il form salva una chiave (carta_identita), l'OCR scrive il nome in
+    // chiaro: non e' un conflitto vero.
+    if (key === 'documento_tipo') continue
     const currentValue = currentData[key]
     if (currentValue && currentValue.trim() !== '' && currentValue.toLowerCase().trim() !== extractedValue.toLowerCase().trim()) {
       conflicts.push({ field: key, currentValue, extractedValue })
