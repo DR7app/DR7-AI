@@ -22,6 +22,8 @@ import MoneyInput from '../../../components/MoneyInput'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import { nettoVoce, giaFatturato, daFatturare } from '../../../utils/fatturazioneVoci'
+import GeneraFatturaClienteModal from './GeneraFatturaClienteModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -172,6 +174,8 @@ export default function UnpaidBookingsTab() {
   const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [processingKey, setProcessingKey] = useState<string | null>(null)
+  // 14/10/2026: Genera fattura / Genera fattura parziale (anche non pagata).
+  const [fatturaCliente, setFatturaCliente] = useState<{ group: CustomerGroup; parziale: boolean } | null>(null)
   // Sollecito pagamento — chiave del gruppo per cui è in corso l'invio del
   // promemoria WhatsApp (disabilita il bottone durante l'invio).
   const [sollecitoSendingKey, setSollecitoSendingKey] = useState<string | null>(null)
@@ -748,6 +752,22 @@ export default function UnpaidBookingsTab() {
 
   // ── Payment & Delete functions (preserved) ─────────────────────────────────
 
+  // 14/10/2026: quanto della prenotazione (noleggio/lavaggio) resta da mettere
+  // in fattura. Conta principale, estensioni e fatture parziali; mai penali,
+  // danni, note di credito o fatture annullate (hanno lo stesso booking_id ma
+  // non coprono il servizio). Stessa regola di generate-invoice-from-booking.
+  async function residuoDaFatturarePrenotazione(bookingId: string, priceTotalCents: number): Promise<number> {
+    const { data: righe } = await supabase
+      .from('fatture')
+      .select('importo_totale, tipo_fattura, stato')
+      .eq('booking_id', bookingId)
+    const esclusi = ['penale', 'danno', 'penali', 'danni', 'nota_di_credito', 'nota_credito', 'td04']
+    const fatturato = (righe || [])
+      .filter(r => !esclusi.includes(String(r.tipo_fattura || '').toLowerCase()) && String(r.stato || '').toLowerCase() !== 'cancelled')
+      .reduce((s, r) => s + (Number(r.importo_totale) || 0), 0)
+    return Math.max(0, Math.round(((Number(priceTotalCents) || 0) / 100 - fatturato) * 100) / 100)
+  }
+
   // 2026-06-04: quando un lavaggio Prime Wash viene segnato pagato da qui,
   // propaga stato + metodo ai blocchi shadow collegati (auto di cortesia /
   // supercar) via parent_carwash_booking_id. Per i noleggi normali non c'è
@@ -877,10 +897,19 @@ export default function UnpaidBookingsTab() {
           logger.log('[updatePaymentStatus] Credit Wallet: skip fattura generation (gia\' generata alla ricarica wallet)')
           toast.success('Segnato come pagato (fattura gia\' presente per ricarica wallet)')
         } else try {
-          const { data: fatture } = await supabase
+          const { data: fattureTutte } = await supabase
             .from('fatture')
-            .select('id, numero_fattura, items')
+            .select('id, numero_fattura, items, tipo_fattura, stato')
             .eq('booking_id', bookingId)
+          // 14/10/2026: penali, danni, note di credito e fatture annullate
+          // stanno sullo stesso booking_id ma non coprono il noleggio: prima contavano
+          // anche loro, e una penale fatturata prima del pagamento faceva credere la
+          // prenotazione gia' fatturata.
+          const esclusiDalServizio = ['penale', 'danno', 'penali', 'danni', 'nota_di_credito', 'nota_credito', 'td04']
+          const fatture = (fattureTutte || []).filter(f =>
+            !esclusiDalServizio.includes(String(f.tipo_fattura || '').toLowerCase()) && String(f.stato || '').toLowerCase() !== 'cancelled')
+          // Solo fatture parziali e nessuna principale: il server emette il saldo.
+          const soloParziali = fatture.length > 0 && fatture.every(f => String(f.tipo_fattura || '').toLowerCase() === 'parziale')
 
           const { data: bk } = await supabase
             .from('bookings')
@@ -909,8 +938,9 @@ export default function UnpaidBookingsTab() {
           }
           const deltaCents = Math.max(0, bookingTotalCents - alreadyInvoicedCents)
 
-          if ((fatture || []).length === 0) {
-            // First fattura for this booking — full amount.
+          if ((fatture || []).length === 0 || soloParziali) {
+            // First fattura for this booking — full amount (con fatture
+            // parziali gia' emesse il server fattura solo il saldo).
             const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -918,7 +948,8 @@ export default function UnpaidBookingsTab() {
             })
             if (invoiceRes.ok) {
               const invoiceData = await invoiceRes.json()
-              toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata`)
+              if (invoiceData.skipped) toast(invoiceData.message || 'Nessuna nuova fattura')
+              else toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata`)
             }
           } else if (deltaCents > 0) {
             // Previously invoiced, but there's a new positive delta — emit a
@@ -1791,8 +1822,15 @@ export default function UnpaidBookingsTab() {
         // their FULL price (so the subtotale matches what the customer
         // initially saw); the sum of discounts is sent as discountAmount and
         // the fattura renders Subtotal / Sconto / Totale correctly.
+        // 14/10/2026: le voci gia' fatturate prima del pagamento (Genera
+        // fattura / Genera fattura parziale) entrano solo per il resto non
+        // ancora fatturato, a prezzo finale: mai una seconda fattura intera.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const invoiceItems = pending.map((item: any) => {
+        const giaInFattura = pending.filter((item: any) => giaFatturato(item) > 0)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const maiFatturate = pending.filter((item: any) => giaFatturato(item) === 0)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const invoiceItems = maiFatturate.map((item: any) => {
           // 2026-06-06: fatturare il TOTALE della penale (prezzo pieno), non il
           // solo residuo. I pagamenti parziali ("Parziale") NON emettono
           // fattura, quindi fatturando solo il residuo l'acconto gia' incassato
@@ -1803,9 +1841,18 @@ export default function UnpaidBookingsTab() {
           return { label: item.label, amount: total, quantity: 1 }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }).filter((i: any) => i.amount > 0)
+        for (const item of giaInFattura) {
+          const resto = daFatturare(item)
+          if (resto > 0) invoiceItems.push({ label: `${item.label} (saldo)`, amount: resto, quantity: 1 })
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const vociFattura = pending.map((item: any) => ({
+          key: type, index: arr.indexOf(item),
+          importo: giaFatturato(item) > 0 ? daFatturare(item) : nettoVoce(item),
+        })).filter(v => v.index >= 0 && v.importo > 0)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const totalDiscount = pending.reduce((sum: number, item: any) => sum + (Number(item.discount) || 0), 0)
+        const totalDiscount = maiFatturate.reduce((sum: number, item: any) => sum + (Number(item.discount) || 0), 0)
 
         if (invoiceItems.length > 0) {
           try {
@@ -1818,7 +1865,8 @@ export default function UnpaidBookingsTab() {
                 items: invoiceItems,
                 discountAmount: totalDiscount > 0 ? totalDiscount : undefined,
                 type: type === 'danni' ? 'danni' : undefined,
-                paymentStatus: 'paid'
+                paymentStatus: 'paid',
+                voci: vociFattura,
               })
             })
             if (res.ok) {
@@ -1980,11 +2028,18 @@ export default function UnpaidBookingsTab() {
 
       // Collect invoice line items from booking_details source items
       const invoiceLineItems: { label: string; amount: number; quantity: number }[] = []
+      const vociFattura: { bookingId: string; key: string; index: number; importo: number }[] = []
       const bookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
 
       for (const item of items) {
         if (item.source === 'booking_details' && item.remaining > 0) {
-          invoiceLineItems.push({ label: item.label, amount: item.remaining, quantity: 1 })
+          // 14/10/2026: voce gia' fatturata prima del pagamento = solo il resto.
+          const voce = item.booking.booking_details?.[type]?.[item.originalIndex]
+          const importo = giaFatturato(voce) > 0 ? daFatturare(voce) : item.remaining
+          if (importo > 0) {
+            invoiceLineItems.push({ label: giaFatturato(voce) > 0 ? `${item.label} (saldo)` : item.label, amount: importo, quantity: 1 })
+            vociFattura.push({ bookingId: item.bookingId, key: type, index: item.originalIndex, importo })
+          }
           if (!bookingUpdates.has(item.bookingId)) {
             bookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
           }
@@ -2027,7 +2082,8 @@ export default function UnpaidBookingsTab() {
               customerId: firstItem.booking.customer_id || firstItem.booking.user_id,
               items: invoiceLineItems,
               type: type === 'danni' ? 'danni' : undefined,
-              paymentStatus: 'paid'
+              paymentStatus: 'paid',
+              voci: vociFattura,
             })
           })
           if (res.ok) {
@@ -2069,7 +2125,9 @@ export default function UnpaidBookingsTab() {
       if (isPending) {
         const totalCents = booking.price_total || 0
         const paidCents = booking.booking_details?.amountPaid || 0
-        const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+        // 14/10/2026: mai oltre quel che la prenotazione ha ancora da fatturare
+        // (fattura emessa prima del pagamento, o fatture parziali).
+        const remainingEur = Math.min(Math.max(0, (totalCents - paidCents) / 100), await residuoDaFatturarePrenotazione(booking.id, totalCents))
         if (remainingEur > 0) {
           invoiceLineItems.push({
             label: `Noleggio ${vehicle}${plate ? ` (${plate})` : ''}`,
@@ -2217,7 +2275,8 @@ export default function UnpaidBookingsTab() {
         if (isPending) {
           const totalCents = booking.price_total || 0
           const paidCents = booking.booking_details?.amountPaid || 0
-          const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+          // 14/10/2026: mai oltre il residuo da fatturare della prenotazione.
+          const remainingEur = Math.min(Math.max(0, (totalCents - paidCents) / 100), await residuoDaFatturarePrenotazione(booking.id, totalCents))
           if (remainingEur > 0) {
             invoiceLineItems.push({
               label: `Noleggio ${vehicle}${plate ? ` (${plate})` : ''}`,
@@ -2262,7 +2321,7 @@ export default function UnpaidBookingsTab() {
         const serviceName = booking.service_name || 'Servizio'
         const totalCents = booking.price_total || 0
         const paidCents = booking.booking_details?.amountPaid || 0
-        const remainingEur = Math.max(0, (totalCents - paidCents) / 100)
+        const remainingEur = Math.min(Math.max(0, (totalCents - paidCents) / 100), await residuoDaFatturarePrenotazione(booking.id, totalCents))
         if (remainingEur > 0) {
           invoiceLineItems.push({ label: serviceName, amount: remainingEur, quantity: 1 })
         }
@@ -2271,13 +2330,20 @@ export default function UnpaidBookingsTab() {
       }
 
       // 3. Penali → collect line items (DO NOT mark paid yet — fattura first)
+      const vociSaldaTutto: { bookingId: string; key: string; index: number; importo: number }[] = []
       const penaliBookingUpdates = new Map<string, { booking: UnpaidBooking; indices: number[] }>()
       for (const item of group.penaliItems) {
         if (!anchorCustomerId) anchorCustomerId = item.booking.customer_id || item.booking.user_id || ''
         if (!anchorBookingId) anchorBookingId = item.bookingId
 
         if (item.source === 'booking_details' && item.remaining > 0) {
-          invoiceLineItems.push({ label: `Penale - ${item.label}`, amount: item.remaining, quantity: 1 })
+          // 14/10/2026: voce gia' fatturata prima del pagamento = solo il resto.
+          const voce = item.booking.booking_details?.penalties?.[item.originalIndex]
+          const importo = giaFatturato(voce) > 0 ? daFatturare(voce) : item.remaining
+          if (importo > 0) {
+            invoiceLineItems.push({ label: `Penale - ${item.label}${giaFatturato(voce) > 0 ? ' (saldo)' : ''}`, amount: importo, quantity: 1 })
+            vociSaldaTutto.push({ bookingId: item.bookingId, key: 'penalties', index: item.originalIndex, importo })
+          }
           if (!penaliBookingUpdates.has(item.bookingId)) {
             penaliBookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
           }
@@ -2292,7 +2358,12 @@ export default function UnpaidBookingsTab() {
         if (!anchorBookingId) anchorBookingId = item.bookingId
 
         if (item.source === 'booking_details' && item.remaining > 0) {
-          invoiceLineItems.push({ label: `Danno - ${item.label}`, amount: item.remaining, quantity: 1 })
+          const voce = item.booking.booking_details?.danni?.[item.originalIndex]
+          const importo = giaFatturato(voce) > 0 ? daFatturare(voce) : item.remaining
+          if (importo > 0) {
+            invoiceLineItems.push({ label: `Danno - ${item.label}${giaFatturato(voce) > 0 ? ' (saldo)' : ''}`, amount: importo, quantity: 1 })
+            vociSaldaTutto.push({ bookingId: item.bookingId, key: 'danni', index: item.originalIndex, importo })
+          }
           if (!danniBookingUpdates.has(item.bookingId)) {
             danniBookingUpdates.set(item.bookingId, { booking: item.booking, indices: [] })
           }
@@ -2310,7 +2381,8 @@ export default function UnpaidBookingsTab() {
             customerId: anchorCustomerId,
             items: invoiceLineItems,
             rawDescriptions: true,
-            paymentStatus: 'paid'
+            paymentStatus: 'paid',
+            voci: vociSaldaTutto,
           })
         })
         if (!res.ok) {
@@ -4230,6 +4302,18 @@ export default function UnpaidBookingsTab() {
                     {group.customerPhone && <div>{group.customerPhone}</div>}
                   </div>
 
+                  {/* 14/10/2026: fatturare anche senza pagamento, o solo una parte */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setFatturaCliente({ group, parziale: false })}
+                      className="px-3 py-2 border border-dr7-gold/50 text-dr7-gold hover:bg-dr7-gold/10 rounded-lg text-sm font-semibold transition-colors"
+                    >Genera fattura</button>
+                    <button
+                      onClick={() => setFatturaCliente({ group, parziale: true })}
+                      className="px-3 py-2 border border-dr7-gold/50 text-dr7-gold hover:bg-dr7-gold/10 rounded-lg text-sm font-semibold transition-colors"
+                    >Fattura parziale</button>
+                  </div>
+
                   {/* Salda Tutto button */}
                   {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                     <button
@@ -4539,6 +4623,14 @@ export default function UnpaidBookingsTab() {
                           className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-purple-400"
                         >Pay by Link — €{remainingEur.toFixed(2)}</button>
                         <button
+                          onClick={() => { setOpenActionsRowKey(null); setFatturaCliente({ group, parziale: false }) }}
+                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-dr7-gold"
+                        >Genera fattura</button>
+                        <button
+                          onClick={() => { setOpenActionsRowKey(null); setFatturaCliente({ group, parziale: true }) }}
+                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-dr7-gold"
+                        >Genera fattura parziale</button>
+                        <button
                           onClick={() => { setOpenActionsRowKey(null); openAddebitoNexi(group) }}
                           className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-orange-400"
                         >Addebito MIT</button>
@@ -4714,6 +4806,15 @@ export default function UnpaidBookingsTab() {
 
       {/* 17/09/2026: autorizzazione del cliente per il Credit Wallet. */}
       {autWallet.modale}
+
+      {fatturaCliente && (
+        <GeneraFatturaClienteModal
+          group={fatturaCliente.group}
+          parziale={fatturaCliente.parziale}
+          onClose={() => setFatturaCliente(null)}
+          onDone={() => loadUnpaidBookings()}
+        />
+      )}
 
       {/* Payment-method picker — opens before any "Segna Pagato" / "Salda Tutto"
           path so the booking row is stamped with HOW the customer paid. */}

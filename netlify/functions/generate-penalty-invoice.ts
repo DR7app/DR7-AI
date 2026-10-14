@@ -65,6 +65,15 @@ export const handler: Handler = async (event) => {
     try {
         const body = JSON.parse(event.body || '{}')
         const { bookingId, customerId, note, type, paymentStatus, rawDescriptions, discountAmount, paymentMethod } = body
+        // 14/10/2026: fattura emessa PRIMA del pagamento (o solo per una parte)
+        // da "In attesa di pagamento" > Genera fattura. `voci` dice a quali
+        // penali/danni di booking_details si riferisce ogni importo, cosi' al
+        // saldo si fattura solo il resto (utils/fatturazioneVoci.ts).
+        // `inviaSdi`: una fattura numerata parte allo SDI anche se non pagata.
+        const voci: { bookingId?: string; key: 'penalties' | 'danni'; index: number; importo: number }[] =
+            Array.isArray(body.voci) ? body.voci.filter((v: any) =>
+                (v?.key === 'penalties' || v?.key === 'danni') && Number.isInteger(v?.index) && Number(v?.importo) > 0) : []
+        const inviaSdi = body.inviaSdi === true
         // 2026-05-18: DR7 Wallet (credit_wallet) NON deve generare fattura SDI
         // perche' l'IVA e' gia' stata pagata sulla ricarica del wallet.
         // Riconosciamo ogni variante: "credit_wallet", "Credit Wallet",
@@ -369,7 +378,7 @@ export const handler: Handler = async (event) => {
             await supabase.from('fatture').update({ sdi_status: 'skipped_wallet' }).eq('id', invoice.id)
         // 2026-08-17: P.IVA da sola identifica il cliente azienda; prima il
         // gate guardava solo il CF e le penali alle aziende non partivano.
-        } else if (paymentStatus === 'paid' && (invoice.customer_tax_code || invoice.customer_vat)) {
+        } else if ((paymentStatus === 'paid' || inviaSdi) && (invoice.customer_tax_code || invoice.customer_vat)) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
@@ -390,6 +399,43 @@ export const handler: Handler = async (event) => {
                 await supabase.from('fatture').update({
                     sdi_response: { auto_send_error: String(sdiError?.message || sdiError), at: new Date().toISOString() }
                 }).eq('id', invoice.id)
+            }
+        }
+
+        // 14/10/2026: segna sulle voci quanto e' appena stato fatturato.
+        // Rilettura fresca di booking_details per prenotazione (le voci di un
+        // cliente possono stare su piu' prenotazioni).
+        if (voci.length > 0) {
+            const perPrenotazione = new Map<string, typeof voci>()
+            for (const v of voci) {
+                const id = v.bookingId || bookingId
+                if (!perPrenotazione.has(id)) perPrenotazione.set(id, [])
+                perPrenotazione.get(id)!.push(v)
+            }
+            for (const [idPren, vociPren] of perPrenotazione) {
+                try {
+                    const { data: riga } = await supabase.from('bookings').select('booking_details').eq('id', idPren).single()
+                    const det = { ...(riga?.booking_details || {}) }
+                    for (const v of vociPren) {
+                        const arr = Array.isArray(det[v.key]) ? [...det[v.key]] : []
+                        const voce = arr[v.index]
+                        if (!voce) continue
+                        const importo = Math.round(Number(v.importo) * 100) / 100
+                        arr[v.index] = {
+                            ...voce,
+                            importoFatturato: Math.round(((Number(voce.importoFatturato) || 0) + importo) * 100) / 100,
+                            fattureEmesse: [
+                                ...(Array.isArray(voce.fattureEmesse) ? voce.fattureEmesse : []),
+                                { id: invoice.id, numero: invoice.numero_fattura, importo },
+                            ],
+                        }
+                        det[v.key] = arr
+                    }
+                    const { error: errVoci } = await supabase.from('bookings').update({ booking_details: det }).eq('id', idPren)
+                    if (errVoci) console.error('[Penalty Invoice] voci non aggiornate su', idPren, errVoci.message)
+                } catch (vociErr: any) {
+                    console.error('[Penalty Invoice] voci non aggiornate su', idPren, vociErr?.message)
+                }
             }
         }
 

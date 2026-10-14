@@ -15,6 +15,7 @@ const TIPI_NON_PRINCIPALI = [
   'nota_di_credito', 'nota_credito', 'td04',
   'penale', 'danno', 'penali', 'danni',
   'estensione',
+  'parziale',
 ]
 
 export interface RigaFattura {

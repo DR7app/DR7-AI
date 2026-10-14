@@ -8,8 +8,9 @@ import { renderTemplate } from './utils/messageTemplates'
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 import { hasApprovedOverride } from './utils/verifyOverride'
+import { userHasRole } from './utils/adminRoles'
 import { loadBusinessConfig } from './utils/businessConfig'
-import { isFatturaPrincipale, isUscitaSdi, TIPO_ESTENSIONE } from './utils/fatturaTipi'
+import { isFatturaPrincipale, isUscitaSdi, isNotaDiCredito, isPenaleODanno, TIPO_ESTENSIONE, TIPO_PARZIALE } from './utils/fatturaTipi'
 import { funzioneFerma } from './utils/systemControl'
 import { classificaRispostaGreenApi, classificaEccezioneGreenApi, leggiCorpo, rigaLogWhatsapp, type EsitoGreenApi } from './utils/esitoGreenApi'
 import { percorsoStorage } from '../../src/utils/percorsoStorage'
@@ -293,6 +294,10 @@ export const handler: Handler = async (event) => {
         // richiesta (sito, PaymentSuccessPage via generate-fattura). Vedi il
         // controllo prima della ricerca della fattura principale.
         nexiOrderId,
+        // 14/10/2026: fattura PARZIALE (€ lordi) della prenotazione — da
+        // "In attesa di pagamento" > Genera fattura parziale. Non tocca la
+        // principale: crea una riga tipo 'parziale' per questo importo.
+        importoParziale,
     } = body
 
     // ── WALLET / CREDIT RECHARGE FATTURA (no auth required) ───────────────
@@ -333,9 +338,11 @@ export const handler: Handler = async (event) => {
     // The endpoint still rejects unpaid bookings below (line ~57) and is
     // idempotent against existing invoices, so this can't double-charge.
     const hasAuthHeader = !!(event.headers?.authorization || event.headers?.Authorization)
+    let emailChiamante: string | null = null
     if (hasAuthHeader) {
-        const { error: authErr } = await requireAuth(event)
+        const { user: utenteAuth, error: authErr } = await requireAuth(event)
         if (authErr) return authErr
+        emailChiamante = utenteAuth?.email || null
     } else if (!bookingId) {
         // No auth and no bookingId — reject (no legitimate use case)
         return { statusCode: 401, body: JSON.stringify({ error: 'Missing Authorization header' }) }
@@ -384,7 +391,12 @@ export const handler: Handler = async (event) => {
         // l'operatore avrebbe ottenuto l'OTP e poi comunque un 400.
         const paymentStatus = booking.payment_status || ''
         if (paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded') {
+            // 14/10/2026: chi ha il tag role:bypass-otp non riceve mai l'OTP (il
+            // client gli da' un id "bypass_..." che non esiste a database): stessa
+            // regola dell'auto-approvazione di limitation-override-otp, verificata
+            // qui sul token, non sulla parola del client.
             const authorized = await hasApprovedOverride(supabase, body.overrideId, 'fattura.booking_non_pagato')
+                || (!!emailChiamante && await userHasRole(emailChiamante, 'bypass-otp'))
             if (!authorized) {
                 console.log(`[Invoice] Skipping — booking ${bookingId} not paid (status: ${paymentStatus})`)
                 return {
@@ -849,8 +861,63 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // 14/10/2026 — FATTURE PARZIALI. Quanto della prenotazione e' gia' in
+        // fattura (principale, estensioni, parziali; mai penali/danni, note di
+        // credito o annullate). Due regole:
+        //  1. una parziale non puo' superare quel che resta da fatturare;
+        //  2. se la prenotazione ha gia' delle parziali e nessuna principale,
+        //     la "fattura della prenotazione" (segna pagato, callback Nexi,
+        //     riconciliazione) diventa il SALDO: solo il residuo, mai di nuovo
+        //     l'intero importo.
+        let parziale = Number(importoParziale) > 0 ? Math.round(Number(importoParziale) * 100) / 100 : 0
+        let etichettaParziale = 'fattura parziale'
+        if (!extensionAmount && !includePenalties) {
+            const { data: righeBooking, error: erroreRighe } = await supabase
+                .from('fatture')
+                .select('importo_totale, tipo_fattura, stato')
+                .eq('booking_id', bookingId)
+            if (erroreRighe) throw erroreRighe
+            const valide = (righeBooking || []).filter((r: any) =>
+                !isNotaDiCredito(r) && !isPenaleODanno(r) && String(r.stato || '').toLowerCase() !== 'cancelled')
+            const giaFatturato = Math.round(valide.reduce((s: number, r: any) => s + (Number(r.importo_totale) || 0), 0) * 100) / 100
+            const residuo = Math.round(((Number(booking.price_total) || 0) / 100 - giaFatturato) * 100) / 100
+            const ciSonoParziali = valide.some((r: any) => String(r.tipo_fattura || '').toLowerCase() === TIPO_PARZIALE)
+            const ciEPrincipale = valide.some(isFatturaPrincipale)
+            if (parziale > 0) {
+                if (parziale > residuo + 0.01) {
+                    return {
+                        statusCode: 400,
+                        body: JSON.stringify({
+                            error: 'Importo oltre il residuo da fatturare',
+                            message: residuo > 0
+                                ? `Su questa prenotazione restano da fatturare solo € ${residuo.toFixed(2)}.`
+                                : 'Questa prenotazione e\' gia\' fatturata per intero.',
+                            residuo,
+                        })
+                    }
+                }
+                if (residuo - parziale <= 0.01) etichettaParziale = ciSonoParziali ? 'saldo' : 'fattura parziale'
+                else etichettaParziale = 'acconto'
+            } else if (ciSonoParziali && !ciEPrincipale) {
+                if (residuo <= 0.01) {
+                    console.log(`[Invoice] ${bookingId} gia' fatturata per intero con fatture parziali — niente da emettere`)
+                    return {
+                        statusCode: 200,
+                        body: JSON.stringify({
+                            message: 'Prenotazione gia\' fatturata per intero con fatture parziali.',
+                            skipped: true,
+                            reason: 'coperta_da_parziali',
+                        })
+                    }
+                }
+                console.log(`[Invoice] ${bookingId} ha fatture parziali: emetto il saldo di € ${residuo.toFixed(2)}`)
+                parziale = residuo
+                etichettaParziale = 'saldo'
+            }
+        }
+
         let existingInvoice: any = null
-        if (!extensionAmount) {
+        if (!extensionAmount && !parziale) {
             const COLONNE_FATTURA = 'id, numero_fattura, sdi_status, aruba_invoice_id, tipo_fattura, stato, created_at'
             let { data: righe, error: righeError } = await supabase
                 .from('fatture')
@@ -945,6 +1012,27 @@ export const handler: Handler = async (event) => {
 
         if (skipMainItems) {
             // Main booking already invoiced — penalties/danni will be added below
+        } else if (parziale > 0) {
+            // 14/10/2026: fattura parziale = una riga sola, alla stessa aliquota
+            // del servizio. L'importo e' LORDO: si scorpora.
+            const isServizio = booking.service_type === 'car_wash' || booking.service_type === 'mechanical'
+            const rateParziale = voiceVat(
+                booking.service_type === 'car_wash' ? 'lavaggio' : booking.service_type === 'mechanical' ? 'meccanica' : 'noleggio',
+                dynamicVatRate
+            )
+            const vatRate = includeIVA ? rateParziale : 0
+            const fmtDay = (iso: string) => { try { return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) } catch { return '' } }
+            const cosa = isServizio
+                ? `${booking.service_name || (booking.service_type === 'car_wash' ? 'Lavaggio Auto' : 'Intervento Meccanico')}${booking.appointment_date || booking.pickup_date ? ` del ${fmtDay(booking.appointment_date || booking.pickup_date)}` : ''}`
+                : `Noleggio ${booking.vehicle_name || ''}${booking.pickup_date && booking.dropoff_date ? ` dal ${fmtDay(booking.pickup_date)} al ${fmtDay(booking.dropoff_date)}` : ''}`
+            const netto = vatRate > 0 ? parziale / (1 + vatRate / 100) : parziale
+            items.push({
+                description: `${cosa.replace(/\s+/g, ' ').trim()} - ${etichettaParziale}`,
+                unit_price: netto,
+                quantity: 1,
+                vat_rate: vatRate,
+                total: netto,
+            })
         } else if (extensionAmount && extensionAmount > 0) {
             // Extension invoice. 2026-05-30: itemizza AUTOMATICAMENTE quando il
             // pagamento copre piu' voci (es. link "Saldo completo" = estensione
@@ -1166,7 +1254,7 @@ export const handler: Handler = async (event) => {
         }
 
         // Include extensions as line items in the same fattura (all extensions, already marked paid)
-        if (includeExtensions) {
+        if (includeExtensions && !parziale) {
             const extensions = bookingDetails.extension_history || []
             const rateEstensioni = voiceVat('estensione', dynamicVatRate)
             const vatRate = includeIVA ? rateEstensioni : 0
@@ -1243,10 +1331,10 @@ export const handler: Handler = async (event) => {
         // prenotazione che ha gia' doppioni, e la chiave collidere.
         const chiaveInserimento = existingInvoice
             ? chiaveIdempotenza
-            : (extensionAmount ? chiaveIdempotenza : `principale:${bookingId}`)
+            : ((extensionAmount || parziale) ? chiaveIdempotenza : `principale:${bookingId}`)
         // Una principale annullata (nota di credito, riemissione) non conta piu'
         // come principale: libera la chiave, o la nuova verrebbe respinta.
-        if (!existingInvoice && !extensionAmount) {
+        if (!existingInvoice && !extensionAmount && !parziale) {
             await supabase
                 .from('fatture')
                 .update({ fattura_dedup_key: null })
@@ -1301,6 +1389,7 @@ export const handler: Handler = async (event) => {
             // per cui nascevano i doppioni, e senza questo tipo l'indice unico
             // rifiuterebbe le estensioni legittime.
             ...(extensionAmount ? { tipo_fattura: TIPO_ESTENSIONE } : {}),
+            ...(!extensionAmount && parziale ? { tipo_fattura: TIPO_PARZIALE } : {}),
         }
 
         let { data: invoice, error: insertError } = existingInvoice

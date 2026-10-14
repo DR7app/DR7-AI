@@ -30,6 +30,13 @@ export const TIPI_PENALE_DANNO = ['penale', 'danno', 'penali', 'danni']
  */
 export const TIPO_ESTENSIONE = 'estensione'
 
+/**
+ * 14/10/2026: fattura PARZIALE di una prenotazione (acconto, o il saldo dopo
+ * un acconto). Non e' la principale: una prenotazione ne puo' avere piu' d'una,
+ * e la loro somma non supera mai price_total (vedi generate-invoice-from-booking).
+ */
+export const TIPO_PARZIALE = 'parziale'
+
 /** Stati che significano "il documento e' gia' uscito verso lo SDI". */
 export const STATI_SDI_USCITA = ['sending', 'sent', 'delivered', 'accepted']
 
@@ -56,6 +63,10 @@ export function isEstensione(riga: RigaFattura): boolean {
     return tipo(riga) === TIPO_ESTENSIONE
 }
 
+export function isParziale(riga: RigaFattura): boolean {
+    return tipo(riga) === TIPO_PARZIALE
+}
+
 /**
  * La fattura principale della prenotazione: non una nota di credito, non una
  * penale/danno, non annullata. Le estensioni si escludono a monte con il filtro
@@ -66,6 +77,7 @@ export function isFatturaPrincipale(riga: RigaFattura): boolean {
     if (isNotaDiCredito(riga)) return false
     if (isPenaleODanno(riga)) return false
     if (isEstensione(riga)) return false
+    if (isParziale(riga)) return false
     if (String(riga.stato || '').toLowerCase() === 'cancelled') return false
     return true
 }

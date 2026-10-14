@@ -14,6 +14,7 @@ import { inviaRichiestaIbanCauzione } from './utils/richiestaIbanCauzione';
 import { funzioneFerma } from './utils/systemControl';
 import { decidiPagamentoTardivo, TOLLERANZA_SCADENZA_MS, type EsitoPagamentoTardivo } from './utils/pagamentoTardivo';
 import { sostituisciLinkInAttesa } from './utils/linkInAttesa';
+import { nettoVoce, giaFatturato, daFatturare } from '../../src/utils/fatturazioneVoci';
 
 // Interruttore System Control: WhatsApp spento = avviso admin saltato, il
 // pagamento resta registrato e tutto il resto prosegue.
@@ -706,11 +707,11 @@ const handler: Handler = async (event) => {
                 // prescindere dall'importo: un Link Parziale da Da Saldare
                 // saldava tutto. Un link per l'intero carrello (DanniPenaliModal)
                 // copre esattamente le righe aperte: stesso esito di prima.
-                const toccate: { key: string; item: any; pagatoOra: number; saldataDaZero: boolean }[] = [];
+                const toccate: { key: string; index: number; item: any; pagatoOra: number; saldataDaZero: boolean }[] = [];
                 let residuoCent = transaction.amount_cents;
                 for (const key of arrayKeys) {
                     const items = details[key] || [];
-                    for (const item of items) {
+                    for (const [index, item] of items.entries()) {
                         if (residuoCent <= 0) break;
                         const aperta = item.paymentStatus === 'nexi_pay_by_link' || item.paymentStatus === 'pending'
                             || item.paymentStatus === 'partial' || !item.paymentStatus;
@@ -731,7 +732,7 @@ const handler: Handler = async (event) => {
                         item.paymentMethod = 'Nexi Pay by Link';
                         item.amountPaid = (saldata ? effettivoCent : pagatoCent) / 100;
                         item.paidAt = new Date().toISOString();
-                        toccate.push({ key, item, pagatoOra: ora / 100, saldataDaZero: giaPagatoCent === 0 && saldata });
+                        toccate.push({ key, index, item, pagatoOra: ora / 100, saldataDaZero: giaPagatoCent === 0 && saldata });
                         updated = true;
                     }
                 }
@@ -755,9 +756,24 @@ const handler: Handler = async (event) => {
                 try {
                     const custId = details.customer?.customerId || details.customer?.id || details.customer_id;
                     const allItems: { label: string; amount: number; quantity: number }[] = [];
+                    const voci: { key: string; index: number; importo: number }[] = [];
                     let aggregateDiscount = 0;
                     for (const t of toccate) {
                         const etichetta = t.item.label || (t.key === 'danni' ? 'Danno' : 'Penale');
+                        // 14/10/2026: voce gia' fatturata (in tutto o in parte)
+                        // prima del pagamento: si fattura solo quel che il
+                        // pagato supera il fatturato, mai di nuovo il totale.
+                        const fatturato = giaFatturato(t.item);
+                        if (fatturato > 0) {
+                            const quota = Math.min(daFatturare(t.item),
+                                Math.max(0, Math.round(((Number(t.item.amountPaid) || 0) - fatturato) * 100) / 100));
+                            if (quota > 0) {
+                                allItems.push({ label: `${etichetta} (${t.item.paymentStatus === 'paid' ? 'saldo' : 'acconto'})`, amount: quota, quantity: 1 });
+                                voci.push({ key: t.key, index: t.index, importo: quota });
+                            }
+                            continue;
+                        }
+                        voci.push({ key: t.key, index: t.index, importo: t.saldataDaZero ? nettoVoce(t.item) : t.pagatoOra });
                         if (t.saldataDaZero) {
                             const itemTotal = t.item.total || (t.item.amount || 0) * (t.item.quantity || 1);
                             allItems.push({ label: etichetta, amount: itemTotal, quantity: 1 });
@@ -767,6 +783,9 @@ const handler: Handler = async (event) => {
                         }
                     }
                     // Use all items that were just marked paid
+                    if (allItems.length === 0 && toccate.length > 0) {
+                        console.log(`[nexi-payment-callback] ${paymentPurpose}: voci gia' fatturate prima del pagamento, nessuna nuova fattura`);
+                    } else {
                     if (allItems.length === 0) {
                         // Fallback: create a single item from the transaction amount
                         allItems.push({ label: paymentPurpose === 'danni' ? 'Danni' : 'Penali', amount: transaction.amount_cents / 100, quantity: 1 });
@@ -781,7 +800,8 @@ const handler: Handler = async (event) => {
                             items: allItems,
                             discountAmount: aggregateDiscount > 0 ? Math.round(aggregateDiscount * 100) / 100 : undefined,
                             type: paymentPurpose,
-                            paymentStatus: 'paid'
+                            paymentStatus: 'paid',
+                            voci,
                         })
                     });
                     const invoiceData = await invoiceRes.json();
@@ -789,6 +809,7 @@ const handler: Handler = async (event) => {
                         console.log(`[nexi-payment-callback] ✅ Fattura ${paymentPurpose} generata: ${invoiceData.invoice?.numero_fattura || 'N/A'}`);
                     } else {
                         console.error(`[nexi-payment-callback] ❌ Fattura ${paymentPurpose} failed:`, invoiceData.error || invoiceData.message);
+                    }
                     }
                 } catch (invErr) {
                     console.error(`[nexi-payment-callback] Fattura ${paymentPurpose} error:`, invErr);
