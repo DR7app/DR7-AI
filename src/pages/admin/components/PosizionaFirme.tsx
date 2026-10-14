@@ -225,8 +225,8 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                                 key={i}
                                 type="button"
                                 onClick={() => { setAttivo(i); setAggiungi(true) }}
-                                className="px-4 py-2 rounded-full border-2 font-bold text-sm"
-                                style={{ borderColor: colore, color: scelto ? '#fff' : colore, background: scelto ? colore : 'transparent' }}
+                                className={`px-4 py-2 rounded-full border-2 font-bold text-sm text-white hover:opacity-90 ${scelto ? 'ring-2 ring-offset-2 ring-offset-theme-bg-secondary' : ''}`}
+                                style={{ borderColor: colore, background: colore, ['--tw-ring-color' as string]: colore }}
                             >
                                 + Aggiungi firma {f.nome || `Firmatario ${i + 1}`}
                                 <span className="ml-1 opacity-80 font-normal">({posizioni[i]?.length || 0})</span>
