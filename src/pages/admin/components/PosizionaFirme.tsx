@@ -46,6 +46,9 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
     // Il prossimo click sul documento aggiunge una firma: sempre se il
     // firmatario non ne ha ancora, altrimenti dopo "Aggiungi firma".
     const [aggiungi, setAggiungi] = useState(false)
+    // 14/10/2026: una pagina alla volta, scelta dalle schede "Pagina N"
+    // (scorrendo, le pagine dopo la prima non si vedevano).
+    const [paginaVista, setPaginaVista] = useState(1)
     const pdfRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null)
     const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map())
     const trascinamento = useRef<{ idx: number; k: number; dx: number; dy: number; pagina: number } | null>(null)
@@ -73,11 +76,11 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
         return () => { annullato = true; pdfRef.current?.destroy() }
     }, [url])
 
-    // Disegna ogni pagina nel suo canvas, alla larghezza del riquadro.
+    // Disegna la pagina visibile nel suo canvas, alla larghezza del riquadro.
     useEffect(() => {
         if (!pagine.length || !pdfRef.current) return
         const pdf = pdfRef.current
-        pagine.forEach(async p => {
+        pagine.filter(p => p.numero === paginaVista).forEach(async p => {
             const canvas = canvasRefs.current.get(p.numero)
             if (!canvas) return
             const page = await pdf.getPage(p.numero)
@@ -87,7 +90,7 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
             canvas.height = vp.height
             await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp, canvas } as any).promise
         })
-    }, [pagine])
+    }, [pagine, paginaVista])
 
     const limita = (v: number, max: number) => Math.min(Math.max(v, 0), Math.max(max, 0))
 
@@ -160,12 +163,30 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                             ? `Clicca sul documento dove deve apparire la firma di ${firmatari[attivo]?.nome || `Firmatario ${attivo + 1}`}.`
                             : 'Trascina una firma per spostarla. "Aggiungi firma" + nome per metterne un\'altra.'}
                     </p>
+                    {pagine.length > 1 && (
+                        <div className="flex flex-wrap gap-2">
+                            {pagine.map(p => {
+                                const firmeQui = posizioni.reduce((n, l) => n + l.filter(v => v.pagina === p.numero).length, 0)
+                                const attiva = paginaVista === p.numero
+                                return (
+                                    <button
+                                        key={p.numero}
+                                        type="button"
+                                        onClick={() => setPaginaVista(p.numero)}
+                                        className={`px-3 py-1.5 rounded-full text-sm font-bold border ${attiva ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-border text-theme-text-secondary hover:text-theme-text-primary'}`}
+                                    >
+                                        Pagina {p.numero}{firmeQui ? ` (${firmeQui} ${firmeQui === 1 ? 'firma' : 'firme'})` : ''}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-theme-bg-tertiary space-y-4">
+                <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 bg-theme-bg-tertiary space-y-4">
                     {errore && <p className="text-sm text-red-400">Impossibile aprire il PDF: {errore}</p>}
                     {!errore && !pagine.length && <p className="text-sm text-theme-text-muted">Caricamento documento...</p>}
-                    {pagine.map(p => (
+                    {pagine.filter(p => p.numero === paginaVista).map(p => (
                         <div key={p.numero}>
                             <div className="text-[11px] text-theme-text-muted mb-1">Pagina {p.numero} di {pagine.length}</div>
                             <div
