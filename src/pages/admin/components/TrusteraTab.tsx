@@ -32,6 +32,7 @@ interface SignatureRequest {
   created_at: string
   token_expires_at: string
   posizione_firma?: PosizioneFirma[] | PosizioneFirma | null
+  gruppo_firma?: string | null
   sent_by_name?: string | null
   sent_by_email?: string | null
   contract?: {
@@ -158,7 +159,7 @@ function DocumentiSubTab() {
     return () => clearTimeout(t)
   }, [ricerca])
 
-  const COLONNE_RICHIESTE = 'id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at, posizione_firma'
+  const COLONNE_RICHIESTE = 'id, contract_id, booking_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at, posizione_firma, gruppo_firma'
 
   async function cercaRichieste(testo: string): Promise<{ data: SignatureRequest[] | null; error: unknown }> {
     // PostgREST restituisce al massimo 1000 righe per volta: si legge a pagine.
@@ -446,6 +447,9 @@ function DocumentiSubTab() {
     let viaEmail = 0
     let failCount = 0
     const errors: string[] = []
+    // 14/10/2026: piu' firmatari = UN documento (DR7 Trust accumula le firme
+    // e invia la copia firmata a tutti solo quando hanno firmato tutti).
+    const gruppoFirma = validSigners.length > 1 ? crypto.randomUUID() : null
     try {
       // Cicla un firmatario alla volta — il backend gestisce 1 per chiamata.
       for (let i = 0; i < validSigners.length; i++) {
@@ -461,6 +465,7 @@ function DocumentiSubTab() {
               signerEmail: s.email,
               signerPhone: s.phone,
               posizioniFirma: s.posizioni || [],
+              gruppoFirma,
             })
           })
           const data = await res.json()
@@ -574,6 +579,7 @@ function DocumentiSubTab() {
             signerEmail: req.signer_email,
             signerPhone: req.signer_phone,
             posizioniFirma: Array.isArray(req.posizione_firma) ? req.posizione_firma : req.posizione_firma ? [req.posizione_firma] : [],
+            gruppoFirma: req.gruppo_firma || null,
           }),
         })
         const data = await res.json().catch(() => ({}))

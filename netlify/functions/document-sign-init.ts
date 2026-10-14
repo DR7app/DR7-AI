@@ -72,6 +72,10 @@ export const handler: Handler = async (event) => {
         const signerEmail = String(body.signerEmail || '').trim()
         const signerPhone = String(body.signerPhone || '').trim()
         const posizioniFirma = leggiPosizioniFirma(body.posizioniFirma ?? body.posizioneFirma)
+        // 14/10/2026: stesso gruppoFirma = un documento con piu' firmatari
+        // (DR7 Trust accumula le firme e invia a tutti alla fine).
+        const gruppoFirma = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.gruppoFirma || ''))
+            ? String(body.gruppoFirma) : null
 
         if (!documentUrl) {
             return { statusCode: 400, body: JSON.stringify({ error: 'URL del documento richiesto' }) }
@@ -119,6 +123,7 @@ export const handler: Handler = async (event) => {
                 document_url: documentUrl,
                 document_name: docName,
                 ...(posizioniFirma ? { posizione_firma: posizioniFirma } : {}),
+                ...(gruppoFirma ? { gruppo_firma: gruppoFirma } : {}),
             })
             .select()
             .single()
@@ -141,6 +146,7 @@ export const handler: Handler = async (event) => {
                 token_expires_at: tokenExpiresAt.toISOString(),
                 original_pdf_hash: originalPdfHash,
                 posizione_firma: posizioniFirma,
+                gruppo_firma: gruppoFirma,
             }
         })
 
