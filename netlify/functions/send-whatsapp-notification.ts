@@ -1,5 +1,5 @@
 import { getEmailFrom } from './utils/emailFrom';
-import type { Handler } from "@netlify/functions";
+import type { Handler, HandlerResponse } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
 import { langFromPhone, translateText } from './utils/i18n';
@@ -7,6 +7,7 @@ import { langFromPhone, translateText } from './utils/i18n';
 // dal pannello. `automatica: false` di proposito — un ritentativo automatico
 // rischierebbe di mandare due volte lo stesso messaggio al cliente.
 import { registraEvento, accodaOperazione, segnaChiamata, funzioneFerma, businessDaServiceType, chiudiOperazione, impronta, sanifica } from './utils/systemControl';
+import { buildReviewRecipients } from './utils/reviewRecipients';
 import { classificaRispostaGreenApi, classificaEccezioneGreenApi, leggiCorpo, reinvioAutomaticoSicuro, reinvioScaduto, rigaLogWhatsapp, REINVIO_SCADE_ORE, type EsitoGreenApi } from './utils/esitoGreenApi';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
@@ -89,7 +90,7 @@ function saltaFiltroServizio(chiave?: string | null, risolta?: string | null): b
   return CHIAVI_TRANSAZIONALI.has(String(chiave || '')) || CHIAVI_TRANSAZIONALI.has(String(risolta || ''));
 }
 
-const handler: Handler = async (event) => {
+const inviaUno: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -1180,7 +1181,9 @@ const handler: Handler = async (event) => {
           .eq('message_key', usedTemplateKey)
           .maybeSingle();
         if (emailMeta?.send_email) {
-          const recipientEmail =
+          // Copia per un altro firmatario: solo la SUA email, mai quella del
+          // titolare (che l'ha gia' ricevuta col proprio invio).
+          const recipientEmail = body.soloQuestoNumero === true ? (body.customerEmail || null) :
             body.customerEmail ||
             body.customer_email ||
             booking?.customer_email ||
@@ -1246,6 +1249,85 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({ message: 'Error sending WhatsApp notification', error: error.message }),
     };
   }
+};
+
+/**
+ * 15/10/2026 (direzione): "cualsiasi cosa ca doit l'envoyer a tous".
+ * Un messaggio su una prenotazione (link di pagamento, contratto, conferma,
+ * modifica...) partiva SOLO al numero che il chiamante passava, cioe' il 1°
+ * guidatore. Il 2° guidatore, il garante e i fideiussori non ricevevano nulla.
+ *
+ * Qui, quando il destinatario e' il TITOLARE della prenotazione, lo stesso
+ * messaggio parte anche a ogni altra persona della prenotazione — le stesse
+ * che firmano il contratto (buildReviewRecipients). Ognuna riceve il testo
+ * col proprio nome e nella lingua del proprio prefisso.
+ *
+ * Restano personali: OTP e link di firma (il token e' di UN firmatario) e le
+ * recensioni (hanno gia' il loro elenco destinatari). Un messaggio a un altro
+ * numero (staff, admin) non viene mai moltiplicato.
+ */
+const MAI_A_TUTTI = /otp|signature|firma|review|recensione|referral|birthday|compleanno/i;
+const soloCifre = (v: unknown): string => String(v || '').replace(/\D/g, '').replace(/^00/, '').replace(/^39(?=\d{9,10}$)/, '').replace(/^0+/, '');
+
+async function altriDestinatari(body: any): Promise<{ name: string; phone: string; email: string | null }[]> {
+  if (body?.soloQuestoNumero === true || body?.notifyAdmin === true) return [];
+  // `prenotazioneId`: per i chiamanti che di proposito non passano booking.id
+  // (cambierebbe le variabili del template) ma vogliono l'invio a tutti.
+  const bookingId = body?.booking?.id || body?.prenotazioneId;
+  if (!bookingId || !body?.customPhone || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) return [];
+  const chiavi = [body.templateKey, body.messageKey, body.type].filter(Boolean).join(' ');
+  if (MAI_A_TUTTI.test(chiavi)) return [];
+  const { data: row } = await createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    .from('bookings').select('customer_name, customer_phone, customer_email, booking_details')
+    .eq('id', bookingId).maybeSingle();
+  if (!row) return [];
+  const persone = buildReviewRecipients(row);
+  const titolare = persone.find(p => p.role === 'CLIENTE');
+  const numero = soloCifre(body.customPhone);
+  // Solo se il messaggio era per il titolare: un invio gia' diretto a un
+  // 2° guidatore o a un garante non va rimbalzato su tutti gli altri.
+  if (!titolare?.phone || soloCifre(titolare.phone) !== numero) return [];
+  return persone
+    .filter(p => p.role !== 'CLIENTE' && p.phone && soloCifre(p.phone) !== numero)
+    .map(p => ({ name: p.name, phone: p.phone as string, email: p.email }));
+}
+
+const handler: Handler = async (event, context) => {
+  const risposta = (await inviaUno(event, context, () => {})) as HandlerResponse;
+  if (event.httpMethod !== 'POST' || !risposta) return risposta;
+  try {
+    const body = JSON.parse(event.body || '{}');
+    // Se al titolare non e' partito per una regola (template spento, filtro
+    // servizio, WhatsApp fermo) non deve partire neanche agli altri.
+    const esito = (() => { try { return JSON.parse((risposta as { body?: string }).body || '{}'); } catch { return {}; } })();
+    if (esito?.skipped && esito?.reason !== 'invalid_phone') return risposta;
+    const altri = await altriDestinatari(body);
+    for (const p of altri) {
+      const nomeVars: Record<string, string> = {};
+      if (body.templateVars && typeof body.templateVars === 'object') {
+        for (const k of Object.keys(body.templateVars)) {
+          const ck = k.replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim();
+          if (['customer_name', 'nome', 'cliente', 'fullName', 'full_name', 'firstName'].includes(ck)) {
+            nomeVars[k] = ck === 'firstName' ? p.name.split(' ')[0] : p.name;
+          }
+        }
+      }
+      const copia = {
+        ...body,
+        customPhone: p.phone,
+        soloQuestoNumero: true,
+        customerEmail: p.email || '',
+        customer_email: p.email || '',
+        booking: { ...body.booking, customer_name: p.name, customer_email: p.email || '' },
+        ...(body.templateVars ? { templateVars: { ...body.templateVars, ...nomeVars } } : {}),
+      };
+      const r = await inviaUno({ ...event, body: JSON.stringify(copia) }, context, () => {});
+      console.log(`[send-whatsapp] copia a ${p.name} (${p.phone}) per prenotazione ${body.booking?.id || body.prenotazioneId}: ${(r as { statusCode?: number })?.statusCode}`);
+    }
+  } catch (e) {
+    console.error('[send-whatsapp] invio agli altri firmatari non riuscito:', e);
+  }
+  return risposta;
 };
 
 export { handler };

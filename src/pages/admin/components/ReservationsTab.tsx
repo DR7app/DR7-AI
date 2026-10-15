@@ -3794,6 +3794,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             customPhone: custPhone,
             customMessage: fallbackMsg,
             type: 'Link Pagamento (fallback)',
+            prenotazioneId: booking.id,
           })
         })
         if (fbRes.ok) {
@@ -8023,6 +8024,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       customPhone: custPhone,
                       customMessage: fallbackMsg,
                       type: 'Link Pagamento (fallback)',
+                      prenotazioneId: insertedBooking.id,
                     })
                   })
                   if (fbRes.ok) {

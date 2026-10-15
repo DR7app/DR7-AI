@@ -1232,6 +1232,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                 customPhone: phone,
                 templateKey: 'payment_link_customer',
                 booking: { service_type: 'rental' },
+                prenotazioneId: bookingId,
                 templateVars: {
                   customer_name: firstName, nome: firstName,
                   amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,

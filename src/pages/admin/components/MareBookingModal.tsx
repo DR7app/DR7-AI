@@ -694,6 +694,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                 customPhone: phone,
                 templateKey: 'payment_link_customer',
                 booking: { service_type: 'boat_rental' },
+                prenotazioneId: savedId,
                 templateVars: {
                   customer_name: firstName, nome: firstName,
                   amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,

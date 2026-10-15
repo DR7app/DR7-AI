@@ -1526,6 +1526,7 @@ export default function UnpaidBookingsTab() {
           // sul canonical rental se rental.
           templateKey,
           booking: { ...(perAddebito ? { id: booking.id } : {}), service_type: (booking as { service_type?: string })?.service_type || 'rental' },
+          prenotazioneId: booking.id,
           // Pass every alias the Pro template might use so nothing leaks as
           // raw `{...}` in the outbound message.
           templateVars: {

@@ -546,10 +546,17 @@ async function reconductSignedContract(params: {
         // Interruttore System Control: WhatsApp spento = contratto ricondotto ma non inviato.
         const fermaWa = await funzioneFerma('invio_whatsapp', businessDaServiceType((booking as { service_type?: string | null }).service_type))
         if (fermaWa) console.warn('[generate-contract] invio saltato: ' + fermaWa)
-        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && customerPhone && !fermaWa) {
-            let cleanPhone = String(customerPhone).replace(/\D/g, '')
-            if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
-            if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+        // 15/10/2026 (direzione): il ricondotto partiva SOLO al numero del
+        // cliente. Ora va a TUTTI quelli che hanno firmato (2° guidatore,
+        // garante, fideiussori), un invio per numero.
+        const numeri: string[] = []
+        for (const raw of [customerPhone, ...distinctSigners.map(s => s.signer_phone)]) {
+            let n = String(raw || '').replace(/\D/g, '')
+            if (n.startsWith('00')) n = n.substring(2)
+            if (n.length === 10) n = '39' + n
+            if (n.length >= 8 && !numeri.includes(n)) numeri.push(n)
+        }
+        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && numeri.length > 0 && !fermaWa) {
             const cacheBustedUrl = `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
             // 2026-07-16: caption editabile da Messaggi di Sistema Pro
             // (template pro_contratto_ricondotto_estensione). Variabili:
@@ -569,10 +576,14 @@ async function reconductSignedContract(params: {
                         .split('{data}').join(dataRiconsegna)
                 }
             } catch (e: any) { console.warn('[reconduct] template caption fallback:', e?.message) }
-            await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption: await nellaLinguaDelTelefono(cleanPhone, caption) }),
-            })
+            for (const cleanPhone of numeri) {
+                try {
+                    await fetch(`https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption: await nellaLinguaDelTelefono(cleanPhone, caption) }),
+                    })
+                } catch (e: any) { console.error(`[reconduct] WhatsApp errore verso ${cleanPhone}:`, e?.message) }
+            }
         }
     } catch (e: any) { console.error('[reconduct] WhatsApp errore:', e?.message) }
     return signedPdfUrl
