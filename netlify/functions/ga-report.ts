@@ -253,6 +253,10 @@ async function fetchWebsiteAttributedBookings(f: Finestra): Promise<WebAttribute
     .from('bookings')
     .select('price_total, payment_status, status')
     .eq('booking_source', 'website')
+    // 15/10/2026: i Lavaggio Rientro li crea il database al rientro del
+    // noleggio (booking_source di default 'website'): non vengono dal sito e
+    // non incassano. Restano a parte nel report mensile e nel Report Lavaggio.
+    .or('customer_name.is.null,customer_name.neq."Lavaggio Rientro"')
     .gte('created_at', f.dbStart)
   if (f.dbEnd) q = q.lt('created_at', f.dbEnd)
   const { data, error } = await q
