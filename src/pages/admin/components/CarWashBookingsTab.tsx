@@ -2409,6 +2409,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingPayload: any = {
       service_type: 'car_wash',
+      // 14/10/2026: senza questo campo vale il default del database,
+      // 'website', e i lavaggi creati dal gestionale comparivano "dal sito"
+      // (allarme nuove prenotazioni, Report Traffico).
+      booking_source: 'admin',
       service_name: serviceNames,
       vehicle_name: vehicleMakeModel || 'Car Wash Service',
       vehicle_plate: vehiclePlate || null,

@@ -727,6 +727,8 @@ export default function PreventiviLavaggioView() {
         dropoff_location: 'DR7 - Car Wash',
         price_total: p.amount || 0,
         currency: 'EUR',
+        // Senza questo vale il default del database, 'website'.
+        booking_source: 'admin',
         status: 'confirmed',
         payment_status: pagato ? 'paid' : 'pending',
         payment_method: convMetodo || null,
