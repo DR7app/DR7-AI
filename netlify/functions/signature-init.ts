@@ -5,6 +5,8 @@ import { renderTemplate } from './utils/messageTemplates'
 import { nuovoTokenFirma } from './utils/tokenFirma'
 import { funzioneFerma, businessDaServiceType } from './utils/systemControl'
 import { langFromPhone, nellaLinguaDelTelefono } from './utils/i18n'
+import { loadBusinessConfig } from './utils/businessConfig'
+import { normalizzaInvioContratto, istanteInvioContratto, scadenzaLinkFirma } from '../../src/utils/invioContratto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -14,7 +16,8 @@ const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://dr7trust.com'
-const TOKEN_EXPIRY_HOURS = 12
+// La validita' del link si sceglie in Centralina Pro > Contratto & Modifiche
+// > Invio contratto (default 12 ore, come prima): vedi src/utils/invioContratto.ts.
 
 function cleanPhone(phone: string): string {
     let cleaned = phone.replace(/\D/g, '')
@@ -103,7 +106,10 @@ export const handler: Handler = async (event) => {
     try {
         // `resign`: la modifica impone la RIFIRMA (Centralina Pro > Contratto &
         // Modifiche). Allora il link va a TUTTI i firmatari, nessuno escluso.
-        const { contractId, bookingId, resign } = JSON.parse(event.body || '{}')
+        // `immediato`: invio chiesto da un operatore (Rinvia contratto, tab
+        // Contratti, DR7 Trust) o dal cron dei contratti programmati. Ignora
+        // l'anticipo di Centralina Pro e manda il link adesso.
+        const { contractId, bookingId, resign, immediato } = JSON.parse(event.body || '{}')
 
         if (!contractId && !bookingId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID or Booking ID is required' }) }
@@ -192,13 +198,19 @@ export const handler: Handler = async (event) => {
         // post-booking webhook) flows through here.
         const guardBookingId = bookingId || contract.booking_id
         let serviceTypeFirma: string | null = null
+        let ritiroMs: number | null = null
         if (guardBookingId) {
             const { data: bookingRow } = await supabase
                 .from('bookings')
-                .select('status, service_type')
+                .select('status, service_type, pickup_date, appointment_date')
                 .eq('id', guardBookingId)
                 .maybeSingle()
             serviceTypeFirma = bookingRow?.service_type || null
+            // Orario del ritiro: pickup_date per i noleggi, appointment_date per
+            // lavaggio/meccanica (stessa regola di process-scheduled-system-messages-cron).
+            const ritiroIso = bookingRow?.pickup_date || bookingRow?.appointment_date || null
+            const t = ritiroIso ? Date.parse(ritiroIso) : NaN
+            ritiroMs = Number.isFinite(t) ? t : null
             const status = String(bookingRow?.status || '').toLowerCase()
             if (status === 'cancelled' || status === 'annullata') {
                 console.log(`[signature-init] Booking ${guardBookingId} is ${status} — refusing to send signing link`)
@@ -218,6 +230,47 @@ export const handler: Handler = async (event) => {
 
         if (!contract.pdf_url) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
+        }
+
+        // 15/10/2026: Centralina Pro > Contratto & Modifiche > Invio contratto.
+        // Se l'anticipo scelto cade nel futuro, il link NON parte adesso: si
+        // scrive l'orario in contratti_invio_programmato e lo manda
+        // contratti-programmati-cron. I link gia' inviati restano validi.
+        const { business: cfgBusiness, main: cfgMain } = await loadBusinessConfig(supabase, serviceTypeFirma)
+        const invioCfg = normalizzaInvioContratto(
+            (cfgBusiness as Record<string, unknown> | null)?.invio_contratto ?? (cfgMain as Record<string, unknown> | null)?.invio_contratto
+        )
+        const programmaBookingId = bookingId || contract.booking_id
+        const inviaAlle = immediato ? null : istanteInvioContratto(invioCfg, ritiroMs)
+        if (inviaAlle !== null && inviaAlle > Date.now() && programmaBookingId) {
+            const { error: progErr } = await supabase
+                .from('contratti_invio_programmato')
+                .upsert({
+                    booking_id: programmaBookingId,
+                    invia_dopo: new Date(inviaAlle).toISOString(),
+                    resign: !!resign,
+                    stato: 'programmato',
+                    tentativi: 0,
+                    ultimo_errore: null,
+                    aggiornato_at: new Date().toISOString(),
+                }, { onConflict: 'booking_id' })
+            if (!progErr) {
+                const quando = new Date(inviaAlle).toLocaleString('it-IT', {
+                    timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+                })
+                console.log(`[signature-init] Booking ${programmaBookingId}: invio programmato per ${quando}`)
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        success: true,
+                        programmato: true,
+                        inviaDopo: new Date(inviaAlle).toISOString(),
+                        message: `Contratto programmato: il link di firma partira' il ${quando}`,
+                    })
+                }
+            }
+            // Tabella non raggiungibile: meglio inviare subito che non inviare.
+            console.warn('[signature-init] programmazione non salvata, invio immediato:', progErr.message)
         }
 
         // Interruttore System Control: firma spenta = nessun nuovo link e i
@@ -494,7 +547,7 @@ export const handler: Handler = async (event) => {
 
         console.log(`[signature-init] Creating ${signers.length} signing request(s) for contract ${contract.contract_number}${resign ? ' — RIFIRMA: nessun firmatario viene saltato' : ''}`)
 
-        const tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000)
+        const tokenExpiresAt = new Date(scadenzaLinkFirma(invioCfg, Date.now(), ritiroMs))
         const ipAddress = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown'
         const userAgent = event.headers['user-agent'] || 'unknown'
         const results: { name: string; role: string; sent: boolean }[] = []
@@ -610,6 +663,17 @@ export const handler: Handler = async (event) => {
                 statusCode: 500,
                 body: JSON.stringify({ error: 'Impossibile inviare i link di firma via WhatsApp. Verifica i numeri di telefono dei firmatari.' })
             }
+        }
+
+        // Link partito: un invio programmato ancora in attesa non serve piu'
+        // (es. l'operatore ha premuto Rinvia contratto prima dell'orario).
+        if (programmaBookingId) {
+            const { error: chiudiErr } = await supabase
+                .from('contratti_invio_programmato')
+                .update({ stato: 'inviato', aggiornato_at: new Date().toISOString() })
+                .eq('booking_id', programmaBookingId)
+                .eq('stato', 'programmato')
+            if (chiudiErr) console.warn('[signature-init] chiusura programmazione:', chiudiErr.message)
         }
 
         return {

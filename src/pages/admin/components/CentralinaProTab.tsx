@@ -1,6 +1,7 @@
 import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { CONTRATTO_VOCI as VOCI, CONTRATTO_DEFAULT as VOCI_DEFAULT, type ContrattoAzione } from '../../../utils/contrattoModifiche'
+import { INVIO_CONTRATTO_DEFAULT, OPZIONI_QUANDO, OPZIONI_VALIDITA, normalizzaInvioContratto, type InvioContrattoConfig } from '../../../utils/invioContratto'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -1467,6 +1468,8 @@ type PersistedSnapshot = {
   locatore?: LocatoreConfig
   /** Firma su DR7 Trust: con OTP (WhatsApp o email) o con il pulsante. */
   firma?: FirmaConfig
+  /** Quando parte il link di firma rispetto al ritiro e quanto resta valido. */
+  invio_contratto?: InvioContrattoConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1722,13 +1725,15 @@ export type { ContrattoAzione } from '../../../utils/contrattoModifiche'
 // firma o COSA ha accettato in termini di responsabilita' (veicolo, guidatore,
 // garanti, copertura assicurativa); si RICONDUCE quando cambiano importi,
 // date o condizioni gia' coperte dalla clausola di riconduzione.
-function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore, firma, setFirma }: {
+function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore, firma, setFirma, invioContratto, setInvioContratto }: {
   regole: Record<string, ContrattoAzione>
   setRegole: (r: Record<string, ContrattoAzione>) => void
   locatore: Required<LocatoreConfig>
   setLocatore: (l: Required<LocatoreConfig>) => void
   firma: FirmaConfig
   setFirma: (f: FirmaConfig) => void
+  invioContratto: InvioContrattoConfig
+  setInvioContratto: (c: InvioContrattoConfig) => void
 }) {
   const [logoInCaricamento, setLogoInCaricamento] = useState(false)
 
@@ -1832,6 +1837,57 @@ function ContrattoModificheSection({ regole, setRegole, locatore, setLocatore, f
             {scelta(firma.gps_obbligatorio, 'Obbligatoria', 'Senza posizione autorizzata il cliente non puo\' firmare.',
               () => setFirma({ ...firma, gps_obbligatorio: true }))}
           </div>
+        </div>
+      </div>
+
+      {/* ── Invio contratto (15/10/2026) ───────────────────────────────
+          Quando parte il link di firma rispetto al ritiro e per quanto resta
+          valido. Lo applica signature-init sugli invii automatici; i
+          programmati li manda contratti-programmati-cron. */}
+      <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-4 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-theme-text-primary">Invio contratto</h3>
+          <p className="text-sm text-theme-text-muted mt-1">
+            Quando il cliente riceve su WhatsApp il link per firmare, rispetto all&apos;orario del ritiro. Vale per gli
+            invii automatici (salvataggio, pagamento, sito). <strong>Rinvia contratto</strong> e gli invii dalla tab
+            Contratti partono sempre subito.
+          </p>
+        </div>
+        <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Quando inviarlo</span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {OPZIONI_QUANDO.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setInvioContratto({ ...invioContratto, quando: o.value })}
+                className={`text-left rounded-lg border px-3 py-2 text-[13px] font-semibold transition-colors ${invioContratto.quando === o.value ? 'border-[#007aff] bg-[#007aff]/10 text-theme-text-primary' : 'border-theme-border bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[12px] text-theme-text-muted mt-2">
+            Se la prenotazione arriva quando l&apos;orario scelto e&apos; gia&apos; passato, il link parte subito.
+          </p>
+        </div>
+        <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Validita&apos; del link</span>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {OPZIONI_VALIDITA.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setInvioContratto({ ...invioContratto, validita_ore: o.value })}
+                className={`text-left rounded-lg border px-3 py-2 text-[13px] font-semibold transition-colors ${invioContratto.validita_ore === o.value ? 'border-[#007aff] bg-[#007aff]/10 text-theme-text-primary' : 'border-theme-border bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[12px] text-theme-text-muted mt-2">
+            Ore contate dall&apos;invio. &quot;Fino all&apos;orario del ritiro&quot; lascia comunque almeno 2 ore per firmare.
+          </p>
         </div>
       </div>
 
@@ -2022,6 +2078,8 @@ export default function CentralinaProTab() {
   const [savedLocatore, setSavedLocatore] = useState<Required<LocatoreConfig>>(LOCATORE_DEFAULT)
   const [firma, setFirma] = useState<FirmaConfig>(FIRMA_DEFAULT)
   const [savedFirma, setSavedFirma] = useState<FirmaConfig>(FIRMA_DEFAULT)
+  const [invioContratto, setInvioContratto] = useState<InvioContrattoConfig>(INVIO_CONTRATTO_DEFAULT)
+  const [savedInvioContratto, setSavedInvioContratto] = useState<InvioContrattoConfig>(INVIO_CONTRATTO_DEFAULT)
   // 26/08/2026: senza la copia "salvata", questa sezione restava fuori da
   // TUTTO il meccanismo delle modifiche: la barra diceva "0 modifiche da
   // salvare" anche dopo aver scelto Rifirma/Ricondotto, Annulla non la
@@ -2112,6 +2170,7 @@ export default function CentralinaProTab() {
       const v = { ...LOCATORE_DEFAULT, ...l }; setLocatore(v); setSavedLocatore(v) }
     { const f = (remote.firma && typeof remote.firma === 'object') ? remote.firma : {}
       const v = { ...FIRMA_DEFAULT, ...f }; setFirma(v); setSavedFirma(v) }
+    { const v = normalizzaInvioContratto(remote.invio_contratto); setInvioContratto(v); setSavedInvioContratto(v) }
   }
 
   // (buildSnapshot e' stato rimosso il 2026-08-25: serviva SOLO a copiare Terra
@@ -2316,6 +2375,12 @@ export default function CentralinaProTab() {
       if (!!firma.gps_obbligatorio !== !!savedFirma.gps_obbligatorio) {
         out.push(`Firma del contratto: posizione GPS ${firma.gps_obbligatorio ? 'obbligatoria' : 'facoltativa'}`)
       }
+      if (invioContratto.quando !== savedInvioContratto.quando) {
+        out.push(`Invio contratto: ${OPZIONI_QUANDO.find(o => o.value === invioContratto.quando)?.label || invioContratto.quando}`)
+      }
+      if (invioContratto.validita_ore !== savedInvioContratto.validita_ore) {
+        out.push(`Invio contratto: link valido ${(OPZIONI_VALIDITA.find(o => o.value === invioContratto.validita_ore)?.label || '').toLowerCase()}`)
+      }
       return out
     },
     [
@@ -2325,6 +2390,7 @@ export default function CentralinaProTab() {
       contrattoRegole, savedContrattoRegole,
       locatore, savedLocatore,
       firma, savedFirma,
+      invioContratto, savedInvioContratto,
     ]
   )
 
@@ -2363,7 +2429,8 @@ export default function CentralinaProTab() {
     setSavedContrattoRegole(contrattoRegole)
     setSavedLocatore(locatore)
     setSavedFirma(firma)
-    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole, locatore, firma }, businessRow(businessId))
+    setSavedInvioContratto(invioContratto)
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole, locatore, firma, invio_contratto: invioContratto }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
@@ -2408,6 +2475,7 @@ export default function CentralinaProTab() {
     setContrattoRegole(savedContrattoRegole)
     setLocatore(savedLocatore)
     setFirma(savedFirma)
+    setInvioContratto(savedInvioContratto)
   }
 
   // Attiva/disattiva una sezione per il business corrente (roadmap 17: ON/OFF).
@@ -2537,6 +2605,8 @@ export default function CentralinaProTab() {
                 setLocatore={setLocatore}
                 firma={firma}
                 setFirma={setFirma}
+                invioContratto={invioContratto}
+                setInvioContratto={setInvioContratto}
               />
             )}
             {section === 'p4' && (

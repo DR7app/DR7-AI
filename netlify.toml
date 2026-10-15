@@ -207,6 +207,13 @@
 [functions."sollecito-pagamento-cron"]
   schedule = "0 */6 * * *"
 
+# Contratti programmati (15/10/2026) — manda il link di firma all'orario scelto
+# in Centralina Pro > Contratto & Modifiche > Invio contratto (48h/24h/.../al
+# ritiro). Una riga per prenotazione in contratti_invio_programmato: nessun
+# doppio invio anche girando spesso.
+[functions."contratti-programmati-cron"]
+  schedule = "*/5 * * * *"
+
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.
 # DR7 Privilege — niente cron periodico: il codice viene inviato

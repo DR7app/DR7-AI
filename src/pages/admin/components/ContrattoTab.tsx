@@ -792,7 +792,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
       const res = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contractId: contract.id, bookingId: contract.booking_id })
+        body: JSON.stringify({ contractId: contract.id, bookingId: contract.booking_id, immediato: true })
       })
       const data = await res.json()
       if (res.ok) {

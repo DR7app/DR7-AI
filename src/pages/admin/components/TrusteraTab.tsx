@@ -561,7 +561,7 @@ function DocumentiSubTab() {
         const res = await fetch('/.netlify/functions/signature-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contractId: req.contract_id, bookingId: req.booking_id }),
+          body: JSON.stringify({ contractId: req.contract_id, bookingId: req.booking_id, immediato: true }),
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error || 'Errore nell\'invio')

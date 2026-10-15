@@ -4237,7 +4237,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const sigRes = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id })
+        // immediato: e' l'operatore a chiederlo, si ignora l'anticipo di Centralina Pro.
+        body: JSON.stringify({ bookingId: booking.id, immediato: true })
       })
       const sigData = await sigRes.json().catch(() => ({} as any))
 
@@ -4267,7 +4268,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         const retryRes = await fetch('/.netlify/functions/signature-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: booking.id })
+          body: JSON.stringify({ bookingId: booking.id, immediato: true })
         })
         const retryData = await retryRes.json().catch(() => ({} as any))
         toast.dismiss('resend-contract')
@@ -8983,7 +8984,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // fideiussori), non solo per chi non risulta gia' firmato.
               body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id, ...(azioneContratto.rifirma ? { resign: true } : {}) })
             })
-            if (sigRes.ok) {
+            const sigOk = sigRes.ok ? await sigRes.clone().json().catch(() => ({} as { programmato?: boolean; message?: string })) : null
+            if (sigOk?.programmato) {
+              // Centralina Pro > Invio contratto: il link partira' piu' tardi.
+              toast.success(sigOk.message || 'Invio del contratto programmato', { duration: 6000 })
+            } else if (sigRes.ok) {
               logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
               if (editingId) toast.success(azioneContratto.rifirma
                 ? `Rifirma richiesta a tutti i firmatari (${azioneContratto.vociRifirma.join(', ')})`

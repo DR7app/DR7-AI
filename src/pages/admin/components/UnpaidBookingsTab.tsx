@@ -968,7 +968,9 @@ export default function UnpaidBookingsTab() {
                   body: JSON.stringify({ bookingId })
                 })
                 if (sigRes.ok) {
-                  toast.success('Contratto e link firma inviati al cliente')
+                  // Centralina Pro > Invio contratto: il link puo' essere programmato.
+                  const sigOk = await sigRes.json().catch(() => ({} as { programmato?: boolean; message?: string }))
+                  toast.success(sigOk?.programmato ? (sigOk.message || 'Invio del contratto programmato') : 'Contratto e link firma inviati al cliente')
                 } else {
                   const sigErr = await sigRes.json().catch(() => ({} as any))
                   logger.warn('[Segna Pagato] signature-init failed:', sigErr)
