@@ -1,4 +1,4 @@
-import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import { CONTRATTO_VOCI as VOCI, CONTRATTO_DEFAULT as VOCI_DEFAULT, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import { INVIO_CONTRATTO_DEFAULT, OPZIONI_QUANDO, OPZIONI_VALIDITA, normalizzaInvioContratto, type InvioContrattoConfig } from '../../../utils/invioContratto'
@@ -2819,9 +2819,15 @@ function CategorieFasciaSection({
     setCategories(categories.map(c => c.id === id ? { ...c, vat_rate: v } : c))
   const setCatTemplate = (id: string, v: string) =>
     setCategories(categories.map(c => c.id === id ? { ...c, contract_template: v } : c))
+  const rv = useRicercaVeicolo(categories)
+  const catVisibili = rv.attiva ? categories.filter(c => rv.categorieTrovate.has(c.id)) : categories
 
   return (
     <div className="space-y-6">
+      <div>
+        <CampoRicercaVeicolo rv={rv} />
+        <RisultatiRicercaVeicolo rv={rv} />
+      </div>
       <EditableList
         title="Categorie"
         subtitle="Tipologie di veicoli disponibili"
@@ -2840,7 +2846,7 @@ function CategorieFasciaSection({
           <p className="text-[13px] text-theme-text-muted">Aggiungi prima una categoria qui sopra.</p>
         ) : (
           <div className="space-y-2">
-            {categories.map(c => (
+            {catVisibili.map(c => (
               <div key={c.id} className="flex items-center gap-3">
                 <span className="flex-1 text-sm text-theme-text-primary truncate">{c.label || <em className="text-theme-text-muted">(senza nome)</em>}</span>
                 <div className="w-28 flex items-center gap-1">
@@ -2872,7 +2878,7 @@ function CategorieFasciaSection({
           <p className="text-[13px] text-theme-text-muted">Aggiungi prima una categoria qui sopra.</p>
         ) : (
           <div className="space-y-2">
-            {categories.map(c => (
+            {catVisibili.map(c => (
               <div key={c.id} className="flex items-center gap-3">
                 <span className="flex-1 text-sm text-theme-text-primary truncate">{c.label || <em className="text-theme-text-muted">(senza nome)</em>}</span>
                 <input
@@ -3825,6 +3831,149 @@ const INITIAL_INSURANCE: InsuranceCategoryConfig[] = []
 // business nuovo ricompariva da solo, e nel form prenotazione arrivavano
 // listini che nessuno aveva mai configurato.
 
+// ========== RICERCA VEICOLO -> CATEGORIA ==========
+// 11/10/2026 (richiesta direzione): in ogni sezione di Centralina Pro che
+// lavora per categoria si puo' cercare una macchina per nome o targa e vedere
+// subito in quale categoria sta — chi non ricorda la categoria di un veicolo
+// non deve aprire le schede una per una.
+
+let cacheVeicoliFlotta: Promise<FleetVehicle[]> | null = null
+function caricaVeicoliFlotta(): Promise<FleetVehicle[]> {
+  if (!cacheVeicoliFlotta) {
+    cacheVeicoliFlotta = (async () => {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id, display_name, daily_rate, category, plate')
+        .neq('status', 'retired')
+        .order('display_name')
+      if (error) {
+        cacheVeicoliFlotta = null
+        return []
+      }
+      return (data as FleetVehicle[]) || []
+    })()
+  }
+  return cacheVeicoliFlotta
+}
+
+type RicercaVeicolo = {
+  ricerca: string
+  setRicerca: (v: string) => void
+  /** Tutta la flotta (vehicles, esclusi i ritirati): alimenta i suggerimenti. */
+  veicoli: FleetVehicle[]
+  attiva: boolean
+  veicoliTrovati: FleetVehicle[]
+  /** id (come scritti nella lista categorie) delle categorie che corrispondono. */
+  categorieTrovate: Set<string>
+  labelCategoria: (raw: string | null) => string
+  idCategoria: (raw: string | null) => string | null
+}
+
+function useRicercaVeicolo(categorie: { id: string; label: string }[]): RicercaVeicolo {
+  const [ricerca, setRicerca] = useState('')
+  const [veicoli, setVeicoli] = useState<FleetVehicle[]>([])
+  useEffect(() => {
+    let cancelled = false
+    caricaVeicoliFlotta().then((v) => {
+      if (!cancelled) setVeicoli(v)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // supercars <-> exotic: stesso alias di Prezzi Veicoli.
+  const idCategoria = (raw: string | null): string | null => {
+    const id = (raw ?? '').toLowerCase()
+    const trova = (x: string) => categorie.find((c) => c.id.toLowerCase() === x)?.id ?? null
+    return trova(id) ?? (id === 'exotic' ? trova('supercars') : id === 'supercars' ? trova('exotic') : null)
+  }
+  const labelCategoria = (raw: string | null): string => {
+    const id = idCategoria(raw)
+    return categorie.find((c) => c.id === id)?.label ?? (raw ? `${raw} (non configurata)` : 'senza categoria')
+  }
+
+  const q = ricerca.trim().toLowerCase()
+  const qTarga = q.replace(/\s/g, '')
+  const veicoliTrovati = q
+    ? veicoli.filter(
+        (v) =>
+          (v.display_name ?? '').toLowerCase().includes(q) ||
+          (qTarga !== '' && (v.plate ?? '').toLowerCase().replace(/\s/g, '').includes(qTarga))
+      )
+    : []
+  const categorieTrovate = new Set<string>()
+  for (const v of veicoliTrovati) {
+    const id = idCategoria(v.category)
+    if (id) categorieTrovate.add(id)
+  }
+  if (q) for (const c of categorie) if (c.label.toLowerCase().includes(q)) categorieTrovate.add(c.id)
+
+  return { ricerca, setRicerca, veicoli, attiva: q !== '', veicoliTrovati, categorieTrovate, labelCategoria, idCategoria }
+}
+
+function CampoRicercaVeicolo({ rv }: { rv: RicercaVeicolo }) {
+  const listId = useId()
+  // Un suggerimento per nome: le macchine con lo stesso modello portano
+  // comunque alla stessa categoria, la targa resta cercabile a mano.
+  const nomi = Array.from(new Set(rv.veicoli.map((v) => v.display_name).filter(Boolean)))
+  return (
+    <>
+      <input
+        type="search"
+        list={listId}
+        value={rv.ricerca}
+        onChange={(e) => rv.setRicerca(e.target.value)}
+        placeholder="Cerca macchina..."
+        className="pointer-events-auto flex-1 min-w-[180px] max-w-xs bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+      />
+      <datalist id={listId}>
+        {nomi.map((n) => <option key={n} value={n} />)}
+      </datalist>
+    </>
+  )
+}
+
+/** Elenco "veicolo · targa -> categoria". Con onScegli il chip apre la categoria. */
+function RisultatiRicercaVeicolo({ rv, onScegli }: { rv: RicercaVeicolo; onScegli?: (categoriaId: string) => void }) {
+  if (!rv.attiva) return null
+  if (rv.veicoliTrovati.length === 0) {
+    return rv.categorieTrovate.size === 0
+      ? <p className="mt-3 text-[13px] text-theme-text-muted">Nessun veicolo trovato.</p>
+      : null
+  }
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 pointer-events-auto">
+      {rv.veicoliTrovati.slice(0, 12).map((v) => {
+        const catId = rv.idCategoria(v.category)
+        const testo = (
+          <>
+            <span className="text-theme-text-primary font-medium">{v.display_name}</span>
+            {v.plate ? ` · ${v.plate}` : ''} → {rv.labelCategoria(v.category)}
+          </>
+        )
+        return onScegli && catId ? (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => onScegli(catId)}
+            className="text-[12px] px-2 py-1 rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover"
+          >
+            {testo}
+          </button>
+        ) : (
+          <span key={v.id} className="text-[12px] px-2 py-1 rounded-lg border border-theme-border text-theme-text-secondary">
+            {testo}
+          </span>
+        )
+      })}
+      {rv.veicoliTrovati.length > 12 && (
+        <span className="text-[12px] px-2 py-1 text-theme-text-muted">+{rv.veicoliTrovati.length - 12} altri</span>
+      )}
+    </div>
+  )
+}
+
 function AssicurazioniSection({
   insurance,
   setInsurance,
@@ -3840,18 +3989,35 @@ function AssicurazioniSection({
     setInsurance(config.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   }
 
+  // Ricerca per veicolo: i prezzi sono per categoria, quindi chi cerca
+  // "Ferrari" deve vedere la scheda della categoria in cui sta la Ferrari.
+  const rv = useRicercaVeicolo(config)
+  const visibili = rv.attiva ? config.filter((c) => rv.categorieTrovate.has(c.id)) : config
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
-          Prezzi Assicurazioni
-        </h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
+            Prezzi Assicurazioni
+          </h2>
+          <CampoRicercaVeicolo rv={rv} />
+        </div>
         <p className="text-[14px] text-theme-text-secondary mt-1">
           Per categoria e fascia conducente
         </p>
+        <RisultatiRicercaVeicolo rv={rv} />
       </div>
 
-      {config.map((cat) => (
+      {rv.attiva && visibili.length === 0 && (
+        <p className="text-center text-[13px] text-theme-text-secondary py-6">
+          {rv.veicoliTrovati.length > 0
+            ? 'Il veicolo trovato non ha una categoria con prezzi assicurazione configurati.'
+            : 'Nessun veicolo trovato.'}
+        </p>
+      )}
+
+      {visibili.map((cat) => (
         <InsuranceCategoryCard
           key={cat.id}
           category={cat}
@@ -4208,6 +4374,7 @@ function KmSforoSection({
   km: KmConfig[]
   setKm: (next: KmConfig[]) => void
 }) {
+  const rvKm = useRicercaVeicolo(km)
   function patch(id: string, p: Partial<KmConfig>) {
     setKm(km.map((k) => (k.id === id ? { ...k, ...p } : k)))
   }
@@ -4222,16 +4389,20 @@ function KmSforoSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
-          Km & Sforo
-        </h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
+            Km & Sforo
+          </h2>
+          <CampoRicercaVeicolo rv={rvKm} />
+        </div>
         <p className="text-[14px] text-theme-text-secondary mt-1">
           Km inclusi per giorno, sforo e prezzo km illimitati per categoria
         </p>
+        <RisultatiRicercaVeicolo rv={rvKm} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {km.map((cat) => (
+        {(rvKm.attiva ? km.filter((c) => rvKm.categorieTrovate.has(c.id)) : km).map((cat) => (
           <section
             key={cat.id}
             className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden flex flex-col"
@@ -4598,6 +4769,13 @@ function CauzioniSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories])
 
+  // Ricerca veicolo: se porta a una sola categoria, la scheda si apre da sola.
+  const rv = useRicercaVeicolo(categoryList)
+  const unicaCategoria = rv.categorieTrovate.size === 1 ? [...rv.categorieTrovate][0] : null
+  useEffect(() => {
+    if (unicaCategoria) setActiveCategory(unicaCategoria)
+  }, [unicaCategoria])
+
   function getCategoryConfig(cat: DepositsCategoryKey): DepositsByFascia {
     return deposits[cat] || {}
   }
@@ -4687,13 +4865,17 @@ function CauzioniSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
-          Opzioni Cauzione per Categoria
-        </h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
+            Opzioni Cauzione per Categoria
+          </h2>
+          <CampoRicercaVeicolo rv={rv} />
+        </div>
         <p className="text-[14px] text-theme-text-secondary mt-1">
           Opzioni cauzione per categoria veicolo, fascia conducente e residenza.
           Il sito e l'admin scelgono il set giusto in base alla categoria del veicolo prenotato.
         </p>
+        <RisultatiRicercaVeicolo rv={rv} onScegli={setActiveCategory} />
       </div>
 
       {/* Category tabs — pointer-events-auto cosi' restano cliccabili
@@ -4710,7 +4892,7 @@ function CauzioniSection({
                 isActive
                   ? 'bg-theme-bg-secondary border border-theme-border border-b-white text-theme-text-primary'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
+              } ${rv.attiva && rv.categorieTrovate.has(c.id) ? 'ring-2 ring-[#007aff]/50' : ''}`}
             >
               {c.label}
             </button>
@@ -4881,6 +5063,7 @@ function ServiziSection({
   fasce: Fascia[]
   categories: Category[]
 }) {
+  const rvConsegna = useRicercaVeicolo(categories)
   function patchExp(id: string, p: Partial<ExperienceService>) {
     setServizi({ ...servizi, experience: servizi.experience.map((s) => (s.id === id ? { ...s, ...p } : s)) })
   }
@@ -5208,7 +5391,11 @@ function ServiziSection({
             </div>
           ) : (
             <div className="space-y-3">
-              {categories.map((cat) => {
+              <div className="flex items-center gap-3 flex-wrap">
+                <CampoRicercaVeicolo rv={rvConsegna} />
+              </div>
+              <RisultatiRicercaVeicolo rv={rvConsegna} />
+              {(rvConsegna.attiva ? categories.filter((c) => rvConsegna.categorieTrovate.has(c.id)) : categories).map((cat) => {
                 const byCat = servizi.delivery.by_category ?? {}
                 const raw = byCat[cat.id]
                 const value: number | '' = raw === undefined ? '' : raw
@@ -5440,6 +5627,15 @@ function PrezzoDinamicoSection({
 }) {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
   const [vehiclesLoading, setVehiclesLoading] = useState(true)
+  // Ricerca veicolo (nome o targa) dentro "Prezzi Base + Limiti per Veicolo":
+  // restano solo le macchine trovate, sotto il titolo della loro categoria.
+  const [cercaVeicolo, setCercaVeicolo] = useState('')
+  const qVeicolo = cercaVeicolo.trim().toLowerCase()
+  const trovaVeicolo = (v: FleetVehicle, catLabel: string) =>
+    !qVeicolo ||
+    (v.display_name ?? '').toLowerCase().includes(qVeicolo) ||
+    (v.plate ?? '').toLowerCase().replace(/\s/g, '').includes(qVeicolo.replace(/\s/g, '')) ||
+    catLabel.toLowerCase().includes(qVeicolo)
   // Current-month revenue per vehicle, computed by the Report (same source of
   // truth as what admins see under Reports). Drives the "raggiunto" indicator
   // next to the per-vehicle monthly target.
@@ -5542,6 +5738,17 @@ function PrezzoDinamicoSection({
             <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
               Prezzi Base + Limiti per Veicolo
             </h3>
+            <datalist id="prezzo-dinamico-veicoli">
+              {Array.from(new Set(vehicles.map((v) => v.display_name).filter(Boolean))).map((n) => <option key={n} value={n} />)}
+            </datalist>
+            <input
+              type="search"
+              value={cercaVeicolo}
+              onChange={(e) => setCercaVeicolo(e.target.value)}
+              list="prezzo-dinamico-veicoli"
+              placeholder="Cerca macchina..."
+              className="pointer-events-auto mt-2 w-full max-w-xs bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
             <p className="text-[13px] text-theme-text-secondary mt-0.5">
               Override del prezzo base e vincoli min/max applicati dopo i coefficienti — per ogni veicolo della flotta
             </p>
@@ -5571,7 +5778,7 @@ function PrezzoDinamicoSection({
               {categories.map((cat) => {
                 const catId = cat.id.toLowerCase()
                 const vs = vehicles.filter((v) =>
-                  (v.category ?? '').toLowerCase() === catId
+                  (v.category ?? '').toLowerCase() === catId && trovaVeicolo(v, cat.label)
                 )
                 if (vs.length === 0) return null
                 return (
@@ -5618,7 +5825,7 @@ function PrezzoDinamicoSection({
                   if (id === 'supercars') known.add('exotic')
                   if (id === 'exotic') known.add('supercars')
                 }
-                const others = vehicles.filter((v) => !known.has((v.category ?? '').toLowerCase()))
+                const others = vehicles.filter((v) => !known.has((v.category ?? '').toLowerCase()) && trovaVeicolo(v, 'Altre categorie'))
                 if (others.length === 0) return null
                 return (
                   <div>
@@ -6707,6 +6914,13 @@ function FeeListEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories])
+
+  // Ricerca veicolo: se porta a una sola categoria, la scheda si apre da sola.
+  const rv = useRicercaVeicolo(categoryList)
+  const unicaCategoria = rv.categorieTrovate.size === 1 ? [...rv.categorieTrovate][0] : null
+  useEffect(() => {
+    if (unicaCategoria) setActiveCategory(unicaCategoria)
+  }, [unicaCategoria])
   const items = config[activeCategory] || []
 
   // 28/09/2026 — la voce "Sforo km" non ha un prezzo suo: era salvata a 0 EUR
@@ -6734,9 +6948,13 @@ function FeeListEditor({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-[16px] font-semibold tracking-tight text-theme-text-primary">
-          {titleNoun} per Categoria
-        </h3>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-[16px] font-semibold tracking-tight text-theme-text-primary">
+            {titleNoun} per Categoria
+          </h3>
+          <CampoRicercaVeicolo rv={rv} />
+        </div>
+        <RisultatiRicercaVeicolo rv={rv} onScegli={setActiveCategory} />
       </div>
 
       {/* Category tabs — pointer-events-auto cosi' restano cliccabili
@@ -6753,7 +6971,7 @@ function FeeListEditor({
                 isActive
                   ? 'bg-theme-bg-secondary border border-theme-border border-b-white text-theme-text-primary'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
-              }`}
+              } ${rv.attiva && rv.categorieTrovate.has(c.id) ? 'ring-2 ring-[#007aff]/50' : ''}`}
             >
               {c.label}
             </button>
