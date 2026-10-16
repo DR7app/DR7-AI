@@ -2998,10 +2998,70 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           return parts.join('\n')
         })()
 
+        // {km_package} -> riepilogo del/i servizio/i Servizi Extra con unit
+      const lineKmPackage = (() => {
+          const lines: string[] = []
+          // 2026-05-16: Pacchetti KM cumulativi (nuovo schema). Letti da
+          // extras.km_packages = { pkgId: qty } + lookup categoria su
+          // rentalConfig.pacchetti_km. Una riga per pacchetto, formato:
+          // "<NomeServizio> <km> Km = <importo>" (× N quando qty > 1).
+          const kmPkgs = (extras?.km_packages || {}) as Record<string, number>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
+          const catPkgs = resolvePacchetti(p.vehicle_category, pkgsByCat)
+          for (const pkg of catPkgs) {
+            const qty = kmPkgs[pkg.id] || 0
+            if (qty <= 0) continue
+            const cap = pkg.is_quantity_buyable ? Math.max(1, Number(pkg.max_quantity) || 2) : 1
+            const q = Math.max(0, Math.min(cap, qty))
+            if (q <= 0) continue
+            const totalPrice = Math.round(pkg.price * q * 100) / 100
+            // 2026-05-28: la label del pacchetto include gia' i km
+            // (default `Pacchetto ${km} km` in convertProConfig.ts) — non
+            // riappenderli o WhatsApp mostra "Pacchetto 200 km 200 Km".
+            const labelStr = q > 1 ? `${pkg.label} × ${q}` : pkg.label
+            lines.push(`${labelStr} = ${formatEur(totalPrice)}`)
+          }
+          // Legacy: experience_km_quotes (Servizi Extra al km, vecchio
+          // catalogo). Mantenuto per backward-compat.
+          const quotes = (extras?.experience_km_quotes || {}) as Record<string, { km?: number; pricePerKm?: number }>
+          for (const [id, q] of Object.entries(quotes)) {
+            const km = Number(q?.km || 0)
+            const ppk = Number(q?.pricePerKm || 0)
+            if (km <= 0 || ppk <= 0) continue
+            const total = Math.round(km * ppk * 100) / 100
+            const svc = (configOverlay.experienceServices || []).find(s => s.id === id)
+            const label = svc?.name || 'Pacchetto KM'
+            lines.push(`${label} ${km} Km = ${formatEur(total)}`)
+          }
+          return lines.join('\n')
+      })()
+
+        // 16/10/2026: le righe del Riepilogo Preventivo che mancavano nel
+        // messaggio (itinerario, pacchetti km, Km totali, cauzione), nello
+        // stesso ordine. Km totali = p.km_limit (base + pacchetti, salvato
+        // come nel Riepilogo; 9999 = illimitati). La cauzione e' quella
+        // scelta nel preventivo, informativa: non entra nel totale.
+        const lineItinerario = Number(itinerarioSalvato.costo) > 0
+          ? `Itinerario${Number(itinerarioSalvato.km) > 0 ? ` (${Number(itinerarioSalvato.km)} km)` : ''} = ${formatEur(Number(itinerarioSalvato.costo))}`
+          : ''
+        const kmTotali = (() => {
+          const n = Number(p.km_limit)
+          if (pickedUnlimitedKm || p.unlimited_km || n >= 9999) return 'Illimitati'
+          return Number.isFinite(n) && n > 0 ? `${n.toLocaleString('it-IT')} Km` : ''
+        })()
+        const lineKmTotali = kmTotali ? `Km totali = ${kmTotali}` : ''
+        const importoCauzione = p.no_cauzione_total > 0 ? 0 : Number(p.deposit_amount) || 0
+        const etichettaCauzione = typeof extras?.deposit_option_label === 'string' ? extras.deposit_option_label.trim() : ''
+        const lineCauzione = importoCauzione > 0
+          ? `Cauzione${etichettaCauzione ? ` (${etichettaCauzione})` : ''} = ${formatEur(importoCauzione)}`
+          : ''
+
         const pricingLines = [
           lineRental, lineInsurance, lineLavaggio, lineNoCauzione, lineKm,
           lineSecondDriver, lineDr7Flex, lineCauzioneVeicoli,
           lineDelivery, linePickup, lineExperience,
+          lineItinerario, lineKmPackage, lineKmTotali, lineCauzione,
         ].filter(Boolean).join('\n')
 
         // Sconto split in pezzi atomici cosi' il template puo' comporre la
@@ -3077,6 +3137,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           delivery_line: lineDelivery,
           pickup_line: linePickup,
           experience_line: lineExperience,
+          itinerario_line: lineItinerario,
+          km_totali_line: lineKmTotali,
+          km_totali: kmTotali,
+          cauzione_line: lineCauzione,
+          cauzione: importoCauzione > 0 ? formatEur(importoCauzione) : '',
           pricing_lines: pricingLines,
           // Subtotale listino: somma di tutte le voci a prezzo di listino,
           // PRIMA dell'applicazione dei coefficienti della Centralina Pro.
@@ -3208,43 +3273,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           // "<NomeServizio> <km> Km = <importo>".
           // Vuoto se nessun servizio al-km e' stato configurato — la riga
           // collassa automaticamente come per le altre voci opzionali.
-          km_package: (() => {
-            const lines: string[] = []
-            // 2026-05-16: Pacchetti KM cumulativi (nuovo schema). Letti da
-            // extras.km_packages = { pkgId: qty } + lookup categoria su
-            // rentalConfig.pacchetti_km. Una riga per pacchetto, formato:
-            // "<NomeServizio> <km> Km = <importo>" (× N quando qty > 1).
-            const kmPkgs = (extras?.km_packages || {}) as Record<string, number>
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
-            const catPkgs = resolvePacchetti(p.vehicle_category, pkgsByCat)
-            for (const pkg of catPkgs) {
-              const qty = kmPkgs[pkg.id] || 0
-              if (qty <= 0) continue
-              const cap = pkg.is_quantity_buyable ? Math.max(1, Number(pkg.max_quantity) || 2) : 1
-              const q = Math.max(0, Math.min(cap, qty))
-              if (q <= 0) continue
-              const totalPrice = Math.round(pkg.price * q * 100) / 100
-              // 2026-05-28: la label del pacchetto include gia' i km
-              // (default `Pacchetto ${km} km` in convertProConfig.ts) — non
-              // riappenderli o WhatsApp mostra "Pacchetto 200 km 200 Km".
-              const labelStr = q > 1 ? `${pkg.label} × ${q}` : pkg.label
-              lines.push(`${labelStr} = ${formatEur(totalPrice)}`)
-            }
-            // Legacy: experience_km_quotes (Servizi Extra al km, vecchio
-            // catalogo). Mantenuto per backward-compat.
-            const quotes = (extras?.experience_km_quotes || {}) as Record<string, { km?: number; pricePerKm?: number }>
-            for (const [id, q] of Object.entries(quotes)) {
-              const km = Number(q?.km || 0)
-              const ppk = Number(q?.pricePerKm || 0)
-              if (km <= 0 || ppk <= 0) continue
-              const total = Math.round(km * ppk * 100) / 100
-              const svc = (configOverlay.experienceServices || []).find(s => s.id === id)
-              const label = svc?.name || 'Pacchetto KM'
-              lines.push(`${label} ${km} Km = ${formatEur(total)}`)
-            }
-            return lines.join('\n')
-          })(),
+          km_package: lineKmPackage,
           // {itinerario} -> il percorso a tappe, una riga per tappa piu' la
           // riga finale con km, tempo e costo. Vuoto se il preventivo non ha
           // un itinerario: la riga del template collassa da sola.
