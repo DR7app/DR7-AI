@@ -32,8 +32,9 @@ const TOKEN_EXPIRY_HOURS = 12
 // 14/10/2026 — Posizioni delle firme scelte dallo staff (tab DR7 Trust,
 // PosizionaFirme.tsx): [{pagina 1-based, x, y in frazione della pagina}],
 // anche piu' di una. Nessuna valida = null, e DR7 Trust usa la posizione
-// automatica.
-type PosizioneFirma = { pagina: number; x: number; y: number }
+// automatica. 15/10/2026: `scala` = grandezza del sigillo (1 = 130 x 42 pt,
+// da 0,5 a 3), assente = 1.
+type PosizioneFirma = { pagina: number; x: number; y: number; scala?: number }
 function leggiPosizioniFirma(v: any): PosizioneFirma[] | null {
     const elenco = (Array.isArray(v) ? v : v ? [v] : [])
         .map(leggiPosizioneFirma)
@@ -48,7 +49,10 @@ function leggiPosizioneFirma(v: any): PosizioneFirma | null {
     const y = Number(v.y)
     if (!Number.isInteger(pagina) || pagina < 1) return null
     if (!isFinite(x) || !isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null
-    return { pagina, x, y }
+    const scala = Number(v.scala)
+    return isFinite(scala) && scala > 0 && scala !== 1
+        ? { pagina, x, y, scala: Math.min(Math.max(scala, 0.5), 3) }
+        : { pagina, x, y }
 }
 
 function cleanPhone(phone: string): string {

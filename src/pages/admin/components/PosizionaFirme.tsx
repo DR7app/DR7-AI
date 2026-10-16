@@ -16,14 +16,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
  * (signature-complete) stampa il sigillo esattamente li'.
  *
  * pagina = 1, 2, ... ; x/y = angolo in alto a sinistra del sigillo, in
- * frazione della pagina (0-1, origine in alto a sinistra). Il sigillo ha
- * dimensione fissa in punti PDF: quella che si vede qui e' quella stampata.
+ * frazione della pagina (0-1, origine in alto a sinistra). Il sigillo e'
+ * 130 x 42 punti PDF per `scala` (15/10/2026: lo staff lo ingrandisce o lo
+ * rimpicciolisce con l'angolo o con -/+; assente = 1): quello che si vede qui
+ * e' quello stampato.
  */
-export interface PosizioneFirma { pagina: number; x: number; y: number }
+export interface PosizioneFirma { pagina: number; x: number; y: number; scala?: number }
 
 // Stesse misure di signature-complete (DR7 Trust): sigillo 130 x 42 pt.
 export const SIGILLO_LARGHEZZA_PT = 130
 export const SIGILLO_ALTEZZA_PT = 42
+export const SCALA_MIN = 0.5
+export const SCALA_MAX = 3
 
 const COLORI = ['#0A8FA3', '#d97706', '#7c3aed', '#16a34a', '#dc2626', '#2563eb']
 
@@ -52,6 +56,8 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
     const pdfRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null)
     const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map())
     const trascinamento = useRef<{ idx: number; k: number; dx: number; dy: number; pagina: number } | null>(null)
+    // Angolo in basso a destra: trascinandolo cambia la grandezza del sigillo.
+    const ridimensiona = useRef<{ idx: number; k: number; pagina: number } | null>(null)
 
     const modoAggiungi = aggiungi || (posizioni[attivo]?.length || 0) === 0
     const totaleFirme = posizioni.reduce((n, l) => n + l.length, 0)
@@ -100,16 +106,29 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
         return { fx: (e.clientX - r.left) / r.width, fy: (e.clientY - r.top) / r.height }
     }
 
-    function inPagina(p: Pagina, x: number, y: number): PosizioneFirma {
-        const w = SIGILLO_LARGHEZZA_PT / p.larghezzaPt
-        const h = SIGILLO_ALTEZZA_PT / p.altezzaPt
-        return { pagina: p.numero, x: limita(x, 1 - w), y: limita(y, 1 - h) }
+    const scalaDi = (pos?: PosizioneFirma) => pos?.scala || 1
+
+    function inPagina(p: Pagina, x: number, y: number, scala = 1): PosizioneFirma {
+        const w = SIGILLO_LARGHEZZA_PT * scala / p.larghezzaPt
+        const h = SIGILLO_ALTEZZA_PT * scala / p.altezzaPt
+        return { pagina: p.numero, x: limita(x, 1 - w), y: limita(y, 1 - h), ...(scala !== 1 ? { scala } : {}) }
+    }
+
+    // Grandezza nuova, senza uscire dalla pagina: l'angolo in alto a sinistra resta fermo.
+    function conScala(p: Pagina, pos: PosizioneFirma, scala: number): PosizioneFirma {
+        const massima = Math.min(SCALA_MAX, ((1 - pos.x) * p.larghezzaPt) / SIGILLO_LARGHEZZA_PT, ((1 - pos.y) * p.altezzaPt) / SIGILLO_ALTEZZA_PT)
+        const s = Math.round(Math.min(Math.max(scala, SCALA_MIN), Math.max(massima, SCALA_MIN)) * 100) / 100
+        return inPagina(p, pos.x, pos.y, s)
+    }
+
+    function cambiaScala(idx: number, k: number, p: Pagina, scala: number) {
+        setPosizioni(prev => prev.map((l, i) => i === idx ? l.map((v, j) => j === k ? conScala(p, v, scala) : v) : l))
     }
 
     // Click sul documento in modalita' "aggiungi": nuova firma del firmatario
     // attivo, centrata sul punto cliccato.
     function clickPagina(e: React.PointerEvent<HTMLDivElement>, p: Pagina) {
-        if (trascinamento.current || !modoAggiungi) return
+        if (trascinamento.current || ridimensiona.current || !modoAggiungi) return
         const { fx, fy } = frazione(e, e.currentTarget)
         const w = SIGILLO_LARGHEZZA_PT / p.larghezzaPt
         const h = SIGILLO_ALTEZZA_PT / p.altezzaPt
@@ -133,12 +152,39 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
         e.currentTarget.setPointerCapture(e.pointerId)
     }
 
+    function iniziaRidimensiona(e: React.PointerEvent<HTMLDivElement>, idx: number, k: number, p: Pagina) {
+        e.stopPropagation()
+        ridimensiona.current = { idx, k, pagina: p.numero }
+        setAttivo(idx)
+        e.currentTarget.setPointerCapture(e.pointerId)
+    }
+
+    function muoviRidimensiona(e: React.PointerEvent<HTMLDivElement>, p: Pagina) {
+        const t = ridimensiona.current
+        // maniglia -> sigillo -> pagina
+        const paginaEl = e.currentTarget.parentElement?.parentElement
+        if (!t || t.pagina !== p.numero || !paginaEl) return
+        const pos = posizioni[t.idx]?.[t.k]
+        if (!pos) return
+        const { fx, fy } = frazione(e, paginaEl)
+        // La larghezza segue il puntatore; anche l'altezza conta, cosi'
+        // trascinare in verticale funziona. Le proporzioni non cambiano.
+        const daX = ((fx - pos.x) * p.larghezzaPt) / SIGILLO_LARGHEZZA_PT
+        const daY = ((fy - pos.y) * p.altezzaPt) / SIGILLO_ALTEZZA_PT
+        cambiaScala(t.idx, t.k, p, Math.max(daX, daY))
+    }
+
+    function fineRidimensiona(e: React.PointerEvent<HTMLDivElement>) {
+        e.stopPropagation()
+        setTimeout(() => { ridimensiona.current = null }, 0)
+    }
+
     function muovi(e: React.PointerEvent<HTMLDivElement>, p: Pagina) {
         const t = trascinamento.current
         const paginaEl = e.currentTarget.parentElement
         if (!t || t.pagina !== p.numero || !paginaEl) return
         const { fx, fy } = frazione(e, paginaEl)
-        const nuova = inPagina(p, fx - t.dx, fy - t.dy)
+        const nuova = inPagina(p, fx - t.dx, fy - t.dy, scalaDi(posizioni[t.idx]?.[t.k]))
         setPosizioni(prev => prev.map((l, i) => i === t.idx ? l.map((v, j) => j === t.k ? nuova : v) : l))
     }
 
@@ -161,7 +207,7 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                     <p className="text-xs text-theme-text-muted">
                         {modoAggiungi
                             ? `Clicca sul documento dove deve apparire la firma di ${firmatari[attivo]?.nome || `Firmatario ${attivo + 1}`}.`
-                            : 'Trascina una firma per spostarla. "Aggiungi firma" + nome per metterne un\'altra.'}
+                            : 'Trascina una firma per spostarla; l\'angolo in basso a destra o -/+ per ingrandirla o rimpicciolirla. "Aggiungi firma" + nome per metterne un\'altra.'}
                     </p>
                     {pagine.length > 1 && (
                         <div className="flex flex-wrap gap-2">
@@ -208,8 +254,8 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                                         style={{
                                             left: `${pos.x * 100}%`,
                                             top: `${pos.y * 100}%`,
-                                            width: `${(SIGILLO_LARGHEZZA_PT / p.larghezzaPt) * 100}%`,
-                                            height: `${(SIGILLO_ALTEZZA_PT / p.altezzaPt) * 100}%`,
+                                            width: `${(SIGILLO_LARGHEZZA_PT * scalaDi(pos) / p.larghezzaPt) * 100}%`,
+                                            height: `${(SIGILLO_ALTEZZA_PT * scalaDi(pos) / p.altezzaPt) * 100}%`,
                                             border: `2px solid ${COLORI[i % COLORI.length]}`,
                                             background: `${COLORI[i % COLORI.length]}22`,
                                         }}
@@ -226,6 +272,38 @@ export default function PosizionaFirme({ url, firmatari, onSalva, onChiudi }: Pr
                                             onPointerUp={e => { e.stopPropagation(); togli(i, k) }}
                                             className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] leading-none flex items-center justify-center"
                                         >×</button>
+                                        {/* 15/10/2026: grandezza del sigillo, stampato uguale da DR7 Trust. */}
+                                        <div
+                                            className="absolute -bottom-7 left-0 flex items-center gap-1 rounded-full bg-gray-900 px-1.5 py-0.5 whitespace-nowrap"
+                                            onPointerDown={e => e.stopPropagation()}
+                                            onPointerUp={e => e.stopPropagation()}
+                                        >
+                                            <button
+                                                type="button"
+                                                title="Rimpicciolisci firma"
+                                                aria-label="Rimpicciolisci firma"
+                                                onClick={() => cambiaScala(i, k, p, scalaDi(pos) - 0.1)}
+                                                disabled={scalaDi(pos) <= SCALA_MIN}
+                                                className="w-5 h-5 rounded-full text-white text-sm leading-none hover:bg-gray-700 disabled:opacity-40"
+                                            >-</button>
+                                            <span className="text-[10px] text-white tabular-nums">{Math.round(scalaDi(pos) * 100)}%</span>
+                                            <button
+                                                type="button"
+                                                title="Ingrandisci firma"
+                                                aria-label="Ingrandisci firma"
+                                                onClick={() => cambiaScala(i, k, p, scalaDi(pos) + 0.1)}
+                                                disabled={scalaDi(pos) >= SCALA_MAX}
+                                                className="w-5 h-5 rounded-full text-white text-sm leading-none hover:bg-gray-700 disabled:opacity-40"
+                                            >+</button>
+                                        </div>
+                                        <div
+                                            title="Trascina per cambiare grandezza"
+                                            onPointerDown={e => iniziaRidimensiona(e, i, k, p)}
+                                            onPointerMove={e => muoviRidimensiona(e, p)}
+                                            onPointerUp={fineRidimensiona}
+                                            className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 cursor-se-resize"
+                                            style={{ borderColor: COLORI[i % COLORI.length] }}
+                                        />
                                     </div>
                                 )))}
                             </div>
