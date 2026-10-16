@@ -3048,14 +3048,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         const kmTotali = (() => {
           const n = Number(p.km_limit)
           if (pickedUnlimitedKm || p.unlimited_km || n >= 9999) return 'Illimitati'
-          return Number.isFinite(n) && n > 0 ? `${n.toLocaleString('it-IT')} Km` : ''
+          return Number.isFinite(n) && n > 0 ? `${n}km` : ''
         })()
         const lineKmTotali = kmTotali ? `Km totali = ${kmTotali}` : ''
         const importoCauzione = p.no_cauzione_total > 0 ? 0 : Number(p.deposit_amount) || 0
-        const etichettaCauzione = typeof extras?.deposit_option_label === 'string' ? extras.deposit_option_label.trim() : ''
-        const lineCauzione = importoCauzione > 0
-          ? `Cauzione${etichettaCauzione ? ` (${etichettaCauzione})` : ''} = ${formatEur(importoCauzione)}`
-          : ''
+        // Formato voluto da Ophelie (16/10): "Cauzione = 1000", senza
+        // tipo di cauzione ne' decimali; "Km totali = 180km".
+        const cauzioneStr = Number.isInteger(importoCauzione) ? String(importoCauzione) : importoCauzione.toFixed(2).replace('.', ',')
+        const lineCauzione = importoCauzione > 0 ? `Cauzione = ${cauzioneStr}` : ''
 
         const pricingLines = [
           lineRental, lineInsurance, lineLavaggio, lineNoCauzione, lineKm,
@@ -3141,7 +3141,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
           km_totali_line: lineKmTotali,
           km_totali: kmTotali,
           cauzione_line: lineCauzione,
-          cauzione: importoCauzione > 0 ? formatEur(importoCauzione) : '',
+          cauzione: importoCauzione > 0 ? cauzioneStr : '',
           pricing_lines: pricingLines,
           // Subtotale listino: somma di tutte le voci a prezzo di listino,
           // PRIMA dell'applicazione dei coefficienti della Centralina Pro.
