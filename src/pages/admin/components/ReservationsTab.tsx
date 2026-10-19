@@ -5205,6 +5205,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
       }
 
+      // 17/10/2026: cambio veicolo nell'estensione = l'assicurazione segue la
+      // categoria del NUOVO mezzo. Prima restava l'id della vecchia categoria
+      // (SL55 urban -> Audi RS3 aziendali) e il contratto stampava le
+      // franchigie della vettura precedente. Si cerca la stessa formula (per
+      // nome) nella nuova categoria, altrimenti RCA, altrimenti la prima.
+      const assicurazioneNuovoVeicolo = (() => {
+        if (!newVehicle) return null
+        const bdIns = extendingBooking.booking_details || {}
+        const attuale = String(bdIns.insuranceOption || bdIns.insurance_option || '')
+        const tierRaw = String(bdIns.driver_tier || '')
+        const tier = (tierRaw === 'TIER_1' || tierRaw === 'TIER_2' || tierRaw === 'BLOCKED' ? tierRaw : undefined) as DriverTier | undefined
+        const opzioni = getInsuranceOptions(newVehicle, tier, configOverlay, rentalConfig)
+        if (!opzioni.length) return null
+        if (opzioni.some(o => o.id === attuale)) return attuale
+        const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const nomeAttuale = rentalConfig && attuale ? (getInsuranceNameById(rentalConfig, attuale) || '') : ''
+        const stessoNome = nomeAttuale ? opzioni.find(o => norm(o.label || '') === norm(nomeAttuale)) : null
+        const rca = opzioni.find(o => /^\s*rca\b/i.test(o.label || ''))
+        return String((stessoNome || rca || opzioni[0]).id)
+      })()
+
       // Calculate KM limit update
       const extensionKmAdded = parseInt(extendData.extension_km_added) || 0
       const previousKmLimit = extendingBooking.booking_details?.km_limit
@@ -5244,6 +5265,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             plate: newVehicle.plate || newVehicle.targa || '',
           },
           vehicle_id: newVehicle.id,
+          ...(assicurazioneNuovoVeicolo ? { insuranceOption: assicurazioneNuovoVeicolo } : {}),
         } : {}),
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
@@ -5470,7 +5492,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // non la leggeva: impostarla su Rifirma non produceva niente e il
               // cliente riceveva comunque il contratto gia' firmato sulle nuove
               // date. Ora la scelta della direzione vale anche per l'estensione.
-              const rifirmaEstensione = richiedeNuovaFirma(['estensione'], contrattoRegole)
+              // 17/10/2026: con cambio veicolo vale anche la voce "Cambio
+              // veicolo" (Rifirma di default): prima contava solo "Estensione"
+              // e il cliente riceveva ricondotto il contratto della vettura
+              // che non aveva mai firmato.
+              const vociEstensione = newVehicle ? ['estensione', 'veicolo'] : ['estensione']
+              const vociRifirmaEstensione = vociEstensione.filter(v => richiedeNuovaFirma([v], contrattoRegole))
+              const rifirmaEstensione = vociRifirmaEstensione.length > 0
               // Stessa traccia del flusso di modifica: senza il flag, un
               // "Rinvia contratto" successivo (che passa reconduct fisso)
               // riconcilierebbe comunque e la rifirma appena chiesta sparirebbe.
@@ -5483,7 +5511,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     booking_details: {
                       ...bd,
                       contratto_rifirma_richiesta: true,
-                      contratto_rifirma_voci: ['estensione'],
+                      contratto_rifirma_voci: vociRifirmaEstensione,
                       contratto_rifirma_at: new Date().toISOString(),
                     },
                   }).eq('id', extendingBooking.id)

@@ -1570,6 +1570,20 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             })
             // 1) id esatto nella categoria giusta, 2) stesso nome (booking legacy),
             // 3) id esatto in qualunque categoria (l'id uid e' unico).
+            // 17/10/2026: tra 2 e 3, se l'id appartiene a un'ALTRA categoria
+            // (veicolo cambiato dopo la scelta: SL55 urban -> Audi RS3
+            // aziendali) si cerca la stessa formula per nome nella categoria
+            // del veicolo. Prima vinceva il passo 3 e il contratto stampava le
+            // franchigie della vettura precedente.
+            const nomeDellId = (() => {
+                for (const c of categorie as Record<string, unknown>[]) {
+                    for (const pool of pooldi(c)) {
+                        const o = pool.find(x => x?.id === insuranceOptionId)
+                        if (o?.name) return String(o.name)
+                    }
+                }
+                return ''
+            })()
             for (const gruppo of [dellaCategoria, categorie as Record<string, unknown>[]]) {
                 for (const c of gruppo) {
                     for (const pool of pooldi(c)) {
@@ -1577,11 +1591,16 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                         if (perId) return perId
                     }
                 }
-                if (gruppo === dellaCategoria && nomeLegacy) {
-                    for (const c of gruppo) {
-                        for (const pool of pooldi(c)) {
-                            const perNome = pool.find(o => normalizzaNome(o?.name) === normalizzaNome(nomeLegacy))
-                            if (perNome) return perNome
+                if (gruppo === dellaCategoria) {
+                    for (const nome of [nomeLegacy, nomeDellId].filter(Boolean)) {
+                        for (const c of gruppo) {
+                            for (const pool of pooldi(c)) {
+                                const perNome = pool.find(o => normalizzaNome(o?.name) === normalizzaNome(nome))
+                                if (perNome) {
+                                    if (nome === nomeDellId) console.log(`[generate-contract] Kasko ${insuranceOptionId} di un'altra categoria: uso "${perNome.name}" (${perNome.id}) della categoria del veicolo`)
+                                    return perNome
+                                }
+                            }
                         }
                     }
                 }
@@ -2527,9 +2546,13 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 reconductBloccatoDa = `rifirma richiesta al salvataggio${voci ? ` (${voci})` : ''}`
             } else if (motivo === 'estensione') {
                 try {
-                    const { data: cfgRow } = await supabase
-                        .from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-                    const regole = (cfgRow?.config as any)?.contratto_modifica || {}
+                    // 17/10/2026: come l'admin, prima la riga del business poi `main`
+                    // (prima solo `main`: Mare/Aria/Soggiorni ignoravano la loro voce).
+                    const rigaBiz = businessRowForServiceType(booking.service_type)
+                    const { data: cfgRows } = await supabase
+                        .from('centralina_pro_config').select('id, config').in('id', [rigaBiz, 'main'])
+                    const daRiga = (id: string) => ((cfgRows || []).find((r: any) => r.id === id)?.config as any)?.contratto_modifica
+                    const regole = daRiga(rigaBiz) || daRiga('main') || {}
                     // Default storico 'ricondotto': senza config si comporta come prima.
                     if (String(regole.estensione || 'ricondotto') === 'rifirma') {
                         reconductBloccatoDa = 'voce "Estensione" impostata su Rifirma in Centralina Pro'

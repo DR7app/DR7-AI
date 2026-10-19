@@ -69,9 +69,15 @@ const CAMPI_PER_VOCE: Record<string, string[]> = {
     'delivery_street', 'delivery_city', 'delivery_zip', 'delivery_province',
     'pickup_street', 'pickup_city', 'pickup_zip', 'pickup_province',
   ],
+  // 17/10/2026: anche i fideiussori del form (garante_1..3_*, garante_count).
+  // Prima la voce guardava solo il garante veicolo: aggiungere o cambiare un
+  // fideiussore non chiedeva mai la rifirma.
   garanti: [
     'garante_customer_id',
     'garante_nome', 'garante_cognome', 'garante_codice_fiscale',
+    'garante_count',
+    ...[1, 2, 3].flatMap(n => ['nome_cognome', 'codice_fiscale', 'data_nascita', 'citta_nascita', 'indirizzo', 'citta']
+      .map(c => `garante_${n}_${c}`)),
   ],
   assicurazioni: ['insurance_option'],
   cauzione: ['deposit', 'deposit_status', 'deposit_option_id', 'include_cauzione_veicoli'],
