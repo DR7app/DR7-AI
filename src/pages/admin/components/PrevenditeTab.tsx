@@ -1307,7 +1307,12 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                     onChange={v => setBozza(b => ({ ...b, posti_totali: v }))}
                     className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-theme-text-primary outline-none focus:border-dr7-gold"
                   />
-                  <p className="text-xs text-theme-text-muted mt-1">Vuoto = illimitata.</p>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    Quante prevendite si possono vendere in tutto. Vuoto = illimitata.
+                    {String(bozza.posti_totali).trim() !== '' && Number(bozza.posti_totali) > 0 && Number(bozza.posti_totali) <= 5 && (
+                      <span className="block text-dr7-gold mt-0.5">Sul sito: "Ne restano {bozza.posti_totali}" (meno quelle gia' vendute).</span>
+                    )}
+                  </p>
                 </div>
               </div>
 
