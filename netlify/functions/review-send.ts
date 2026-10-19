@@ -6,6 +6,7 @@ import { getMessageTemplate } from './utils/messageTemplates';
 import { getMarketingConfig } from './utils/loadMarketing';
 import { getEmailFrom } from './utils/emailFrom'
 import { funzioneFerma } from './utils/systemControl'
+import { trovaGiaRecensito, MOTIVO_GIA_RECENSITO } from './utils/giaRecensito'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -174,6 +175,32 @@ const handler: Handler = async (event) => {
         headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ error: motivo }),
       };
+    }
+
+    // 3a-bis. 19/10/2026: "gia' recensito" vale per la PERSONA. Su Google si
+    // recensisce una volta sola: se lo stesso cliente (telefono o email) e'
+    // bloccato come gia' recensito su un'altra prenotazione, niente invio e la
+    // riga passa a Bloccato, cosi' esce da "Da inviare" al prossimo refresh.
+    // Copre anche le righe create prima di questa regola.
+    if (!previewOnly) {
+      const precedente = await trovaGiaRecensito(supabase, candidate, candidateId);
+      if (precedente) {
+        await supabase
+          .from('review_candidates')
+          .update({
+            send_status: 'BLOCKED',
+            eligibility_status: 'ELIGIBLE',
+            exclusion_reason_code: 'ALREADY_REVIEWED',
+            exclusion_reason_text: MOTIVO_GIA_RECENSITO,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', candidateId);
+        return {
+          statusCode: 409,
+          headers: getHeaders(event.headers.origin),
+          body: JSON.stringify({ error: "Cliente ha gia' lasciato una recensione su un'altra prenotazione: richiesta non inviata." }),
+        };
+      }
     }
 
     // 3b. Anti-duplication check: no existing SENT request for this candidate.

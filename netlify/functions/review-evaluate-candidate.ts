@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { buildReviewRecipients, type ReviewRecipient } from './utils/reviewRecipients';
+import { trovaGiaRecensito, MOTIVO_GIA_RECENSITO } from './utils/giaRecensito';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -28,7 +29,8 @@ type ExclusionReasonCode =
   | 'MISSING_NAME'
   | 'NO_CONTACT'
   | 'INTERNAL_RECORD'
-  | 'OPEN_DISPUTE';
+  | 'OPEN_DISPUTE'
+  | 'ALREADY_REVIEWED';
 
 const EXCLUSION_REASONS: Record<ExclusionReasonCode, string> = {
   HAS_PENALTY: 'Presenza di penale registrata',
@@ -41,6 +43,7 @@ const EXCLUSION_REASONS: Record<ExclusionReasonCode, string> = {
   NO_CONTACT: 'Nessun contatto disponibile (email o telefono)',
   INTERNAL_RECORD: 'Registrazione interna/tecnica',
   OPEN_DISPUTE: 'Contestazione aperta',
+  ALREADY_REVIEWED: MOTIVO_GIA_RECENSITO,
 };
 
 const PAID_STATUSES = ['paid', 'completed', 'succeeded'];
@@ -436,7 +439,7 @@ const handler: Handler = async (event) => {
       }
 
       const basicCheck = checkInternalOrBasicExclusions(record, serviceType, recipient);
-      const evaluation: EvaluationResult = basicCheck.excluded
+      let evaluation: EvaluationResult = basicCheck.excluded
         ? {
             eligibility_status: 'EXCLUDED',
             review_risk: 'RED',
@@ -445,6 +448,25 @@ const handler: Handler = async (event) => {
             is_internal_record: basicCheck.is_internal,
           }
         : await bookingEvaluation();
+
+      // 19/10/2026: su Google si recensisce UNA volta sola. Se questa persona
+      // e' gia' stata segnata "gia' recensito" su un'altra prenotazione, la
+      // nuova riga nasce bloccata (stesso stato del bottone Blocca), non in
+      // "Da inviare". Si rimanda solo con "Sblocca".
+      if (evaluation.eligibility_status !== 'EXCLUDED') {
+        const precedente = await trovaGiaRecensito(supabase, {
+          customer_phone: recipient.phone,
+          customer_email: recipient.email,
+        });
+        if (precedente) {
+          evaluation = {
+            ...evaluation,
+            eligibility_status: 'ELIGIBLE',
+            send_status: 'BLOCKED',
+            exclusion_reasons: [{ code: 'ALREADY_REVIEWED', text: EXCLUSION_REASONS.ALREADY_REVIEWED }],
+          };
+        }
+      }
 
       try {
         const candidate = await insertCandidate(sourceRecordId, serviceType, recipient, evaluation);
