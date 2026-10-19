@@ -18,6 +18,7 @@ import { requireAuth } from './require-auth'
 import { funzioneFerma } from './utils/systemControl'
 import { langFromPhone, nellaLinguaDelTelefono } from './utils/i18n'
 import { traduciContratto, impaginaCopiaCortesia } from './utils/contrattoCortesia'
+import { percorsoStorage } from '../../src/utils/percorsoStorage'
 import { classificaRispostaGreenApi, classificaEccezioneGreenApi, leggiCorpo, rigaLogWhatsapp, type EsitoGreenApi } from './utils/esitoGreenApi'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
@@ -68,7 +69,7 @@ export const handler: Handler = async (event) => {
         try {
             let url = urlPerLingua.get(lang)
             if (!url) {
-                const percorso = `cortesia/${contractId}_${impronta}_${lang}.pdf`
+                const percorso = percorsoStorage('cortesia', `${contractId}_${impronta}_${lang}.pdf`)
                 const pubblico = sb.storage.from('contracts').getPublicUrl(percorso).data.publicUrl
                 const esiste = await fetch(pubblico, { method: 'HEAD' }).then(x => x.ok).catch(() => false)
                 if (!esiste) {
