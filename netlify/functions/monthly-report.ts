@@ -72,6 +72,20 @@ function dateToISOLocal(d: Date): string {
 //                             il resto e' da saldare
 // Gestisce le varie forme dei dati: total, amount*quantity, amountPaid.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * 20/10/2026: incassato di penali/danni di UNA prenotazione.
+ * Se booking_details ha la lista, la lista e' la fonte (stato pagato/da saldare
+ * voce per voce): la fattura serve solo al numero e NON prova l'incasso. Prima
+ * si prendeva il massimo tra lista e fattura: un danno fatturato ma non pagato
+ * finiva sia nel Ricavo (dalla fattura) sia nel Da saldare (dalla lista), e il
+ * Totale Complessivo lo contava due volte (Concas 09/10: 279.709,46 x 2).
+ * La fattura conta solo per le prenotazioni senza lista (storico).
+ */
+function incassatoCharges(fromDetails: { paid: number; remaining: number }, fromFatture: number): number {
+  if (fromDetails.paid + fromDetails.remaining > 0) return fromDetails.paid
+  return fromFatture
+}
+
 function splitCharges(arr: any): { paid: number; remaining: number } {
   let paid = 0
   let remaining = 0
@@ -825,10 +839,10 @@ async function generateVehicleReport(
       const bookingPenaltyFromFatture = fatturePenaltyMap.get(booking.id) || 0
       const bookingDanniFromFatture = fattureDanniMap.get(booking.id) || 0
 
-      // PAGATO: il maggiore tra booking_details e fatture (evita doppi conteggi
-      // quando la stessa penale e' presente in entrambe le fonti).
-      const bookingPenaltyAmount = Math.max(penFromDetails.paid, bookingPenaltyFromFatture)
-      const bookingDanniAmount = Math.max(danFromDetails.paid, bookingDanniFromFatture)
+      // PAGATO: dalla lista in booking_details; la fattura solo se la lista
+      // manca (vedi incassatoCharges, 20/10/2026).
+      const bookingPenaltyAmount = incassatoCharges(penFromDetails, bookingPenaltyFromFatture)
+      const bookingDanniAmount = incassatoCharges(danFromDetails, bookingDanniFromFatture)
       penaltyRevenue += bookingPenaltyAmount
       danniRevenue += bookingDanniAmount
 
@@ -905,8 +919,8 @@ async function generateVehicleReport(
 
       const penFromDetails = splitCharges(cb.booking_details?.penalties)
       const danFromDetails = splitCharges(cb.booking_details?.danni)
-      const penAmt = Math.max(penFromDetails.paid, fatturePenaltyMap.get(cb.id) || 0)
-      const danAmt = Math.max(danFromDetails.paid, fattureDanniMap.get(cb.id) || 0)
+      const penAmt = incassatoCharges(penFromDetails, fatturePenaltyMap.get(cb.id) || 0)
+      const danAmt = incassatoCharges(danFromDetails, fattureDanniMap.get(cb.id) || 0)
       if (penAmt <= 0 && danAmt <= 0) return
 
       penaltyRevenue += penAmt
