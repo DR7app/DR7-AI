@@ -105,6 +105,7 @@ import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import DanniPenaliModal from './DanniPenaliModal'
+import SegnaRientrataModal from './SegnaRientrataModal'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { isOtpRequired } from '../../../utils/otpConfigCache'
@@ -418,6 +419,18 @@ interface Booking {
 // positives caused by booking_details key mismatches (camelCase vs
 // snake_case, multi-shape deposit fields, etc.) and only surfaces
 // fields the operator actually changed.
+/**
+ * 20/10/2026: "Segna rientrata" ha senso solo con il mezzo FUORI (ritiro gia'
+ * passato) e la riconsegna prevista ancora nel futuro. Annullate escluse.
+ */
+function mezzoFuoriPrimaDelRientro(b: { status: string; pickup_date: string; dropoff_date: string }): boolean {
+  if (b.status === 'cancelled' || b.status === 'annullata') return false
+  const adesso = Date.now()
+  const ritiro = new Date(b.pickup_date).getTime()
+  const riconsegna = new Date(b.dropoff_date).getTime()
+  return ritiro < adesso && adesso < riconsegna
+}
+
 function buildBookingEditDiff(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   before: Record<string, any>,
@@ -2475,6 +2488,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   // Combined Danni & Penali Modal State
   const [danniPenaliModalOpen, setDanniPenaliModalOpen] = useState(false)
+  // 20/10/2026: "Segna rientrata" — mezzo riportato prima della riconsegna prevista.
+  const [rientroBooking, setRientroBooking] = useState<Booking | null>(null)
   const [selectedBookingForDanniPenali, setSelectedBookingForDanniPenali] = useState<Booking | null>(null)
   const [danniPenaliInitialTab, setDanniPenaliInitialTab] = useState<'danni' | 'penali'>('danni')
 
@@ -9619,6 +9634,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           />
         )}
 
+        {/* 20/10/2026: Segna rientrata */}
+        <SegnaRientrataModal
+          booking={rientroBooking ? {
+            id: rientroBooking.id,
+            customer_name: rientroBooking.customer_name || 'Cliente',
+            vehicle_name: rientroBooking.vehicle_name,
+            vehicle_plate: rientroBooking.vehicle_plate || undefined,
+            pickup_date: rientroBooking.pickup_date,
+            dropoff_date: rientroBooking.dropoff_date,
+          } : null}
+          onClose={() => setRientroBooking(null)}
+          onDone={() => void loadData()}
+        />
+
         {/* Combined Danni & Penali Modal */}
         {selectedBookingForDanniPenali && (
           <DanniPenaliModal
@@ -12562,6 +12591,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           actions: [
                             { label: 'Modifica', onClick: () => void apriModificaPrenotazione(booking) },
                             { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: !isCarWash },
+                            { label: 'Segna rientrata', onClick: () => setRientroBooking(booking), visible: !isCarWash && mezzoFuoriPrimaDelRientro(booking) },
                             { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking') },
                           ],
                         },
@@ -12836,6 +12866,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                                 actions: [
                                   { label: 'Modifica', onClick: () => void apriModificaPrenotazione(booking), visible: booking.status !== 'cancelled' },
                                   { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: booking.status !== 'cancelled' && !isCarWash },
+                                  { label: 'Segna rientrata', onClick: () => setRientroBooking(booking), visible: !isCarWash && mezzoFuoriPrimaDelRientro(booking) },
                                   { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking'), visible: booking.status !== 'cancelled' },
                                 ],
                               },

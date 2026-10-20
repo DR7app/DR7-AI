@@ -430,7 +430,10 @@ function getEventTimeMs(booking: Booking, event: string): number | null {
             // Ritardo riconsegna oltre la grace. Ancora a dropoff_date.
             // Il template viene mandato quando NOW > dropoff_date + grace_min
             // e l'auto non e' ancora rientrata (status != completata).
-            const isReturned = booking.status === 'completed' || booking.status === 'completata';
+            // 20/10/2026: "Segna rientrata" sposta dropoff_date all'ora vera del
+            // rientro senza toccare lo stato: il mezzo E' rientrato.
+            const isReturned = booking.status === 'completed' || booking.status === 'completata'
+                || !!booking.booking_details?.rientro_anticipato;
             if (isReturned) return null;
             const t = isRental ? (booking.dropoff_date || booking.pickup_date) : apt;
             return t ? new Date(t).getTime() : null;
