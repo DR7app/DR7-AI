@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
@@ -99,8 +99,20 @@ export default function ReportTrafficTab() {
     nome: string
     cognome: string
     last_sign_in_at: string | null
+    // 21/10/2026: storico visite (dr7_sito_accessi). Senza migrazione restano vuoti.
+    visita_id?: string
+    ultima_attivita?: string | null
+    dispositivo?: string | null
+    provenienza?: string | null
+    pagine?: number
   }
   const [accessi, setAccessi] = useState<AccessoRecente[]>([])
+  // true = storico completo (una riga per visita); false = vecchio "ultimo accesso".
+  const [accessiStorico, setAccessiStorico] = useState(false)
+  const [accCerca, setAccCerca] = useState('')
+  const [percorsoAperto, setPercorsoAperto] = useState<string | null>(null)
+  const [percorsi, setPercorsi] = useState<Record<string, { percorso: string; visto_il: string }[]>>({})
+  const [pagineTop, setPagineTop] = useState<{ percorso: string; viste: number; visite: number }[] | null>(null)
   const [accessiLoading, setAccessiLoading] = useState(true)
   const [accessiErrore, setAccessiErrore] = useState<string | null>(null)
   // Ricerca per data: "chi si e' collegato ieri".
@@ -124,6 +136,25 @@ export default function ReportTrafficTab() {
       const daISO = accDa ? new Date(accDa + 'T00:00:00').toISOString() : null
       const aISO = accA ? new Date(accA + 'T23:59:59').toISOString() : null
       try {
+        // 21/10/2026: prima lo storico (una riga per visita: ieri + oggi = 2
+        // righe); senza la migrazione 20261021_sito_visite_e_pagine si torna
+        // all'ultimo accesso di ogni account, come prima.
+        const storico = await supabase.rpc('dr7_sito_accessi', { p_from: daISO, p_to: aISO, p_limit: 1000 })
+        if (annullato) return
+        if (!storico.error) {
+          type RigaStorico = { visita_id: string; user_id: string; email: string; nome: string; cognome: string; iniziata_il: string; ultima_attivita: string; dispositivo: string | null; provenienza: string | null; pagine: number }
+          setAccessi(((storico.data || []) as RigaStorico[]).map(r => ({
+            id: r.user_id, email: r.email, nome: r.nome, cognome: r.cognome,
+            last_sign_in_at: r.iniziata_il, visita_id: r.visita_id, ultima_attivita: r.ultima_attivita,
+            dispositivo: r.dispositivo, provenienza: r.provenienza, pagine: Number(r.pagine) || 0,
+          })))
+          setAccessiStorico(true)
+          const top = await supabase.rpc('dr7_sito_pagine_top', { p_from: daISO, p_to: aISO, p_limit: 30 })
+          if (!annullato) setPagineTop(top.error ? null : ((top.data || []) as { percorso: string; viste: number; visite: number }[]))
+          return
+        }
+        setAccessiStorico(false)
+        setPagineTop(null)
         const { data, error } = await supabase.rpc('dr7_recent_logins', {
           p_from: daISO, p_to: aISO, p_limit: 500,
         })
@@ -156,13 +187,28 @@ export default function ReportTrafficTab() {
   const accessiFiltrati = useMemo(() => {
     const daMs = accDa ? new Date(accDa + 'T00:00:00').getTime() : -Infinity
     const aMs = accA ? new Date(accA + 'T23:59:59').getTime() : Infinity
+    const cerca = accCerca.trim().toLowerCase()
     return accessi
       .filter(u => {
         const t = new Date(u.last_sign_in_at as string).getTime()
         return t >= daMs && t <= aMs
       })
+      .filter(u => !cerca || `${u.nome} ${u.cognome} ${u.email}`.toLowerCase().includes(cerca))
       .sort((a, b) => new Date(b.last_sign_in_at as string).getTime() - new Date(a.last_sign_in_at as string).getTime())
-  }, [accessi, accDa, accA])
+  }, [accessi, accDa, accA, accCerca])
+  // Accessi per persona nel periodo (Massimo Runchina: 2).
+  const accessiPerPersona = useMemo(() => {
+    const m = new Map<string, number>()
+    accessiFiltrati.forEach(u => m.set(u.id, (m.get(u.id) || 0) + 1))
+    return m
+  }, [accessiFiltrati])
+  async function apriPercorso(visitaId: string) {
+    if (percorsoAperto === visitaId) { setPercorsoAperto(null); return }
+    setPercorsoAperto(visitaId)
+    if (percorsi[visitaId]) return
+    const { data } = await supabase.rpc('dr7_sito_percorso', { p_visita: visitaId })
+    setPercorsi(prev => ({ ...prev, [visitaId]: (data || []) as { percorso: string; visto_il: string }[] }))
+  }
   const [data, setData] = useState<ReportPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -403,6 +449,12 @@ export default function ReportTrafficTab() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-theme-text-secondary">Accessi al sito</h3>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
+            <input
+              value={accCerca}
+              onChange={e => setAccCerca(e.target.value)}
+              placeholder="Cerca cliente..."
+              className="px-2 py-1 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs w-36"
+            />
             <span>Dal</span>
             <EuropeanDateInput value={accDa} onChange={(__v: string) => setAccDa(__v)} className="px-2 py-1 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs" />
             <span>al</span>
@@ -438,47 +490,128 @@ export default function ReportTrafficTab() {
                 <tr className="text-[10px] uppercase tracking-wider text-theme-text-muted">
                   <th className="text-left py-2 pr-3">Cliente</th>
                   <th className="text-left py-2 pr-3">Email</th>
-                  <th className="text-left py-2">Ultimo accesso</th>
+                  <th className="text-left py-2 pr-3">{accessiStorico ? 'Accesso' : 'Ultimo accesso'}</th>
+                  {accessiStorico && <th className="text-left py-2 pr-3">Durata</th>}
+                  {accessiStorico && <th className="text-left py-2 pr-3">Dispositivo</th>}
+                  {accessiStorico && <th className="text-left py-2 pr-3">Da</th>}
+                  {accessiStorico && <th className="text-left py-2">Pagine</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-border">
                 {accessiFiltrati.map(u => {
                   const quando = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null
-                  const minutiFa = quando ? Math.round((Date.now() - quando.getTime()) / 60000) : null
-                  // "Adesso" = ultimi 30 minuti, la stessa finestra del blocco GA4
-                  // qui sopra: i due numeri si leggono insieme senza confondersi.
+                  const fine = u.ultima_attivita ? new Date(u.ultima_attivita) : quando
+                  const minutiFa = fine ? Math.round((Date.now() - fine.getTime()) / 60000) : null
+                  // "Adesso" = attivo negli ultimi 30 minuti, la stessa finestra del
+                  // blocco GA4 qui sopra: i due numeri si leggono insieme.
                   const online = minutiFa !== null && minutiFa <= 30
+                  const durataMin = quando && fine ? Math.max(0, Math.round((fine.getTime() - quando.getTime()) / 60000)) : 0
+                  const quante = accessiPerPersona.get(u.id) || 0
+                  const chiave = u.visita_id || u.id
+                  const aperto = !!u.visita_id && percorsoAperto === u.visita_id
                   return (
-                    <tr key={u.id} className="text-theme-text-primary">
+                    <Fragment key={chiave}>
+                    <tr className="text-theme-text-primary">
                       <td className="py-2 pr-3">
                         <span className="inline-flex items-center gap-2">
                           {online && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Attivo negli ultimi 30 minuti" />}
                           {[u.nome, u.cognome].filter(Boolean).join(' ') || '—'}
+                          {accessiStorico && quante > 1 && (
+                            <button
+                              onClick={() => setAccCerca(u.email)}
+                              title="Vedi solo gli accessi di questa persona"
+                              className="px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-[10px] text-theme-text-secondary hover:text-dr7-gold"
+                            >{quante} accessi</button>
+                          )}
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-theme-text-secondary">{u.email}</td>
-                      <td className="py-2 text-theme-text-secondary">
-                        {quando
-                          ? `${quando.toLocaleDateString('it-IT')} ${quando.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}`
-                          : '—'}
+                      <td className="py-2 pr-3 text-theme-text-secondary whitespace-nowrap">
+                        {quando ? `${quando.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} ${quando.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })}` : '—'}
                         {minutiFa !== null && minutiFa <= 120 && (
                           <span className="ml-2 text-[11px] text-theme-text-muted">
                             {minutiFa < 1 ? 'ora' : `${minutiFa} min fa`}
                           </span>
                         )}
                       </td>
+                      {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary whitespace-nowrap">{durataMin < 1 ? '< 1 min' : durataMin < 60 ? `${durataMin} min` : `${Math.floor(durataMin / 60)}h ${durataMin % 60}m`}</td>}
+                      {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary capitalize">{u.dispositivo || '—'}</td>}
+                      {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary">{u.provenienza || '—'}</td>}
+                      {accessiStorico && (
+                        <td className="py-2">
+                          {(u.pagine || 0) > 0 ? (
+                            <button onClick={() => u.visita_id && void apriPercorso(u.visita_id)} className="text-dr7-gold hover:underline whitespace-nowrap">
+                              {u.pagine} {u.pagine === 1 ? 'pagina' : 'pagine'} {aperto ? '▲' : '▼'}
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-theme-text-muted" title="Il cliente non ha accettato i cookie statistici: le pagine non si registrano">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
+                    {aperto && (
+                      <tr>
+                        <td colSpan={7} className="pb-3 pt-1">
+                          {!percorsi[u.visita_id as string] ? (
+                            <ScheletroTesto righe={1} />
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                              {percorsi[u.visita_id as string].map((p, i) => {
+                                const t = new Date(p.visto_il)
+                                return (
+                                  <Fragment key={i}>
+                                    {i > 0 && <span className="text-theme-text-muted">→</span>}
+                                    <span className="px-2 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-primary" title={t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })}>
+                                      {p.percorso}
+                                      <span className="ml-1.5 text-[10px] text-theme-text-muted">{t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })}</span>
+                                    </span>
+                                  </Fragment>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>
             </table>
             <p className="mt-2 text-[11px] text-theme-text-muted">
-              {accessiFiltrati.length} accesso/i nel periodo · clienti entrati nel proprio account.
-              I visitatori non registrati restano anonimi (limite di GA4).
+              {accessiStorico
+                ? `${accessiFiltrati.length} accessi di ${accessiPerPersona.size} clienti nel periodo · ogni visita e' una riga (nuova visita dopo 30 minuti di pausa). Le pagine si vedono solo per chi ha accettato i cookie statistici.`
+                : `${accessiFiltrati.length} accesso/i nel periodo · solo l'ultimo accesso di ogni cliente. Lo storico completo parte dopo la migrazione 20261021_sito_visite_e_pagine.`}
             </p>
           </div>
         )}
       </div>
+
+      {/* 21/10/2026: pagine piu' viste (nostro tracciamento, visitatori con
+          consenso ai cookie, collegati o no). */}
+      {accessiStorico && pagineTop && (
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-theme-text-secondary mb-3">Pagine piu' visitate</h3>
+          {pagineTop.length === 0 ? (
+            <p className="text-sm text-theme-text-muted">Nessuna pagina registrata nel periodo.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {pagineTop.map(p => {
+                const max = Number(pagineTop[0].viste) || 1
+                return (
+                  <div key={p.percorso} className="flex items-center gap-3 text-sm">
+                    <span className="w-48 sm:w-64 truncate text-theme-text-primary" title={p.percorso}>{p.percorso}</span>
+                    <div className="flex-1 h-2 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                      <div className="h-full bg-dr7-gold/70" style={{ width: `${Math.max(2, (Number(p.viste) / max) * 100)}%` }} />
+                    </div>
+                    <span className="w-28 text-right text-xs text-theme-text-secondary tabular-nums">{p.viste} viste · {p.visite} visite</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Fetch error */}
       {err && (
