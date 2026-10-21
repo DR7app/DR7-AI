@@ -104,3 +104,27 @@ describe('isVehicleAvailable — slot blocking', () => {
     expect(result.available).toBe(true)
   })
 })
+
+// 21/10/2026: GLE con "Segna rientrata" alle 18:31 e un noleggio a luglio 2027
+// (fine 12:30). La "prima disponibilita'" diceva 14:00 (= luglio 2027 + 90 min).
+describe('prima disponibilita: solo chi occupa il mezzo quel giorno', () => {
+  const rientrata = mockBooking({
+    id: 'madau', customer_name: 'Madau',
+    pickup_date: '2026-10-21T10:30:00.000Z', dropoff_date: '2026-10-21T16:31:00.000Z',
+  })
+  const futura = mockBooking({
+    id: 'serra', customer_name: 'Serra',
+    pickup_date: '2027-07-10T12:00:00.000Z', dropoff_date: '2027-07-12T10:30:00.000Z',
+  })
+
+  it('un noleggio di mesi dopo non sposta la prima disponibilita', () => {
+    const esito = isVehicleAvailable(mockVehicle(), '2026-10-21', '2026-10-22', '17:00', '10:00', [rientrata, futura] as any)
+    expect(esito.available).toBe(false)
+    expect(esito.reason).toContain('Prima disponibilità utile: 20:01')
+  })
+
+  it('libero dal giorno dopo il rientro', () => {
+    const esito = isVehicleAvailable(mockVehicle(), '2026-10-22', '2026-10-23', '10:00', '10:00', [rientrata, futura] as any)
+    expect(esito.available).toBe(true)
+  })
+})

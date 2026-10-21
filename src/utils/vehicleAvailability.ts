@@ -259,7 +259,9 @@ export function getEarliestValidPickupTime(
     pickupDate: string,
     _returnDate: string,
     existingBookings: Booking[],
-    excludeBookingId?: string
+    excludeBookingId?: string,
+    /** 21/10/2026: ora di ritiro richiesta; la ricerca parte da qui. */
+    daQuando?: Date
 ): Date | null {
     // Parse pickup date in Rome timezone
     const pickupComponents = getRomeDateComponents(pickupDate)
@@ -272,6 +274,8 @@ export function getEarliestValidPickupTime(
         BUSINESS_START_HOUR,
         0
     )
+
+    if (daQuando && daQuando > earliestTime) earliestTime = daQuando
 
     // Filter bookings for this vehicle
     const vehicleBookings = existingBookings.filter(booking => {
@@ -295,51 +299,31 @@ export function getEarliestValidPickupTime(
         return matchVehicleByPlate(booking, vehicle)
     })
 
-    // Find the latest conflicting booking that ends on or before the pickup date
-    for (const booking of vehicleBookings) {
-        const bookingEnd = new Date(booking.dropoff_date)
-        const bookingEndComponents = getRomeDateComponents(booking.dropoff_date)
-
-        // Check if booking ends on the same day as pickup or before
-        const bookingEndDate = createRomeDate(
-            bookingEndComponents.year,
-            bookingEndComponents.month,
-            bookingEndComponents.day,
-            0,
-            0
-        )
-
-        const pickupDateOnly = createRomeDate(
-            pickupComponents.year,
-            pickupComponents.month,
-            pickupComponents.day,
-            0,
-            0
-        )
-
-        if (bookingEndDate.getTime() === pickupDateOnly.getTime()) {
-            // Booking ends on the same day - add buffer
-            // Tronca a precisione di minuto: il buffer e' definito in minuti,
-            // ms/secondi nel dropoff stored non devono spostare l'earliest.
-            const bufferMs = bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000
-            const truncatedMs = Math.floor(bufferMs / 60000) * 60000
-            const timeWithBuffer = new Date(truncatedMs)
-
-            if (timeWithBuffer > earliestTime) {
-                earliestTime = timeWithBuffer
-            }
-        } else if (bookingEnd > earliestTime) {
-            // Booking extends into or past the pickup date
-            // Tronca a precisione di minuto: il buffer e' definito in minuti,
-            // ms/secondi nel dropoff stored non devono spostare l'earliest.
-            const bufferMs = bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000
-            const truncatedMs = Math.floor(bufferMs / 60000) * 60000
-            const timeWithBuffer = new Date(truncatedMs)
-
-            if (timeWithBuffer > earliestTime) {
-                earliestTime = timeWithBuffer
-            }
+    // 21/10/2026: conta SOLO chi occupa il mezzo all'ora candidata. Prima ogni
+    // prenotazione che finiva dopo l'inizio del giorno spostava la "prima
+    // disponibilita'", anche una di MESI dopo: GLE con un noleggio a luglio
+    // 2027 (fine 12:30) mostrava "Prima disponibilita' utile: 14:00" su ogni
+    // giorno. In ordine di ritiro: chi e' gia' iniziato all'ora candidata la
+    // sposta alla sua riconsegna + buffer; chi inizia dopo non la tocca.
+    const ordinate = [...vehicleBookings].sort(
+        (a, b) => new Date(a.pickup_date).getTime() - new Date(b.pickup_date).getTime()
+    )
+    for (const booking of ordinate) {
+        const bookingStart = new Date(booking.pickup_date)
+        if (bookingStart.getTime() > earliestTime.getTime()) continue
+        // Tronca a precisione di minuto: il buffer e' definito in minuti,
+        // ms/secondi nel dropoff stored non devono spostare l'earliest.
+        const bufferMs = new Date(booking.dropoff_date).getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000
+        const timeWithBuffer = new Date(Math.floor(bufferMs / 60000) * 60000)
+        if (timeWithBuffer > earliestTime) {
+            earliestTime = timeWithBuffer
         }
+    }
+
+    // Libero solo un altro giorno: "in giornata" non c'e' un orario utile.
+    const earliestDay = getRomeDateComponents(earliestTime.toISOString())
+    if (earliestDay.year !== pickupComponents.year || earliestDay.month !== pickupComponents.month || earliestDay.day !== pickupComponents.day) {
+        return null
     }
 
     // Check if earliest time is still within business hours
@@ -507,7 +491,7 @@ export function isVehicleAvailable(
 
         // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
         if (reqStartMin < bufferEndMin && reqEndMin > bookingStartMin) {
-            const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
+            const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId, requestStart)
             // Conflicting booking — surface the customer + start/end so the
             // OTP recipient can verify the override without opening the calendar.
             const conflictingCustomer = booking.customer_name
