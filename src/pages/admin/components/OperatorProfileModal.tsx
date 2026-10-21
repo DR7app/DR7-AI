@@ -34,7 +34,7 @@ import SceltaMese from '../../../components/admin/SceltaMese'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import MoneyInput from '../../../components/MoneyInput'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
-import { OPZIONI_FREQUENZA, normalizzaFrequenza, suffissoFrequenza, tariffaGiornaliera, contaGiornatePagate, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
+import { OPZIONI_FREQUENZA, normalizzaFrequenza, suffissoFrequenza, tariffaGiornaliera, contaGiornatePagate, campoPagaGiornaliera, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
 
 interface Operatore {
     id: string
@@ -641,6 +641,8 @@ interface Contratto {
     stipendio_mensile_eur: number | null
     stipendio_frequenza: FrequenzaStipendio
     paga_oraria_eur: number | null
+    // 21/10/2026: tariffa di una giornata (vedi pagaGiornaliera.ts).
+    paga_giornaliera_eur?: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
     // Soglia ore lavorate / giorno oltre cui scatta lo straordinario.
@@ -667,6 +669,7 @@ function emptyContratto(): Contratto {
         stipendio_mensile_eur: null,
         stipendio_frequenza: 'mensile',
         paga_oraria_eur: null,
+        paga_giornaliera_eur: null,
         paga_straordinario_eur: null,
         straordinario_abilitato: false,
         ore_soglia_straordinario: null,
@@ -951,6 +954,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                 stipendio_mensile_eur: draft.stipendio_mensile_eur,
                 stipendio_frequenza: draft.stipendio_frequenza || 'mensile',
                 paga_oraria_eur: draft.paga_oraria_eur,
+                ...campoPagaGiornaliera(draft.paga_giornaliera_eur, contratto),
                 paga_straordinario_eur: draft.paga_straordinario_eur,
                 straordinario_abilitato: draft.straordinario_abilitato,
                 ore_soglia_straordinario: draft.ore_soglia_straordinario,
@@ -1025,6 +1029,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                             : '—'}
                     />
                     <Field label="Paga oraria" value={contratto.paga_oraria_eur != null ? `€${contratto.paga_oraria_eur}/h` : '—'} />
+                    <Field label="Paga giornaliera" value={contratto.paga_giornaliera_eur != null ? `€${contratto.paga_giornaliera_eur}/giorno` : '—'} />
                     <Field label="Straordinario" value={contratto.paga_straordinario_eur != null ? `€${contratto.paga_straordinario_eur}/h` : '—'} />
                     <Field
                         label="Soglia straordinario"
@@ -1096,7 +1101,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
 
                     <fieldset className="border border-theme-border rounded p-3">
                         <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Compenso</legend>
-                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
                             <LabeledInput
                                 label={draft.stipendio_frequenza === 'giornaliera' ? 'Paga giornaliera (€/giorno)' : `Stipendio (€${suffissoFrequenza(draft.stipendio_frequenza)})`}
                                 type="number"
@@ -1112,8 +1117,14 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                                 options={OPZIONI_FREQUENZA}
                             />
                             <LabeledInput label="Paga oraria (€/h)" type="number" step="0.01" value={draft.paga_oraria_eur ?? ''} onChange={v => updateDraft('paga_oraria_eur', num(v))} placeholder="es. 9.50" />
+                            <LabeledInput label="Paga giornaliera (€/giorno)" type="number" step="0.01" value={draft.paga_giornaliera_eur ?? ''} onChange={v => updateDraft('paga_giornaliera_eur', num(v))} placeholder="es. 80.00" />
                             <LabeledInput label="Straordinario (€/h)" type="number" step="0.01" value={draft.paga_straordinario_eur ?? ''} onChange={v => updateDraft('paga_straordinario_eur', num(v))} placeholder="es. 14.00" />
                         </div>
+                        {(draft.paga_giornaliera_eur ?? 0) > 0 && (
+                            <p className="mt-2 text-[11px] text-theme-text-muted">
+                                Paga a giornata: giorni lavorati nel periodo (entrata e uscita timbrate) × €{draft.paga_giornaliera_eur}. Ha la precedenza su stipendio e paga oraria.
+                            </p>
+                        )}
                         {draft.straordinario_abilitato && (
                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <LabeledInput
@@ -1486,6 +1497,7 @@ interface CalcolaPagaContract {
     stipendio_mensile_eur: number | null
     stipendio_frequenza: FrequenzaStipendio | null
     paga_oraria_eur: number | null
+    paga_giornaliera_eur?: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
     ore_soglia_straordinario: number | null
@@ -1545,7 +1557,8 @@ function CalcolaPagaSection({
             setLoading(true)
             const [{ data: cData }, { data: oData }] = await Promise.all([
                 supabase.from('operatore_contratto')
-                    .select('stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili')
+                    // '*': legge anche paga_giornaliera_eur quando la migrazione c'e', senza rompersi prima.
+                    .select('*')
                     .eq('operatore_id', operatoreId)
                     .eq('attivo', true)
                     .maybeSingle(),

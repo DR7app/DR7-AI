@@ -86,6 +86,37 @@ function incassatoCharges(fromDetails: { paid: number; remaining: number }, from
   return fromFatture
 }
 
+/**
+ * 21/10/2026: una targa = UNA riga di report. La stessa auto ricaricata in
+ * flotta lascia due schede in `vehicles` (es. Fiat Panda GW130WJ: dismessa del
+ * 10/04 e attiva del 29/09). Il report le mostrava entrambe e, siccome le
+ * prenotazioni si abbinano anche per targa, ciascuna prendeva gli stessi
+ * noleggi: ricavo contato due volte nei totali. Resta la scheda attiva (o la
+ * piu' recente); le prenotazioni col vecchio vehicle_id arrivano lo stesso
+ * per targa. I mezzi senza targa restano tutti.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unaRigaPerTarga(rows: any[] | null): any[] | null {
+  if (!rows) return rows
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const perTarga = new Map<string, any>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const senzaTarga: any[] = []
+  for (const v of rows) {
+    const targa = String(v.plate || '').replace(/\s/g, '').toUpperCase()
+    if (!targa) { senzaTarga.push(v); continue }
+    const gia = perTarga.get(targa)
+    if (!gia) { perTarga.set(targa, v); continue }
+    const attivo = (x: { status?: string }) => x.status !== 'retired'
+    const meglio = attivo(v) !== attivo(gia)
+      ? (attivo(v) ? v : gia)
+      : (String(v.created_at || '') > String(gia.created_at || '') ? v : gia)
+    perTarga.set(targa, meglio)
+  }
+  const tenuti = new Set([...perTarga.values(), ...senzaTarga])
+  return rows.filter(v => tenuti.has(v))
+}
+
 function splitCharges(arr: any): { paid: number; remaining: number } {
   let paid = 0
   let remaining = 0
@@ -354,7 +385,7 @@ async function generateVehicleReport(
         .select('id, display_name, plate, status, daily_rate, category, metadata, created_at')
         .order('display_name')
       if (vehiclesError) throw vehiclesError
-      vehicles = data
+      vehicles = unaRigaPerTarga(data)
     } else {
       const { data, error: catalogError } = await supabase
         .from('noleggio_catalog')
