@@ -56,6 +56,7 @@ interface Contratto {
     stipendio_mensile_eur: number | null
     stipendio_frequenza: FrequenzaStipendio | null
     paga_oraria_eur: number | null
+    paga_giornaliera_eur?: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean | null
     ore_soglia_straordinario: number | null
@@ -151,7 +152,7 @@ export default function PayrollPeriodoView() {
             //   soglia_giornaliera_implicita = settimanali/5 = 9.4h
             const { data: contracts, error: errContracts } = await supabase
                 .from('operatore_contratto')
-                .select('operatore_id, stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, attivo')
+                .select('*') // anche paga_giornaliera_eur, senza rompersi prima della migrazione
                 .eq('attivo', true)
             if (errContracts) throw new Error(`Contratti: ${errContracts.message}`)
             const contractByOp = new Map<string, Contratto & { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null }>()
@@ -215,7 +216,7 @@ export default function PayrollPeriodoView() {
                 const orariaDerived = (() => {
                     if (oraExplicit > 0) return 0
                     if (stipendio <= 0) return 0
-                    if (freq === 'giornaliera') return 0  // a giornata: si paga per giorno
+                    if (tariffaGiornaliera(c) > 0) return 0  // a giornata: si paga per giorno
                     const settH = Number(c?.ore_target_settimanali || 0)
                     const mensH = Number(c?.ore_target_mensili || 0)
                     const giornH = Number(c?.ore_target_giornaliere || 0)

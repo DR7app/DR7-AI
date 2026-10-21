@@ -1662,7 +1662,7 @@ function CalcolaPagaSection({
         const orariaDerived = (() => {
             if (oraExplicit > 0) return 0  // priorita' al valore esplicito
             if (stipendio <= 0) return 0
-            if (freq === 'giornaliera') return 0  // a giornata: si paga per giorno, non per ora
+            if (tariffaGiornaliera(contract) > 0) return 0  // a giornata: si paga per giorno, non per ora
             const settH = Number(contract?.ore_target_settimanali || 0)
             const mensH = Number(contract?.ore_target_mensili || 0)
             const giornH = Number(contract?.ore_target_giornaliere || 0)

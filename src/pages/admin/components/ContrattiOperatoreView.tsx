@@ -5,7 +5,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import Input from './Input'
 import Select from './Select'
-import { OPZIONI_FREQUENZA, normalizzaFrequenza, suffissoFrequenza, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
+import { OPZIONI_FREQUENZA, normalizzaFrequenza, suffissoFrequenza, campoPagaGiornaliera, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
 import { GIORNI_SETTIMANA_IT, descriviGiorniPausa } from '../../../utils/pauseObbligatorie'
 
 // Sezione "Contratti" dentro Operatori. Direzione + ophe selezionano un
@@ -49,6 +49,8 @@ interface Contratto {
     // Importo di stipendio_mensile_eur: al mese, alla settimana o a giornata.
     stipendio_frequenza?: FrequenzaStipendio | null
     paga_oraria_eur: number | null
+    // 21/10/2026: tariffa di una giornata (pagaGiornaliera.ts).
+    paga_giornaliera_eur?: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
     lavora_festivi: boolean
@@ -183,6 +185,7 @@ export default function ContrattiOperatoreView() {
                 stipendio_mensile_eur: contratto.stipendio_mensile_eur,
                 stipendio_frequenza: normalizzaFrequenza(contratto.stipendio_frequenza),
                 paga_oraria_eur: contratto.paga_oraria_eur,
+                ...campoPagaGiornaliera(contratto.paga_giornaliera_eur, contratto),
                 paga_straordinario_eur: contratto.paga_straordinario_eur,
                 straordinario_abilitato: contratto.straordinario_abilitato,
                 lavora_festivi: contratto.lavora_festivi,
@@ -462,7 +465,7 @@ export default function ContrattiOperatoreView() {
                         {/* Compenso */}
                         <fieldset className="border border-theme-border rounded-lg p-4 space-y-3">
                             <legend className="px-2 text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Compenso</legend>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                                 <Select
                                     label="Tipo di paga"
                                     value={normalizzaFrequenza(contratto.stipendio_frequenza)}
@@ -486,6 +489,14 @@ export default function ContrattiOperatoreView() {
                                     value={contratto.paga_oraria_eur ?? ''}
                                     onChange={e => update('paga_oraria_eur', nullableNumber(e.target.value))}
                                     placeholder="es. 9.50"
+                                />
+                                <Input
+                                    label="Paga giornaliera (€/giorno)"
+                                    type="number"
+                                    step="0.01"
+                                    value={contratto.paga_giornaliera_eur ?? ''}
+                                    onChange={e => update('paga_giornaliera_eur', nullableNumber(e.target.value))}
+                                    placeholder="es. 80.00"
                                 />
                                 <Input
                                     label="Straordinario (€/h)"

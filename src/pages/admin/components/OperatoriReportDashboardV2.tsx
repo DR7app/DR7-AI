@@ -7,7 +7,7 @@ import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno 
 import OperatorProfileModal from './OperatorProfileModal'
 import InviteOperatoreModal from './InviteOperatoreModal'
 import DateRangeFilter from '../../../components/DateRangeFilter'
-import { contaGiornatePagate } from '../../../utils/pagaGiornaliera'
+import { contaGiornatePagate, tariffaGiornaliera } from '../../../utils/pagaGiornaliera'
 
 /**
  * OperatoriReportDashboardV2 — dashboard a vista singola "tutto in uno",
@@ -629,7 +629,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             //      contributi = stipendi × 30% (stima INPS+IRAP, etichettata come stima)
             const { data: contratti } = await supabase
                 .from('operatore_contratto')
-                .select('operatore_id, stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, giorni_lavorativi_settimana')
+                .select('*') // anche paga_giornaliera_eur, senza rompersi prima della migrazione
                 .eq('attivo', true)
                 .in('operatore_id', opIds.length ? opIds : ['00000000-0000-0000-0000-000000000000'])
 
@@ -685,6 +685,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 operatore_id: string
                 stipendio_mensile_eur: number | null
                 stipendio_frequenza: string | null
+                paga_giornaliera_eur?: number | null
                 paga_oraria_eur: number | null
                 paga_straordinario_eur: number | null
                 straordinario_abilitato: boolean | null
@@ -698,17 +699,19 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 // 21/10/2026: prima ogni importo era trattato come MENSILE, anche
                 // quello settimanale (contato ~4 volte meno). A giornata: tariffa
                 // × giornate timbrate (entrata e uscita), come Calcola Paga.
+                const tariffaGiorno = tariffaGiornaliera(c)
+                if (tariffaGiorno > 0) {
+                    const dayMap = byOpDay.get(c.operatore_id)
+                    const giornate = dayMap
+                        ? contaGiornatePagate(Array.from(dayMap.entries()).map(([day, t]) => (t.uscita ? minOnDay(c.operatore_id, day) : 0)))
+                        : 0
+                    stipendiTot += tariffaGiorno * giornate
+                    // A giornata stipendio e paga oraria non si sommano: la giornata e' gia' pagata.
+                    continue
+                }
                 const importo = Number(c.stipendio_mensile_eur) || 0
                 if (importo > 0) {
-                    if (c.stipendio_frequenza === 'giornaliera') {
-                        const dayMap = byOpDay.get(c.operatore_id)
-                        const giornate = dayMap
-                            ? contaGiornatePagate(Array.from(dayMap.entries()).map(([day, t]) => (t.uscita ? minOnDay(c.operatore_id, day) : 0)))
-                            : 0
-                        stipendiTot += importo * giornate
-                        // A giornata la paga oraria non si somma: la giornata e' gia' pagata.
-                        continue
-                    } else if (c.stipendio_frequenza === 'settimanale') {
+                    if (c.stipendio_frequenza === 'settimanale') {
                         stipendiTot += importo * (daysCount / 7)
                     } else {
                         stipendiTot += importo * (daysCount / 30)

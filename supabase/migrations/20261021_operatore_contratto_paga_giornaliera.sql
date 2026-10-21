@@ -1,11 +1,15 @@
 -- ============================================================================
 -- CONTRATTO OPERATORE: PAGA GIORNALIERA (21/10/2026)
 --
--- stipendio_frequenza accetta anche 'giornaliera': l'importo in
--- stipendio_mensile_eur (nome storico) e' la tariffa di una giornata.
--- Giornata timbrata (entrata e uscita) = giornata pagata intera.
--- Calcolo in src/utils/pagaGiornaliera.ts.
+-- paga_giornaliera_eur = tariffa di UNA giornata, casella propria nel
+-- contratto. Se impostata: paga del periodo = giornate timbrate (entrata e
+-- uscita) nel periodo x tariffa. Calcolo in src/utils/pagaGiornaliera.ts.
+-- Il CHECK su stipendio_frequenza accetta anche 'giornaliera' (prima versione,
+-- resta valida per i contratti salvati cosi').
 -- ============================================================================
+
+ALTER TABLE public.operatore_contratto
+  ADD COLUMN IF NOT EXISTS paga_giornaliera_eur NUMERIC(10,2);
 
 ALTER TABLE public.operatore_contratto
   DROP CONSTRAINT IF EXISTS operatore_contratto_stipendio_frequenza_chk;
