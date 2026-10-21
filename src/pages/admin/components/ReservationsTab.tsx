@@ -12682,7 +12682,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           {/* Desktop Table View */}
           <div className="hidden lg:block rounded-lg overflow-x-auto">
             <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
-              <table className="table-auto">
+              {/* 21/10/2026: tabella larga quanto lo schermo. La colonna Car aveva
+                  w-full + nowrap: la tabella superava lo schermo e Azioni
+                  (Pronta / Foto inviata / Gestisci) finiva tagliata. */}
+              <table className="table-auto w-full">
                 <thead className="sticky top-0 z-10">
                   <tr>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
@@ -12691,7 +12694,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     {viewMode === 'uscite' && (
                       <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Autista</th>
                     )}
-                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-full">Car</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Car</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
                     <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
@@ -12753,7 +12756,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             })()}
                           </td>
                         )}
-                        <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
+                        <td className="px-2 py-2 text-sm text-theme-text-primary min-w-[140px]">
                           {/* 05/10/2026 (direzione): scritta grande CANCELLATA nello
                               spazio libero della riga, solo se annullata. */}
                           <div className="flex items-center justify-between gap-4">
