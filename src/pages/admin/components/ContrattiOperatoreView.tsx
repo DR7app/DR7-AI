@@ -5,6 +5,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import Input from './Input'
 import Select from './Select'
+import { OPZIONI_FREQUENZA, normalizzaFrequenza, suffissoFrequenza, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
 import { GIORNI_SETTIMANA_IT, descriviGiorniPausa } from '../../../utils/pauseObbligatorie'
 
 // Sezione "Contratti" dentro Operatori. Direzione + ophe selezionano un
@@ -45,6 +46,8 @@ interface Contratto {
     ore_target_mensili: number | null
     giorni_lavorativi_settimana: number | null
     stipendio_mensile_eur: number | null
+    // Importo di stipendio_mensile_eur: al mese, alla settimana o a giornata.
+    stipendio_frequenza?: FrequenzaStipendio | null
     paga_oraria_eur: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
@@ -77,6 +80,7 @@ function emptyContratto(operatore_id: string, user_id: string | null): Contratto
         ore_target_mensili: 160,
         giorni_lavorativi_settimana: 5,
         stipendio_mensile_eur: null,
+        stipendio_frequenza: 'mensile',
         paga_oraria_eur: null,
         paga_straordinario_eur: null,
         straordinario_abilitato: false,
@@ -177,6 +181,7 @@ export default function ContrattiOperatoreView() {
                 ore_target_mensili: contratto.ore_target_mensili,
                 giorni_lavorativi_settimana: contratto.giorni_lavorativi_settimana,
                 stipendio_mensile_eur: contratto.stipendio_mensile_eur,
+                stipendio_frequenza: normalizzaFrequenza(contratto.stipendio_frequenza),
                 paga_oraria_eur: contratto.paga_oraria_eur,
                 paga_straordinario_eur: contratto.paga_straordinario_eur,
                 straordinario_abilitato: contratto.straordinario_abilitato,
@@ -457,14 +462,22 @@ export default function ContrattiOperatoreView() {
                         {/* Compenso */}
                         <fieldset className="border border-theme-border rounded-lg p-4 space-y-3">
                             <legend className="px-2 text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Compenso</legend>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <Select
+                                    label="Tipo di paga"
+                                    value={normalizzaFrequenza(contratto.stipendio_frequenza)}
+                                    onChange={e => update('stipendio_frequenza', normalizzaFrequenza(e.target.value))}
+                                    options={OPZIONI_FREQUENZA}
+                                />
                                 <Input
-                                    label="Stipendio mensile (€)"
+                                    label={contratto.stipendio_frequenza === 'giornaliera'
+                                        ? 'Paga giornaliera (€/giorno)'
+                                        : contratto.stipendio_frequenza === 'settimanale' ? 'Stipendio settimanale (€)' : 'Stipendio mensile (€)'}
                                     type="number"
                                     step="0.01"
                                     value={contratto.stipendio_mensile_eur ?? ''}
                                     onChange={e => update('stipendio_mensile_eur', nullableNumber(e.target.value))}
-                                    placeholder="es. 1500.00"
+                                    placeholder={contratto.stipendio_frequenza === 'giornaliera' ? 'es. 80.00' : contratto.stipendio_frequenza === 'settimanale' ? 'es. 375.00' : 'es. 1500.00'}
                                 />
                                 <Input
                                     label="Paga oraria (€/h)"
@@ -546,7 +559,7 @@ export default function ContrattiOperatoreView() {
                                                 {s.tipo_rapporto && <span className="ml-2 uppercase tracking-wider text-[10px] text-theme-text-muted">({s.tipo_rapporto})</span>}
                                             </span>
                                             <span className="text-theme-text-muted">
-                                                {s.stipendio_mensile_eur ? `€${s.stipendio_mensile_eur}/mese` : s.paga_oraria_eur ? `€${s.paga_oraria_eur}/h` : '—'}
+                                                {s.stipendio_mensile_eur ? `€${s.stipendio_mensile_eur}${suffissoFrequenza(s.stipendio_frequenza)}` : s.paga_oraria_eur ? `€${s.paga_oraria_eur}/h` : '—'}
                                             </span>
                                         </li>
                                     ))}

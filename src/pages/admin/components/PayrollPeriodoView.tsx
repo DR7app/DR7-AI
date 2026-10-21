@@ -7,6 +7,7 @@ import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoB
 import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import { tariffaGiornaliera, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
 
 /**
  * PayrollPeriodoView — vista riassuntiva "buste paga del periodo".
@@ -53,7 +54,7 @@ interface Operatore {
 interface Contratto {
     operatore_id: string
     stipendio_mensile_eur: number | null
-    stipendio_frequenza: 'settimanale' | 'mensile' | null
+    stipendio_frequenza: FrequenzaStipendio | null
     paga_oraria_eur: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean | null
@@ -204,6 +205,7 @@ export default function PayrollPeriodoView() {
                 let totalMinLav = 0
                 let minOrdinari = 0
                 let minStraord = 0
+                let giornatePagate = 0
                 // 2026-05-22: paga oraria DERIVATA dal pacchetto contrattuale
                 // se non c'e' paga_oraria_eur esplicita. Es. contratto
                 // €1000/sett + 47h/sett → derived = 21.28€/h.
@@ -213,6 +215,7 @@ export default function PayrollPeriodoView() {
                 const orariaDerived = (() => {
                     if (oraExplicit > 0) return 0
                     if (stipendio <= 0) return 0
+                    if (freq === 'giornaliera') return 0  // a giornata: si paga per giorno
                     const settH = Number(c?.ore_target_settimanali || 0)
                     const mensH = Number(c?.ore_target_mensili || 0)
                     const giornH = Number(c?.ore_target_giornaliere || 0)
@@ -282,6 +285,7 @@ export default function PayrollPeriodoView() {
                         const m = Math.max(0, lordo - combo.scalateMin)
                         totalMinLav += m
                         if (m <= 0) return
+                        if (t.uscita) giornatePagate++
                         // Spezza la settimana al confine di MESE: i giorni della stessa
                         // settimana ISO ma in mesi diversi vanno in bucket separati. Così
                         // una settimana a cavallo (es. fine giugno / inizio luglio) NON
@@ -306,10 +310,13 @@ export default function PayrollPeriodoView() {
                     minOrdinari = Math.max(0, totalMinLav - minStraord)
                 }
 
-                const pagaOrd = (minOrdinari / 60) * oraria
+                // 21/10/2026: contratto a GIORNATA — giornata timbrata = pagata
+                // intera, niente decurtazione ore a recuperare (pagaGiornaliera.ts).
+                const tariffaGiorno = tariffaGiornaliera(c)
+                const pagaOrd = tariffaGiorno > 0 ? giornatePagate * tariffaGiorno : (minOrdinari / 60) * oraria
                 const pagaStraord = (minStraord / 60) * straord
                 const oreRec = Number(op.ore_a_recuperare_min || 0)
-                const correzione = -(oreRec / 60) * oraria
+                const correzione = tariffaGiorno > 0 ? 0 : -(oreRec / 60) * oraria
                 const totale = pagaOrd + pagaStraord + correzione
                 const accontiRighe = acconti.perOperatore.get(op.id) || []
                 const accontiEur = totaleAcconti(accontiRighe)
@@ -544,7 +551,11 @@ export default function PayrollPeriodoView() {
                                     <td className="py-1.5 px-3 text-theme-text-muted">{r.operatore.ruolo || '—'}</td>
                                     <td className="py-1.5 px-3">
                                         {r.hasContract ? (
-                                            <span className="text-theme-text-primary text-[11px]">€{Number(r.contratto?.paga_oraria_eur || 0).toFixed(2)}/h</span>
+                                            <span className="text-theme-text-primary text-[11px]">
+                                                {tariffaGiornaliera(r.contratto) > 0
+                                                    ? `€${tariffaGiornaliera(r.contratto).toFixed(2)}/giorno`
+                                                    : `€${Number(r.contratto?.paga_oraria_eur || 0).toFixed(2)}/h`}
+                                            </span>
                                         ) : (
                                             <span className="text-amber-400 text-[11px]">No contratto</span>
                                         )}

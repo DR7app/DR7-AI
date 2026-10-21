@@ -34,6 +34,7 @@ import SceltaMese from '../../../components/admin/SceltaMese'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
 import MoneyInput from '../../../components/MoneyInput'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
+import { OPZIONI_FREQUENZA, normalizzaFrequenza, suffissoFrequenza, tariffaGiornaliera, contaGiornatePagate, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
 
 interface Operatore {
     id: string
@@ -159,7 +160,7 @@ export default function OperatorProfileModal({
                 fetchPauseConfigOperatore(operatore.id),
             ])
             if (cancelled) return
-            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null } | null
+            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: FrequenzaStipendio | null } | null
             setPauseConfig(cfgPause)
             // 2026-06-06: default periodo Calcola Paga dalla frequenza stipendio.
             // settimanale → 7gg, mensile → mese corrente (default gia' impostato). Solo
@@ -638,7 +639,7 @@ interface Contratto {
     // Importo stipendio (settimanale o mensile, vedi stipendio_frequenza).
     // Nome colonna DB e' stipendio_mensile_eur per backwards compat.
     stipendio_mensile_eur: number | null
-    stipendio_frequenza: 'settimanale' | 'mensile'
+    stipendio_frequenza: FrequenzaStipendio
     paga_oraria_eur: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
@@ -1018,9 +1019,9 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                     <Field label="Ore/mese" value={contratto.ore_target_mensili != null ? `${contratto.ore_target_mensili}h` : '—'} />
                     <Field label="Giorni/sett." value={contratto.giorni_lavorativi_settimana != null ? String(contratto.giorni_lavorativi_settimana) : '—'} />
                     <Field
-                        label={`Stipendio ${contratto.stipendio_frequenza || 'mensile'}`}
+                        label={contratto.stipendio_frequenza === 'giornaliera' ? 'Paga giornaliera' : `Stipendio ${contratto.stipendio_frequenza || 'mensile'}`}
                         value={contratto.stipendio_mensile_eur != null
-                            ? `€${contratto.stipendio_mensile_eur} / ${contratto.stipendio_frequenza === 'settimanale' ? 'sett.' : 'mese'}`
+                            ? `€${contratto.stipendio_mensile_eur} ${suffissoFrequenza(contratto.stipendio_frequenza)}`
                             : '—'}
                     />
                     <Field label="Paga oraria" value={contratto.paga_oraria_eur != null ? `€${contratto.paga_oraria_eur}/h` : '—'} />
@@ -1097,21 +1098,18 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                         <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Compenso</legend>
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                             <LabeledInput
-                                label={`Stipendio (€${draft.stipendio_frequenza === 'settimanale' ? '/sett.' : '/mese'})`}
+                                label={draft.stipendio_frequenza === 'giornaliera' ? 'Paga giornaliera (€/giorno)' : `Stipendio (€${suffissoFrequenza(draft.stipendio_frequenza)})`}
                                 type="number"
                                 step="0.01"
                                 value={draft.stipendio_mensile_eur ?? ''}
                                 onChange={v => updateDraft('stipendio_mensile_eur', num(v))}
-                                placeholder={draft.stipendio_frequenza === 'settimanale' ? 'es. 375.00' : 'es. 1500.00'}
+                                placeholder={draft.stipendio_frequenza === 'giornaliera' ? 'es. 80.00' : draft.stipendio_frequenza === 'settimanale' ? 'es. 375.00' : 'es. 1500.00'}
                             />
                             <LabeledSelect
                                 label="Frequenza"
                                 value={draft.stipendio_frequenza}
-                                onChange={v => updateDraft('stipendio_frequenza', (v === 'settimanale' ? 'settimanale' : 'mensile'))}
-                                options={[
-                                    { value: 'mensile', label: 'Mensile' },
-                                    { value: 'settimanale', label: 'Settimanale' },
-                                ]}
+                                onChange={v => updateDraft('stipendio_frequenza', normalizzaFrequenza(v))}
+                                options={OPZIONI_FREQUENZA}
                             />
                             <LabeledInput label="Paga oraria (€/h)" type="number" step="0.01" value={draft.paga_oraria_eur ?? ''} onChange={v => updateDraft('paga_oraria_eur', num(v))} placeholder="es. 9.50" />
                             <LabeledInput label="Straordinario (€/h)" type="number" step="0.01" value={draft.paga_straordinario_eur ?? ''} onChange={v => updateDraft('paga_straordinario_eur', num(v))} placeholder="es. 14.00" />
@@ -1486,7 +1484,7 @@ function ContrattoPdfArea({ contratto, onChange }: { contratto: Contratto; onCha
 // ──────────────────────────────────────────────────────────────────
 interface CalcolaPagaContract {
     stipendio_mensile_eur: number | null
-    stipendio_frequenza: 'settimanale' | 'mensile' | null
+    stipendio_frequenza: FrequenzaStipendio | null
     paga_oraria_eur: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
@@ -1651,6 +1649,7 @@ function CalcolaPagaSection({
         const orariaDerived = (() => {
             if (oraExplicit > 0) return 0  // priorita' al valore esplicito
             if (stipendio <= 0) return 0
+            if (freq === 'giornaliera') return 0  // a giornata: si paga per giorno, non per ora
             const settH = Number(contract?.ore_target_settimanali || 0)
             const mensH = Number(contract?.ore_target_mensili || 0)
             const giornH = Number(contract?.ore_target_giornaliere || 0)
@@ -1719,11 +1718,15 @@ function CalcolaPagaSection({
         }
         const totMin = days.reduce((s, d) => s + Math.max(0, d.minutiLavorati), 0)
         const minOrdinari = Math.max(0, totMin - minStraord)
-        const pagaOrd = (minOrdinari / 60) * oraria
+        // 21/10/2026: contratto a GIORNATA — giornata timbrata = giornata pagata
+        // intera; niente decurtazione ore a recuperare (vedi pagaGiornaliera.ts).
+        const tariffaGiorno = tariffaGiornaliera(contract)
+        const giornatePagate = contaGiornatePagate(days.map(d => (d.entrata && d.uscita ? d.minutiLavorati : 0)))
+        const pagaOrd = tariffaGiorno > 0 ? giornatePagate * tariffaGiorno : (minOrdinari / 60) * oraria
         const pagaStraord = (minStraord / 60) * straord
-        const correzione = -(oreRecMin / 60) * oraria // recuperare = decurta
+        const correzione = tariffaGiorno > 0 ? 0 : -(oreRecMin / 60) * oraria // recuperare = decurta
         const totale = pagaOrd + pagaStraord + correzione
-        return { sogliaMin, sogliaMode, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, oraSource, straord }
+        return { sogliaMin, sogliaMode, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, oraSource, straord, tariffaGiorno, giornatePagate }
     }, [days, contract, oreRecMin, oreTargetGiornaliere])
 
     async function saveOreRecuperare() {
@@ -1796,12 +1799,18 @@ function CalcolaPagaSection({
                         e "Soglia" SOLO se i straordinari sono effettivamente
                         attivi (paga_straord > 0 AND abilitato !== false). */}
                     <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
+                        {calc.tariffaGiorno > 0 ? (
+                            <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
+                                Giornaliera: <strong className="text-theme-text-primary">€{calc.tariffaGiorno.toFixed(2)}/giorno</strong>
+                            </span>
+                        ) : (
                         <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
                             Ordinaria: <strong className="text-theme-text-primary">€{calc.oraria.toFixed(2)}/h</strong>
                             {calc.oraSource === 'derived' && (
                                 <span className="ml-1 text-amber-400" title={`Derivata da stipendio ${contract?.stipendio_frequenza ?? ''} €${contract?.stipendio_mensile_eur} / ore target`}>(derivata)</span>
                             )}
                         </span>
+                        )}
                         {calc.straordEnabled && (
                             <>
                                 <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
@@ -1822,8 +1831,8 @@ function CalcolaPagaSection({
                     </div>
                     <div className={`grid grid-cols-2 ${calc.straordEnabled ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2 mb-3`}>
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
-                            <div className="text-[10px] uppercase text-theme-text-muted">Ore Ordinarie</div>
-                            <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minOrdinari)}</div>
+                            <div className="text-[10px] uppercase text-theme-text-muted">{calc.tariffaGiorno > 0 ? 'Giornate lavorate' : 'Ore Ordinarie'}</div>
+                            <div className="text-sm font-semibold text-theme-text-primary">{calc.tariffaGiorno > 0 ? `${calc.giornatePagate} ${calc.giornatePagate === 1 ? 'giorno' : 'giorni'} · ${fmtMin(calc.minOrdinari)}` : fmtMin(calc.minOrdinari)}</div>
                             <div className="text-[10px] text-emerald-400 mt-0.5 tabular-nums">{eur(calc.pagaOrd)}</div>
                         </div>
                         {calc.straordEnabled && (
@@ -1850,7 +1859,7 @@ function CalcolaPagaSection({
                                 <div className="text-[9px] text-theme-text-muted mt-0.5">Maturato {eur(calc.totale)} − acconti {eur(accontiEur)}</div>
                             )}
                             {contract?.stipendio_mensile_eur && (
-                                <div className="text-[9px] text-theme-text-muted mt-0.5">Stipendio fisso: {eur(Number(contract.stipendio_mensile_eur))} / {contract.stipendio_frequenza || 'mese'}</div>
+                                <div className="text-[9px] text-theme-text-muted mt-0.5">{contract.stipendio_frequenza === 'giornaliera' ? 'Paga giornaliera' : 'Stipendio fisso'}: {eur(Number(contract.stipendio_mensile_eur))} {suffissoFrequenza(contract.stipendio_frequenza)}</div>
                             )}
                         </div>
                     </div>
