@@ -544,7 +544,7 @@ export default function ReportTrafficTab() {
                               {u.pagine} {u.pagine === 1 ? 'pagina' : 'pagine'} {aperto ? '▲' : '▼'}
                             </button>
                           ) : (
-                            <span className="text-[11px] text-theme-text-muted" title="Il cliente non ha accettato i cookie statistici: le pagine non si registrano">—</span>
+                            <span className="text-[11px] text-theme-text-muted" title="Nessuna pagina registrata per questa visita">—</span>
                           )}
                         </td>
                       )}
@@ -580,7 +580,7 @@ export default function ReportTrafficTab() {
             </table>
             <p className="mt-2 text-[11px] text-theme-text-muted">
               {accessiStorico
-                ? `${accessiFiltrati.length} accessi di ${accessiPerPersona.size} clienti nel periodo · ogni visita e' una riga (nuova visita dopo 30 minuti di pausa). Le pagine si vedono solo per chi ha accettato i cookie statistici.`
+                ? `${accessiFiltrati.length} accessi di ${accessiPerPersona.size} clienti nel periodo · ogni visita e' una riga (nuova visita dopo 30 minuti di pausa). Pagine: clienti collegati sempre, visitatori anonimi solo con consenso ai cookie.`
                 : `${accessiFiltrati.length} accesso/i nel periodo · solo l'ultimo accesso di ogni cliente. Lo storico completo parte dopo la migrazione 20261021_sito_visite_e_pagine.`}
             </p>
           </div>

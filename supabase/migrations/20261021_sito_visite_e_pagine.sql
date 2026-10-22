@@ -6,11 +6,12 @@
 -- (oggi cancellava ieri), e chi tornava con la sessione ancora aperta non
 -- compariva affatto. Qui ogni visita e' una riga.
 --
--- Regole (direzione + GDPR):
+-- Regole (decise dalla direzione il 21-22/10/2026):
 --  - sito_visite: una riga per visita (nuova dopo 30 minuti di inattivita').
---    Per i clienti collegati si registra sempre (storico accessi = servizio);
---    per gli anonimi solo con consenso ai cookie statistici.
---  - sito_pagine_viste: le pagine si registrano SOLO con consenso.
+--    Clienti collegati: sempre. Anonimi: solo con consenso ai cookie.
+--  - sito_pagine_viste: clienti collegati SEMPRE (anche senza consenso,
+--    scelta della direzione: va scritto nell'informativa privacy); anonimi
+--    solo con consenso.
 --  - Il sito scrive solo tramite le due funzioni qui sotto: user_id lo mette
 --    il database (auth.uid()), dal browser non si puo' falsificare.
 --  - Leggono solo gli operatori del gestionale (dr7_admin_id()).
@@ -92,8 +93,8 @@ SET search_path = public
 AS $$
 BEGIN
   IF p_visita IS NULL OR p_percorso IS NULL OR p_percorso = '' THEN RETURN; END IF;
-  -- Solo visite con consenso ai cookie statistici.
-  IF NOT EXISTS (SELECT 1 FROM public.sito_visite WHERE id = p_visita AND consenso_statistiche) THEN
+  -- Visite con consenso ai cookie, oppure di un cliente collegato.
+  IF NOT EXISTS (SELECT 1 FROM public.sito_visite WHERE id = p_visita AND (consenso_statistiche OR user_id IS NOT NULL)) THEN
     RETURN;
   END IF;
   INSERT INTO public.sito_pagine_viste (visita_id, percorso) VALUES (p_visita, left(p_percorso, 300));
@@ -145,7 +146,7 @@ AS $$
    LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 500), 2000));
 $$;
 
--- Pagine piu' viste nel periodo (visitatori con consenso, collegati o no).
+-- Pagine piu' viste nel periodo (clienti collegati + anonimi con consenso).
 CREATE OR REPLACE FUNCTION public.dr7_sito_pagine_top(
   p_from  TIMESTAMPTZ DEFAULT NULL,
   p_to    TIMESTAMPTZ DEFAULT NULL,
