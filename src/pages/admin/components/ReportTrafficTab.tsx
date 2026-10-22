@@ -143,11 +143,24 @@ export default function ReportTrafficTab() {
         if (annullato) return
         if (!storico.error) {
           type RigaStorico = { visita_id: string; user_id: string; email: string; nome: string; cognome: string; iniziata_il: string; ultima_attivita: string; dispositivo: string | null; provenienza: string | null; pagine: number }
-          setAccessi(((storico.data || []) as RigaStorico[]).map(r => ({
+          const visite: AccessoRecente[] = ((storico.data || []) as RigaStorico[]).map(r => ({
             id: r.user_id, email: r.email, nome: r.nome, cognome: r.cognome,
             last_sign_in_at: r.iniziata_il, visita_id: r.visita_id, ultima_attivita: r.ultima_attivita,
             dispositivo: r.dispositivo, provenienza: r.provenienza, pagine: Number(r.pagine) || 0,
-          })))
+          }))
+          // 22/10/2026: lo storico parte dal 21/10 sera. Gli accessi di prima
+          // (es. Massimo Runchina) erano spariti dal riquadro: si aggiunge
+          // l'ultimo accesso di ogni account se nessuna visita lo copre.
+          const login = await supabase.rpc('dr7_recent_logins', { p_from: daISO, p_to: aISO, p_limit: 500 })
+          if (annullato) return
+          const scoperti = ((login.data || []) as AccessoRecente[]).filter(l => {
+            if (!l.last_sign_in_at) return false
+            const t = new Date(l.last_sign_in_at).getTime()
+            return !visite.some(v => v.id === l.id && v.last_sign_in_at
+              && Math.abs(new Date(v.last_sign_in_at).getTime() - t) <= 30 * 60000)
+          })
+          setAccessi([...visite, ...scoperti].sort((a, b) =>
+            new Date(b.last_sign_in_at || 0).getTime() - new Date(a.last_sign_in_at || 0).getTime()))
           setAccessiStorico(true)
           const top = await supabase.rpc('dr7_sito_pagine_top', { p_from: daISO, p_to: aISO, p_limit: 30 })
           if (!annullato) setPagineTop(top.error ? null : ((top.data || []) as { percorso: string; viste: number; visite: number }[]))
@@ -534,7 +547,7 @@ export default function ReportTrafficTab() {
                           </span>
                         )}
                       </td>
-                      {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary whitespace-nowrap">{durataMin < 1 ? '< 1 min' : durataMin < 60 ? `${durataMin} min` : `${Math.floor(durataMin / 60)}h ${durataMin % 60}m`}</td>}
+                      {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary whitespace-nowrap">{!u.visita_id ? '—' : durataMin < 1 ? '< 1 min' : durataMin < 60 ? `${durataMin} min` : `${Math.floor(durataMin / 60)}h ${durataMin % 60}m`}</td>}
                       {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary capitalize">{u.dispositivo || '—'}</td>}
                       {accessiStorico && <td className="py-2 pr-3 text-theme-text-secondary">{u.provenienza || '—'}</td>}
                       {accessiStorico && (
@@ -544,7 +557,7 @@ export default function ReportTrafficTab() {
                               {u.pagine} {u.pagine === 1 ? 'pagina' : 'pagine'} {aperto ? '▲' : '▼'}
                             </button>
                           ) : (
-                            <span className="text-[11px] text-theme-text-muted" title="Nessuna pagina registrata per questa visita">—</span>
+                            <span className="text-[11px] text-theme-text-muted" title={u.visita_id ? 'Nessuna pagina registrata per questa visita' : 'Accesso precedente allo storico delle pagine (21/10/2026)'}>{u.visita_id ? '—' : 'non tracciato'}</span>
                           )}
                         </td>
                       )}
