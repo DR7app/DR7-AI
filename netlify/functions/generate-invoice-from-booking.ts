@@ -1427,6 +1427,21 @@ export const handler: Handler = async (event) => {
         // L'indice unico a database (migrazione 20260901_fatture_doppie) fa
         // fallire le seconde con 23505: qui si rilegge la riga vincente e la si
         // aggiorna, invece di restituire un errore all'operatore.
+        // 22/10/2026: una PARZIALE o un'ESTENSIONE non sono la principale: se
+        // l'indice le respinge e' perche' sul database manca la migrazione
+        // 20261014_fatture_non_pagate_e_parziali (l'indice vecchio contava anche
+        // le parziali). Prima si rispondeva "fattura gia' in emissione" citando
+        // la principale (Balducci, DR7-2026-2073): messaggio falso, operatore bloccato.
+        if (insertError && (insertError as any).code === '23505' && !existingInvoice && (extensionAmount || parziale)) {
+            console.error(`[Invoice] ${parziale ? 'Parziale' : 'Estensione'} respinta dall'indice della principale per ${bookingId}:`, insertError)
+            return {
+                statusCode: 409,
+                body: JSON.stringify({
+                    error: 'Fattura respinta dal database',
+                    message: `Il database non accetta una seconda fattura (${parziale ? 'parziale' : 'estensione'}) su questa prenotazione: va applicata la migrazione 20261014_fatture_non_pagate_e_parziali.`,
+                })
+            }
+        }
         if (insertError && (insertError as any).code === '23505' && !existingInvoice) {
             console.warn(`[Invoice] Inserimento in conflitto per ${bookingId} — riprendo la fattura gia' creata`)
             let vincente: any = null
