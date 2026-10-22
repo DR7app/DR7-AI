@@ -681,6 +681,11 @@ type AutomationsConfig = {
   /** Maggiorazione applicata al totale quando il pagamento e' in contanti.
    *  Fino al 19/09/2026 era 20% scritto in duro dentro ReservationsTab. */
   contanti_surcharge_pct?: number | ''
+  /** 22/10/2026: prevendite sul sito. Assente = acceso. Il database li legge
+   *  (prevendite_opzioni_pagamento) e blocca anche chi chiama le funzioni
+   *  direttamente. */
+  prevendite_wallet_attivo?: boolean
+  prevendite_codice_sconto_attivo?: boolean
   /** Periodi in cui le prenotazioni LAVAGGIO sono BLOCCATE: il sito non
    *  permette di prenotare in quelle date. Vuoto = nessun blocco. */
   carwash_block_ranges?: { from: string; to: string; message?: string }[]
@@ -3020,6 +3025,12 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
   if (current.automations.pre_pickup_carwash_buffer_minutes !== saved.automations.pre_pickup_carwash_buffer_minutes) {
     out.push(`Buffer pre-pickup (lavaggio in corso): ${saved.automations.pre_pickup_carwash_buffer_minutes || 0} → ${current.automations.pre_pickup_carwash_buffer_minutes || 0} minuti`)
+  }
+  if ((current.automations.prevendite_wallet_attivo ?? true) !== (saved.automations.prevendite_wallet_attivo ?? true)) {
+    out.push(`Prevendite, pagamento con Credit Wallet: ${(current.automations.prevendite_wallet_attivo ?? true) ? 'ACCESO' : 'SPENTO'}`)
+  }
+  if ((current.automations.prevendite_codice_sconto_attivo ?? true) !== (saved.automations.prevendite_codice_sconto_attivo ?? true)) {
+    out.push(`Prevendite, codice sconto: ${(current.automations.prevendite_codice_sconto_attivo ?? true) ? 'ACCESO' : 'SPENTO'}`)
   }
   if (current.automations.contanti_surcharge_pct !== saved.automations.contanti_surcharge_pct) {
     out.push(`Maggiorazione contanti: ${saved.automations.contanti_surcharge_pct ?? 20}% → ${current.automations.contanti_surcharge_pct ?? 20}%`)
@@ -7850,6 +7861,41 @@ function AutomazioniSection({
             </div>
             <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 20%. Su 1.000 € il cliente paga 1.200 €.</p>
           </label>
+        </div>
+      </section>
+
+      {/* 22/10/2026: Prevendite sul sito — wallet e codice sconto */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 border-b border-theme-border">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1">Prevendite: pagamento sul sito</h3>
+          <p className="text-[12px] text-theme-text-secondary leading-relaxed">
+            Cosa puo' usare il cliente quando compra una prevendita sul sito. Spento = l'opzione sparisce dal sito e il database la rifiuta.
+          </p>
+        </header>
+        <div className="p-5 space-y-3">
+          {([
+            { key: 'prevendite_wallet_attivo', label: 'Pagamento con Credit Wallet', hint: 'Bottone "Paga con Credit Wallet" e wallet nel carrello.' },
+            { key: 'prevendite_codice_sconto_attivo', label: 'Codice sconto', hint: 'Casella "Codice sconto" nella scheda della prevendita (carta e wallet). Valgono i codici "tutti i servizi" o "prevendite".' },
+          ] as const).map(opt => {
+            const acceso = automations[opt.key] ?? true
+            return (
+              <label key={opt.key} className="flex items-start justify-between gap-4 cursor-pointer">
+                <span>
+                  <span className="block text-[14px] font-medium text-theme-text-primary">{opt.label}</span>
+                  <span className="block text-[12px] text-theme-text-secondary">{opt.hint}</span>
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className={`text-[12px] font-semibold ${acceso ? 'text-green-600 dark:text-green-400' : 'text-theme-text-muted'}`}>{acceso ? 'ACCESO' : 'SPENTO'}</span>
+                  <input
+                    type="checkbox"
+                    checked={acceso}
+                    onChange={(e) => update({ [opt.key]: e.target.checked })}
+                    className="w-5 h-5 accent-green-600"
+                  />
+                </span>
+              </label>
+            )
+          })}
         </div>
       </section>
 
