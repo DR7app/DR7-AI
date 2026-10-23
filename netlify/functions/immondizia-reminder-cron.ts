@@ -11,6 +11,24 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 
+// 23/10/2026: ogni 2 settimane = ogni 14 giorni dal primo ritiro (pickup_date);
+// ogni mese = stesso giorno del primo ritiro, o l'ultimo del mese se piu' corto.
+// Date YYYY-MM-DD confrontate in UTC: nessun fuso orario in mezzo.
+export function ritiroRicorrente(mode: string, primo: string | null, giorno: string): boolean {
+    if (!primo || giorno < primo) return false
+    const [ay, am, ad] = primo.split('-').map(Number)
+    const [gy, gm, gd] = giorno.split('-').map(Number)
+    if (mode === 'biweekly') {
+        const diff = Math.round((Date.UTC(gy, gm - 1, gd) - Date.UTC(ay, am - 1, ad)) / 86400000)
+        return diff % 14 === 0
+    }
+    if (mode === 'monthly') {
+        const ultimo = new Date(Date.UTC(gy, gm, 0)).getUTCDate()
+        return gd === Math.min(ad, ultimo)
+    }
+    return false
+}
+
 const cronHandler = async () => {
     // Interruttore System Control: messaggi automatici spenti = il giro salta
     // (il battito resta registrato: il cron e' vivo, ha solo saltato).
@@ -37,7 +55,8 @@ const cronHandler = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tomorrows = (rules || []).filter((r: any) =>
         (r.mode === 'weekly' && r.day_of_week === tomorrowDow) ||
-        (r.mode === 'date' && r.pickup_date === tomorrowDate)
+        (r.mode === 'date' && r.pickup_date === tomorrowDate) ||
+        ((r.mode === 'biweekly' || r.mode === 'monthly') && ritiroRicorrente(r.mode, r.pickup_date, tomorrowDate))
     )
     if (tomorrows.length === 0) {
         console.log(`[immondizia-reminder] nessun ritiro per domani (${tomorrowDate})`)

@@ -493,7 +493,7 @@ function RecipientManager({ recipients, onClose, onChanged }: { recipients: Tick
                         <select value={form.reparto} onChange={e => setForm({ ...form, reparto: e.target.value })} className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-cyan-500">
                             {REPARTI.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
-                        <input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="393471234567" className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono focus:outline-none focus:border-cyan-500" />
+                        <TelefonoConPrefisso value={form.whatsapp} onChange={v => setForm({ ...form, whatsapp: v })} mostraAnteprima={false} />
                     </div>
                     <div className="flex gap-2">
                         <button onClick={save} disabled={busy} className="px-5 py-2 rounded-full bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700 disabled:opacity-50">{editingId ? 'Salva modifiche' : 'Aggiungi destinatario'}</button>

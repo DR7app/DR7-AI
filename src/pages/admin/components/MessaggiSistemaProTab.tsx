@@ -8,6 +8,7 @@ const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import ElencoTelefoniConPrefisso from '../../../components/ElencoTelefoniConPrefisso'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca, cifreTelefono } from '../../../utils/ricerca'
 
@@ -1793,6 +1794,21 @@ const ADMIN_ROLE_TAGS: string[] = [
 ]
 
 /** Riga di riepilogo "a chi va" per il preview Programmazione. */
+// 23/10/2026: numeri destinatari con bandiera; si salva quando il cursore
+// esce dal riquadro (come il vecchio campo di testo con onBlur), non a ogni tasto.
+function TelefoniSalvatiAllUscita({ valore, onSalva }: { valore: string | null | undefined; onSalva: (v: string) => void }) {
+    const [bozza, setBozza] = useState(valore || '')
+    useEffect(() => { setBozza(valore || '') }, [valore])
+    return (
+        <div onBlur={e => {
+            if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+            if (bozza !== (valore || '')) onSalva(bozza)
+        }}>
+            <ElencoTelefoniConPrefisso value={bozza} onChange={setBozza} />
+        </div>
+    )
+}
+
 function recipientSummary(t: { recipient_mode?: string | null; recipient_phones?: string | null; recipient_admin_roles?: string | null }): string {
   const mode = (t.recipient_mode || 'customer').trim()
   if (mode === 'custom_phones') {
@@ -4453,14 +4469,7 @@ export default function MessaggiSistemaProTab() {
                                         {newRecipientMode === 'custom_phones' && (
                                             <div>
                                                 <label className="block text-xs font-medium text-theme-text-muted mb-1">Numeri destinatari</label>
-                                                <textarea
-                                                    value={newRecipientPhones}
-                                                    onChange={e => setNewRecipientPhones(e.target.value)}
-                                                    rows={2}
-                                                    placeholder="393401234567, 393339876543"
-                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm font-mono"
-                                                />
-                                                <p className="text-[11px] text-theme-text-muted mt-1">Con prefisso internazionale, separati da virgola o a capo.</p>
+                                                <ElencoTelefoniConPrefisso value={newRecipientPhones} onChange={setNewRecipientPhones} />
                                             </div>
                                         )}
                                         {newRecipientMode === 'admin_roles' && (
@@ -5301,12 +5310,9 @@ export default function MessaggiSistemaProTab() {
                                                                 </select>
                                                             </div>
                                                             {(template.recipient_mode || 'customer') === 'custom_phones' && (
-                                                                <input
-                                                                    type="text"
-                                                                    defaultValue={template.recipient_phones ?? ''}
-                                                                    onBlur={e => handleUpdateAutomation(template.id, 'recipient_phones', e.target.value.trim() || null)}
-                                                                    placeholder="393401234567, 393339876543"
-                                                                    className="w-full text-xs font-mono bg-theme-bg-tertiary border border-theme-border rounded-md px-2 py-1.5 text-theme-text-primary focus:outline-none"
+                                                                <TelefoniSalvatiAllUscita
+                                                                    valore={template.recipient_phones}
+                                                                    onSalva={v => handleUpdateAutomation(template.id, 'recipient_phones', v.trim() || null)}
                                                                 />
                                                             )}
                                                             {(template.recipient_mode || 'customer') === 'admin_roles' && (

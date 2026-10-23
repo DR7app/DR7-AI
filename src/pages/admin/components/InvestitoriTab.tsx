@@ -16,6 +16,7 @@ import { parseMoney } from '../../../utils/money'
 import { LeadPicker } from './LeadPicker'
 import { inviaMessaggiInvestitore } from '../../../utils/messaggiInvestitori'
 import { allineaSitoInvestitori } from '../../../utils/investitoriSito'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface Investitore {
   id: string
@@ -397,7 +398,7 @@ export default function InvestitoriTab() {
               <input value={nuovo.email} onChange={e => setNuovo({ ...nuovo, email: e.target.value })} className={inputCls} />
             </label>
             <label className="text-xs text-theme-text-muted">Telefono
-              <input value={nuovo.telefono} onChange={e => setNuovo({ ...nuovo, telefono: e.target.value })} className={inputCls} />
+              <div className="mt-1"><TelefonoConPrefisso value={nuovo.telefono} onChange={v => setNuovo({ ...nuovo, telefono: v })} mostraAnteprima={false} /></div>
             </label>
             <label className="text-xs text-theme-text-muted">Importo investito €
               <MoneyInput value={nuovo.importo} onChange={cambiaImportoNuovo} placeholder="0,00" className={`${inputCls} text-right tabular-nums`} />

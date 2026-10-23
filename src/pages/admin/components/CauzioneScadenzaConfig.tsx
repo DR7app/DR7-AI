@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import ElencoTelefoniConPrefisso from '../../../components/ElencoTelefoniConPrefisso'
 
 /**
  * Scadenza cauzione — Centralina Pro > Cauzioni (24/08/2026).
@@ -413,13 +414,10 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
 
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Numero WhatsApp</label>
-            <textarea
+            <ElencoTelefoniConPrefisso
               disabled={readOnly || avvisoMancante}
               value={avvisoWhatsapp}
-              onChange={e => setAvvisoWhatsapp(e.target.value)}
-              rows={2}
-              placeholder="39347..., uno per riga"
-              className="w-full px-2.5 py-2 rounded-lg border border-theme-border bg-theme-bg-primary text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
+              onChange={setAvvisoWhatsapp}
             />
           </div>
 

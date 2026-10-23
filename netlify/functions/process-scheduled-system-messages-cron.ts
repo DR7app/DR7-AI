@@ -207,7 +207,13 @@ interface ResolvedRecipient {
 
 /** Normalizza un numero a sole cifre (Green API rifiuta i caratteri nascosti). */
 function normalizePhoneDigits(raw: string): string {
-    return String(raw || '').replace(/\D/g, '');
+    const grezzo = String(raw || '').trim();
+    const cifre = grezzo.replace(/\D/g, '');
+    // 23/10/2026: "345 458 2811" scritto senza prefisso (Immondizia) partiva
+    // come chatId 3454582811 e Green API non lo consegnava a nessuno. Un
+    // cellulare italiano senza "+" ne' "00" prende il 39 davanti.
+    if (!grezzo.startsWith('+') && !cifre.startsWith('00') && /^3\d{8,9}$/.test(cifre)) return `39${cifre}`;
+    return cifre.replace(/^00/, '');
 }
 
 /**

@@ -6,11 +6,12 @@ import { ScheletroTabella } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import ElencoTelefoniConPrefisso from '../../../components/ElencoTelefoniConPrefisso'
 
 interface ImmondiziaRule {
   id: string
   tipo_rifiuto: string
-  mode: 'weekly' | 'date'
+  mode: Modo
   day_of_week: number | null
   pickup_date: string | null
   reminder_enabled: boolean
@@ -32,6 +33,12 @@ interface MessaggioRitiro {
   recipient_phones: string | null
 }
 
+// 23/10/2026: oltre a settimanale e data singola, ogni 2 settimane e ogni
+// mese. Per questi due pickup_date e' il PRIMO ritiro, da cui si contano i
+// successivi (stesso calcolo in immondizia-reminder-cron).
+type Modo = 'weekly' | 'biweekly' | 'monthly' | 'date'
+const RICORRENTI: Modo[] = ['weekly', 'biweekly', 'monthly']
+
 // Lunedi' per primo, come in un calendario; il valore resta 0 = domenica.
 const ORDINE_GIORNI = [1, 2, 3, 4, 5, 6, 0]
 
@@ -44,7 +51,7 @@ export default function ImmondiziaTab() {
   const [saving, setSaving] = useState(false)
   // form
   const [tipo, setTipo] = useState(TIPI_RIFIUTO[0])
-  const [mode, setMode] = useState<'weekly' | 'date'>('weekly')
+  const [mode, setMode] = useState<Modo>('weekly')
   const [dow, setDow] = useState(1) // Lunedì
   const [date, setDate] = useState('')
   const [note, setNote] = useState('')
@@ -114,17 +121,21 @@ export default function ImmondiziaTab() {
   }
 
   const add = async () => {
-    if (mode === 'date' && !date) { toast.error('Seleziona una data'); return }
+    if (mode !== 'weekly' && !date) { toast.error(mode === 'date' ? 'Seleziona una data' : 'Seleziona la data del primo ritiro'); return }
     setSaving(true)
     const { error } = await supabase.from('immondizia_calendario').insert({
       tipo_rifiuto: tipo,
       mode,
-      day_of_week: mode === 'weekly' ? dow : null,
-      pickup_date: mode === 'date' ? date : null,
+      day_of_week: mode === 'weekly' ? dow : mode === 'biweekly' ? new Date(date + 'T12:00:00').getDay() : null,
+      pickup_date: mode === 'weekly' ? null : date,
       note: note.trim() || null,
     })
     setSaving(false)
-    if (error) { toast.error('Errore: ' + error.message); return }
+    if (error) {
+      // Senza la migrazione 20261023 il database accetta solo settimanale e data.
+      if ((error as { code?: string }).code === '23514') { toast.error('Ogni 2 settimane / ogni mese: manca la migrazione 20261023_immondizia sul database.'); return }
+      toast.error('Errore: ' + error.message); return
+    }
     toast.success('Ritiro aggiunto')
     setNote(''); setDate('')
     load()
@@ -147,12 +158,17 @@ export default function ImmondiziaTab() {
     setRules(prev => prev.filter(x => x.id !== r.id))
   }
 
-  const weekly = rules.filter(r => r.mode === 'weekly')
+  const weekly = rules.filter(r => RICORRENTI.includes(r.mode))
   const dates = rules.filter(r => r.mode === 'date')
 
+  const dataBreve = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const describe = (r: ImmondiziaRule) =>
     r.mode === 'weekly'
       ? `Ogni ${GIORNI[r.day_of_week ?? 0]}`
+      : r.mode === 'biweekly' && r.pickup_date
+      ? `Ogni 2 settimane, il ${GIORNI[new Date(r.pickup_date + 'T12:00:00').getDay()]} (dal ${dataBreve(r.pickup_date)})`
+      : r.mode === 'monthly' && r.pickup_date
+      ? `Ogni mese, il giorno ${Number(r.pickup_date.slice(8, 10))} (dal ${dataBreve(r.pickup_date)})`
       : (r.pickup_date ? new Date(r.pickup_date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
 
   const RuleRow = ({ r }: { r: ImmondiziaRule }) => (
@@ -193,9 +209,11 @@ export default function ImmondiziaTab() {
           </div>
           <div>
             <label className="text-xs text-theme-text-muted block mb-1">Ricorrenza</label>
-            <select value={mode} onChange={e => setMode(e.target.value as 'weekly' | 'date')} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary">
-              <option value="weekly">Settimanale (giorno fisso)</option>
-              <option value="date">Data specifica</option>
+            <select value={mode} onChange={e => setMode(e.target.value as Modo)} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary">
+              <option value="weekly">Ogni settimana (giorno fisso)</option>
+              <option value="biweekly">Ogni 2 settimane</option>
+              <option value="monthly">Ogni mese</option>
+              <option value="date">Data specifica (una volta)</option>
             </select>
           </div>
           {mode === 'weekly' ? (
@@ -207,7 +225,7 @@ export default function ImmondiziaTab() {
             </div>
           ) : (
             <div>
-              <label className="text-xs text-theme-text-muted block mb-1">Data</label>
+              <label className="text-xs text-theme-text-muted block mb-1">{mode === 'date' ? 'Data' : 'Primo ritiro'}</label>
               <EuropeanDateInput value={date} onChange={(__v: string) => setDate(__v)} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
             </div>
           )}
@@ -273,9 +291,8 @@ export default function ImmondiziaTab() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-theme-text-muted block mb-1">Destinatari (telefoni, separati da virgola)</label>
-                <input value={m.recipient_phones ?? ''} onChange={e => modificaMsg(m.id, { recipient_phones: e.target.value })}
-                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
+                <label className="text-xs text-theme-text-muted block mb-1">Destinatari</label>
+                <ElencoTelefoniConPrefisso value={m.recipient_phones} onChange={v => modificaMsg(m.id, { recipient_phones: v })} />
               </div>
             </div>
             <button onClick={() => salvaMessaggio(m)} disabled={salvataggioMsg === m.id}
@@ -291,9 +308,9 @@ export default function ImmondiziaTab() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-sm font-bold text-theme-text-primary mb-2">Ritiri settimanali</h3>
+            <h3 className="text-sm font-bold text-theme-text-primary mb-2">Ritiri ricorrenti</h3>
             <div className="space-y-2">
-              {weekly.length === 0 ? <p className="text-xs text-theme-text-muted">Nessun ritiro settimanale.</p> : weekly.map(r => <RuleRow key={r.id} r={r} />)}
+              {weekly.length === 0 ? <p className="text-xs text-theme-text-muted">Nessun ritiro ricorrente.</p> : weekly.map(r => <RuleRow key={r.id} r={r} />)}
             </div>
           </div>
           <div>

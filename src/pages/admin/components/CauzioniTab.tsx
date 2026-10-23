@@ -16,6 +16,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface Cauzione {
     id: string
@@ -2019,13 +2020,9 @@ function NumeriAmministrazione() {
                             <div className="space-y-2">
                                 {numbers.map((n, i) => (
                                     <div key={i} className="flex items-center gap-2">
-                                        <input
-                                            value={n}
-                                            onChange={e => setAt(i, e.target.value)}
-                                            placeholder="+39 345 1234567"
-                                            inputMode="tel"
-                                            className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <TelefonoConPrefisso value={n} onChange={v => setAt(i, v)} mostraAnteprima={false} />
+                                        </div>
                                         <button
                                             onClick={() => removeAt(i)}
                                             className="px-2.5 py-2 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10"
