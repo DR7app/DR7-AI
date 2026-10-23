@@ -2689,6 +2689,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_marketing_invio_codice_sconto', label: 'Invio Codice Sconto', description: 'WhatsApp con cui si manda un codice sconto dal tab Codice Sconto — token: {nome}, {codice}, {valore}, {servizi}, {validita}, {spesa_minima}, {sito}' },
       { key: 'pro_marketing_rinnovo',    label: 'Promemoria Rinnovo',   description: 'Promemoria rinnovo membership DR7 Club' },
       { key: 'pro_wallet_bonus_cliente', label: 'Bonus Wallet Cliente', description: 'Notifica bonus wallet accreditato al cliente' },
+      { key: 'pro_marketing_wallet_credito', label: 'Wallet Marketing: credito regalato', description: 'WhatsApp al cliente quando riceve credito da Marketing > Wallet — token: {nome}, {importo}, {servizi}, {scadenza}' },
     ],
   },
   {

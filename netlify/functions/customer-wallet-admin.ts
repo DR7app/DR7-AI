@@ -3,10 +3,90 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { hasApprovedOverride } from './utils/verifyOverride';
 import { userIsStaff } from './utils/adminRoles';
+import { getMessageTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// 23/10/2026 (direzione): "metto 50 euro a tutti, ma serve un messaggio che
+// posso modificare". Il testo e' il template Pro pro_marketing_wallet_credito
+// (modificabile da Marketing > Wallet e da Messaggi di Sistema Pro). L'invio
+// passa per una campagna marketing: stessa coda, stessa cadenza anti-spam
+// (1 messaggio ogni 7 secondi) e stessi interruttori System Control; la
+// spinge process-scheduled-campaigns-cron. {nome} lo mette la campagna.
+const TEMPLATE_WALLET_MARKETING = 'pro_marketing_wallet_credito';
+
+async function avvisaClientiCredito(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  userIds: string[],
+  dati: { importo: number; scadenza: string | null; servizi: string[] },
+): Promise<{ messaggi: number; motivo?: string }> {
+  const servizi = dati.servizi.length > 0 ? dati.servizi.map(s => ETICHETTE_SERVIZI[s] || s).join(', ') : 'tutti i servizi';
+  const scadenza = dati.scadenza
+    ? new Date(dati.scadenza + 'T12:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : 'nessuna scadenza';
+  const testo = await getMessageTemplate(TEMPLATE_WALLET_MARKETING, {
+    importo: dati.importo.toFixed(2).replace('.', ','),
+    scadenza,
+    servizi,
+  });
+  if (!testo) return { messaggi: 0, motivo: 'Messaggio spento o vuoto: nessun WhatsApp inviato.' };
+
+  const destinatari: { customer_id: string | null; customer_name: string; phone: string; email: string | null }[] = [];
+  const visti = new Set<string>();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const { data } = await db
+      .from('customers_extended')
+      .select('id, user_id, nome, cognome, telefono, email')
+      .in('user_id', userIds.slice(i, i + 200));
+    for (const c of data || []) {
+      const uid = String(c.user_id || '');
+      const tel = String(c.telefono || '').trim();
+      if (!uid || visti.has(uid) || !tel) continue;
+      visti.add(uid);
+      destinatari.push({
+        customer_id: c.id || null,
+        customer_name: [c.nome, c.cognome].filter(Boolean).join(' ') || 'Cliente',
+        phone: tel,
+        email: c.email || null,
+      });
+    }
+  }
+  if (destinatari.length === 0) return { messaggi: 0, motivo: 'Nessun cliente con numero di telefono.' };
+
+  const { data: campagna, error } = await db
+    .from('marketing_campaigns')
+    .insert({
+      title: `Wallet: credito EUR ${dati.importo.toFixed(2)}`,
+      message_text: testo,
+      channel: 'whatsapp',
+      audience: 'wallet_marketing',
+      total_recipients: destinatari.length,
+      status: 'pending',
+      recurrence_type: 'none',
+    })
+    .select('id')
+    .single();
+  if (error || !campagna) return { messaggi: 0, motivo: 'Campagna non creata: ' + (error?.message || 'errore') };
+
+  for (let i = 0; i < destinatari.length; i += 500) {
+    const { error: e } = await db.from('marketing_campaign_recipients').insert(
+      destinatari.slice(i, i + 500).map(d => ({ ...d, campaign_id: campagna.id, status: 'pending' })),
+    );
+    if (e) console.error('[customer-wallet-admin] destinatari campagna wallet:', e.message);
+  }
+  return { messaggi: destinatari.length };
+}
+
+const ETICHETTE_SERVIZI: Record<string, string> = {
+  rental: 'Noleggio Terra',
+  boat_rental: 'Noleggio Mare',
+  heli_rental: 'Noleggio Aria',
+  stay_rental: 'Soggiorni',
+  car_wash: 'Lavaggio e Meccanica',
+};
 
 // 17/09/2026 (direzione): la tab Credit Wallet mostra tutti i clienti della
 // Lead, anche chi non si e' mai iscritto al sito. Il wallet vive sull'account
@@ -123,7 +203,7 @@ const handler: Handler = async (event) => {
     }
 
     const { action, customer_id, user_id, amount, description, query, nature, overrideId,
-            destinatari, scadenza, servizi, clientOverrideId } = JSON.parse(event.body || '{}');
+            destinatari, scadenza, servizi, clientOverrideId, invia_messaggio } = JSON.parse(event.body || '{}');
 
     switch (action) {
       case 'list_all_balances': {
@@ -563,6 +643,9 @@ const handler: Handler = async (event) => {
             });
             scritti++;
           }
+          const avviso = invia_messaggio
+            ? await avvisaClientiCredito(serviceSupabase, [...perAccount.keys()], { importo, scadenza: null, servizi: [] })
+            : null;
           return {
             statusCode: 200,
             headers,
@@ -571,6 +654,8 @@ const handler: Handler = async (event) => {
               destinatari: scritti,
               totale: Math.round(importo * scritti * 100) / 100,
               nel_saldo: true,
+              messaggi: avviso?.messaggi ?? 0,
+              messaggi_motivo: avviso?.motivo,
             }),
           };
         }
@@ -594,6 +679,9 @@ const handler: Handler = async (event) => {
           return { statusCode: 500, headers, body: JSON.stringify({ error: erroreInsert.message }) };
         }
 
+        const avviso = invia_messaggio
+          ? await avvisaClientiCredito(serviceSupabase, [...perAccount.keys()], { importo, scadenza: scadenza || null, servizi: serviziPuliti })
+          : null;
         return {
           statusCode: 200,
           headers,
@@ -601,6 +689,8 @@ const handler: Handler = async (event) => {
             success: true,
             destinatari: righe.length,
             totale: Math.round(importo * righe.length * 100) / 100,
+            messaggi: avviso?.messaggi ?? 0,
+            messaggi_motivo: avviso?.motivo,
           }),
         };
       }

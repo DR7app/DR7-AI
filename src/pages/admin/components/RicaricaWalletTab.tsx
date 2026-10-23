@@ -52,6 +52,29 @@ const SERVIZI_WALLET: { id: string; label: string }[] = [
   { id: 'car_wash', label: 'Lavaggio & Meccanica' },
 ]
 
+// 23/10/2026 (direzione): il WhatsApp al cliente quando riceve il credito.
+// Template Pro pro_marketing_wallet_credito: si modifica qui (come il
+// messaggio dell'Immondizia) e in Messaggi di Sistema Pro, e' la stessa riga.
+// L'invio lo fa customer-wallet-admin con la coda delle campagne marketing.
+const CHIAVE_MESSAGGIO = 'pro_marketing_wallet_credito'
+const MESSAGGIO_DEFAULT = `Ciao {nome}!
+
+Ti abbiamo regalato *€{importo}* di credito nel tuo DR7 Wallet.
+
+Vale su: {servizi}
+Scadenza: {scadenza}
+
+Lo trovi gia' nel tuo account su dr7empire.com e lo usi al momento del pagamento.
+
+A presto,
+DR7 Empire`
+
+interface MessaggioWallet {
+  id: string | null
+  message_body: string
+  is_enabled: boolean
+}
+
 export default function RicaricaWalletTab() {
   const [clienti, setClienti] = useState<ClienteWallet[]>([])
   const [caricamento, setCaricamento] = useState(true)
@@ -69,8 +92,47 @@ export default function RicaricaWalletTab() {
   const [descrizione, setDescrizione] = useState('')
   const [natura, setNatura] = useState<'bonus' | 'real'>('bonus')
   const [invio, setInvio] = useState(false)
+  const [messaggio, setMessaggio] = useState<MessaggioWallet>({ id: null, message_body: MESSAGGIO_DEFAULT, is_enabled: true })
+  const [salvataggioMsg, setSalvataggioMsg] = useState(false)
+  const [inviaMessaggio, setInviaMessaggio] = useState(true)
 
   useEffect(() => { caricaClienti() }, [])
+  useEffect(() => { caricaMessaggio() }, [])
+
+  async function caricaMessaggio() {
+    const { data } = await supabase
+      .from('system_messages')
+      .select('id, message_body, is_enabled')
+      .eq('message_key', CHIAVE_MESSAGGIO)
+      .maybeSingle()
+    if (data) setMessaggio({ id: data.id, message_body: data.message_body || '', is_enabled: data.is_enabled !== false })
+  }
+
+  // La riga non esiste finche' non si salva la prima volta: la si crea col
+  // testo scritto qui, cosi' compare anche in Messaggi di Sistema Pro.
+  async function salvaMessaggio(m: MessaggioWallet = messaggio): Promise<boolean> {
+    setSalvataggioMsg(true)
+    const campi = { message_body: m.message_body, is_enabled: m.is_enabled }
+    const { data, error } = m.id
+      ? await supabase.from('system_messages').update(campi).eq('id', m.id).select('id')
+      : await supabase.from('system_messages').insert({
+          ...campi,
+          message_key: CHIAVE_MESSAGGIO,
+          label: 'Wallet Marketing: credito regalato',
+          description: 'WhatsApp al cliente quando riceve credito da Marketing > Wallet — token: {nome}, {importo}, {servizi}, {scadenza}',
+          is_automatic: false,
+          include_header: false,
+          trigger_event: 'manual',
+          trigger_offset_hours: 0,
+          send_hour: 9,
+          target_category: 'all',
+        }).select('id')
+    setSalvataggioMsg(false)
+    if (error) { toast.error('Errore: ' + error.message); return false }
+    if (!data || data.length === 0) { toast.error('Nessuna riga salvata (permessi?)'); return false }
+    setMessaggio({ ...m, id: data[0].id })
+    return true
+  }
 
   async function caricaClienti() {
     setCaricamento(true)
@@ -165,8 +227,14 @@ export default function RicaricaWalletTab() {
           ? 'Nessun vincolo: finisce nel saldo, spendibile su tutto e senza scadenza.\n'
           : `Vale su: ${dove}\nScadenza: ${quando}\n`)
       + `Totale: EUR ${(valore * quanti).toFixed(2)}`
+      + (inviaMessaggio && messaggio.is_enabled ? '\n\nOgni cliente ricevera\' anche il messaggio WhatsApp.' : '\n\nNessun messaggio WhatsApp.')
     )
     if (!conferma) return
+
+    const conMessaggio = inviaMessaggio && messaggio.is_enabled && !!messaggio.message_body.trim()
+    // Il server legge il testo dal database: si salva prima quello che si
+    // vede a schermo, anche se non si e' premuto "Salva messaggio".
+    if (conMessaggio && !(await salvaMessaggio())) return
 
     setInvio(true)
     try {
@@ -180,6 +248,7 @@ export default function RicaricaWalletTab() {
           servizi: [...servizi],
           description: descrizione,
           nature: natura === 'bonus' ? 'bonus' : 'real',
+          invia_messaggio: conMessaggio,
           destinatari: {
             tipo: destinatari,
             user_ids: destinatari === 'selezione' ? [...selezione] : [],
@@ -189,6 +258,10 @@ export default function RicaricaWalletTab() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`)
       toast.success(`Credito caricato a ${data.destinatari} clienti (EUR ${Number(data.totale).toFixed(2)} in totale)`)
+      if (conMessaggio) {
+        if (data.messaggi > 0) toast.success(`WhatsApp in coda per ${data.messaggi} clienti: uno ogni 7 secondi, si segue in Campagna Marketing.`, { duration: 8000 })
+        else toast.error(data.messaggi_motivo || 'Nessun WhatsApp inviato.')
+      }
       setImporto('')
       setDescrizione('')
       setSelezione(new Set())
@@ -461,6 +534,44 @@ export default function RicaricaWalletTab() {
             placeholder="es. Promo lavaggio settembre"
             className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-emerald-500/50"
           />
+        </div>
+
+        {/* Messaggio WhatsApp al cliente — stesso schema del messaggio
+            dell'Immondizia: testo, acceso/spento, Salva. */}
+        <div className="space-y-3 p-3 rounded-lg border border-theme-border bg-theme-bg-tertiary/40">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-theme-text-primary">Messaggio WhatsApp al cliente</div>
+              <p className="text-xs text-theme-text-muted mt-0.5">Lo stesso messaggio di Messaggi di Sistema Pro: le modifiche fatte qui valgono anche li'.</p>
+            </div>
+            <button onClick={() => setMessaggio(m => ({ ...m, is_enabled: !m.is_enabled }))} title={messaggio.is_enabled ? 'Invio attivo' : 'Invio spento'}
+              className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${messaggio.is_enabled ? 'bg-green-500' : 'bg-gray-600'}`}>
+              <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${messaggio.is_enabled ? 'left-5' : 'left-0.5'}`} />
+            </button>
+          </div>
+          <textarea
+            value={messaggio.message_body}
+            onChange={e => setMessaggio(m => ({ ...m, message_body: e.target.value }))}
+            rows={9}
+            className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
+          />
+          <p className="text-[11px] text-theme-text-muted">
+            Si sostituiscono da soli: <span className="font-mono">{'{nome}'}</span>, <span className="font-mono">{'{importo}'}</span>, <span className="font-mono">{'{servizi}'}</span>, <span className="font-mono">{'{scadenza}'}</span>. Parte ai clienti con un numero in scheda, uno ogni 7 secondi.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={() => void salvaMessaggio().then(ok => ok && toast.success('Messaggio salvato'))} disabled={salvataggioMsg}
+              className="px-4 py-2 rounded-lg bg-dr7-gold text-black text-sm font-semibold disabled:opacity-50">
+              {salvataggioMsg ? 'Salvataggio…' : 'Salva messaggio'}
+            </button>
+            <button onClick={() => setMessaggio(m => ({ ...m, message_body: MESSAGGIO_DEFAULT }))}
+              className="text-xs text-theme-text-muted hover:text-theme-text-primary underline">
+              Ripristina testo predefinito
+            </button>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <input type="checkbox" checked={inviaMessaggio} onChange={e => setInviaMessaggio(e.target.checked)} />
+            Invia questo messaggio con la ricarica
+          </label>
         </div>
 
         <button
