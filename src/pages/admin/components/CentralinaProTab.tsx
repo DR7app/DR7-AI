@@ -8411,8 +8411,8 @@ function OrariNoleggioSection({
           Come funziona
         </h3>
         <ul className="space-y-1.5 text-[13px] text-[#3a3a3c]">
-          <li>• <b>Pickup</b>: orari mostrati al cliente per ritirare il veicolo (default Lun-Ven 10:30-12:30 / 16:30-18:30, Sab 10:30-16:30, Dom chiuso).</li>
-          <li>• <b>Riconsegna</b>: orari mostrati al cliente per riconsegnare (default Lun-Ven 09:00-11:00 / 15:00-17:00, Sab 09:00-15:00, Dom chiuso).</li>
+          <li>• <b>Pickup</b>: orari mostrati al cliente per ritirare il veicolo: sono esattamente quelli impostati qui sotto, il sito li legge da qui.</li>
+          <li>• <b>Riconsegna</b>: orari mostrati al cliente per riconsegnare: sono esattamente quelli impostati qui sotto, il sito li legge da qui.</li>
           <li>• Per ogni direzione e per ogni giorno: toggle aperto/chiuso + lista finestre editabili (aggiungi/modifica/elimina).</li>
           <li>• <b>Granularità slot</b> condivisa (default 15 min) — frequenza degli orari prenotabili dentro ogni finestra.</li>
         </ul>
