@@ -259,7 +259,7 @@ export default function RicaricaWalletTab() {
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`)
       toast.success(`Credito caricato a ${data.destinatari} clienti (EUR ${Number(data.totale).toFixed(2)} in totale)`)
       if (conMessaggio) {
-        if (data.messaggi > 0) toast.success(`WhatsApp in coda per ${data.messaggi} clienti: uno ogni 7 secondi, si segue in Campagna Marketing.`, { duration: 8000 })
+        if (data.messaggi > 0) toast.success(`WhatsApp in coda per ${data.messaggi} clienti: 50 ogni ora dalle 9 alle 21 (circa ${Math.ceil(data.messaggi / 50)} ore di invio), si segue in Campagna Marketing.`, { duration: 8000 })
         else toast.error(data.messaggi_motivo || 'Nessun WhatsApp inviato.')
       }
       setImporto('')
@@ -556,7 +556,7 @@ export default function RicaricaWalletTab() {
             className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
           />
           <p className="text-[11px] text-theme-text-muted">
-            Si sostituiscono da soli: <span className="font-mono">{'{nome}'}</span>, <span className="font-mono">{'{importo}'}</span>, <span className="font-mono">{'{servizi}'}</span>, <span className="font-mono">{'{scadenza}'}</span>. Parte ai clienti con un numero in scheda, uno ogni 7 secondi.
+            Si sostituiscono da soli: <span className="font-mono">{'{nome}'}</span>, <span className="font-mono">{'{importo}'}</span>, <span className="font-mono">{'{servizi}'}</span>, <span className="font-mono">{'{scadenza}'}</span>. Parte ai clienti con un numero in scheda, 50 ogni ora, solo dalle 9 alle 21: chi resta fuori lo riceve il giorno dopo.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button onClick={() => void salvaMessaggio().then(ok => ok && toast.success('Messaggio salvato'))} disabled={salvataggioMsg}

@@ -13,7 +13,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // posso modificare". Il testo e' il template Pro pro_marketing_wallet_credito
 // (modificabile da Marketing > Wallet e da Messaggi di Sistema Pro). L'invio
 // passa per una campagna marketing: stessa coda, stessa cadenza anti-spam
-// (1 messaggio ogni 7 secondi) e stessi interruttori System Control; la
+// (50 messaggi l'ora, dalle 9 alle 21) e stessi interruttori System Control; la
 // spinge process-scheduled-campaigns-cron. {nome} lo mette la campagna.
 const TEMPLATE_WALLET_MARKETING = 'pro_marketing_wallet_credito';
 
@@ -66,6 +66,11 @@ async function avvisaClientiCredito(
       total_recipients: destinatari.length,
       status: 'pending',
       recurrence_type: 'none',
+      // 23/10/2026 (direzione): tutti subito = Green API ci blocca. 50 ogni
+      // ora, solo dalle 9 alle 21 (finestra nel cron); chi resta fuori lo
+      // riceve il giorno dopo, in automatico.
+      drip_batch_size: 50,
+      drip_interval_minutes: 60,
     })
     .select('id')
     .single();

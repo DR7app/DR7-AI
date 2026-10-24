@@ -292,6 +292,13 @@ async function materialiseRun(
     return { runCampaignId, recipientCount: audience.length }
 }
 
+const FASCIA_INVIO = { da: 9, a: 21 }
+
+function inFasciaInvio(): boolean {
+    const ora = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date()))
+    return ora >= FASCIA_INVIO.da && ora < FASCIA_INVIO.a
+}
+
 async function pumpChunkLoop(deadline: number) {
     if (!SITE_URL) return
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
@@ -329,6 +336,9 @@ async function pumpChunkLoop(deadline: number) {
             const batch = Number(c.drip_batch_size) || 0
             const intervalMin = Number(c.drip_interval_minutes) || 0
             if (batch > 0 && intervalMin > 0) {
+                // 23/10/2026 (direzione): a scaglioni solo dalle 9 alle 21.
+                // Fuori fascia i destinatari restano in coda per il mattino dopo.
+                if (!inFasciaInvio()) continue
                 const sinceIso = new Date(Date.now() - intervalMin * 60_000).toISOString()
                 const { count } = await sb
                     .from('marketing_campaign_recipients')
