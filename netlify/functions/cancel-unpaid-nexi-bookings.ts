@@ -92,6 +92,14 @@ const cancelHandler: Handler = async () => {
             if (booking.booking_details?.manually_confirmed === true) {
                 return false;
             }
+            // Richiesta "No Cauzione" ancora da decidere: non c'e' nessun link
+            // da pagare, aspetta Valerio. Prima veniva annullata dopo un'ora,
+            // prima che qualcuno potesse approvarla. Approvata, vale la
+            // scadenza del link scritta all'approvazione.
+            if (booking.booking_details?.no_cauzione_request === true
+                && booking.booking_details?.no_cauzione_status !== 'approved') {
+                return false;
+            }
             const expiresAt = booking.booking_details?.payment_link_expires_at;
             if (expiresAt) {
                 // Use exact expiration timestamp from when link was sent

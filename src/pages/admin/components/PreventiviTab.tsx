@@ -2115,7 +2115,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       if (!linkRes.ok || !linkData.paymentUrl) { toast.error('Errore generazione link: ' + (linkData.error || 'Riprova')); return }
 
       await supabase.from('bookings').update({
-        booking_details: { ...booking.booking_details, no_cauzione_status: 'approved', nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId },
+        // payment_link_expires_at: senza, l'annullamento automatico contava
+        // un'ora dalla richiesta e chiudeva la prenotazione appena approvata.
+        booking_details: { ...booking.booking_details, no_cauzione_status: 'approved', nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId, no_cauzione_approved_at: new Date().toISOString(), payment_link_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() },
         payment_status: 'pending',
       }).eq('id', booking.id)
 
