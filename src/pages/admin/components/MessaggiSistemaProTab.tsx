@@ -2686,6 +2686,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_marketing_recensione', label: 'Richiesta Recensione', description: 'Richiesta di recensione dopo il servizio' },
       { key: 'pro_marketing_compleanno', label: 'Messaggio Compleanno', description: 'Auguri di compleanno al cliente' },
       { key: 'pro_marketing_referral',   label: 'Codice Referral',      description: 'Invio codice referral al cliente' },
+      { key: 'pro_marketing_gadget_omaggio', label: 'Gadget in Omaggio', description: 'WhatsApp al cliente dal bottone "Gadget" della prenotazione (ogni servizio), una sola volta per cliente — token: {nome}' },
       { key: 'pro_marketing_invio_codice_sconto', label: 'Invio Codice Sconto', description: 'WhatsApp con cui si manda un codice sconto dal tab Codice Sconto — token: {nome}, {codice}, {valore}, {servizi}, {validita}, {spesa_minima}, {sito}' },
       { key: 'pro_marketing_rinnovo',    label: 'Promemoria Rinnovo',   description: 'Promemoria rinnovo membership DR7 Club' },
       { key: 'pro_wallet_bonus_cliente', label: 'Bonus Wallet Cliente', description: 'Notifica bonus wallet accreditato al cliente' },

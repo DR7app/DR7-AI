@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroPagina, ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
@@ -135,6 +135,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import { chiaviPersona, type GadgetInviato } from '../../../utils/gadgetOmaggio'
 
 // --- Kasko Constants & Types ---
 // L'id di un'assicurazione e' quello che le da' Centralina Pro (un codice
@@ -1043,6 +1044,35 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const autoProntaLockRef = useRef<Set<string>>(new Set())
   const [fotoInviataSending, setFotoInviataSending] = useState(false)
   const fotoInviataLockRef = useRef<Set<string>>(new Set())
+  // 26/10/2026 (direzione): "Gadget" = WhatsApp "gadget DR7 in omaggio", una
+  // volta per PERSONA su qualunque servizio (come la recensione). gadgetPersone
+  // = chiavi telefono/email di chi l'ha gia' ricevuto, da tutte le prenotazioni.
+  const [gadgetSending, setGadgetSending] = useState(false)
+  const gadgetLockRef = useRef<Set<string>>(new Set())
+  const [gadgetPersone, setGadgetPersone] = useState<Set<string>>(new Set())
+  const caricaGadgetPersone = useCallback(async (): Promise<Set<string>> => {
+    const chiavi = new Set<string>()
+    const PAGINA = 1000
+    for (let da = 0; ; da += PAGINA) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id, customer_phone, customer_email, gadget:booking_details->gadget_omaggio')
+        .not('booking_details->gadget_omaggio', 'is', null)
+        .range(da, da + PAGINA - 1)
+      if (error) throw error
+      for (const r of (data || []) as Array<{ customer_phone: string | null; customer_email: string | null; gadget: GadgetInviato | null }>) {
+        chiaviPersona(r.customer_phone, r.customer_email, r.gadget?.telefono, r.gadget?.email).forEach(k => chiavi.add(k))
+      }
+      if (!data || data.length < PAGINA) break
+    }
+    setGadgetPersone(chiavi)
+    return chiavi
+  }, [])
+  useEffect(() => { caricaGadgetPersone().catch(e => console.warn('[gadget] caricamento invii falliti:', e?.message)) }, [caricaGadgetPersone])
+  const gadgetGiaInviato = (b: Booking): boolean =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    !!(b.booking_details as any)?.gadget_omaggio
+    || chiaviPersona(b.customer_phone, b.customer_email).some(k => gadgetPersone.has(k))
   // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
@@ -4219,6 +4249,79 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     } finally {
       fotoInviataLockRef.current.delete(booking.id)
       setFotoInviataSending(false)
+    }
+  }
+
+  // 26/10/2026 (direzione): bottone "Gadget" su ogni servizio. Manda al cliente
+  // il template Pro "Gadget in Omaggio" (gadget_omaggio ->
+  // pro_marketing_gadget_omaggio) UNA volta per persona: prima di inviare si
+  // rilegge chi l'ha gia' ricevuto, anche su altre prenotazioni.
+  async function handleGadget(booking: Booking) {
+    if (gadgetLockRef.current.has(booking.id) || gadgetSending) return
+    gadgetLockRef.current.add(booking.id)
+    setGadgetSending(true)
+    const toastId = toast.loading('Invio messaggio gadget...')
+    try {
+      const phone = await risolviTelefonoCliente(booking).catch(() => null)
+      if (!phone) {
+        toast.error('Nessun numero cliente — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { id: toastId, duration: 8000 })
+        return
+      }
+      const giaRicevuto = await caricaGadgetPersone()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((booking.booking_details as any)?.gadget_omaggio
+        || chiaviPersona(String(phone), booking.customer_phone, booking.customer_email).some(k => giaRicevuto.has(k))) {
+        toast('Gadget già inviato a questo cliente (anche su un\'altra prenotazione): non si rimanda.', { id: toastId, duration: 8000 })
+        return
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const custBd = ((booking.booking_details as any)?.customer || {}) as Record<string, string | undefined>
+      const nomeCompleto = String(
+        booking.customer_name || custBd.fullName || custBd.full_name
+        || [custBd.firstName, custBd.lastName].filter(Boolean).join(' ') || '',
+      ).trim()
+      const nome = nomeCompleto.split(/\s+/)[0] || 'Cliente'
+      const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
+      const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: String(phone),
+          templateKey: 'gadget_omaggio',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          booking: { service_type: (booking as any).service_type || 'car_rental' },
+          templateVars: {
+            customer_name: nome, nome, name: nome,
+            booking_id: bookingRef, booking_ref: bookingRef,
+            vehicle_name: booking.vehicle_name || '',
+            vehicle_plate: booking.vehicle_plate || '', targa: booking.vehicle_plate || '',
+          },
+          skipHeader: true,
+        }),
+      }).catch(() => null)
+      const waResult = waResp ? await waResp.json().catch(() => ({})) : {}
+      if (waResult?.skipped) {
+        toast.error('Messaggio non inviato: template "Gadget in Omaggio" mancante o spento in Messaggi di Sistema Pro > Marketing.', { id: toastId, duration: 12000 })
+        return
+      }
+      if (!waResp || !waResp.ok) {
+        toast.error('Invio WhatsApp fallito', { id: toastId })
+        return
+      }
+      const registro: GadgetInviato = { inviato_at: new Date().toISOString(), telefono: String(phone), email: booking.customer_email || null }
+      const newDetails = { ...(booking.booking_details || {}), gadget_omaggio: registro }
+      const { error: errSegna } = await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
+      setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
+      setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, booking_details: newDetails } as Booking : b)))
+      setGadgetPersone(prev => new Set([...prev, ...chiaviPersona(String(phone), booking.customer_phone, booking.customer_email)]))
+      if (errSegna) toast.error('Messaggio inviato, ma non registrato sulla prenotazione: ' + errSegna.message, { duration: 10000 })
+      toast.success('Messaggio gadget inviato al cliente', { id: toastId })
+      logAdminAction('gadget_omaggio_inviato', 'booking', booking.id, buildBookingContext(booking))
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
+    } finally {
+      gadgetLockRef.current.delete(booking.id)
+      setGadgetSending(false)
     }
   }
 
@@ -12669,6 +12772,23 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               {fotoInviataDoneMd ? 'Foto inviate' : 'Foto inviata'}
                             </button>
                           )}
+                          {booking.status !== 'cancelled' && (() => {
+                            const gadgetFatto = gadgetGiaInviato(booking)
+                            return (
+                              <button
+                                onClick={() => handleGadget(booking)}
+                                disabled={gadgetSending || gadgetFatto}
+                                title="WhatsApp al cliente: gadget DR7 in omaggio in auto (una volta per cliente)"
+                                className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                  gadgetFatto
+                                    ? 'bg-amber-600/20 text-amber-700 dark:text-amber-400 cursor-default'
+                                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                                }`}
+                              >
+                                {gadgetFatto ? 'Gadget inviato' : 'Gadget'}
+                              </button>
+                            )
+                          })()}
                           <GestisciMenu sections={sections} size="md" />
                         </div>
                       )
@@ -12958,7 +13078,24 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                                     {fotoInviataDone ? 'Foto inviate' : 'Foto inviata'}
                                   </button>
                                 )}
-                                <GestisciMenu sections={sections} size="sm" />
+                                {booking.status !== 'cancelled' && (() => {
+                            const gadgetFatto = gadgetGiaInviato(booking)
+                            return (
+                              <button
+                                onClick={() => handleGadget(booking)}
+                                disabled={gadgetSending || gadgetFatto}
+                                title="WhatsApp al cliente: gadget DR7 in omaggio in auto (una volta per cliente)"
+                                className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                  gadgetFatto
+                                    ? 'bg-amber-600/20 text-amber-700 dark:text-amber-400 cursor-default'
+                                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                                }`}
+                              >
+                                {gadgetFatto ? 'Gadget inviato' : 'Gadget'}
+                              </button>
+                            )
+                          })()}
+                          <GestisciMenu sections={sections} size="sm" />
                               </div>
                             )
                           })()}

@@ -120,6 +120,8 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Diverso da review_discount_code, che manda i DUE codici post-recensione.
   discount_code_created: 'pro_marketing_invio_codice_sconto',
   discount_code_manual_send: 'pro_marketing_invio_codice_sconto',
+  // 26/10/2026 (direzione): bottone "Gadget" sulle prenotazioni, una volta per cliente.
+  gadget_omaggio: 'pro_marketing_gadget_omaggio',
   // 06/10/2026 (direzione): due WhatsApp a ogni nuovo investitore salvato in
   // Amministrazione > Investitori (prima il benvenuto, poi la richiesta di
   // pubblicare il nome sul sito). Inviati da utils/messaggiInvestitori.ts.
@@ -166,6 +168,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   tour_new_customer: 'ARIA/MARE: alla creazione della prenotazione TOUR (al cliente) — dopo pagamento o spunta Conferma Prenotazione',
   rental_auto_pronta: 'NOLEGGIO: Pronta — mezzo pronto al ritiro (admin clicca "Pronta" su prenotazione o calendario)',
   rental_foto_inviata: 'NOLEGGIO: Foto inviata — foto/video del mezzo mandati al cliente prima della consegna (admin clicca "Foto inviata" sulla prenotazione)',
+  gadget_omaggio: 'TUTTI I SERVIZI: Gadget — gadget DR7 in omaggio in auto (admin clicca "Gadget" sulla prenotazione; una sola volta per cliente)',
   deposit_return_iban: 'Quando si chiede l\'IBAN per il rimborso cauzione',
 
   // Lavaggio
@@ -1402,6 +1405,10 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
   pro_marketing_invio_codice_sconto: [
     ['invio', 'codice', 'sconto'],
     ['codice', 'sconto', 'cliente'],
+  ],
+  pro_marketing_gadget_omaggio: [
+    ['gadget', 'omaggio'],
+    ['gadget'],
   ],
   pro_investitore_benvenuto: [
     ['investitore', 'benvenuto'],

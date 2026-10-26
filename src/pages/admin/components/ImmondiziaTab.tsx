@@ -31,6 +31,9 @@ interface MessaggioRitiro {
   send_hour: number | null
   send_minute: number | null
   recipient_phones: string | null
+  // 26/10/2026: ogni N settimane, contate dalla settimana di recurrence_start_date.
+  recurrence_every_weeks?: number | null
+  recurrence_start_date?: string | null
 }
 
 // 23/10/2026: oltre a settimanale e data singola, ogni 2 settimane e ogni
@@ -72,15 +75,22 @@ export default function ImmondiziaTab() {
 
   const [messaggi, setMessaggi] = useState<MessaggioRitiro[]>([])
   const [salvataggioMsg, setSalvataggioMsg] = useState<string | null>(null)
+  // 26/10/2026: senza la migrazione 20261026 la colonna recurrence_every_weeks
+  // non esiste: si ricarica senza, e il messaggio resta settimanale.
+  const [conOgniSettimane, setConOgniSettimane] = useState(true)
   const caricaMessaggi = async () => {
-    const { data, error } = await supabase
+    const leggi = (colonne: string) => supabase
       .from('system_messages')
-      .select('id, label, message_body, is_enabled, target_days_of_week, send_hour, send_minute, recipient_phones')
+      .select(colonne)
       .eq('trigger_event', 'on_schedule')
       .or('label.ilike.%spazzatura%,label.ilike.%immondizia%,label.ilike.%rifiut%,message_key.ilike.%spazzatura%,message_key.ilike.%immondizia%')
       .order('label', { ascending: true })
+    const base = 'id, label, message_body, is_enabled, target_days_of_week, send_hour, send_minute, recipient_phones, recurrence_start_date'
+    let { data, error } = await leggi(base + ', recurrence_every_weeks')
+    setConOgniSettimane(!error)
+    if (error) ({ data, error } = await leggi(base))
     if (error) { toast.error('Errore caricamento messaggio: ' + error.message); return }
-    setMessaggi((data || []) as MessaggioRitiro[])
+    setMessaggi((data || []) as unknown as MessaggioRitiro[])
   }
   useEffect(() => { caricaMessaggi() }, [])
 
@@ -99,6 +109,9 @@ export default function ImmondiziaTab() {
   const salvaMessaggio = async (m: MessaggioRitiro) => {
     if (!m.message_body.trim()) { toast.error('Il testo del messaggio non puo\' essere vuoto'); return }
     if (giorniDi(m).length === 0) { toast.error('Seleziona almeno un giorno'); return }
+    const ogni = Number(m.recurrence_every_weeks ?? 1) || 1
+    if (ogni > 1 && !conOgniSettimane) { toast.error('Ogni 2 settimane: manca la migrazione 20261026_system_messages sul database.'); return }
+    if (ogni > 1 && !m.recurrence_start_date) { toast.error('Ogni 2 settimane: scegli la data del primo invio'); return }
     setSalvataggioMsg(m.id)
     const { data, error } = await supabase
       .from('system_messages')
@@ -109,6 +122,8 @@ export default function ImmondiziaTab() {
         send_hour: m.send_hour ?? 9,
         send_minute: m.send_minute ?? 0,
         recipient_phones: (m.recipient_phones || '').trim() || null,
+        recurrence_start_date: m.recurrence_start_date || null,
+        ...(conOgniSettimane ? { recurrence_every_weeks: ogni } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', m.id)
@@ -273,6 +288,22 @@ export default function ImmondiziaTab() {
                     </button>
                   )
                 })}
+              </div>
+            </div>
+            {/* 26/10/2026: la frequenza e' del MESSAGGIO. Quella di "Aggiungi ritiro"
+                serve solo al promemoria serale e non cambiava questo invio. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-theme-text-muted block mb-1">Frequenza del messaggio</label>
+                <select value={Number(m.recurrence_every_weeks ?? 1) || 1} onChange={e => modificaMsg(m.id, { recurrence_every_weeks: Number(e.target.value) })}
+                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary">
+                  <option value={1}>Ogni settimana</option>
+                  <option value={2}>Ogni 2 settimane</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted block mb-1">{(Number(m.recurrence_every_weeks ?? 1) || 1) > 1 ? 'Primo invio (si conta da questa settimana)' : 'Primo invio (opzionale)'}</label>
+                <EuropeanDateInput value={m.recurrence_start_date || ''} onChange={(__v: string) => modificaMsg(m.id, { recurrence_start_date: __v || null })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

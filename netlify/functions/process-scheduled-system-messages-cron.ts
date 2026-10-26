@@ -42,6 +42,7 @@ import { conSystemControl, funzioneFerma } from './utils/systemControl'
 import { recuperaRichiesteIbanMancanti } from './utils/richiestaIbanCauzione'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
+import { settimanaDiTurno } from './utils/settimanaDiTurno';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -77,6 +78,8 @@ interface SystemMessage {
     send_minute?: number | null;
     recurrence_start_date?: string | null;
     recurrence_end_date?: string | null;
+    // 2026-10-26: ogni N settimane (1 = ogni settimana), contate da recurrence_start_date.
+    recurrence_every_weeks?: number | null;
     recipient_mode?: string | null;
     recipient_phones?: string | null;
     recipient_admin_roles?: string | null;
@@ -187,6 +190,16 @@ function recurringDueNow(tpl: SystemMessage, nowMs: number): boolean {
     // Intervallo di validita' (date incluse).
     if (tpl.recurrence_start_date && rome.date < tpl.recurrence_start_date) return false;
     if (tpl.recurrence_end_date && rome.date > tpl.recurrence_end_date) return false;
+
+    // 2026-10-26: "ogni 2 settimane" (messaggio spazzatura). Prima esisteva solo
+    // il settimanale: il messaggio partiva ogni lunedi' anche nelle settimane
+    // senza ritiro. Le settimane si contano dalla data di inizio (settimana 0
+    // = quella della data di inizio); senza data di inizio non si puo' sapere
+    // quale settimana tocca, quindi non parte.
+    const ogniSettimane = Math.max(1, Math.floor(Number(tpl.recurrence_every_weeks ?? 1) || 1));
+    if (ogniSettimane > 1 && !settimanaDiTurno(tpl.recurrence_start_date ?? null, rome.date, ogniSettimane)) {
+        return false;
+    }
 
     // Orario: send_hour = null significa "appena possibile" → mezzanotte non ha
     // senso per una ricorrenza, quindi trattiamo null come 9:00 (stesso default
@@ -1623,13 +1636,27 @@ const cronHandler = async () => {
     let templates: SystemMessage[] | null = null;
     let tplErr: { message: string } | null = null;
 
-    const withRecurring = await supabase
+    // 2026-10-26: `recurrence_every_weeks` (migration 20261026) si prova per
+    // prima e da sola: se mancasse, si perde solo "ogni N settimane" e non
+    // tutte le colonne della ricorrenza (orario, destinatari...).
+    const withEveryWeeks = await supabase
         .from('system_messages')
-        .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}`)
+        .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}, recurrence_every_weeks`)
         .eq('is_automatic', true)
         .eq('is_enabled', true);
-    templates = (withRecurring.data as unknown as SystemMessage[] | null);
-    tplErr = withRecurring.error;
+    templates = (withEveryWeeks.data as unknown as SystemMessage[] | null);
+    tplErr = withEveryWeeks.error;
+
+    if (tplErr) {
+        console.warn('[scheduled-msgs] select con recurrence_every_weeks fallita (migration 20261026?), riprovo senza:', tplErr.message);
+        const withRecurring = await supabase
+            .from('system_messages')
+            .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}`)
+            .eq('is_automatic', true)
+            .eq('is_enabled', true);
+        templates = (withRecurring.data as unknown as SystemMessage[] | null);
+        tplErr = withRecurring.error;
+    }
 
     if (tplErr) {
         console.warn('[scheduled-msgs] select con colonne ricorrenza fallita, fallback alle colonne storiche:', tplErr.message);
