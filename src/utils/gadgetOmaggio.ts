@@ -34,3 +34,4 @@ export interface GadgetInviato {
   email?: string | null
   operatore?: string | null
 }
+

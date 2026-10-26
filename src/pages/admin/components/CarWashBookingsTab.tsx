@@ -16,6 +16,7 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { inviaGadget } from '../../../utils/inviaGadget'
 import { buildCarWashContext } from '../../../utils/adminLogHelpers'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
@@ -1813,6 +1814,31 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   const isAutoProntaSent = (booking: CarWashBooking) =>
     autoProntaSentIds.has(booking.id) || !!booking.booking_details?.auto_pronta_sent_at
+
+  // 26/10/2026 (direzione): "Gadget" anche sui lavaggi. Una volta per persona
+  // su qualunque servizio: il controllo e l'invio stanno in utils/gadgetOmaggio.
+  const [gadgetSending, setGadgetSending] = useState<string | null>(null)
+  async function handleGadget(booking: CarWashBooking) {
+    if (gadgetSending) return
+    setGadgetSending(booking.id)
+    const toastId = toast.loading('Invio messaggio gadget...')
+    try {
+      const esito = await inviaGadget(booking)
+      if (esito.stato !== 'inviato') {
+        if (esito.stato === 'gia_inviato') toast(esito.messaggio, { id: toastId, duration: 8000 })
+        else toast.error(esito.messaggio, { id: toastId, duration: 10000 })
+        return
+      }
+      setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, booking_details: esito.booking_details } as CarWashBooking : b)))
+      if (esito.avviso) toast.error(esito.avviso, { duration: 10000 })
+      toast.success('Messaggio gadget inviato al cliente', { id: toastId })
+      logAdminAction('gadget_omaggio_inviato', 'carwash_booking', booking.id, { customer_name: booking.customer_name })
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
+    } finally {
+      setGadgetSending(null)
+    }
+  }
 
   async function handleAutoPronta(booking: CarWashBooking) {
     if (!booking.id) return
@@ -5878,6 +5904,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                   disabled: sent || sending,
                                   visible: booking.customer_name !== 'Lavaggio Rientro',
                                 },
+                                {
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                  label: (booking.booking_details as any)?.gadget_omaggio ? '✓ Gadget inviato' : gadgetSending === booking.id ? 'Invio...' : 'Gadget',
+                                  onClick: () => handleGadget(booking),
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                  disabled: !!(booking.booking_details as any)?.gadget_omaggio || !!gadgetSending,
+                                  visible: booking.customer_name !== 'Lavaggio Rientro' && booking.status !== 'cancelled',
+                                },
                               ],
                             },
                           ]
@@ -6033,6 +6067,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 onClick: () => handleAutoPronta(booking),
                                 disabled: sent || sending,
                                 visible: !isRientro,
+                              },
+                              {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                label: (booking.booking_details as any)?.gadget_omaggio ? '✓ Gadget inviato' : gadgetSending === booking.id ? 'Invio...' : 'Gadget',
+                                onClick: () => handleGadget(booking),
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                disabled: !!(booking.booking_details as any)?.gadget_omaggio || !!gadgetSending,
+                                visible: !isRientro && booking.status !== 'cancelled',
                               },
                             ],
                           },
