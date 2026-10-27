@@ -5513,8 +5513,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <label className="block text-sm font-medium text-theme-text-secondary mb-2">Metodo di Pagamento</label>
                       <select
                         value={formData.payment_method}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const method = e.target.value
+                          // 27/10/2026: lasciare il Credit Wallet su una prenotazione
+                          // gia' addebitata fa restituire l'importo dal database:
+                          // un credito manuale in piu' rimborsa due volte.
+                          if (editingBooking?.id && isCreditWallet(formData.payment_method) && !isCreditWallet(method)) {
+                            const gia = (await leggiMovimentoWallet(editingBooking.id)).addebitato || 0
+                            if (gia > 0 && !window.confirm(`Questa prenotazione ha gia' prelevato ${formattaEuro(gia)} dal Credit Wallet.\n\nCambiando metodo di pagamento il sistema li RESTITUISCE DA SOLO al wallet del cliente al salvataggio (riga "Storno prenotazione").\n\nNON fare anche un credito manuale: il cliente riceverebbe i soldi due volte.\n\nContinuare?`)) return
+                          }
                           const updates: Record<string, string> = { payment_method: method }
                           // 2026-05-22: auto-reset a pending SOLO se non
                           // gia' selezionato Pagato/Parziale. Cosi' admin
@@ -5609,6 +5616,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </span>
                       <span className="font-semibold text-theme-text-primary">{formattaEuro(dovuto)}</span>
                     </div>
+                    {/* 27/10/2026: con "Da Saldare" il database non preleva nulla (lo
+                        decide la direzione, vedi il cambio metodo). Il riquadro lo
+                        diceva in piccolo e l'operatore salvava convinto di aver
+                        incassato: ora l'avviso e' esplicito, con un tasto. */}
+                    {dovuto === 0 && getFinalPrice() > 0 && (
+                      <div className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-amber-700 dark:text-amber-300">
+                        <p className="font-semibold">Il wallet NON viene toccato con questo stato.</p>
+                        <p className="text-xs mt-0.5">Per prelevare {formattaEuro(getFinalPrice())} metti lo stato su Pagato (o Parziale per un acconto).</p>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, payment_status: 'paid', amount_paid: getFinalPrice().toString() }))}
+                          className="mt-2 px-3 py-1.5 rounded bg-amber-500 text-black text-xs font-semibold hover:bg-amber-400"
+                        >
+                          Segna Pagato e preleva dal wallet
+                        </button>
+                      </div>
+                    )}
                     {/* 16/09/2026 (direzione): mai mostrare un saldo negativo, il
                         wallet non ci puo' andare. Con credito insufficiente
                         compare solo l'avviso di cambiare metodo di pagamento. */}

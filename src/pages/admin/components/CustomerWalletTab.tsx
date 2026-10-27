@@ -532,7 +532,10 @@ export default function CustomerWalletTab() {
       if (esitoCliente === null) return
     }
 
-    if (!otpVerified) {
+    // 27/10/2026 (direzione): sull'addebito l'autorizzazione e' il codice del
+    // CLIENTE (chiesto qui sopra e verificato dal database). L'OTP staff si
+    // auto-approvava per la direzione e sembrava che il cliente non servisse.
+    if (modalAction !== 'debit' && !otpVerified) {
       sendOtp()
       return
     }
@@ -952,7 +955,7 @@ export default function CustomerWalletTab() {
                     stay_rental: 'Soggiorni', car_wash: 'Lavaggio & Meccanica',
                   }
                   return (
-                    <div className="col-span-full mt-2 bg-teal-500/5 border border-teal-500/30 rounded-xl p-4">
+                    <div className="col-span-full w-full min-w-0 justify-self-stretch mt-2 bg-teal-500/5 border border-teal-500/30 rounded-xl p-4">
                       <div className="flex items-center justify-between gap-3 mb-2">
                         <p className="text-sm font-bold text-teal-400">Credito vincolato</p>
                         <span className="text-xs text-teal-400 tabular-nums">
@@ -1328,8 +1331,14 @@ export default function CustomerWalletTab() {
                 </div>
               )}
 
-              {/* OTP Section */}
-              <div>
+              {modalAction === 'debit' && (
+                <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  Serve il codice del cliente: premendo Conferma Addebito il cliente riceve un codice via email e lo comunica all&apos;operatore.
+                </p>
+              )}
+
+              {/* OTP Section — solo per i caricamenti */}
+              {modalAction !== 'debit' && <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium text-gray-700">Codice OTP</label>
                   <button
@@ -1388,7 +1397,7 @@ export default function CustomerWalletTab() {
                       : 'Caricamento Wallet richiede l\'autorizzazione. Un codice OTP verra inviato via email per confermare.'}
                   </p>
                 )}
-              </div>
+              </div>}
 
               {/* Transactions preview */}
               {transactions.length > 0 && (

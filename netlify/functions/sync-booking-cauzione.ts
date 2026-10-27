@@ -77,6 +77,31 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // 27/10/2026: cauzioni.cliente_id punta a customers_extended.id. Le
+        // prenotazioni dal sito portano invece l'id dell'ACCOUNT (auth.users):
+        // l'inserimento falliva con "cauzioni_cliente_id_fkey" (Runchina,
+        // Macan). Si passa dall'account alla sua scheda, solo per id — mai per
+        // email o telefono (caso Stara).
+        if (customerId) {
+            const { data: scheda } = await supabase
+                .from('customers_extended')
+                .select('id')
+                .eq('id', customerId)
+                .maybeSingle()
+            if (!scheda) {
+                const { data: perAccount } = await supabase
+                    .from('customers_extended')
+                    .select('id')
+                    .eq('user_id', customerId)
+                    .order('created_at', { ascending: true })
+                    .limit(1)
+                if (perAccount && perAccount[0]?.id) {
+                    console.log(`[cauzione] account ${customerId} -> scheda ${perAccount[0].id}`)
+                    customerId = perAccount[0].id
+                }
+            }
+        }
+
         // If deposit amount is 0 or not provided, delete any existing cauzione
         if (!depositAmount || depositAmount <= 0) {
             console.log('💰 No deposit required, deleting any existing cauzione')
