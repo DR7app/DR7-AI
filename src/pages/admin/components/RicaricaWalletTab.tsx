@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { authFetch } from '../../../utils/authFetch'
 import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
@@ -140,11 +141,18 @@ export default function RicaricaWalletTab() {
       // Chi ha un account sito: e' l'unico che puo' avere un wallet. Si parte
       // dalle schede clienti e si aggiunge chi ha gia' un saldo ma non ha una
       // scheda (iscritti al sito senza profilo compilato).
+      // 27/10/2026: tutto a pagine. PostgREST si ferma a 1000 righe senza
+      // errore: oltre le prime 1000 schede i clienti non comparivano qui.
       const [{ data: schede }, { data: saldi }] = await Promise.all([
-        supabase.from('customers_extended')
-          .select('user_id, nome, cognome, email, telefono')
-          .not('user_id', 'is', null),
-        supabase.from('user_credit_balance').select('user_id, balance'),
+        fetchAllRows((from, to) => supabase.from('customers_extended')
+          .select('id, user_id, nome, cognome, email, telefono')
+          .not('user_id', 'is', null)
+          .order('id', { ascending: true })
+          .range(from, to)),
+        fetchAllRows((from, to) => supabase.from('user_credit_balance')
+          .select('user_id, balance')
+          .order('user_id', { ascending: true })
+          .range(from, to), { dedupeById: false }),
       ])
 
       const perUtente = new Map<string, ClienteWallet>()
@@ -171,11 +179,13 @@ export default function RicaricaWalletTab() {
 
       setClienti([...perUtente.values()].sort((a, b) => b.saldo - a.saldo || a.nome.localeCompare(b.nome)))
 
-      const { data: righeLotti } = await supabase
+      const { data: righeLotti } = await fetchAllRows((from, to) => supabase
         .from('wallet_crediti_vincolati')
         .select('id, user_id, importo, residuo, scadenza, servizi, descrizione, created_at')
         .gt('residuo', 0)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to))
       setLotti((righeLotti || []).map(l => ({
         ...(l as LottoVincolato),
         importo: Number((l as { importo: number }).importo) || 0,

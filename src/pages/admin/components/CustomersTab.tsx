@@ -914,12 +914,17 @@ export default function CustomersTab() {
         // mai avvenuta. La colonna dice quanto ha, non meta'.
         void Promise.all([
           fetchAllRows<{ user_id: string; balance: string | number }>((from, to) =>
-            supabase.from('user_credit_balance').select('user_id, balance').range(from, to)
+            supabase.from('user_credit_balance').select('user_id, balance').order('user_id', { ascending: true }).range(from, to)
           ),
-          supabase
-            .from('wallet_crediti_vincolati')
-            .select('user_id, residuo, scadenza')
-            .gt('residuo', 0),
+          // A pagine anche i lotti: sono piu' di 1000.
+          fetchAllRows<{ id: string; user_id: string; residuo: number | string; scadenza: string | null }>((from, to) =>
+            supabase
+              .from('wallet_crediti_vincolati')
+              .select('id, user_id, residuo, scadenza')
+              .gt('residuo', 0)
+              .order('id', { ascending: true })
+              .range(from, to)
+          ),
         ]).then(([saldi, vincolati]) => {
           const saldoPerAccount = new Map<string, number>()
           for (const row of saldi.data) {

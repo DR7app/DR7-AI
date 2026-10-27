@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { hasApprovedOverride } from './utils/verifyOverride';
 import { userIsStaff } from './utils/adminRoles';
 import { getMessageTemplate } from './utils/messageTemplates';
+import { leggiTutteLeRighe } from './utils/leggiTutteLeRighe';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -558,11 +559,18 @@ const handler: Handler = async (event) => {
 
         const perAccount = new Map<string, { id: string; nome: string }>();
 
+        // 27/10/2026: paginato. PostgREST si ferma a 1000 righe senza errore,
+        // e "tutti" dava il credito solo alle prime 1000 schede: gli altri
+        // clienti restavano senza bonus e nessuno se ne accorgeva.
         const aggiungiSchede = async (filtro: (q: any) => any) => {
-          const { data, error: err } = await filtro(
-            serviceSupabase.from('customers_extended').select('id, user_id, nome, cognome').not('user_id', 'is', null)
+          const { data, error: err } = await leggiTutteLeRighe<{ id: string; user_id?: string; nome?: string; cognome?: string }>(
+            (from, to, conConteggio) => filtro(
+              serviceSupabase.from('customers_extended')
+                .select('id, user_id, nome, cognome', conConteggio ? { count: 'exact' } : undefined)
+                .not('user_id', 'is', null)
+            ).order('id').range(from, to)
           );
-          if (err) throw new Error(err.message);
+          if (err) throw new Error(err instanceof Error ? err.message : String((err as { message?: string })?.message || err));
           for (const c of data || []) {
             const uid = String((c as { user_id?: string }).user_id || '');
             if (!uid || perAccount.has(uid)) continue;
@@ -591,8 +599,14 @@ const handler: Handler = async (event) => {
             await aggiungiSchede(q => q);
             // Chi ha gia' un wallet ma non ha una scheda compilata: e' un
             // cliente a tutti gli effetti, "tutti" vuol dire anche lui.
-            const { data: saldi } = await serviceSupabase
-              .from('user_credit_balance').select('user_id');
+            const { data: saldi, error: erroreSaldi } = await leggiTutteLeRighe<{ user_id?: string }>(
+              (from, to, conConteggio) => serviceSupabase
+                .from('user_credit_balance')
+                .select('user_id', conConteggio ? { count: 'exact' } : undefined)
+                .order('user_id').range(from, to),
+              { dedupeById: false }
+            );
+            if (erroreSaldi) throw new Error(String((erroreSaldi as { message?: string })?.message || erroreSaldi));
             for (const b of saldi || []) {
               const uid = String((b as { user_id?: string }).user_id || '');
               if (uid && !perAccount.has(uid)) perAccount.set(uid, { id: uid, nome: '' });

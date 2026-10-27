@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
 import { supabase } from '../../../supabaseClient'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -246,11 +247,17 @@ export default function CustomerWalletTab() {
 
       // Somma dei lotti ancora spendibili, per account.
       const oggi = new Date().toISOString().slice(0, 10)
-      const { data: lottiVincolati } = await supabase
+      // 27/10/2026: a pagine. I lotti sono piu' di 1000 (un bonus a tutti ne
+      // crea uno per cliente) e PostgREST si ferma a 1000 senza errore:
+      // spariva un lotto a caso per cliente, e sembrava che il bonus lavaggio
+      // non fosse mai arrivato.
+      const { data: lottiVincolati } = await fetchAllRows((from, to) => supabase
         .from('wallet_crediti_vincolati')
         .select('id, user_id, residuo, scadenza, servizi, descrizione')
         .gt('residuo', 0)
         .order('scadenza', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(from, to))
       const perUtenteLotti = new Map<string, LottoCliente[]>()
       for (const l of lottiVincolati || []) {
         const scad = (l as { scadenza?: string | null }).scadenza
