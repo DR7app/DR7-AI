@@ -230,6 +230,22 @@ export async function hasActiveClub(supabase: SupabaseClient, userId: string): P
  * over the last 12 months, in EUR. Excludes wallet-paid bookings, cancelled
  * bookings, and bonus credits — per `tier_annual_spend_rule.md`.
  */
+// 28/10/2026: rettifiche manuali della direzione (dr7_club_rettifiche_spesa),
+// valide 12 mesi. Errore o tabella assente = nessuna rettifica.
+async function getRettificaSpesaEur(supabase: SupabaseClient, userId: string, sinceIso: string): Promise<number> {
+    try {
+        const { data, error } = await supabase
+            .from('dr7_club_rettifiche_spesa')
+            .select('importo')
+            .eq('user_id', userId)
+            .gte('created_at', sinceIso)
+        if (error) return 0
+        return (data || []).reduce((s, r) => s + (Number((r as { importo: number | string }).importo) || 0), 0)
+    } catch {
+        return 0
+    }
+}
+
 export async function getAnnualSpendEur(supabase: SupabaseClient, userId: string): Promise<number> {
     if (!userId) return 0
 
@@ -266,8 +282,9 @@ export async function getAnnualSpendEur(supabase: SupabaseClient, userId: string
     }
 
     totalEur += await getRechargeSpendEur(supabase, userId, sinceIso)
+    totalEur += await getRettificaSpesaEur(supabase, userId, sinceIso)
 
-    const computed = Math.round(totalEur * 100) / 100
+    const computed = Math.max(0, Math.round(totalEur * 100) / 100)
     const override = TIER_SPEND_OVERRIDES[userId]
     // L'override è un PAVIMENTO (mai una sostituzione): stessa regola del sito.
     return typeof override === 'number' ? Math.max(override, computed) : computed

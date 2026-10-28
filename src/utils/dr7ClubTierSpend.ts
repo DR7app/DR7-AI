@@ -89,6 +89,14 @@ export interface TierSpend {
   computed: number
   /** true quando il pavimento grandfathered sta ancora reggendo la cifra. */
   floorApplied: boolean
+  /** Somma delle rettifiche manuali della direzione ancora valide (12 mesi). */
+  rettifica: number
+}
+
+/** Rettifica manuale della spesa (tabella dr7_club_rettifiche_spesa). */
+export interface TierSpendRettifica {
+  importo: number | string | null
+  created_at: string | null
 }
 
 const toNumber = (raw: unknown): number => {
@@ -109,7 +117,8 @@ export function computeAnnualSpend(
   bookings: TierSpendBooking[] | null | undefined,
   recharges: TierSpendRecharge[] | null | undefined,
   userId?: string | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  rettifiche: TierSpendRettifica[] | null | undefined = []
 ): TierSpend {
   const cutoff = new Date(now)
   cutoff.setFullYear(cutoff.getFullYear() - 1)
@@ -150,10 +159,19 @@ export function computeAnnualSpend(
   }
   rechargeSpend = round2(rechargeSpend)
 
-  const computed = round2(bookingSpend + rechargeSpend)
+  // 3. Rettifiche manuali (28/10/2026): la direzione corregge la cifra
+  //    cliente per cliente, con OTP. Valgono 12 mesi come le prenotazioni.
+  let rettifica = 0
+  for (const r of rettifiche || []) {
+    if (!entroUnAnno(r.created_at)) continue
+    rettifica += toNumber(r.importo)
+  }
+  rettifica = round2(rettifica)
+
+  const computed = round2(Math.max(0, bookingSpend + rechargeSpend + rettifica))
   const override = userId ? TIER_SPEND_OVERRIDES[userId] : undefined
   const floorApplied = typeof override === 'number' && override > computed
   const annualSpend = floorApplied ? (override as number) : computed
 
-  return { annualSpend, bookingSpend, rechargeSpend, rechargeCount, computed, floorApplied }
+  return { annualSpend, bookingSpend, rechargeSpend, rechargeCount, computed, floorApplied, rettifica }
 }

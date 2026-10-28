@@ -31,6 +31,17 @@ describe('computeAnnualSpend', () => {
     expect(r.bookingSpend).toBe(1220.20)
   })
 
+  it('applica le rettifiche della direzione degli ultimi 12 mesi, mai sotto zero', () => {
+    const r = computeAnnualSpend([prenotazione()], [ricarica()], null, OGGI, [
+      { importo: -500, created_at: ieri },
+      { importo: '-9999', created_at: tredicIMesiFa },
+    ])
+    expect(r.rettifica).toBe(-500)
+    expect(r.annualSpend).toBe(1110.10)
+    const zero = computeAnnualSpend([prenotazione()], [], null, OGGI, [{ importo: -5000, created_at: ieri }])
+    expect(zero.annualSpend).toBe(0)
+  })
+
   it('esclude le prenotazioni pagate dal wallet o con gift card', () => {
     const r = computeAnnualSpend(
       [prenotazione({ payment_method: 'credit' }), prenotazione({ payment_method: 'gift_card' })],

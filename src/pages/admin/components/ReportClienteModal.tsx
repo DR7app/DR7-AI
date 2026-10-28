@@ -16,7 +16,8 @@ import {
   normalizeClientStatus,
   type ClientStatusDef,
 } from '../../../utils/clientStatusConfig'
-import { computeAnnualSpend } from '../../../utils/dr7ClubTierSpend'
+import { computeAnnualSpend, type TierSpendRettifica } from '../../../utils/dr7ClubTierSpend'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { loadClubTiers, pickClubTier, DEFAULT_CLUB_TIERS, type ClubTierDef } from '../../../utils/dr7ClubTiers'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
@@ -186,6 +187,53 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [veicoliAperti, setVeicoliAperti] = useState(false)
   const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
   const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
+  // 28/10/2026 (direzione): rettifica manuale della spesa DR7 Club, con OTP.
+  const [rettificheSpesa, setRettificheSpesa] = useState<Array<TierSpendRettifica & { id: string; nota: string | null; creato_da: string | null }>>([])
+  const [rettificaForm, setRettificaForm] = useState<{ importo: string; nota: string } | null>(null)
+  const [rettificaOtp, setRettificaOtp] = useState<{ azione: 'crea' | 'elimina'; id?: string; messaggio: string } | null>(null)
+  const [rettificaSessione] = useState(() => crypto.randomUUID())
+  // Account sito a cui e' legata la spesa (lo stesso del wallet).
+  const [rettificaUid, setRettificaUid] = useState<string | null>(null)
+  const caricaRettifiche = async (uid: string) => {
+    setRettificaUid(uid)
+    // Tabella nuova: prima della migrazione la lettura fallisce e la spesa
+    // resta quella calcolata, senza bloccare la scheda.
+    const { data, error } = await supabase
+      .from('dr7_club_rettifiche_spesa')
+      .select('id, importo, nota, creato_da, created_at')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+    setRettificheSpesa(error ? [] : (data || []))
+  }
+  const eseguiRettifica = async (overrideId: string) => {
+    const richiesta = rettificaOtp
+    setRettificaOtp(null)
+    const uid = rettificaUid
+    if (!richiesta || !uid) return
+    const corpo = richiesta.azione === 'crea'
+      ? {
+          action: 'crea',
+          user_id: uid,
+          importo: parseFloat((rettificaForm?.importo || '').replace(/\s/g, '').replace(',', '.')),
+          nota: rettificaForm?.nota || '',
+          overrideId,
+        }
+      : { action: 'elimina', id: richiesta.id, overrideId }
+    try {
+      const res = await authFetch('/.netlify/functions/dr7-club-rettifica-spesa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || d.error) throw new Error(d.error || `HTTP ${res.status}`)
+      toast.success(richiesta.azione === 'crea' ? 'Rettifica applicata' : 'Rettifica eliminata')
+      if (richiesta.azione === 'crea') setRettificaForm({ importo: '', nota: '' })
+      await caricaRettifiche(uid)
+    } catch (err) {
+      toast.error('Rettifica non salvata: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
   // Livelli DR7 Club come configurati in Centralina Pro (non piu' i tre
   // Access/Black/Signature scritti nel codice: l'operatore ne puo' avere 30).
   const [clubTiers, setClubTiers] = useState<ClubTierDef[]>(DEFAULT_CLUB_TIERS)
@@ -381,6 +429,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           purchases = senzaFlag.data
         }
         setWalletRecharges(purchases || [])
+        await caricaRettifiche(walletUserId)
       }
 
       // DR7 CLUB PRIVILEGE membership check — try the function first, then
@@ -530,8 +579,8 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     // a carta (fuori bonifici e contanti) e si sommavano anche le ricariche
     // doppie. Adesso il calcolo e' quello canonico, condiviso con il motore
     // del cashback e con il sito: dr7ClubTierSpend.ts.
-    const { annualSpend, bookingSpend: cardBookingSpend, rechargeSpend, rechargeCount } =
-      computeAnnualSpend(bookings, walletRecharges, customer?.user_id)
+    const { annualSpend, bookingSpend: cardBookingSpend, rechargeSpend, rechargeCount, rettifica } =
+      computeAnnualSpend(bookings, walletRecharges, customer?.user_id, new Date(), rettificheSpesa)
 
     // 04/09/2026 — I livelli arrivano da Centralina Pro > DR7 Club. Prima
     // erano tre soglie scritte qui dentro: aggiungerne di nuovi in Centralina
@@ -548,14 +597,14 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       tier: match.tier,
       label: match.label,
       reward: match.rewardPercent,
-      annualSpend, cardBookingSpend, rechargeSpend, rechargeCount,
+      annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, rettifica,
       currentThreshold: match.min,
       nextThreshold: match.next ? match.next.min : null,
       nextLabel: match.next ? match.next.label : null,
       isTop,
       badge,
     }
-  }, [bookings, walletRecharges, customer?.user_id, clubTiers])
+  }, [bookings, walletRecharges, customer?.user_id, clubTiers, rettificheSpesa])
 
 
   // Insight
@@ -996,9 +1045,90 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-sm font-bold text-theme-text-primary tabular-nums">{fmtEur(clubTier.annualSpend)} <span className="text-[10px] font-normal uppercase tracking-wider text-theme-text-muted">carta · 12m</span></div>
-                  <div className="text-[11px] text-theme-text-muted tabular-nums">Prenotazioni {fmtEur(clubTier.cardBookingSpend)} · Ricariche {fmtEur(clubTier.rechargeSpend)} ({clubTier.rechargeCount})</div>
+                  <div className="text-[11px] text-theme-text-muted tabular-nums">
+                    Prenotazioni {fmtEur(clubTier.cardBookingSpend)} · Ricariche {fmtEur(clubTier.rechargeSpend)} ({clubTier.rechargeCount})
+                    {clubTier.rettifica !== 0 && <> · Rettifica {fmtEur(clubTier.rettifica)}</>}
+                  </div>
+                  {rettificaUid && (
+                    <button
+                      type="button"
+                      onClick={() => setRettificaForm(f => f ? null : { importo: '', nota: '' })}
+                      className="text-[11px] text-blue-400 hover:text-blue-300 font-medium"
+                    >
+                      Rettifica spesa
+                    </button>
+                  )}
                 </div>
               </div>
+              {/* Rettifica manuale della spesa: importo negativo toglie, positivo
+                  aggiunge. Vale 12 mesi. Serve l'OTP della direzione. */}
+              {rettificaForm && (
+                <div className="mt-2 rounded-lg border border-theme-border bg-theme-bg-tertiary/40 p-3 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={rettificaForm.importo}
+                      onChange={e => setRettificaForm({ ...rettificaForm, importo: e.target.value })}
+                      placeholder="Importo (es. -2528,79)"
+                      className="w-44 px-3 py-1.5 text-sm bg-theme-bg-secondary border border-theme-border rounded text-theme-text-primary"
+                    />
+                    <input
+                      type="text"
+                      value={rettificaForm.nota}
+                      onChange={e => setRettificaForm({ ...rettificaForm, nota: e.target.value })}
+                      placeholder="Motivo"
+                      className="flex-1 min-w-[160px] px-3 py-1.5 text-sm bg-theme-bg-secondary border border-theme-border rounded text-theme-text-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const valore = parseFloat(rettificaForm.importo.replace(/\s/g, '').replace(',', '.'))
+                        if (!Number.isFinite(valore) || valore === 0) { toast.error('Inserisci un importo (negativo per togliere)'); return }
+                        if (!rettificaForm.nota.trim()) { toast.error('Scrivi il motivo della rettifica'); return }
+                        setRettificaOtp({
+                          azione: 'crea',
+                          messaggio: `Rettifica spesa DR7 Club di ${fmtEur(valore)} per ${[customer?.nome, customer?.cognome].filter(Boolean).join(' ') || customer?.denominazione || 'il cliente'}: ${fmtEur(clubTier.annualSpend)} -> ${fmtEur(Math.max(0, clubTier.annualSpend + valore))}. Motivo: ${rettificaForm.nota.trim()}`,
+                        })
+                      }}
+                      className="px-3 py-1.5 text-sm font-semibold rounded bg-dr7-gold text-black"
+                    >
+                      Applica
+                    </button>
+                  </div>
+                  {rettificaOtp && (
+                    <LimitationOverrideModal
+                      isOpen
+                      limitationCode="dr7club.rettifica_spesa"
+                      limitationMessage={rettificaOtp.messaggio}
+                      draftSessionId={rettificaSessione}
+                      flowType="dr7club_rettifica_spesa"
+                      onCancel={() => setRettificaOtp(null)}
+                      onClose={() => setRettificaOtp(null)}
+                      onOverrideApproved={(overrideId) => { void eseguiRettifica(overrideId) }}
+                    />
+                  )}
+                  {rettificheSpesa.length > 0 && (
+                    <div className="space-y-1">
+                      {rettificheSpesa.map(r => (
+                        <div key={r.id} className="flex items-center justify-between gap-3 text-[11px]">
+                          <span className="text-theme-text-secondary">
+                            {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''} · <span className="font-semibold tabular-nums">{fmtEur(Number(r.importo) || 0)}</span>
+                            {r.nota ? ` · ${r.nota}` : ''}{r.creato_da ? ` · ${r.creato_da}` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRettificaOtp({ azione: 'elimina', id: r.id, messaggio: `Eliminare la rettifica di ${fmtEur(Number(r.importo) || 0)} dalla spesa DR7 Club di ${[customer?.nome, customer?.cognome].filter(Boolean).join(' ') || customer?.denominazione || 'il cliente'}` })}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            Elimina
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Tutti i livelli configurati in Centralina Pro. Possono
                   essere trenta: nel gestionale la lista sta chiusa. */}
               <details className="mt-1.5 group">
