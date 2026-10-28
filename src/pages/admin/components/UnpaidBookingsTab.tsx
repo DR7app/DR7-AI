@@ -3787,8 +3787,13 @@ export default function UnpaidBookingsTab() {
       {/* KPI Cards + AI Insights — su lg sta tutto in una riga: 5 KPI a
           sinistra (col 1-5 di 7) + pannello AI Insights a destra (col 6-7).
           Sotto lg le card si impilano (KPI in 2 col, Insights full width). */}
-      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3 lg:gap-4">
-        <div className="col-span-2 lg:col-span-5 grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+      {/* 28/10/2026: a 5/7 della larghezza le card erano larghe ~190px, gli
+          importi a sei cifre venivano tagliati e le card si allungavano fino
+          all'altezza del pannello AI Insights. Ora la riga a fianco parte solo
+          su schermi molto larghi (2xl); prima le KPI stanno in riga piena e
+          gli Insights sotto. */}
+      <div className="grid grid-cols-1 2xl:grid-cols-7 gap-3 lg:gap-4 items-start">
+        <div className="2xl:col-span-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 lg:gap-4">
         {/* 1. Totale da incassare */}
         <div className="relative overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent p-4">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-red-500/10 rounded-full blur-2xl pointer-events-none"/>
@@ -3801,7 +3806,7 @@ export default function UnpaidBookingsTab() {
                 </svg>
               </div>
             </div>
-            <div className="text-2xl lg:text-3xl font-bold text-red-400 mt-2.5 tabular-nums">
+            <div className="text-2xl xl:text-[26px] leading-tight font-bold text-red-400 mt-2.5 tabular-nums whitespace-nowrap">
               €{(totalUnpaid / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">
@@ -3822,7 +3827,7 @@ export default function UnpaidBookingsTab() {
                 </svg>
               </div>
             </div>
-            <div className="text-2xl lg:text-3xl font-bold text-purple-400 mt-2.5 tabular-nums">{allGroups.total}</div>
+            <div className="text-2xl xl:text-[26px] leading-tight font-bold text-purple-400 mt-2.5 tabular-nums whitespace-nowrap">{allGroups.total}</div>
             <div className="text-[11px] text-theme-text-muted mt-1">
               {allGroups.rental} noleggio &middot; {allGroups.pw} prime wash
             </div>
@@ -3841,7 +3846,7 @@ export default function UnpaidBookingsTab() {
                 </svg>
               </div>
             </div>
-            <div className="text-2xl lg:text-3xl font-bold text-orange-400 mt-2.5 tabular-nums">
+            <div className="text-2xl xl:text-[26px] leading-tight font-bold text-orange-400 mt-2.5 tabular-nums whitespace-nowrap">
               €{(performanceStats.scadutoCents / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">oltre 14 giorni</div>
@@ -3860,7 +3865,7 @@ export default function UnpaidBookingsTab() {
                 </svg>
               </div>
             </div>
-            <div className="text-2xl lg:text-3xl font-bold text-emerald-400 mt-2.5 tabular-nums">
+            <div className="text-2xl xl:text-[26px] leading-tight font-bold text-emerald-400 mt-2.5 tabular-nums whitespace-nowrap">
               {performanceStats.probabilitaIncasso}%
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">
@@ -3881,8 +3886,8 @@ export default function UnpaidBookingsTab() {
                 </svg>
               </div>
             </div>
-            <div className="text-2xl lg:text-3xl font-bold text-blue-400 mt-2.5 tabular-nums">
-              €{(performanceStats.incassiMese / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className="text-2xl xl:text-[26px] leading-tight font-bold text-blue-400 mt-2.5 tabular-nums whitespace-nowrap">
+              €{(performanceStats.incassiMese / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions)}
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">recuperati via addebito</div>
           </div>
@@ -3892,7 +3897,7 @@ export default function UnpaidBookingsTab() {
         {/* AI Insights — pannello a destra (col 6-7 su lg). Regole euristiche
             sui dati gia\' disponibili in performanceStats e customerGroups,
             niente LLM. Click su un insight scrolla / filtra la lista (TBD). */}
-        <div className="col-span-2 relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-cyan-500/5 to-transparent p-4">
+        <div className="2xl:col-span-2 relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-cyan-500/5 to-transparent p-4">
           <div className="absolute -top-8 -right-8 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"/>
           <div className="relative">
             <div className="flex items-center justify-between mb-3">
@@ -3955,7 +3960,7 @@ export default function UnpaidBookingsTab() {
                 cyan: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
               }
               return (
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 2xl:grid-cols-1 gap-2">
                   {insights.map((ins, i) => (
                     <div key={i} className="flex items-start gap-2.5 bg-theme-bg-primary/40 border border-theme-border/50 rounded-xl px-3 py-2">
                       <div className={`shrink-0 w-7 h-7 rounded-lg ${tones[ins.tone]} border grid place-items-center font-bold text-xs tabular-nums`}>{ins.n}</div>
