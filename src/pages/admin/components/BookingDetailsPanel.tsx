@@ -209,6 +209,15 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   // Format dates
   const pickupDate = new Date(booking.pickup_date)
   const dropoffDate = new Date(booking.dropoff_date)
+  // 29/10/2026: Lavaggio e Meccanica non hanno pickup_date/dropoff_date, solo
+  // appointment_date + appointment_time. new Date(null) = 1 gennaio 1970 01:00:
+  // la scheda aperta dal Calendario Giornaliero mostrava quella data.
+  const appuntamento = !booking.pickup_date && booking.appointment_date
+    ? new Date(booking.appointment_date)
+    : null
+  const dataValida = (d: Date) => !isNaN(d.getTime()) && d.getTime() > 0
+  const giorno = (d: Date) => dataValida(d) ? formatRomeDate(d, { dateStyle: 'long' }) : '—'
+  const ora = (d: Date) => dataValida(d) ? formatRomeDate(d, { timeStyle: 'short' }) : ''
 
   // Il pannello vive in un portale su <body>. Chi lo apre puo' essere dentro un
   // contenitore con `backdrop-blur` e uno z-index basso (la modale del
@@ -282,29 +291,43 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           </div>
 
           {/* Rental Period */}
+          {appuntamento ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Appuntamento</h3>
+            <div className="space-y-1">
+              <div className="font-mono text-sm sm:text-base text-theme-text-primary">
+                {giorno(appuntamento)}
+              </div>
+              <div className="font-mono text-sm text-theme-text-muted">
+                {booking.appointment_time ? String(booking.appointment_time).slice(0, 5) : ora(appuntamento)}
+              </div>
+            </div>
+          </div>
+          ) : (
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Periodo Noleggio</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <div className="text-xs text-theme-text-muted">Ritiro</div>
                 <div className="font-mono text-sm sm:text-base text-theme-text-primary">
-                  {formatRomeDate(pickupDate, { dateStyle: 'long' })}
+                  {giorno(pickupDate)}
                 </div>
                 <div className="font-mono text-sm text-theme-text-muted">
-                  {formatRomeDate(pickupDate, { timeStyle: 'short' })}
+                  {ora(pickupDate)}
                 </div>
               </div>
               <div className="space-y-1">
                 <div className="text-xs text-theme-text-muted">Rientro</div>
                 <div className="font-mono text-sm sm:text-base text-theme-text-primary">
-                  {formatRomeDate(dropoffDate, { dateStyle: 'long' })}
+                  {giorno(dropoffDate)}
                 </div>
                 <div className="font-mono text-sm text-theme-text-muted">
-                  {formatRomeDate(dropoffDate, { timeStyle: 'short' })}
+                  {ora(dropoffDate)}
                 </div>
               </div>
             </div>
           </div>
+          )}
 
           {/* 14/09/2026 — Prenotazione fatta con una PREVENDITA. Va detto qui,
               prima del blocco Pagamento: chi guarda la scheda vede un totale
