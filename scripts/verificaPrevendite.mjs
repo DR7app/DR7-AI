@@ -191,4 +191,89 @@ console.log('\n── 11. La migrazione si puo rilanciare ───────�
 await db.exec(fs.readFileSync(MIGRAZIONE, 'utf8'))
 ok(await residui(pc.id) === 10, 'rilanciarla non cancella e non altera i dati')
 
+console.log('\n── 12. Un acquisto = una riga pagata (migrazione 20261104) ─────')
+// Tabelle vere su Supabase, qui ridotte alle colonne che le funzioni toccano.
+await db.exec(`
+CREATE TABLE public.carrello_articoli (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tipo text,
+  CONSTRAINT carrello_articoli_tipo_check CHECK (tipo IS NOT NULL));
+CREATE TABLE public.user_credit_balance (user_id uuid PRIMARY KEY, balance numeric, last_updated timestamptz);
+CREATE TABLE public.credit_transactions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid,
+  transaction_type text, amount numeric, balance_after numeric, description text, reference_id uuid,
+  reference_type text, service_type text, created_at timestamptz);
+CREATE TABLE public.discount_codes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), code text, status text,
+  valid_from timestamptz, valid_until timestamptz, single_use boolean, customer_email text, customer_phone text,
+  scope jsonb, minimum_spend numeric, value_type text, value_amount numeric, updated_at timestamptz);
+CREATE TABLE public.discount_code_usages (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), discount_code_id uuid,
+  customer_name text, service_type text, booking_id uuid, discount_applied numeric, notes text);
+CREATE TABLE public.customers_extended (user_id uuid, telefono text);
+CREATE TABLE public.centralina_pro_config (id text PRIMARY KEY, config jsonb);
+INSERT INTO public.centralina_pro_config VALUES ('main', '{}'::jsonb);
+`)
+for (const f of ['20260926_prevendite_wallet_carrello.sql', '20261019_prevendite_solo_carta.sql', '20261022_prevendite_wallet_codice_sconto.sql']) {
+  await db.exec(fs.readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8'))
+}
+const IDEMPOTENTE = new URL('../supabase/migrations/20261104_prevendite_acquisto_idempotente.sql', import.meta.url)
+await db.exec(fs.readFileSync(IDEMPOTENTE, 'utf8'))
+ok((await uno(`SELECT count(*)::int n FROM pg_proc WHERE proname='prevendita_acquista_con_credito'`)).n === 1,
+  'una sola funzione prevendita_acquista_con_credito (nessun overload)')
+
+const macan = await uno(`INSERT INTO prevendite (nome, prezzo, utilizzi_inclusi, veicoli, km_inclusi)
+  VALUES ('Macan GTS', 790, 2, '[{"id":"veh-macan","nome":"Porsche Macan GTS"}]'::jsonb, 100) RETURNING id`)
+await db.query(`INSERT INTO user_credit_balance VALUES ($1, 5000, now())`, [CLIENTE])
+await chi(CLIENTE, 'cliente@dr7.app')
+const compra = async dati => (await uno(`SELECT prevendita_acquista_con_credito($1, $2::jsonb) r`, [macan.id, JSON.stringify(dati)])).r
+const saldo = async () => Number((await uno(`SELECT balance FROM user_credit_balance WHERE user_id=$1`, [CLIENTE])).balance)
+const righeMacan = async () => (await uno(`SELECT count(*)::int n FROM prevendite_clienti WHERE prevendita_id=$1 AND payment_status='succeeded'`, [macan.id])).n
+
+const a1 = await compra({ chiave_acquisto: 'scheda-1' })
+ok(a1.ok && await saldo() === 4210 && await righeMacan() === 1, 'wallet: primo acquisto, saldo 5000 -> 4210')
+const r1 = await uno(`SELECT utilizzi_iniziali, prezzo_pagato FROM prevendite_clienti WHERE id=$1`, [a1.prevendita_cliente_id])
+ok(r1.utilizzi_iniziali === 2 && Number(r1.prezzo_pagato) === 790, 'utilizzi e prezzo copiati dal catalogo (2 utilizzi, 790)')
+const a2 = await compra({ chiave_acquisto: 'scheda-1' })
+ok(a2.ok && a2.gia_acquistata && a2.prevendita_cliente_id === a1.prevendita_cliente_id, 'doppio clic (stessa chiave): stessa riga')
+ok(await saldo() === 4210 && await righeMacan() === 1, 'e nessun secondo addebito')
+ok((await uno(`SELECT count(*)::int n FROM credit_transactions WHERE user_id=$1`, [CLIENTE])).n === 1, 'un solo movimento nel wallet')
+ok((await uno(`SELECT posti_venduti n FROM prevendite WHERE id=$1`, [macan.id])).n === 1, 'posti venduti: 1')
+
+const a3 = await compra({ chiave_acquisto: 'scheda-2' })
+ok(a3.ok && !a3.gia_acquistata && await righeMacan() === 2 && await saldo() === 3420, 'nuova intenzione (altra chiave): ricompra davvero')
+
+// Client vecchio, senza chiave: protetto dalla finestra di 2 minuti.
+await db.query(`UPDATE prevendite_clienti SET created_at = now() - interval '10 minutes' WHERE prevendita_id=$1`, [macan.id])
+const s1 = await compra({})
+const s2 = await compra({})
+ok(s1.ok && !s1.gia_acquistata && s2.ok && s2.gia_acquistata && s2.prevendita_cliente_id === s1.prevendita_cliente_id,
+  'senza chiave: doppia chiamata entro 2 minuti = una riga')
+ok(await righeMacan() === 3 && await saldo() === 2630, 'e un solo addebito')
+await db.query(`UPDATE prevendite_clienti SET created_at = now() - interval '3 minutes' WHERE id=$1`, [s1.prevendita_cliente_id])
+const s3 = await compra({})
+ok(s3.ok && !s3.gia_acquistata && await righeMacan() === 4, 'senza chiave, piu tardi: nuovo acquisto consentito')
+await chi(ALTRO, 'altro@dr7.app')
+await db.query(`INSERT INTO user_credit_balance VALUES ($1, 1000, now())`, [ALTRO])
+const x1 = await compra({ chiave_acquisto: 'scheda-1' })
+ok(x1.ok && !x1.gia_acquistata && x1.prevendita_cliente_id !== a1.prevendita_cliente_id, 'la stessa chiave di un altro cliente non aggancia la riga altrui')
+await chi(CLIENTE, 'cliente@dr7.app')
+
+// Un ordine Nexi non puo' stare su due righe.
+const rigaNexi = ordine => db.query(`INSERT INTO prevendite_clienti (prevendita_id, user_id, nome, payment_status, nexi_order_id)
+  VALUES ($1, $2, 'Macan GTS', 'pending', $3)`, [macan.id, CLIENTE, ordine])
+await rigaNexi('DR7PVUNICO')
+let doppio = null
+try { await rigaNexi('DR7PVUNICO') } catch (e) { doppio = e }
+ok(doppio && /duplicate|unique/i.test(doppio.message), 'stesso nexi_order_id due volte: rifiutato dal database')
+await rigaNexi(null); await rigaNexi(null)
+ok(true, 'righe senza ordine Nexi (wallet, sportello): nessun vincolo')
+
+// Doppioni gia' presenti: la migrazione non deve fallire, salta l'indice.
+await db.exec(`DROP INDEX ux_prevendite_clienti_nexi_order`)
+await rigaNexi('DR7PVUNICO')
+await db.exec(fs.readFileSync(IDEMPOTENTE, 'utf8'))
+ok((await uno(`SELECT count(*)::int n FROM pg_indexes WHERE indexname='ux_prevendite_clienti_nexi_order'`)).n === 0,
+  'con doppioni esistenti la migrazione passa e NON crea l indice (NOTICE)')
+await db.query(`DELETE FROM prevendite_clienti WHERE id = (SELECT id FROM prevendite_clienti WHERE nexi_order_id='DR7PVUNICO' LIMIT 1)`)
+await db.exec(fs.readFileSync(IDEMPOTENTE, 'utf8'))
+ok((await uno(`SELECT count(*)::int n FROM pg_indexes WHERE indexname='ux_prevendite_clienti_nexi_order'`)).n === 1,
+  'tolti i doppioni, il rilancio crea l indice')
+ok(await righeMacan() === 5, 'rilanciare la migrazione non tocca gli acquisti (4 + 1 dell altro cliente)')
+
 console.log('\nSCENARIO COMPLETO: tutto verificato.')

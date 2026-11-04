@@ -125,7 +125,7 @@ interface ClienteScheda {
 }
 
 type Vista = 'catalogo' | 'venduti' | 'popup' | 'promozioni'
-type FiltroVenduti = 'tutte' | 'attiva' | 'terminata' | 'scaduta' | 'bloccata'
+type FiltroVenduti = 'tutte' | 'attiva' | 'terminata' | 'scaduta' | 'bloccata' | 'non_pagata'
 
 const PAGATO = ['paid', 'completed', 'succeeded']
 
@@ -149,15 +149,24 @@ function statoReale(pc: PrevenditaCliente): PrevenditaCliente['stato'] {
   return 'attiva'
 }
 
-function BadgeStato({ stato }: { stato: PrevenditaCliente['stato'] }) {
+/**
+ * 04/11/2026 — un tentativo di pagamento con carta abbandonato resta in
+ * pending per sempre (Nexi non richiama se il cliente chiude la pagina). Non
+ * e' una prevendita del cliente: fuori dalla lista di default, sotto "Non
+ * pagate", con la sua etichetta e non "Bloccata".
+ */
+const pagata = (pc: PrevenditaCliente) => PAGATO.includes(pc.payment_status)
+
+function BadgeStato({ stato }: { stato: PrevenditaCliente['stato'] | 'non_pagata' }) {
   const stili: Record<string, string> = {
     attiva: 'bg-emerald-600/20 text-emerald-400',
     terminata: 'bg-blue-600/20 text-blue-400',
     scaduta: 'bg-amber-600/20 text-amber-400',
     bloccata: 'bg-red-600/20 text-red-400',
+    non_pagata: 'bg-theme-bg-secondary text-theme-text-muted border border-theme-border',
   }
   const etichette: Record<string, string> = {
-    attiva: 'Attiva', terminata: 'Terminata', scaduta: 'Scaduta', bloccata: 'Bloccata',
+    attiva: 'Attiva', terminata: 'Terminata', scaduta: 'Scaduta', bloccata: 'Bloccata', non_pagata: 'Non pagata',
   }
   return <span className={`px-2 py-1 rounded-full text-xs font-medium ${stili[stato]}`}>{etichette[stato]}</span>
 }
@@ -330,6 +339,9 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   const [vendMetodo, setVendMetodo] = useState('contanti')
   const [vendNote, setVendNote] = useState('')
   const [vendInCorso, setVendInCorso] = useState(false)
+  // 04/11/2026 — blocco sincrono: con il solo stato un doppio clic su
+  // "Registra la vendita" creava due pacchetti pagati (vedi useSingleFlight).
+  const vendLock = useRef(false)
 
   // Popup
   const [config, setConfig] = useState<Record<string, unknown>>({})
@@ -660,6 +672,8 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     const c = clienti.find(x => x.id === vendClienteId)
     if (!p || !c) return toast.error('Dati non trovati')
 
+    if (vendLock.current) return
+    vendLock.current = true
     setVendInCorso(true)
     try {
       const prezzo = numeroOppureNull(vendPrezzo) ?? p.prezzo
@@ -701,6 +715,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
       console.error(e)
       toast.error('Vendita non registrata: ' + ((e as Error).message || ''))
     } finally {
+      vendLock.current = false
       setVendInCorso(false)
     }
   }
@@ -725,7 +740,10 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
 
   const vendutiFiltrati = useMemo(() => {
     return venduti.filter(pc => {
-      if (filtroVenduti !== 'tutte' && statoReale(pc) !== filtroVenduti) return false
+      // Le non pagate si vedono solo nel loro filtro: non sono pacchetti del cliente.
+      if (filtroVenduti === 'non_pagata') { if (pagata(pc)) return false }
+      else if (!pagata(pc)) return false
+      else if (filtroVenduti !== 'tutte' && statoReale(pc) !== filtroVenduti) return false
       return corrispondeRicerca(ricercaVenduti, [
         pc.customer_nome, pc.customer_email, pc.customer_telefono, pc.nome,
         ...(pc.veicoli || []).flatMap(v => [v.nome, v.targa]),
@@ -743,6 +761,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   const totali = useMemo(() => {
     const pagate = venduti.filter(v => PAGATO.includes(v.payment_status))
     return {
+      nonPagate: venduti.length - pagate.length,
       vendute: pagate.length,
       incassato: pagate.reduce((s, v) => s + (Number(v.prezzo_pagato) || 0), 0),
       utilizziResidui: pagate.reduce((s, v) => s + Math.max(0, v.utilizzi_iniziali - v.utilizzi_usati), 0),
@@ -910,6 +929,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                 { k: 'terminata' as FiltroVenduti, l: 'Terminate' },
                 { k: 'scaduta' as FiltroVenduti, l: 'Scadute' },
                 { k: 'bloccata' as FiltroVenduti, l: 'Bloccate' },
+                { k: 'non_pagata' as FiltroVenduti, l: `Tentativi non pagati (${totali.nonPagate})` },
               ]).map(f => (
                 <button
                   key={f.k}
@@ -957,15 +977,27 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                             <div className="text-xs">{pc.customer_email || '—'}</div>
                           </td>
                           <td className="p-4 text-theme-text-primary">{pc.nome}</td>
-                          <td className="p-4 text-theme-text-primary">{euro(pc.prezzo_pagato)}</td>
-                          <td className="p-4">
-                            <span className="text-theme-text-primary font-medium">{residui}</span>
-                            <span className="text-xs"> disponibili su {pc.utilizzi_iniziali}</span>
-                            <div className="text-xs">usati: {pc.utilizzi_usati}</div>
-                          </td>
+                          {pagata(pc) ? (
+                            <>
+                              <td className="p-4 text-theme-text-primary">{euro(pc.prezzo_pagato)}</td>
+                              <td className="p-4">
+                                <span className="text-theme-text-primary font-medium">{residui}</span>
+                                <span className="text-xs"> disponibili su {pc.utilizzi_iniziali}</span>
+                                <div className="text-xs">usati: {pc.utilizzi_usati}</div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-4">
+                                <div className="text-theme-text-primary">Non pagato</div>
+                                <div className="text-xs">{euro(pc.prezzo_pagato)} non incassati · {pc.payment_status}</div>
+                              </td>
+                              <td className="p-4 text-xs">Nessun utilizzo: il pagamento non e' andato a buon fine</td>
+                            </>
+                          )}
                           <td className="p-4 text-xs">{dataIt(pc.data_acquisto)}</td>
                           <td className="p-4 text-xs">{dataIt(pc.data_scadenza)}</td>
-                          <td className="p-4"><BadgeStato stato={statoReale(pc)} /></td>
+                          <td className="p-4"><BadgeStato stato={pagata(pc) ? statoReale(pc) : 'non_pagata'} /></td>
                           <td className="p-4 text-right">
                             <button onClick={() => setDettaglio(pc)} className="text-xs text-dr7-gold hover:underline">Apri</button>
                           </td>
@@ -1522,7 +1554,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
 
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-theme-text-secondary">Stato</span>
-                    <BadgeStato stato={statoReale(dettaglio)} />
+                    <BadgeStato stato={pagata(dettaglio) ? statoReale(dettaglio) : 'non_pagata'} />
                     {dettaglio.stato === 'bloccata'
                       ? <Button variant="secondary" className="!py-1 !min-h-0 text-xs" onClick={() => cambiaStato(dettaglio, 'attiva')}>Sblocca</Button>
                       : <Button variant="danger" className="!py-1 !min-h-0 text-xs" onClick={() => cambiaStato(dettaglio, 'bloccata')}>Blocca</Button>}
