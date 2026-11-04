@@ -22,6 +22,11 @@ import { isNexiPayByLink, isCreditWallet, isContanti } from '../../../utils/paym
 import { percentualeContanti, totaleConContanti } from '../../../utils/maggiorazioneContanti'
 import { giorniDiAddebito } from '../../../utils/giorniAddebito'
 import { leggiSaldoWallet, leggiMovimentoWallet, importoDovutoWallet, formattaEuro, type SaldoWallet } from '../../../utils/walletCliente'
+import {
+  caricaPrevenditeCliente, caricaPrevendita, prenotazioneGiaScalata, prevenditeSpendibili, valePerVeicolo,
+  verificaPrevendita, applicaPrevenditaAlPrezzo, kmConPrevendita, stessaAssicurazione, utilizziResidui,
+  type PrevenditaCliente,
+} from '../../../utils/prevenditaPrenotazione'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import { romeDateFromParts } from '../../../utils/timezoneUtils'
 import {
@@ -1395,6 +1400,156 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     return customers.filter(c => c.inLead || selezionati.has(c.id))
   }, [customers, formData.customer_id, formData.second_driver_id, formData.garante_customer_id])
 
+  // ── PREVENDITE (04/11/2026) ─────────────────────────────────────────
+  // Il trigger trg_prevendita_scala_da_prenotazione scala l'utilizzo SOLO se
+  // booking_details.prevendita_cliente_id e' scritto. Il sito lo scriveva,
+  // il gestionale no: le prenotazioni fatte qui per un cliente con una
+  // prevendita non scalavano niente (Runchina, "Macan gts Runchina").
+  // Qui l'operatore vede le prevendite spendibili del cliente sul veicolo
+  // scelto e puo' usarne una: noleggio/lavaggio/assicurazione compresa a zero
+  // come sul sito, vincoli decisi dal database (prevendita_verifica).
+  // Cliente abbinato per id / user_id / email esatta, MAI per nome.
+  const [prevenditeCliente, setPrevenditeCliente] = useState<PrevenditaCliente[]>([])
+  const [prevenditaScelta, setPrevenditaScelta] = useState<PrevenditaCliente | null>(null)
+  // ok: null = verifica in corso o non fatta; true = il database la accetta.
+  const [prevenditaVerifica, setPrevenditaVerifica] = useState<{ ok: boolean | null; errore: string | null; giaScalata: boolean }>({ ok: null, errore: null, giaScalata: false })
+  const [prevenditaCopertura, setPrevenditaCopertura] = useState(0)
+  // Prevendita gia' scritta sulla prenotazione aperta in modifica.
+  const prevenditaOriginaleIdRef = useRef<string | null>(null)
+  // In modifica il totale si ricalcola solo se l'operatore ha toccato la
+  // prevendita (non quando la si ricarica aprendo la prenotazione).
+  const prevenditaToccataRef = useRef(false)
+  const ultimaPrevenditaPrezzataRef = useRef<string | null>(null)
+  // Valori del form prima di "Usa prevendita": togliendola si rimettono.
+  const primaDellaPrevenditaRef = useRef<{ unlimited_km: boolean; km_limit: string; insurance_option: string } | null>(null)
+  // La prevendita entra nel prezzo solo quando il database l'ha accettata.
+  const prevenditaApplicata = (!isAltroBusiness && prevenditaScelta && prevenditaVerifica.ok === true) ? prevenditaScelta : null
+  // Per il calcolo che arriva in ritardo (calculate-dynamic-price): legge il
+  // valore di ADESSO, non quello di quando la richiesta e' partita.
+  const prevenditaApplicataRef = useRef<PrevenditaCliente | null>(null)
+  prevenditaApplicataRef.current = prevenditaApplicata
+
+  // Km dei pacchetti km scelti nel form (id -> quantita').
+  const kmDaPacchettiForm = (kmPkgs: Record<string, number> | undefined, categoria?: string) => {
+    if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number }>> | undefined
+    let tot = 0
+    for (const pkg of resolvePacchetti(categoria, pkgsByCat)) {
+      const q = Number(kmPkgs[pkg.id]) || 0
+      if (q > 0) tot += Number(pkg.km || 0) * q
+    }
+    return tot
+  }
+
+  // Carica le prevendite del cliente valide per il veicolo scelto.
+  useEffect(() => {
+    let annullato = false
+    if (isAltroBusiness || !formData.customer_id || !formData.vehicle_id) {
+      setPrevenditeCliente([])
+      if (!formData.customer_id || isAltroBusiness) setPrevenditaScelta(null)
+      return
+    }
+    const veicolo = vehicles.find(v => v.id === formData.vehicle_id)
+    const cliente = customers.find(c => c.id === formData.customer_id)
+    ;(async () => {
+      const { data: scheda } = await supabase
+        .from('customers_extended')
+        .select('id, user_id, email')
+        .eq('id', formData.customer_id)
+        .maybeSingle()
+      const tutte = await caricaPrevenditeCliente({
+        ids: [formData.customer_id, scheda?.user_id],
+        email: scheda?.email || cliente?.email || null,
+      })
+      let spendibili = prevenditeSpendibili(tutte, formData.vehicle_id, veicolo?.display_name)
+      // In modifica la prevendita gia' legata resta selezionabile anche se ha
+      // finito gli utilizzi: l'ultimo l'ha consumato proprio questa prenotazione.
+      const originaleId = prevenditaOriginaleIdRef.current
+      if (originaleId && !spendibili.some(p => p.id === originaleId)) {
+        const originale = tutte.find(p => p.id === originaleId) || await caricaPrevendita(originaleId)
+        if (originale && valePerVeicolo(originale, formData.vehicle_id, veicolo?.display_name)) {
+          spendibili = [originale, ...spendibili]
+        }
+      }
+      if (annullato) return
+      setPrevenditeCliente(spendibili)
+      setPrevenditaScelta(prev => {
+        if (prev) return spendibili.find(p => p.id === prev.id) || null
+        if (originaleId) return spendibili.find(p => p.id === originaleId) || null
+        return null
+      })
+    })()
+    return () => { annullato = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.customer_id, formData.vehicle_id, isAltroBusiness, vehicles.length, editingId])
+
+  // Verdetto del database a ogni cambio di prevendita, date o veicolo.
+  useEffect(() => {
+    let annullato = false
+    if (!prevenditaScelta || !formData.pickup_date || !formData.return_date) {
+      setPrevenditaVerifica({ ok: null, errore: null, giaScalata: false })
+      return
+    }
+    setPrevenditaVerifica({ ok: null, errore: null, giaScalata: false })
+    const veicolo = vehicles.find(v => v.id === formData.vehicle_id)
+    ;(async () => {
+      // Prenotazione in modifica che ha gia' scalato questo utilizzo: il
+      // database non lo riscalera' (prevendita_usa e' idempotente per
+      // prenotazione) e la verifica conterebbe due volte lo stesso utilizzo.
+      if (editingId && prevenditaScelta.id === prevenditaOriginaleIdRef.current && await prenotazioneGiaScalata(editingId)) {
+        if (!annullato) setPrevenditaVerifica({ ok: true, errore: null, giaScalata: true })
+        return
+      }
+      const esito = await verificaPrevendita({
+        prevenditaClienteId: prevenditaScelta.id,
+        dataInizio: formData.pickup_date,
+        dataFine: formData.return_date,
+        vehicleId: formData.vehicle_id || null,
+        veicoloNome: veicolo?.display_name || null,
+      })
+      if (annullato) return
+      setPrevenditaVerifica({ ok: !!esito.ok, errore: esito.ok ? null : (esito.errore || 'Prevendita non utilizzabile per queste date'), giaScalata: false })
+    })()
+    return () => { annullato = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prevenditaScelta?.id, formData.pickup_date, formData.return_date, formData.vehicle_id, editingId])
+
+  const usaPrevenditaNelForm = (pc: PrevenditaCliente) => {
+    prevenditaToccataRef.current = true
+    // Scelta esplicita sul prezzo: il totale scritto a mano non vale piu'.
+    setTotalLock(false)
+    setPrevenditaScelta(pc)
+    const veicolo = vehicles.find(v => v.id === formData.vehicle_id)
+    setFormData(prev => {
+      if (!primaDellaPrevenditaRef.current) {
+        primaDellaPrevenditaRef.current = { unlimited_km: prev.unlimited_km, km_limit: prev.km_limit, insurance_option: prev.insurance_option }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: any = {}
+      const km = kmConPrevendita(pc, kmDaPacchettiForm(prev.km_packages as Record<string, number>, veicolo?.category))
+      if (km === 'illimitati') updates.unlimited_km = true
+      else if (typeof km === 'number') { updates.unlimited_km = false; updates.km_limit = String(km) }
+      // Assicurazione compresa nel pacchetto: si seleziona quella (come il sito).
+      if (pc.assicurazione_inclusa && veicolo) {
+        const opts = getInsuranceOptions(veicolo, customerTier?.tier, configOverlay, rentalConfig) as Array<{ id: string; label?: string; name?: string }>
+        const compresa = opts.find(o => stessaAssicurazione(o.label || o.name, pc.assicurazione_inclusa))
+        if (compresa?.id) updates.insurance_option = compresa.id
+      }
+      return { ...prev, ...updates }
+    })
+  }
+
+  const togliPrevenditaDalForm = () => {
+    prevenditaToccataRef.current = true
+    // Scelta esplicita sul prezzo: il totale scritto a mano non vale piu'.
+    setTotalLock(false)
+    setPrevenditaScelta(null)
+    const prima = primaDellaPrevenditaRef.current
+    primaDellaPrevenditaRef.current = null
+    if (prima) setFormData(prev => ({ ...prev, ...prima }))
+  }
+
   // --- Centralina Config Overlay ---
   // Loads pricing from Supabase config. Falls back to hardcoded defaults.
   const { config: rentalConfig } = useRentalConfig(serviceType)
@@ -1855,6 +2010,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // bespoke experience add-on is added on top afterwards.
               const listDailyRate = data.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, data.rentalDays)
               const listRentalTotal = listDailyRate * data.rentalDays
+              // 04/11/2026: PREVENDITA — stesse voci a zero del sito
+              const pvAttiva = prevenditaApplicataRef.current
+              // (noleggio, lavaggio, assicurazione compresa, km se illimitati).
+              const pvInclusa = pvAttiva?.assicurazione_inclusa
+                ? kaskoOptions.find(k => stessaAssicurazione(k.label, pvAttiva.assicurazione_inclusa))
+                : undefined
+              const pv = applicaPrevenditaAlPrezzo(pvAttiva, {
+                noleggio: listRentalTotal, lavaggio: CFG_LAVAGGIO_FEE, assicurazione: insuranceTotal,
+                assicurazioneInclusaGiorno: pvInclusa?.pricePerDay || 0, giorni: data.rentalDays,
+                kmIllimitati: unlimitedKmSurcharge, pacchettiKm: kmPackagesCost,
+              })
+              setPrevenditaCopertura(pv.copertura)
               // Location fees (consegna + ritiro) are EXCLUDED from the
               // coefficient — same treatment as Experience. They cover
               // transport/km that doesn't scale with demand.
@@ -1862,18 +2029,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // entra nel subtotale clamp-eligible (× coefficiente) o se viene
               // sommato a listino dopo (come experience / location fees).
               const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
-              const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
-              const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
+              const sIns = splitX(pv.assicurazione,       coeffFlags.insurance)
+              const sLav = splitX(pv.lavaggio,            coeffFlags.lavaggio)
               // 2026-05-26: TUTTI i 7 toggle di Centralina Pro > Automazioni >
               // Inclusione Coefficiente ora rispettati. Prima no_cauzione era
               // hardcoded ad atList ignorando la scelta admin. Allineato a
               // CarBookingWizard (sito) e PreventiviTab (admin preventivi).
               const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
-              const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
+              const sKm  = splitX(pv.kmIllimitati,        coeffFlags.unlimited_km)
               const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
               const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
               // 2026-05-27: pacchetti KM con toggle proprio (prima condividevano unlimited_km).
-              const sPkg = splitX(kmPackagesCost,         coeffFlags.km_packages)
+              const sPkg = splitX(pv.pacchettiKm,          coeffFlags.km_packages)
               const sExp = splitX(experienceCost,         coeffFlags.experience)
               const sDel = splitX(deliveryFee,            coeffFlags.delivery)
               const sPck = splitX(pickupFee,              coeffFlags.pickup)
@@ -1881,7 +2048,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               const sCau = splitX(cauzioneVeicoliFee,     coeffFlags.cauzione_veicoli)
               const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC + sCau.inC
               const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at  + sCau.at
-              const listSubtotalNoExp = listRentalTotal + extrasInCoeff
+              const listSubtotalNoExp = pv.noleggio + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
               // Clamp the clamp-eligible portion (rental + standard extras)
@@ -1895,7 +2062,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // stessa regola gia' in PreventiviTab e CarBookingWizard. Prima i due
               // `if` giravano in sequenza: il max abbassava sotto il min, poi il min
               // rialzava, e il prezzo finale non era ne' l'uno ne' l'altro.
-              if (maxTotal != null && afterRevenueNoExp > maxTotal + 0.5) afterRevenueNoExp = maxTotal
+              // 04/11/2026: con una prevendita il clamp NON si applica (come il sito):
+              // il minimo giornaliero rimetterebbe in conto il noleggio gia' pagato.
+              if (pv.saltaClamp) { /* nessun clamp */ }
+              else if (maxTotal != null && afterRevenueNoExp > maxTotal + 0.5) afterRevenueNoExp = maxTotal
               else if (minTotal != null && afterRevenueNoExp < minTotal - 0.5) afterRevenueNoExp = minTotal
               // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai
               // centesimi, come revenuePricingEngine (finalDailyRate). Arrotondare
@@ -1928,6 +2098,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 if (kmIncluded !== 'unlimited' && typeof kmIncluded === 'number' && kmIncluded > 0) {
                   updates.km_limit = String(kmIncluded)
                 }
+                // 04/11/2026: con una prevendita i km sono quelli del pacchetto
+                // (+ pacchetti km comprati adesso), come sul sito.
+                const kmPv = kmConPrevendita(pvAttiva, kmDaPacchettiForm(prev.km_packages as Record<string, number>, selectedVehicle?.category))
+                if (typeof kmPv === 'number') updates.km_limit = String(kmPv)
               }
               return { ...prev, ...updates }
             })
@@ -1970,7 +2144,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const depositChanged = prev !== null
         && (prev.status !== formData.deposit_status || prev.option_id !== formData.deposit_option_id)
       prevDepositRef.current = { status: formData.deposit_status, option_id: formData.deposit_option_id }
-      if (!depositChanged) return
+      // 04/11/2026: anche usare/togliere una prevendita ricalcola il totale in
+      // modifica — ma solo se l'ha toccata l'operatore, non quando la si
+      // ricarica aprendo la prenotazione.
+      const idPrevenditaPrezzo = prevenditaApplicata?.id || null
+      const prevenditaChanged = prevenditaToccataRef.current && idPrevenditaPrezzo !== ultimaPrevenditaPrezzataRef.current
+      ultimaPrevenditaPrezzataRef.current = idPrevenditaPrezzo
+      if (!depositChanged && !prevenditaChanged) return
     } else {
       prevDepositRef.current = { status: formData.deposit_status, option_id: formData.deposit_option_id }
     }
@@ -2042,25 +2222,35 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // auto_apply branch above.
       const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, revenueSuggestion.rentalDays)
       const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
+      // 04/11/2026: PREVENDITA — stesse voci a zero del sito (vedi path auto_apply).
+      const pvInclusa = prevenditaApplicata?.assicurazione_inclusa
+        ? kaskoOptions.find(k => stessaAssicurazione(k.label, prevenditaApplicata.assicurazione_inclusa))
+        : undefined
+      const pv = applicaPrevenditaAlPrezzo(prevenditaApplicata, {
+        noleggio: listRentalTotal, lavaggio: CFG_LAVAGGIO_FEE, assicurazione: insuranceTotal,
+        assicurazioneInclusaGiorno: pvInclusa?.pricePerDay || 0, giorni: revenueSuggestion.rentalDays,
+        kmIllimitati: unlimitedKmSurcharge, pacchettiKm: kmPackagesCost,
+      })
+      setPrevenditaCopertura(pv.copertura)
       // Location fees (consegna + ritiro) excluded from the coefficient —
       // same rationale as Experience.
       const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
-      const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
-      const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
+      const sIns = splitX(pv.assicurazione,       coeffFlags.insurance)
+      const sLav = splitX(pv.lavaggio,            coeffFlags.lavaggio)
       // 2026-05-26: TUTTI i toggle Centralina Pro rispettati anche qui
       // (revenueSuggestion path). Allineato ad auto_apply + sito + Preventivi.
       const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
-      const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
+      const sKm  = splitX(pv.kmIllimitati,        coeffFlags.unlimited_km)
       const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
       const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
-      const sPkg = splitX(kmPackagesCost,         coeffFlags.km_packages)
+      const sPkg = splitX(pv.pacchettiKm,          coeffFlags.km_packages)
       const sExp = splitX(experienceCost,         coeffFlags.experience)
       const sDel = splitX(deliveryFee,            coeffFlags.delivery)
       const sPck = splitX(pickupFee,              coeffFlags.pickup)
       const sCau = splitX(cauzioneVeicoliFee,     coeffFlags.cauzione_veicoli)
       const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC + sCau.inC
       const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at  + sCau.at
-      const listSubtotalNoExp = listRentalTotal + extrasInCoeff
+      const listSubtotalNoExp = pv.noleggio + extrasInCoeff
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
       const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
@@ -2068,7 +2258,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const minTotal = minDaily != null ? minDaily * revenueSuggestion.rentalDays : null
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       // 19/09/2026: una sola clamp, tolleranza 0,50 EUR (come PreventiviTab).
-      if (maxTotal != null && afterRevenueNoExp > maxTotal + 0.5) afterRevenueNoExp = maxTotal
+      // 04/11/2026: con una prevendita il clamp NON si applica (come il sito).
+      if (pv.saltaClamp) { /* nessun clamp */ }
+      else if (maxTotal != null && afterRevenueNoExp > maxTotal + 0.5) afterRevenueNoExp = maxTotal
       else if (minTotal != null && afterRevenueNoExp < minTotal - 0.5) afterRevenueNoExp = minTotal
       // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai centesimi
       // (vedi nota path auto_apply). Evita la perdita di 1 cent amplificata dal
@@ -2111,11 +2303,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           const totalKm = Number(kmIncluded) + kmFromPackages
           updates.km_limit = String(totalKm)
         }
+        // 04/11/2026: con una prevendita i km sono quelli del pacchetto
+        // (+ pacchetti km comprati adesso), come sul sito.
+        const kmPv = kmConPrevendita(prevenditaApplicata, kmDaPacchettiForm(formData.km_packages as Record<string, number>, selectedVehicle?.category))
+        if (typeof kmPv === 'number') updates.km_limit = String(kmPv)
       }
       if (Object.keys(updates).length > 0) setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, formData.km_packages, formData.include_cauzione_veicoli, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, formData.km_packages, formData.include_cauzione_veicoli, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig, prevenditaApplicata?.id])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -5198,6 +5394,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // differences between booking_details shapes and the form's keys).
     editFormSnapshotRef.current = editSnap
     editingBookingRef.current = booking
+    // 04/11/2026: prevendita gia' legata a questa prenotazione (la ricarica
+    // l'effetto delle prevendite; aprirla non ricalcola il totale).
+    prevenditaOriginaleIdRef.current = booking.booking_details?.prevendita_cliente_id || null
+    ultimaPrevenditaPrezzataRef.current = prevenditaOriginaleIdRef.current
+    prevenditaToccataRef.current = false
+    primaDellaPrevenditaRef.current = null
+    setPrevenditaScelta(null)
     // Punto di partenza della cauzione = quello della prenotazione. Senza,
     // il ref teneva i valori del form precedente e la prima esecuzione del
     // ricalcolo vedeva un "cambio cauzione" mai fatto e riscriveva totale e km.
@@ -6654,6 +6857,42 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         }
       }
 
+      // ===== PREVENDITA: ultimo verdetto del database prima di salvare =====
+      // 04/11/2026: il trigger su bookings scala l'utilizzo se trova
+      // booking_details.prevendita_cliente_id. Una prevendita che il database
+      // non accetta (date, veicolo, utilizzi, scadenza) non si puo' attaccare:
+      // la si toglie, il totale torna al prezzo pieno e l'operatore lo rivede
+      // prima di salvare di nuovo. Nessun blocco: la prenotazione si salva
+      // comunque, senza prevendita.
+      if (!isAltroBusiness && prevenditaScelta) {
+        let esitoPv: { ok: boolean; errore?: string | null }
+        if (editingId && prevenditaScelta.id === prevenditaOriginaleIdRef.current && await prenotazioneGiaScalata(editingId)) {
+          esitoPv = { ok: true }
+        } else {
+          esitoPv = await verificaPrevendita({
+            prevenditaClienteId: prevenditaScelta.id,
+            dataInizio: formData.pickup_date,
+            dataFine: formData.return_date,
+            vehicleId: formData.vehicle_id || null,
+            veicoloNome: vehicles.find(v => v.id === formData.vehicle_id)?.display_name || null,
+          })
+        }
+        if (!esitoPv.ok || prevenditaVerifica.ok !== true) {
+          if (!esitoPv.ok) {
+            toast.error(`Prevendita "${prevenditaScelta.nome}" non utilizzabile: ${esitoPv.errore || 'verifica non superata'}. L'ho tolta: controlla il totale e salva di nuovo.`, { duration: 9000 })
+            togliPrevenditaDalForm()
+          } else {
+            // Verifica ok ma il totale non e' ancora stato ricalcolato con la prevendita.
+            setPrevenditaVerifica({ ok: true, errore: null, giaScalata: false })
+            toast('Prevendita verificata: controlla il totale aggiornato e salva di nuovo.', { duration: 6000 })
+          }
+          setIsSubmitting(false)
+          submitLockRef.current = false
+          pendingSubmitRef.current = null
+          return
+        }
+      }
+
       // ===== VALIDATION: Credit Wallet — credito sufficiente =====
       // 15/09/2026 (direzione): salvando con metodo "Credit Wallet" l'importo
       // esce davvero dal wallet del cliente (trigger di database). Il Credit
@@ -7471,7 +7710,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         payment_status: (!editingId && isNexiPayByLink(formData.payment_method)
                           && formData.payment_status !== 'paid' && formData.payment_status !== 'partial')
           ? 'unpaid' : formData.payment_status,
-        payment_method: formData.payment_method,
+        // 04/11/2026: totale zero da prevendita = metodo 'prevendita', come il
+        // sito (mai 'discount_code': falserebbe i report).
+        payment_method: (!isAltroBusiness && prevenditaScelta && eurToCents(formData.total_amount || '0') <= 0)
+          ? 'prevendita'
+          : formData.payment_method,
         customer_name: customerInfo?.full_name || 'N/A',
         customer_email: customerInfo?.email || null,
         customer_phone: customerInfo?.phone || null,
@@ -7533,6 +7776,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             && autorizzazioneWalletRef.current.customerId === formData.customer_id
             ? { wallet_autorizzazione_cliente: { override_id: autorizzazioneWalletRef.current.overrideId, importo: autorizzazioneWalletRef.current.importo, autorizzato_il: new Date().toISOString() } }
             : {}),
+          // 04/11/2026: PREVENDITA. prevendita_cliente_id e' il campo che legge
+          // il trigger trg_prevendita_scala_da_prenotazione per scalare
+          // l'utilizzo (a prenotazione confermata o pagata). Stesse chiavi del sito.
+          ...((!isAltroBusiness && prevenditaScelta)
+            ? {
+                prevendita_cliente_id: prevenditaScelta.id,
+                prevendita_nome: prevenditaScelta.nome,
+                prevendita_km_inclusi: prevenditaScelta.km_inclusi,
+                prevendita_assicurazione: prevenditaScelta.assicurazione_inclusa || null,
+                prevendita_copertura_eur: prevenditaCopertura > 0
+                  ? prevenditaCopertura
+                  : (bookingOriginale?.booking_details?.prevendita_cliente_id === prevenditaScelta.id
+                      ? (bookingOriginale?.booking_details?.prevendita_copertura_eur ?? 0)
+                      : 0),
+              }
+            : (editingId && prevenditaToccataRef.current && bookingOriginale?.booking_details?.prevendita_cliente_id)
+              // Tolta dall'operatore: la prenotazione non e' piu' legata alla
+              // prevendita. L'utilizzo gia' scalato NON torna da solo: lo
+              // rimette la direzione da Prevendite Vendute (Ripristina utilizzo).
+              ? { prevendita_cliente_id: null, prevendita_nome: null, prevendita_km_inclusi: null, prevendita_assicurazione: null, prevendita_copertura_eur: null }
+              : {}),
           customer: {
             fullName: customerInfo?.full_name || '',
             email: customerInfo?.email || '',
@@ -9196,6 +9460,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setAutistiRiconsegna([])
     editFormSnapshotRef.current = null
     editingBookingRef.current = null
+    // 04/11/2026: prevendita del form precedente
+    prevenditaOriginaleIdRef.current = null
+    ultimaPrevenditaPrezzataRef.current = null
+    prevenditaToccataRef.current = false
+    primaDellaPrevenditaRef.current = null
+    setPrevenditaScelta(null)
+    setPrevenditeCliente([])
+    setPrevenditaCopertura(0)
     kmLimitManualRef.current = false
     setTotalLock(false)
     // 2026-05-18: pulizia stato OTP residuo per evitare auto-resume su
@@ -11974,6 +12246,69 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 importo totale, metodo, stato, conferma, importo pagato. */}
             <div className="mt-4 p-4 rounded-lg border border-theme-border space-y-4">
               <h4 className="text-theme-text-primary font-semibold">Pagamento</h4>
+              {/* 04/11/2026: PREVENDITA del cliente valida per il veicolo scelto.
+                  Usandola si scrive booking_details.prevendita_cliente_id: e' il
+                  campo che fa scalare l'utilizzo al database. */}
+              {!isAltroBusiness && formData.customer_id && formData.vehicle_id && (prevenditeCliente.length > 0 || prevenditaScelta) && (
+                <div className="p-3 rounded-lg border border-emerald-500/50 bg-emerald-500/5 space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Prevendita del cliente</p>
+                  {!prevenditaScelta && prevenditeCliente.map(pc => (
+                    <div key={pc.id} className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                      <div className="text-xs text-theme-text-secondary">
+                        {pc.km_inclusi >= 9999 ? 'Km illimitati' : pc.km_inclusi > 0 ? `${pc.km_inclusi} km inclusi` : 'Km di listino'}
+                        {pc.assicurazione_inclusa ? ` · ${pc.assicurazione_inclusa}` : ''}
+                        {pc.data_scadenza ? ` · scade il ${new Date(pc.data_scadenza).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => usaPrevenditaNelForm(pc)}
+                        className="px-3 py-2 rounded-lg border border-emerald-500 text-sm font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors text-left"
+                      >
+                        Usa prevendita: {pc.nome} ({utilizziResidui(pc)} disponibili)
+                      </button>
+                    </div>
+                  ))}
+                  {prevenditaScelta && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-theme-text-primary">
+                          Prevendita in uso: {prevenditaScelta.nome} ({utilizziResidui(prevenditaScelta)} disponibili)
+                        </p>
+                        <button type="button" onClick={togliPrevenditaDalForm} className="text-xs underline text-theme-text-muted hover:text-theme-text-primary">
+                          Non usare la prevendita
+                        </button>
+                      </div>
+                      {prevenditaVerifica.ok === null && !prevenditaVerifica.errore && (
+                        <p className="text-xs text-theme-text-muted">
+                          {formData.pickup_date && formData.return_date ? 'Controllo della prevendita in corso...' : 'Scegli le date per controllare la prevendita.'}
+                        </p>
+                      )}
+                      {prevenditaVerifica.errore && (
+                        <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+                          {prevenditaVerifica.errore} — la prevendita non viene applicata: cambia le date o non usarla.
+                        </p>
+                      )}
+                      {prevenditaVerifica.ok === true && (
+                        <>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                            Noleggio e lavaggio a €0
+                            {prevenditaScelta.assicurazione_inclusa ? `, ${prevenditaScelta.assicurazione_inclusa} compresa` : ''}
+                            {prevenditaScelta.km_inclusi >= 9999 ? ', km illimitati compresi' : prevenditaScelta.km_inclusi > 0 ? `, ${prevenditaScelta.km_inclusi} km del pacchetto` : ''}
+                            {prevenditaCopertura > 0 ? ` (valore ${formattaEuro(prevenditaCopertura)})` : ''}.
+                            {' '}Gli extra si pagano normalmente. Minimo/massimo di Centralina Pro non applicati.
+                          </p>
+                          <p className="text-xs text-theme-text-muted">
+                            {prevenditaVerifica.giaScalata
+                              ? 'Utilizzo gia\' scalato per questa prenotazione.'
+                              : 'L\'utilizzo si scala quando la prenotazione e\' Confermata o Pagata.'}
+                            {eurToCents(formData.total_amount || '0') <= 0 ? ' Totale €0: verra\' salvata con metodo di pagamento "prevendita".' : ''}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <Input
                 label="Importo Totale (€)"
                 type="number"
@@ -12136,7 +12471,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                                   {discountPct > 0 ? `-${discountPct}%` : `+${Math.abs(discountPct)}%`}
                                 </span>
                               )}
-                              {revenueSuggestion.mode !== 'auto_apply' && (
+                              {revenueSuggestion.mode !== 'auto_apply' && !prevenditaApplicata && (
                                 <button
                                   type="button"
                                   onClick={() => {
