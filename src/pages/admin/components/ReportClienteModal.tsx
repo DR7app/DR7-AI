@@ -55,6 +55,10 @@ interface CustomerData {
   source?: string
   created_at: string
   user_id?: string
+  // Fidelity Card lavaggio: le scrive SOLO il database
+  // (dr7_punti_lavaggio_ricalcola), le legge anche il sito.
+  fidelity_points?: number | null
+  fidelity_lifetime_points?: number | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: any
 }
@@ -141,6 +145,30 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     return m
   }, [statusDefs])
   const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
+
+  // 04/11/2026: premi Fidelity Card lavaggio della persona (250 punti = 25 EUR).
+  // Con la migrazione 20261104 ogni premio ha il suo `titolare` (account o
+  // scheda); prima della migrazione la colonna non c'e' e si legge per scheda.
+  const [premiFidelity, setPremiFidelity] = useState<{ id: string; created_at: string; importo: number; voucher_code: string | null; lotto_id?: string | null }[]>([])
+  useEffect(() => {
+    if (!customer?.id) { setPremiFidelity([]); return }
+    let annullato = false
+    const ids = [customer.id, customer.user_id].filter(Boolean) as string[]
+    ;(async () => {
+      let { data, error } = await supabase.from('fidelity_buoni').select('*')
+        .or(`customer_extended_id.eq.${customer.id},titolare.in.(${ids.join(',')})`)
+        .order('created_at', { ascending: false }).limit(20)
+      if (error) {
+        ;({ data, error } = await supabase.from('fidelity_buoni').select('*')
+          .eq('customer_extended_id', customer.id)
+          .order('created_at', { ascending: false }).limit(20))
+      }
+      if (annullato) return
+      if (error) logger.warn('[Scheda cliente] premi fidelity:', error)
+      setPremiFidelity(error ? [] : (data || []))
+    })()
+    return () => { annullato = true }
+  }, [customer?.id, customer?.user_id])
 
   // Foto cliente (roadmap 21): upload diretto dalla scheda + salva su DB.
   async function uploadFoto(file: File) {
@@ -1191,6 +1219,45 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           {/* STATO CLIENTE */}
           {activeTab === 'stato' && (
             <div className="space-y-4">
+              {/* Fidelity Card lavaggio: stessi numeri della carta sul sito
+                  (customers_extended.fidelity_points, calcolati dal database). */}
+              {customer && (() => {
+                const SOGLIA = 250
+                const punti = Math.max(0, Math.min(Number(customer.fidelity_points || 0), SOGLIA))
+                const totale = Math.max(0, Number(customer.fidelity_lifetime_points || 0))
+                return (
+                  <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Fidelity Card lavaggio</h3>
+                      <span className="text-[10px] text-theme-text-muted">1 € di lavaggio pagato = 1 punto · {SOGLIA} punti = €25</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold text-theme-text-primary tabular-nums">{punti}</span>
+                      <span className="text-sm text-theme-text-muted tabular-nums">/ {SOGLIA} punti</span>
+                    </div>
+                    <div className="mt-2 h-2 w-full bg-theme-bg-tertiary overflow-hidden">
+                      <div className="h-full bg-cyan-500" style={{ width: `${(punti / SOGLIA) * 100}%` }} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-theme-text-secondary">
+                      <span>Mancano <span className="font-bold text-theme-text-primary tabular-nums">{SOGLIA - punti}</span> punti al prossimo premio</span>
+                      <span>Totale punti: <span className="font-bold text-theme-text-primary tabular-nums">{totale}</span> · Premi: <span className="font-bold text-theme-text-primary tabular-nums">{premiFidelity.length}</span></span>
+                    </div>
+                    {premiFidelity.length > 0 && (
+                      <div className="mt-3 space-y-1">
+                        {premiFidelity.slice(0, 5).map(pr => (
+                          <div key={pr.id} className="flex items-center justify-between text-xs">
+                            <span className="text-theme-text-secondary">{fmtDate(pr.created_at)}</span>
+                            <span className="text-theme-text-primary">
+                              €{Number(pr.importo) || 25} · {pr.voucher_code ? `buono ${pr.voucher_code}` : 'credito wallet lavaggio'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* Distribuzione Spesa per Servizio + Veicoli Utilizzati */}
               {(serviceBreakdown.total > 0 || uniqueVehicles.length > 0) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

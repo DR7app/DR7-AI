@@ -25,7 +25,7 @@ export async function inviaBuoniFidelity(sb: SupabaseClient, now: Date, budgetMs
     const t0 = Date.now()
     const { data: righe, error } = await sb
         .from('fidelity_buoni')
-        .select('id, booking_id, customer_extended_id, voucher_code, importo, punti_soglia, punti_rimasti, valido_fino')
+        .select('*')
         .is('messaggio_at', null)
         .gte('created_at', new Date(now.getTime() - FINESTRA_MS).toISOString())
         .order('created_at', { ascending: true })
@@ -47,7 +47,9 @@ export async function inviaBuoniFidelity(sb: SupabaseClient, now: Date, budgetMs
 
         try {
             const [{ data: booking }, { data: ce }] = await Promise.all([
-                sb.from('bookings').select('*').eq('id', r.booking_id).maybeSingle(),
+                r.booking_id
+                    ? sb.from('bookings').select('*').eq('id', r.booking_id).maybeSingle()
+                    : Promise.resolve({ data: null }),
                 r.customer_extended_id
                     ? sb.from('customers_extended').select('nome, cognome, ragione_sociale, tipo_cliente, telefono').eq('id', r.customer_extended_id).maybeSingle()
                     : Promise.resolve({ data: null }),
@@ -63,6 +65,13 @@ export async function inviaBuoniFidelity(sb: SupabaseClient, now: Date, budgetMs
             const importo = String(Number(r.importo) || 25)
             const punti = String(r.punti_soglia)
             const scadenza = dataIt(r.valido_fino)
+            // 04/11/2026: chi ha l'account riceve il premio come credito wallet
+            // vincolato al lavaggio (lotto_id), senza codice. Il template resta
+            // lo stesso: al posto del codice si dice dove trovare il credito.
+            const codice = r.voucher_code
+                ? String(r.voucher_code)
+                : (r.lotto_id ? 'accreditato nel tuo DR7 Credit Wallet' : '')
+            if (!codice) { await esito('senza_premio'); continue }
             const giorni = r.valido_fino
                 ? String(Math.max(1, Math.round((new Date(r.valido_fino).getTime() - now.getTime()) / 86_400_000)))
                 : ''
@@ -76,8 +85,8 @@ export async function inviaBuoniFidelity(sb: SupabaseClient, now: Date, budgetMs
                     ...(booking ? { booking } : {}),
                     templateVars: {
                         nome, customer_name: nomeCompleto || nome, cliente: nomeCompleto || nome,
-                        codice: r.voucher_code, code: r.voucher_code, voucher: r.voucher_code, buono: r.voucher_code,
-                        codice_sconto: r.voucher_code, code_sconto: r.voucher_code, codice_lavaggio: r.voucher_code, code_lavaggio: r.voucher_code,
+                        codice, code: codice, voucher: codice, buono: codice,
+                        codice_sconto: codice, code_sconto: codice, codice_lavaggio: codice, code_lavaggio: codice,
                         importo, amount: importo,
                         punti, points: punti,
                         punti_rimasti: String(r.punti_rimasti),

@@ -25,6 +25,7 @@
     "testi:gen": "node scripts/genTestiCatalogo.mjs",
     "wallet:verifica": "node scripts/verificaWalletPrenotazione.mjs",
     "wallet:vincolato": "node scripts/verificaWalletVincolato.mjs",
+    "punti:lavaggio": "node scripts/verificaPuntiLavaggio.mjs && PUNTI_SENZA_1012=1 node scripts/verificaPuntiLavaggio.mjs",
     "wallet:autorizzazione": "node scripts/verificaWalletAutorizzazione.mjs",
     "wallet:rimborso": "node scripts/verificaRimborsoPagato.mjs",
     "wallet:server": "node scripts/verificaWalletSoloServer.mjs",

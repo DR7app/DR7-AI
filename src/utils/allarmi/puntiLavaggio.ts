@@ -19,8 +19,9 @@ const ORE_LETTURA = 72
 
 export interface BuonoFidelityLite {
     id: string
-    booking_id: string
-    voucher_code: string
+    booking_id: string | null
+    voucher_code: string | null
+    lotto_id?: string | null
     importo: number
     punti_soglia: number
     punti_rimasti: number
@@ -39,7 +40,7 @@ async function carica(now: Date, sb: ClienteAllarmi): Promise<Record<string, unk
     const da = new Date(now.getTime() - ORE_LETTURA * 60 * 60_000).toISOString()
     const { data, error } = await sb
         .from('fidelity_buoni')
-        .select('id, booking_id, voucher_code, importo, punti_soglia, punti_rimasti, created_at, messaggio_esito, customers_extended(nome, cognome, ragione_sociale, tipo_cliente)')
+        .select('*, customers_extended(nome, cognome, ragione_sociale, tipo_cliente)')
         .gte('created_at', da)
         .order('created_at', { ascending: false })
         .range(0, 499)
@@ -66,8 +67,11 @@ const punti_lavaggio_250: Detector = (cfg, ctx) => {
             return eta >= -60_000 && eta <= finestra
         })
         .map(r => ({
-            bookingId: String(r.booking_id),
-            entita: `${r.cliente || 'Cliente'} · ${r.punti_soglia} punti · buono €${r.importo} ${r.voucher_code}`,
+            // 04/11/2026: premio senza prenotazione (cancellata) o senza codice
+            // (credito wallet vincolato per chi ha l'account sul sito).
+            bookingId: r.booking_id || undefined,
+            entita: `${r.cliente || 'Cliente'} · ${r.punti_soglia} punti · `
+                + (r.voucher_code ? `buono €${r.importo} ${r.voucher_code}` : `€${r.importo} di credito wallet lavaggio`),
             dettaglio: `Buono emesso il ${oraIt(r.created_at)} · ${r.punti_rimasti} punti sulla nuova carta`
                 + (r.messaggio_esito === 'inviato' ? ' · WhatsApp inviato' : r.messaggio_esito ? ` · WhatsApp non inviato (${r.messaggio_esito})` : ''),
         }))
