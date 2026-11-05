@@ -276,4 +276,70 @@ ok((await uno(`SELECT count(*)::int n FROM pg_indexes WHERE indexname='ux_preven
   'tolti i doppioni, il rilancio crea l indice')
 ok(await righeMacan() === 5, 'rilanciare la migrazione non tocca gli acquisti (4 + 1 dell altro cliente)')
 
+console.log('\n── 13. Storico del catalogo (migrazione 20261105) ──────────────')
+// Incidente 27/10: "Macan gts Runchina" passata da 1 a 2 utilizzi tra due
+// acquisti, senza sapere chi l'avesse cambiata. Ora ogni modifica resta.
+const STORICO = new URL('../supabase/migrations/20261105_prevendite_catalogo_storico.sql', import.meta.url)
+await db.exec(fs.readFileSync(STORICO, 'utf8'))
+const STAFF = '33333333-3333-3333-3333-333333333333'
+const storico = async id => q(`SELECT * FROM prevendite_catalogo_storico WHERE prevendita_id=$1 ORDER BY created_at, id`, [id])
+
+await chi(STAFF, 'ophe@dr7.app')
+const runchina = await uno(`INSERT INTO prevendite (nome, prezzo, utilizzi_inclusi, veicoli, km_inclusi)
+  VALUES ('Macan gts Runchina', 790, 1, '[{"id":"veh-macan","nome":"Porsche Macan GTS"}]'::jsonb, 100) RETURNING id`)
+let st = await storico(runchina.id)
+ok(st.length === 1 && st[0].azione === 'insert' && st[0].changed_by === STAFF && st[0].changed_by_email === 'ophe@dr7.app',
+  'creazione registrata con chi l ha fatta')
+
+await db.query(`UPDATE prevendite SET utilizzi_inclusi = 2 WHERE id=$1`, [runchina.id])
+st = await storico(runchina.id)
+const modifica = st.find(r => r.azione === 'update')
+ok(st.length === 2 && modifica && modifica.modifiche.utilizzi_inclusi?.da === 1 && modifica.modifiche.utilizzi_inclusi?.a === 2,
+  'utilizzi 1 -> 2: registrato campo per campo (da 1 a 2)')
+ok(Object.keys(modifica.modifiche).length === 1 && !('updated_at' in modifica.modifiche),
+  'solo il campo cambiato, updated_at escluso')
+ok(modifica.changed_by_email === 'ophe@dr7.app' && modifica.vecchio.utilizzi_inclusi === 1 && modifica.nuovo.utilizzi_inclusi === 2,
+  'con autore e riga prima/dopo')
+
+await chi(null, null) // acquisto dal server: scala solo i posti venduti
+await db.query(`UPDATE prevendite SET posti_venduti = posti_venduti + 1 WHERE id=$1`, [runchina.id])
+await db.query(`UPDATE prevendite SET posti_venduti = posti_venduti + 1, updated_at = now() WHERE id=$1`, [runchina.id])
+ok((await storico(runchina.id)).length === 2, 'acquisti (solo posti_venduti / updated_at): nessuna riga di storico')
+await db.query(`UPDATE prevendite SET utilizzi_inclusi = 2 WHERE id=$1`, [runchina.id])
+ok((await storico(runchina.id)).length === 2, 'salvataggio senza cambiamenti: nessuna riga')
+
+// Un acquisto vero col wallet non deve sporcare lo storico.
+await chi(CLIENTE, 'cliente@dr7.app')
+const acq = await compra({ chiave_acquisto: 'storico-1' })
+ok(acq.ok, 'acquisto wallet riuscito')
+ok((await uno(`SELECT count(*)::int n FROM prevendite_catalogo_storico WHERE prevendita_id=$1`, [macan.id])).n === 0,
+  'gli acquisti della Macan GTS non hanno creato storico')
+
+await chi(STAFF, 'ophe@dr7.app')
+await db.query(`DELETE FROM prevendite WHERE id=$1`, [runchina.id])
+st = await storico(runchina.id)
+ok(st.length === 3 && st[2].azione === 'delete' && st[2].vecchio.nome === 'Macan gts Runchina',
+  'eliminazione registrata, lo storico sopravvive alla prevendita')
+
+// RLS: lo legge solo lo staff, nessuno scrive da client.
+await db.exec(`GRANT USAGE ON SCHEMA auth TO authenticated; GRANT SELECT ON auth._ctx TO authenticated;`)
+const comeUtente = async fn => { await db.exec('SET ROLE authenticated'); try { return await fn() } finally { await db.exec('RESET ROLE') } }
+await chi(CLIENTE, 'cliente@dr7.app')
+ok((await comeUtente(() => uno(`SELECT count(*)::int n FROM prevendite_catalogo_storico`))).n === 0,
+  'un cliente del sito non vede lo storico')
+let scrittura = null
+try { await comeUtente(() => db.query(`INSERT INTO prevendite_catalogo_storico (prevendita_id, azione) VALUES (gen_random_uuid(), 'update')`)) } catch (e) { scrittura = e }
+ok(scrittura && /permission|denied|policy/i.test(scrittura.message), 'e non puo scriverci')
+await chi(STAFF, 'ophe@dr7.app')
+ok((await comeUtente(() => uno(`SELECT count(*)::int n FROM prevendite_catalogo_storico`))).n >= 3, 'la direzione lo legge')
+scrittura = null
+try { await comeUtente(() => db.query(`DELETE FROM prevendite_catalogo_storico`)) } catch (e) { scrittura = e }
+ok(scrittura && /permission|denied/i.test(scrittura.message), 'nemmeno lo staff puo cancellarlo da client')
+
+const righePrima = (await uno(`SELECT count(*)::int n FROM prevendite_catalogo_storico`)).n
+await db.exec(fs.readFileSync(STORICO, 'utf8'))
+ok((await uno(`SELECT count(*)::int n FROM prevendite_catalogo_storico`)).n === righePrima &&
+   (await uno(`SELECT count(*)::int n FROM pg_trigger WHERE tgname='trg_prevendite_catalogo_storico'`)).n === 1,
+  'la migrazione si puo rilanciare: storico intatto, un solo trigger')
+
 console.log('\nSCENARIO COMPLETO: tutto verificato.')

@@ -191,6 +191,80 @@ function fotoDellaPrevendita(p: { foto_url: string | null; foto_urls?: string[] 
   return p.foto_url ? [p.foto_url] : []
 }
 
+// ─── Condizioni vendute e storico del catalogo (05/11/2026) ────────────────
+//
+// Incidente 27/10: "Macan gts Runchina" e' passata da 1 a 2 utilizzi tra due
+// acquisti a 3 minuti di distanza, e nessuno sapeva chi l'avesse cambiata.
+// L'acquisto fotografa le condizioni (resta cosi'): chi ha gia' pagato tiene
+// le sue. Qui si avvisa prima di salvare e si mostra lo storico delle modifiche
+// (tabella prevendite_catalogo_storico, migrazione 20261105).
+
+type CampoCondizione =
+  | 'utilizzi_inclusi' | 'km_inclusi' | 'validita_mesi' | 'prezzo' | 'veicoli'
+  | 'assicurazione_inclusa' | 'max_utilizzi_mese' | 'max_giorni_consecutivi'
+
+const CAMPI_CONDIZIONI: CampoCondizione[] = [
+  'utilizzi_inclusi', 'km_inclusi', 'validita_mesi', 'prezzo', 'veicoli',
+  'assicurazione_inclusa', 'max_utilizzi_mese', 'max_giorni_consecutivi',
+]
+
+const ETICHETTE_CAMPI: Record<string, string> = {
+  nome: 'Nome', descrizione: 'Descrizione', foto_url: 'Foto copertina', foto_urls: 'Foto',
+  prezzo: 'Prezzo', prezzo_listino: 'Prezzo di listino', utilizzi_inclusi: 'Utilizzi inclusi',
+  veicoli: 'Veicoli', km_inclusi: 'Km per utilizzo', assicurazione_inclusa: 'Assicurazione',
+  validita_mesi: 'Validita\' (mesi)', max_utilizzi_mese: 'Max utilizzi al mese',
+  max_giorni_consecutivi: 'Max giorni consecutivi', regole_extra: 'Regole extra',
+  posti_totali: 'Posti totali', attiva: 'Attiva', visibile_sito: 'Visibile sul sito',
+  ordine: 'Ordine', business: 'Business',
+}
+
+/** Valore di un campo del catalogo in forma leggibile (anche dal jsonb dello storico). */
+function testoValoreCampo(campo: string, v: unknown): string {
+  if (v === null || v === undefined || v === '') {
+    if (campo === 'max_utilizzi_mese' || campo === 'max_giorni_consecutivi') return 'Nessun limite'
+    if (campo === 'assicurazione_inclusa') return 'Non inclusa'
+    return '—'
+  }
+  if (campo === 'veicoli' && Array.isArray(v)) {
+    return v.map(x => (x && typeof x === 'object' ? String((x as VeicoloPrevendita).nome || (x as VeicoloPrevendita).id) : String(x))).join(', ') || '—'
+  }
+  if (campo === 'foto_urls' && Array.isArray(v)) return `${v.length} foto`
+  if (campo === 'foto_url') return 'foto'
+  if (campo === 'km_inclusi') return testoKm(Number(v))
+  if (campo === 'prezzo' || campo === 'prezzo_listino') return euro(Number(v))
+  if (typeof v === 'boolean') return v ? 'Si' : 'No'
+  if (typeof v === 'object') return JSON.stringify(v)
+  const s = String(v)
+  return s.length > 60 ? `${s.slice(0, 57)}...` : s
+}
+
+/** Stesso valore per un campo delle condizioni (veicoli: stesso elenco di id). */
+function stessaCondizione(campo: CampoCondizione, a: unknown, b: unknown): boolean {
+  if (campo === 'veicoli') {
+    const ids = (x: unknown) => (Array.isArray(x) ? x : []).map(v => String((v as VeicoloPrevendita)?.id ?? '')).sort().join('|')
+    return ids(a) === ids(b)
+  }
+  if (campo === 'assicurazione_inclusa') return String(a ?? '').trim() === String(b ?? '').trim()
+  const n = (x: unknown) => (x === null || x === undefined || x === '' ? null : Number(x))
+  return n(a) === n(b)
+}
+
+interface RigaStorico {
+  id: string
+  azione: 'insert' | 'update' | 'delete'
+  modifiche: Record<string, { da: unknown; a: unknown }> | null
+  changed_by_email: string | null
+  changed_by_nome: string | null
+  ruolo_db: string | null
+  created_at: string
+}
+
+interface ConfermaCondizioni {
+  differenze: { campo: CampoCondizione; da: unknown; a: unknown }[]
+  /** null = conteggio non riuscito: si avvisa comunque. */
+  clienti: number | null
+}
+
 const PREVENDITA_VUOTA = {
   nome: '',
   descrizione: '',
@@ -230,6 +304,10 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
   const [salvataggio, setSalvataggio] = useState(false)
   const [caricamentoFoto, setCaricamentoFoto] = useState(false)
   const inputFoto = useRef<HTMLInputElement>(null)
+  // 05/11/2026 — avviso prima di cambiare condizioni gia' vendute + storico.
+  const [confermaCondizioni, setConfermaCondizioni] = useState<ConfermaCondizioni | null>(null)
+  // null = tabella non ancora creata (migrazione non eseguita): sezione nascosta.
+  const [storicoCatalogo, setStoricoCatalogo] = useState<RigaStorico[] | null>(null)
 
   // 26/09/2026 — "Nuova offerta": si sceglie Prevendita o Promozione.
   const [sceltaOfferta, setSceltaOfferta] = useState(false)
@@ -478,6 +556,25 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     setInModifica(p)
     setRicercaVeicolo('')
     setModale('modifica')
+    caricaStoricoCatalogo(p.id)
+  }
+
+  // Storico modifiche del catalogo: se la tabella non c'e' ancora (migrazione
+  // 20261105 non eseguita) o la lettura fallisce, la sezione resta nascosta.
+  async function caricaStoricoCatalogo(prevenditaId: string) {
+    setStoricoCatalogo(null)
+    try {
+      const { data, error } = await supabase
+        .from('prevendite_catalogo_storico')
+        .select('id, azione, modifiche, changed_by_email, changed_by_nome, ruolo_db, created_at')
+        .eq('prevendita_id', prevenditaId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (error) { console.warn('Prevendite: storico catalogo non disponibile', error.message); return }
+      setStoricoCatalogo((data || []) as RigaStorico[])
+    } catch (e) {
+      console.warn('Prevendite: storico catalogo non disponibile', e)
+    }
   }
 
   async function caricaFoto(files: File[]) {
@@ -531,7 +628,7 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
     return isNaN(n) ? null : n
   }
 
-  async function salvaPrevendita() {
+  async function salvaPrevendita(confermato = false) {
     if (!bozza.nome.trim()) return toast.error('Serve il nome della prevendita')
     const prezzo = numeroOppureNull(bozza.prezzo)
     if (prezzo === null || prezzo <= 0) return toast.error('Serve un prezzo maggiore di zero')
@@ -563,6 +660,29 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
         visibile_sito: bozza.visibile_sito,
         ordine: Number(bozza.ordine) || 0,
       }
+
+      // 05/11/2026 — condizioni gia' vendute: prima di salvare si avvisa e si
+      // chiede conferma. Chi ha gia' pagato tiene la sua fotografia; le nuove
+      // condizioni valgono solo per i prossimi acquisti. Non e' un blocco.
+      if (inModifica && !confermato) {
+        const differenze = CAMPI_CONDIZIONI
+          .filter(c => !stessaCondizione(c, inModifica[c], riga[c]))
+          .map(c => ({ campo: c, da: inModifica[c] as unknown, a: riga[c] as unknown }))
+        if (differenze.length) {
+          const { count, error: errConteggio } = await supabase
+            .from('prevendite_clienti')
+            .select('id', { count: 'exact', head: true })
+            .eq('prevendita_id', inModifica.id)
+            .in('payment_status', PAGATO)
+          const clienti = errConteggio ? null : (count ?? 0)
+          if (clienti === null || clienti > 0) {
+            setConfermaCondizioni({ differenze, clienti })
+            return
+          }
+        }
+      }
+      setConfermaCondizioni(null)
+
       // 23/09/2026: finche' la colonna foto_urls non e' stata creata
       // (migrazione 20260923130000) si salva senza, con la sola copertina:
       // il salvataggio della prevendita non deve mai fermarsi per le foto.
@@ -750,6 +870,18 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
       ])
     })
   }, [venduti, filtroVenduti, ricercaVenduti])
+
+  // 05/11/2026 — pacchetto pagato con condizioni diverse dal catalogo attuale
+  // (catalogo modificato dopo l'acquisto): lo staff deve accorgersene.
+  const diversoDalCatalogo = useCallback((pc: PrevenditaCliente): string | null => {
+    if (!pagata(pc) || !pc.prevendita_id) return null
+    const cat = prevendite.find(p => p.id === pc.prevendita_id)
+    if (!cat) return null
+    const parti: string[] = []
+    if (Number(pc.utilizzi_iniziali) !== Number(cat.utilizzi_inclusi)) parti.push(`${cat.utilizzi_inclusi} utilizzi`)
+    if (Number(pc.km_inclusi) !== Number(cat.km_inclusi)) parti.push(`${testoKm(cat.km_inclusi)} km`)
+    return parti.length ? `Diverso dal catalogo (catalogo: ${parti.join(', ')})` : null
+  }, [prevendite])
 
   const clientiFiltrati = useMemo(() => {
     if (!ricercaCliente.trim()) return clienti.slice(0, 30)
@@ -984,6 +1116,11 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
                                 <span className="text-theme-text-primary font-medium">{residui}</span>
                                 <span className="text-xs"> disponibili su {pc.utilizzi_iniziali}</span>
                                 <div className="text-xs">usati: {pc.utilizzi_usati}</div>
+                                {diversoDalCatalogo(pc) && (
+                                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-600/20 dark:text-amber-400">
+                                    {diversoDalCatalogo(pc)}
+                                  </span>
+                                )}
                               </td>
                             </>
                           ) : (
@@ -1380,10 +1517,89 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
               </div>
             </div>
 
+            {/* 05/11/2026 — Storico modifiche del catalogo (nascosto se la tabella non c'e'). */}
+            {modale === 'modifica' && storicoCatalogo !== null && (
+              <div className="px-6 pb-6">
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4">
+                  <div className="text-xs text-theme-text-muted uppercase tracking-wider mb-2">Storico modifiche</div>
+                  {storicoCatalogo.length === 0 ? (
+                    <p className="text-xs text-theme-text-muted">Nessuna modifica registrata (lo storico parte dal 05/11/2026).</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {storicoCatalogo.map(r => {
+                        const autore = r.changed_by_nome || r.changed_by_email
+                          || (r.ruolo_db === 'postgres' ? 'SQL editor' : r.ruolo_db === 'service_role' ? 'Sistema' : 'Sconosciuto')
+                        const campi = Object.entries(r.modifiche || {})
+                        return (
+                          <li key={r.id} className="text-xs border-b border-theme-border last:border-b-0 pb-2 last:pb-0">
+                            <div className="flex flex-wrap gap-x-2 text-theme-text-muted">
+                              <span className="text-theme-text-primary font-medium">{dataOraIt(r.created_at)}</span>
+                              <span>{autore}</span>
+                              {r.azione === 'insert' && <span>· creata</span>}
+                              {r.azione === 'delete' && <span>· eliminata</span>}
+                            </div>
+                            {campi.length > 0 && (
+                              <div className="mt-1 space-y-0.5">
+                                {campi.map(([campo, v]) => (
+                                  <div key={campo} className="text-theme-text-secondary">
+                                    {ETICHETTE_CAMPI[campo] || campo}:{' '}
+                                    <span className="text-theme-text-muted">{testoValoreCampo(campo, v?.da)}</span>
+                                    {' -> '}
+                                    <span className="text-theme-text-primary">{testoValoreCampo(campo, v?.a)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="p-6 border-t border-theme-border flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setModale(null)}>Annulla</Button>
-              <Button onClick={salvaPrevendita} disabled={salvataggio}>
+              <Button onClick={() => salvaPrevendita()} disabled={salvataggio}>
                 {salvataggio ? 'Salvataggio...' : 'Salva'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ CONFERMA CAMBIO CONDIZIONI GIA' VENDUTE (05/11/2026) ═══ */}
+      {modale && confermaCondizioni && (
+        <div className="fixed inset-0 z-[130] bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg my-16">
+            <div className="p-6 border-b border-theme-border flex items-center justify-between">
+              <h3 className="text-lg font-bold text-theme-text-primary">Cambi le condizioni di una prevendita gia' venduta</h3>
+              <button onClick={() => setConfermaCondizioni(null)} className="text-theme-text-muted hover:text-theme-text-primary">Chiudi</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4 space-y-2 text-sm">
+                {confermaCondizioni.differenze.map(d => (
+                  <div key={d.campo} className="flex flex-wrap justify-between gap-2">
+                    <span className="text-theme-text-muted">{ETICHETTE_CAMPI[d.campo] || d.campo}</span>
+                    <span className="text-right">
+                      <span className="text-theme-text-muted line-through">{testoValoreCampo(d.campo, d.da)}</span>
+                      <span className="text-theme-text-muted">{' -> '}</span>
+                      <span className="text-theme-text-primary font-medium">{testoValoreCampo(d.campo, d.a)}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                {confermaCondizioni.clienti === null
+                  ? "Non e' stato possibile contare gli acquisti: potrebbero esserci clienti che l'hanno gia' acquistata. Chi ha gia' pagato mantiene le condizioni pagate. Le nuove valgono solo per i prossimi acquisti."
+                  : `${confermaCondizioni.clienti} ${confermaCondizioni.clienti === 1 ? "cliente l'ha" : "clienti l'hanno"} gia' acquistata: mantengono le condizioni pagate. Le nuove valgono solo per i prossimi acquisti.`}
+              </p>
+            </div>
+            <div className="p-6 border-t border-theme-border flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setConfermaCondizioni(null)}>Annulla</Button>
+              <Button onClick={() => salvaPrevendita(true)} disabled={salvataggio}>
+                {salvataggio ? 'Salvataggio...' : 'Conferma e salva'}
               </Button>
             </div>
           </div>
@@ -1530,6 +1746,11 @@ export default function PrevenditeTab({ vista: vistaIniziale = 'catalogo' }: { v
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-4 space-y-2 text-sm">
                   <div className="text-xs text-theme-text-muted uppercase tracking-wider mb-2">Condizioni pagate</div>
+                  {diversoDalCatalogo(dettaglio) && (
+                    <span className="inline-block mb-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-600/20 dark:text-amber-400">
+                      {diversoDalCatalogo(dettaglio)}
+                    </span>
+                  )}
                   <div className="flex justify-between"><span className="text-theme-text-muted">Km per utilizzo</span><span className="text-theme-text-primary">{testoKm(dettaglio.km_inclusi)}</span></div>
                   <div className="flex justify-between"><span className="text-theme-text-muted">Assicurazione</span><span className="text-theme-text-primary">{dettaglio.assicurazione_inclusa || 'Non inclusa'}</span></div>
                   <div className="flex justify-between"><span className="text-theme-text-muted">Max utilizzi al mese</span><span className="text-theme-text-primary">{dettaglio.max_utilizzi_mese ?? 'Nessun limite'}</span></div>
