@@ -26,6 +26,7 @@ import NumeroTelefono from '../../../components/NumeroTelefono'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import { logger } from '../../../utils/logger'
+import { caricaFidelityLavaggio, euroFidelity, FIDELITY_LAVAGGIO_DEFAULT, type FidelityLavaggioConfig } from '../../../utils/fidelityLavaggio'
 
 interface ReportClienteProps {
   customerId: string
@@ -146,7 +147,16 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   }, [statusDefs])
   const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
 
-  // 04/11/2026: premi Fidelity Card lavaggio della persona (250 punti = 25 EUR).
+  // 06/11/2026: regole della Fidelity Card da Centralina Pro > Fidelity
+  // Lavaggio (lettura fallita = valori di sempre, la scheda resta in piedi).
+  const [regoleFidelity, setRegoleFidelity] = useState<FidelityLavaggioConfig>(FIDELITY_LAVAGGIO_DEFAULT)
+  useEffect(() => {
+    let vivo = true
+    caricaFidelityLavaggio().then(r => { if (vivo) setRegoleFidelity(r.config) })
+    return () => { vivo = false }
+  }, [])
+
+  // 04/11/2026: premi Fidelity Card lavaggio della persona (soglia e importo da Centralina Pro).
   // Con la migrazione 20261104 ogni premio ha il suo `titolare` (account o
   // scheda); prima della migrazione la colonna non c'e' e si legge per scheda.
   const [premiFidelity, setPremiFidelity] = useState<{ id: string; created_at: string; importo: number; voucher_code: string | null; lotto_id?: string | null }[]>([])
@@ -1222,15 +1232,21 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               {/* Fidelity Card lavaggio: stessi numeri della carta sul sito
                   (customers_extended.fidelity_points, calcolati dal database). */}
               {customer && (() => {
-                const SOGLIA = 250
+                const SOGLIA = regoleFidelity.soglia_punti
+                const attivo = regoleFidelity.attivo
                 const punti = Math.max(0, Math.min(Number(customer.fidelity_points || 0), SOGLIA))
                 const totale = Math.max(0, Number(customer.fidelity_lifetime_points || 0))
                 return (
                   <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Fidelity Card lavaggio</h3>
-                      <span className="text-[10px] text-theme-text-muted">1 € di lavaggio pagato = 1 punto · {SOGLIA} punti = €25</span>
+                      <span className="text-[10px] text-theme-text-muted">
+                        {attivo
+                          ? `${euroFidelity(regoleFidelity.euro_per_punto)} € di lavaggio pagato = 1 punto · ${SOGLIA} punti = €${euroFidelity(regoleFidelity.importo_premio)}`
+                          : 'Programma non attivo (Centralina Pro > Fidelity Lavaggio)'}
+                      </span>
                     </div>
+                    {attivo && (<>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-bold text-theme-text-primary tabular-nums">{punti}</span>
                       <span className="text-sm text-theme-text-muted tabular-nums">/ {SOGLIA} punti</span>
@@ -1238,8 +1254,11 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     <div className="mt-2 h-2 w-full bg-theme-bg-tertiary overflow-hidden">
                       <div className="h-full bg-cyan-500" style={{ width: `${(punti / SOGLIA) * 100}%` }} />
                     </div>
+                    </>)}
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-theme-text-secondary">
-                      <span>Mancano <span className="font-bold text-theme-text-primary tabular-nums">{SOGLIA - punti}</span> punti al prossimo premio</span>
+                      {attivo
+                        ? <span>Mancano <span className="font-bold text-theme-text-primary tabular-nums">{SOGLIA - punti}</span> punti al prossimo premio</span>
+                        : <span>Nessun premio nuovo finche il programma resta spento. I premi gia emessi restano validi.</span>}
                       <span>Totale punti: <span className="font-bold text-theme-text-primary tabular-nums">{totale}</span> · Premi: <span className="font-bold text-theme-text-primary tabular-nums">{premiFidelity.length}</span></span>
                     </div>
                     {premiFidelity.length > 0 && (
@@ -1248,7 +1267,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                           <div key={pr.id} className="flex items-center justify-between text-xs">
                             <span className="text-theme-text-secondary">{fmtDate(pr.created_at)}</span>
                             <span className="text-theme-text-primary">
-                              €{Number(pr.importo) || 25} · {pr.voucher_code ? `buono ${pr.voucher_code}` : 'credito wallet lavaggio'}
+                              €{euroFidelity(Number(pr.importo) || 0)} · {pr.voucher_code ? `buono ${pr.voucher_code}` : 'credito wallet lavaggio'}
                             </span>
                           </div>
                         ))}

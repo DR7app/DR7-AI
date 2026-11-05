@@ -27,6 +27,7 @@ import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 import CauzioneScadenzaConfig from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
+import FidelityLavaggioSection from './FidelityLavaggioSection'
 import MulteConfigSection from './MulteConfigSection'
 import GestioneMailPecSection from './GestioneMailPecSection'
 import MeteoConfigSection from './MeteoConfigSection'
@@ -72,7 +73,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp' | 'fidelity-lavaggio'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -119,6 +120,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p9', title: 'Fiscale' },
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
+  { id: 'fidelity-lavaggio', title: 'Fidelity Lavaggio' },
   { id: 'meteo', title: 'Allerta Meteo' },
   { id: 'p12', title: 'Orari' },
   { id: 'calendario-giornaliero', title: 'Calendario Giornaliero' },
@@ -2737,6 +2739,15 @@ export default function CentralinaProTab() {
                 setAutomations={setAutomations}
               />
             )}
+            {/* 06/11/2026: regole della Fidelity Card lavaggio. Una sola per
+                tutti (riga 'main'), salvataggio proprio: il calcolo lo fa il
+                database (migrazione 20261106_fidelity_lavaggio_da_centralina). */}
+            {section === 'fidelity-lavaggio' && (
+              <>
+                <GlobaleBadge cosa="La Fidelity Card lavaggio" />
+                <FidelityLavaggioSection readOnly={isCauzioniViewOnly} />
+              </>
+            )}
             {section === 'p12' && (
               <OrariSection
                 lavaggio={lavaggioHours}
@@ -2797,7 +2808,7 @@ export default function CentralinaProTab() {
           niente di quella sezione. */}
       {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti'
         && section !== 'sito' && section !== 'gestione-otp'
-        && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && (
+        && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && section !== 'fidelity-lavaggio' && (
         <SaveBar
           changes={changes}
           justSaved={justSaved}

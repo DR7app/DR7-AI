@@ -62,7 +62,11 @@ export async function inviaBuoniFidelity(sb: SupabaseClient, now: Date, budgetMs
                 ? (ce.tipo_cliente === 'azienda' ? String(ce.ragione_sociale || '') : `${ce.nome || ''} ${ce.cognome || ''}`.trim())
                 : String(booking?.customer_name || '')
             const nome = nomeCompleto.split(/\s+/)[0] || 'Cliente'
-            const importo = String(Number(r.importo) || 25)
+            // 06/11/2026: importo e soglia sono quelli scritti sul premio dal
+            // database, cioe' le regole di Centralina Pro > Fidelity Lavaggio
+            // in vigore quando e' stato emesso. Nessun valore fisso qui.
+            const imp = Number(r.importo) || 0
+            const importo = Number.isInteger(imp) ? String(imp) : imp.toFixed(2).replace('.', ',')
             const punti = String(r.punti_soglia)
             const scadenza = dataIt(r.valido_fino)
             // 04/11/2026: chi ha l'account riceve il premio come credito wallet

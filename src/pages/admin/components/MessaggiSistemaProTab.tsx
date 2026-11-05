@@ -2159,7 +2159,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
     {
         label: 'Voucher Fidelity / Codice Sconto',
         scope: 'specific',
-        scopeNote: 'Solo nei template voucher fidelity (250 punti) o codice sconto post-recensione.',
+        scopeNote: 'Solo nei template premio Fidelity lavaggio (soglia da Centralina Pro) o codice sconto post-recensione.',
         items: [
             { key: 'codice', description: 'Codice sconto univoco', example: 'DR7-FID-9F2A', aliases: ['code'] },
         ],

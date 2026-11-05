@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * verificaPuntiLavaggio.mjs — prova su un Postgres vero, in memoria, la
- * Fidelity Card lavaggio (migrazione 20261104_punti_lavaggio_credito_wallet).
+ * Fidelity Card lavaggio (migrazioni 20261104_punti_lavaggio_credito_wallet,
+ * 20261105_punti_lavaggio_anche_per_email e 20261106_fidelity_lavaggio_da_centralina:
+ * regole da Centralina Pro, cambi di regole senza premi arretrati).
  *
  *   npm run punti:lavaggio
  *
@@ -21,9 +23,13 @@ try {
 }
 import fs from 'node:fs'
 
-const db = new PGlite()
-
-await db.exec(`
+const SCHEMA = `
+CREATE TABLE public.centralina_pro_config (
+  id text PRIMARY KEY,
+  config jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+INSERT INTO public.centralina_pro_config (id, config) VALUES
+  ('main', '{"site_copy":{"x":1}}'::jsonb), ('business_lavaggio', '{}'::jsonb);
 CREATE TABLE public.bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid,
@@ -103,12 +109,18 @@ END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY, email text);
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
-`)
+`
 
 const leggi = (f) => fs.readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')
-await db.exec(leggi('20260915000000_wallet_addebito_prenotazione.sql'))
-await db.exec(leggi('20260916030000_wallet_account_da_scheda.sql'))
-await db.exec(leggi('20260916000000_wallet_crediti_vincolati.sql'))
+async function nuovoDb() {
+  const d = new PGlite()
+  await d.exec(SCHEMA)
+  await d.exec(leggi('20260915000000_wallet_addebito_prenotazione.sql'))
+  await d.exec(leggi('20260916030000_wallet_account_da_scheda.sql'))
+  await d.exec(leggi('20260916000000_wallet_crediti_vincolati.sql'))
+  return d
+}
+let db = await nuovoDb()
 
 const ok = (c, m) => { console.log(`${c ? 'OK  ' : 'KO  '} ${m}`); if (!c) process.exit(1) }
 const q = async (s, p) => (await db.query(s, p)).rows
@@ -322,5 +334,163 @@ await db.exec(leggi('20261105_punti_lavaggio_anche_per_email.sql'))
 ok((await premi(PAOLA_ACC)).length === 1 && (await premi(ACCOUNT)).length === 2, 'migrazione rilanciata: nessun premio in piu')
 const fn = await q(`SELECT p.oid FROM pg_proc p WHERE p.proname = 'dr7_punti_titolare_prenotazione'`)
 ok(fn.length === 1, 'una sola versione della funzione (niente overload)')
+
+tit('12. 20261106: regole da Centralina Pro, con i default nulla cambia')
+const DEF = { attivo: true, euro_per_punto: 1, soglia_punti: 250, importo_premio: 25, validita_giorni: 15, tipo_premio: 'credito_wallet' }
+const salvaCfg = async (over, dbx = db) => dbx.query(
+  `UPDATE public.centralina_pro_config SET config = jsonb_set(config, '{fidelity_lavaggio}', $1::jsonb) WHERE id = 'main'`,
+  [JSON.stringify({ ...DEF, ...over })])
+const foto = async () => JSON.stringify({
+  carte: await q('SELECT id, fidelity_points, fidelity_lifetime_points FROM public.customers_extended ORDER BY id'),
+  premi: Number((await uno('SELECT count(*) n FROM public.fidelity_buoni')).n),
+  codici: Number((await uno('SELECT count(*) n FROM public.discount_codes')).n),
+  lotti: Number((await uno('SELECT count(*) n FROM public.wallet_crediti_vincolati')).n),
+})
+const versione = async () => Number((await uno(`SELECT coalesce((SELECT versione FROM public.fidelity_lavaggio_config WHERE id='attiva'), 0) v`)).v)
+const ancore = async () => Number((await uno('SELECT count(*) n FROM public.fidelity_lavaggio_ancora')).n)
+const nuovoCliente = async (id, scheda, email) => {
+  await db.query('INSERT INTO auth.users (id, email) VALUES ($1,$2)', [id, email])
+  await db.query('INSERT INTO public.user_credit_balance (user_id, balance) VALUES ($1, 0)', [id])
+  await db.query(`INSERT INTO public.customers_extended (id, user_id, email, nome, cognome, telefono) VALUES ($1,$2,$3,'Prova','Cliente','3339999999')`, [scheda, id, email])
+}
+const n = async (s, p) => Number((await uno(s, p)).n)
+
+const prima = await foto()
+await db.exec(leggi('20261106_fidelity_lavaggio_da_centralina.sql'))
+ok(await foto() === prima, 'migrazione con config assente: carte, premi, codici, lotti identici')
+ok(await versione() === 0 && await ancore() === 0, 'nessuna ancora, regola di sempre')
+await db.exec(leggi('20261106_fidelity_lavaggio_da_centralina.sql'))
+ok(await foto() === prima, 'migrazione rilanciata: identico')
+await salvaCfg({})
+ok(await foto() === prima && await versione() === 0 && await ancore() === 0, 'salvata la sezione con i valori di default: niente si muove')
+const norm = (await uno(`SELECT public.dr7_fidelity_lavaggio_norm('{"euro_per_punto":-1,"soglia_punti":0,"importo_premio":"abc","validita_giorni":0,"tipo_premio":"x"}'::jsonb) c`)).c
+ok(Number(norm.euro_per_punto) === 1 && norm.soglia_punti === 250 && Number(norm.importo_premio) === 25 && norm.validita_giorni === 15 && norm.tipo_premio === 'credito_wallet' && norm.attivo === true, 'valori 0, negativi o testo = default')
+const norm2 = (await uno(`SELECT public.dr7_fidelity_lavaggio_norm('{"euro_per_punto":"1,5","soglia_punti":"120"}'::jsonb) c`)).c
+ok(Number(norm2.euro_per_punto) === 1.5 && norm2.soglia_punti === 120, 'decimali con la virgola accettati')
+
+const RIC_ACC = 'd0000000-0000-0000-0000-000000000001', RIC = 'd0000000-0000-0000-0000-000000000002'
+await nuovoCliente(RIC_ACC, RIC, 'riccardo@prova.it')
+await lavaggio({ userId: RIC_ACC, eur: 260 })
+p = await premi(RIC_ACC)
+c = await carta(RIC)
+ok(p.length === 1 && Number(p[0].importo) === 25 && p[0].punti_soglia === 250 && c.punti === 10 && c.totale === 260, 'default dal vivo: 260 -> premio 25 EUR a 250, 10 punti')
+const lr = await uno('SELECT * FROM public.wallet_crediti_vincolati WHERE id=$1', [p[0].lotto_id])
+ok(Number(lr.importo) === 25 && Number((await uno(`SELECT ($1::date - (now() AT TIME ZONE 'Europe/Rome')::date) AS g`, [lr.scadenza])).g) === 15, 'lotto 25 EUR, 15 giorni')
+
+tit('13. Soglia da 250 a 100 (premio 10) con un cliente a 179')
+const GIU_ACC = 'd0000000-0000-0000-0000-000000000003', GIU = 'd0000000-0000-0000-0000-000000000004'
+await nuovoCliente(GIU_ACC, GIU, 'giulia@prova.it')
+const giu100 = await lavaggio({ userId: GIU_ACC, eur: 100 })
+await lavaggio({ userId: GIU_ACC, eur: 79 })
+ok((await carta(GIU)).punti === 179, 'Giulia a 179/250')
+let premiTotali = await n('SELECT count(*) n FROM public.fidelity_buoni')
+await salvaCfg({ soglia_punti: 100, importo_premio: 10 })
+ok(await n('SELECT count(*) n FROM public.fidelity_buoni') === premiTotali, 'al cambio NESSUN premio, per nessun cliente')
+c = await carta(GIU)
+ok(c.punti === 99 && c.totale === 179, `Giulia tiene i punti fino a soglia - 1: 99/100 (letto ${c.punti}/${c.totale})`)
+ok(await versione() === 1 && await ancore() > 0, 'regola versione 1, ancore scritte')
+c = await carta(RIC)
+ok(c.punti === 10, 'Riccardo resta a 10')
+ok((await uno(`SELECT label FROM public.system_alarms WHERE id='lav_punti_250'`)).label === 'Cliente a 100 punti lavaggio', 'etichetta allarme con la soglia nuova')
+ok((await uno(`SELECT label FROM public.system_messages WHERE message_key='pro_fidelity_voucher'`)).label === 'Lavaggio: 100 punti raggiunti (buono 10 EUR)', 'etichetta template con soglia e importo nuovi')
+const fotoV1 = await foto()
+await salvaCfg({ soglia_punti: 100, importo_premio: 10 })
+await db.exec(leggi('20261106_fidelity_lavaggio_da_centralina.sql'))
+ok(await foto() === fotoV1 && await versione() === 1, 'stessa config risalvata e migrazione rilanciata: nulla cambia')
+await lavaggio({ userId: GIU_ACC, eur: 15 })
+p = await premi(GIU_ACC)
+c = await carta(GIU)
+ok(p.length === 1 && Number(p[0].importo) === 10 && p[0].punti_soglia === 100 && c.punti === 14, `primo lavaggio dopo il cambio: UN premio da 10, carta a 14 (letto ${c.punti})`)
+ok(Number((await uno('SELECT importo FROM public.wallet_crediti_vincolati WHERE id=$1', [p[0].lotto_id])).importo) === 10, 'lotto da 10 EUR')
+const MAR_ACC = 'd0000000-0000-0000-0000-000000000005', MAR = 'd0000000-0000-0000-0000-000000000006'
+await nuovoCliente(MAR_ACC, MAR, 'marco@prova.it')
+await lavaggio({ userId: MAR_ACC, eur: 60 })
+ok((await carta(MAR)).punti === 60 && (await premi(MAR_ACC)).length === 0, 'cliente nuovo: 60/100')
+await lavaggio({ userId: MAR_ACC, eur: 50 })
+c = await carta(MAR)
+ok((await premi(MAR_ACC)).length === 1 && c.punti === 10 && c.totale === 110, 'a 110: premio a 100, surplus 10 riportato')
+
+tit('14. 2 EUR per punto')
+await salvaCfg({ soglia_punti: 100, importo_premio: 10, euro_per_punto: 2 })
+ok((await carta(GIU)).punti === 14 && (await carta(MAR)).punti === 10, 'chi era a meta carta tiene i suoi punti')
+const NAD_ACC = 'd0000000-0000-0000-0000-000000000007', NAD = 'd0000000-0000-0000-0000-000000000008'
+await nuovoCliente(NAD_ACC, NAD, 'nadia@prova.it')
+await lavaggio({ userId: NAD_ACC, eur: 179 })
+c = await carta(NAD)
+ok(c.punti === 89 && c.totale === 89, `179 EUR = 89 punti (letto ${c.punti}/${c.totale})`)
+await lavaggio({ userId: GIU_ACC, eur: 42 })
+ok((await carta(GIU)).punti === 35, 'Giulia: 14 + 42 EUR / 2 = 35')
+
+tit('15. Premio "codice sconto" anche per chi ha l account')
+await salvaCfg({ soglia_punti: 100, importo_premio: 10, euro_per_punto: 2, tipo_premio: 'codice_sconto' })
+const lottiMarco = await n('SELECT count(*) n FROM public.wallet_crediti_vincolati WHERE user_id=$1', [MAR_ACC])
+await lavaggio({ userId: MAR_ACC, eur: 180 })
+p = await premi(MAR_ACC)
+ok(p.length === 2 && p[1].voucher_code && !p[1].lotto_id, 'premio n.2 di Marco = codice, nessun lotto')
+const dcm = await uno('SELECT * FROM public.discount_codes WHERE code=$1', [p[1].voucher_code])
+ok(Number(dcm.value_amount) === 10 && dcm.customer_email === 'marco@prova.it' && /EUR 10 .*\(100 punti\).*Valido 15 giorni/.test(dcm.usage_conditions), 'codice da 10 EUR intestato a Marco, testo coi valori in vigore')
+ok(await n('SELECT count(*) n FROM public.wallet_crediti_vincolati WHERE user_id=$1', [MAR_ACC]) === lottiMarco, 'nessun credito wallet in piu')
+ok((await carta(MAR)).punti === 0, 'Marco riparte da 0')
+await salvaCfg({ soglia_punti: 100, importo_premio: 10, euro_per_punto: 2 })
+
+tit('16. Soglia alzata da 100 a 400')
+await salvaCfg({ soglia_punti: 400, importo_premio: 10, euro_per_punto: 2 })
+ok((await carta(NAD)).punti === 89 && (await carta(GIU)).punti === 35, 'Nadia 89/400, Giulia 35/400')
+await lavaggio({ userId: NAD_ACC, eur: 1 })
+ok((await carta(NAD)).punti === 90, 'l euro avanzato prima del cambio non si perde: 180 EUR = 90')
+await lavaggio({ userId: NAD_ACC, eur: 620 })
+c = await carta(NAD)
+ok((await premi(NAD_ACC)).length === 1 && c.punti === 0 && c.totale === 400, 'premio a 400, non prima')
+
+tit('17. Programma spento e riacceso')
+await salvaCfg({ attivo: false, soglia_punti: 400, importo_premio: 10, euro_per_punto: 2 })
+premiTotali = await n('SELECT count(*) n FROM public.fidelity_buoni')
+const giuSpento = await lavaggio({ userId: GIU_ACC, eur: 900 })
+ok((await carta(GIU)).punti === 35, 'spento: la carta resta ferma')
+ok(Number((await uno('SELECT public.dr7_punti_lavaggio_accredita($1) n', [giuSpento])).n) === 0, 'il sito che richiama accredita: 0')
+ok(await n('SELECT count(*) n FROM public.fidelity_buoni') === premiTotali, 'spento: nessun premio')
+ok(await n('SELECT count(*) n FROM public.fidelity_point_awards WHERE booking_id=$1', [giuSpento]) === 0, 'spento: nessun registro punti')
+await salvaCfg({ attivo: true, soglia_punti: 400, importo_premio: 10, euro_per_punto: 2 })
+ok(await n('SELECT count(*) n FROM public.fidelity_buoni') === premiTotali, 'riacceso: nessuna raffica di arretrati')
+ok((await carta(GIU)).punti === 35, 'riacceso: Giulia riparte da 35')
+await lavaggio({ userId: GIU_ACC, eur: 2 })
+ok((await carta(GIU)).punti === 36, 'conta solo quello pagato dopo la riaccensione')
+await lavaggio({ userId: GIU_ACC, eur: 728 })
+c = await carta(GIU)
+ok((await premi(GIU_ACC)).length === 2 && c.punti === 0, 'premio a 400 punti dopo la riaccensione')
+
+tit('18. Lavaggio pagato prima del cambio, annullato dopo')
+const totPrima = (await carta(GIU)).totale
+await db.query(`UPDATE public.bookings SET status='cancelled' WHERE id=$1`, [giu100])
+c = await carta(GIU)
+ok(c.totale === totPrima - 50 && c.punti === 0 && (await premi(GIU_ACC)).length === 2, 'tolti 100 EUR = 50 punti al valore nuovo, nessun premio')
+
+tit('19. Idempotenza dopo i cambi')
+const fotoFine = await foto()
+const verFine = await versione()
+await db.exec(leggi('20261106_fidelity_lavaggio_da_centralina.sql'))
+await salvaCfg({ attivo: true, soglia_punti: 400, importo_premio: 10, euro_per_punto: 2 })
+ok(await foto() === fotoFine && await versione() === verFine, 'migrazione rilanciata e config risalvata: identico')
+const emessi = await n(`SELECT coalesce(sum(public.dr7_punti_lavaggio_ricalcola(t)), 0) n FROM (SELECT DISTINCT coalesce(user_id, id) t FROM public.customers_extended) x`)
+ok(emessi === 0 && await foto() === fotoFine, 'ricalcolo di tutte le carte: 0 premi, nessuna carta cambia')
+await db.query(`UPDATE public.centralina_pro_config SET config = jsonb_set(config, '{fidelity_lavaggio}', $1::jsonb) WHERE id = 'business_lavaggio'`, [JSON.stringify({ ...DEF, soglia_punti: 5 })])
+ok(await versione() === verFine, 'la riga di un altro business non cambia la regola')
+
+tit('20. Sezione salvata PRIMA di eseguire la migrazione')
+db = await nuovoDb()
+const LU_ACC = 'e0000000-0000-0000-0000-000000000001', LU = 'e0000000-0000-0000-0000-000000000002'
+await nuovoCliente(LU_ACC, LU, 'lucia@prova.it')
+await lavaggio({ userId: LU_ACC, eur: 179 })
+await db.exec(leggi('20261104_punti_lavaggio_credito_wallet.sql'))
+await db.exec(leggi('20261105_punti_lavaggio_anche_per_email.sql'))
+ok((await carta(LU)).punti === 179, 'Lucia a 179/250')
+await salvaCfg({ soglia_punti: 100, importo_premio: 10 })
+await db.exec(leggi('20261106_fidelity_lavaggio_da_centralina.sql'))
+c = await carta(LU)
+ok((await premi(LU_ACC)).length === 0 && c.punti === 99, `migrazione: regole salvate in vigore senza arretrati (99/100, letto ${c.punti})`)
+ok(await versione() === 1, 'regola versione 1')
+await lavaggio({ userId: LU_ACC, eur: 15 })
+p = await premi(LU_ACC)
+ok(p.length === 1 && Number(p[0].importo) === 10 && (await carta(LU)).punti === 14, 'primo lavaggio dopo: premio da 10, carta a 14')
 
 console.log('\nSCENARIO COMPLETO: tutto verificato.')

@@ -138,7 +138,7 @@ export const OLD_TO_PRO: Record<string, string> = {
   no_cauzione_rejected: 'pro_no_cauzione_rifiutato',
   quote_discount_offered: 'pro_sconto_concesso',
 
-  // Fidelity Card — voucher fired at 250 punti
+  // Fidelity Card — premio alla soglia punti (Centralina Pro > Fidelity Lavaggio)
   fidelity_voucher_whatsapp: 'pro_fidelity_voucher',
 
   // Website customer actions — cancellation lifecycle now points all to
@@ -231,7 +231,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   wallet_bonus_credit: 'Cashback wallet dopo pagamento carta (callback Nexi)',
 
   // Fidelity
-  fidelity_voucher_whatsapp: 'Voucher fidelity raggiunti i 250 punti',
+  fidelity_voucher_whatsapp: 'Premio Fidelity lavaggio (soglia punti raggiunta)',
 
   // Marketing aggiuntivo
   review_discount_code: 'Invio codice sconto post-recensione (Review Management)',

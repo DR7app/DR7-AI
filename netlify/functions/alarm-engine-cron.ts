@@ -87,7 +87,7 @@ const giro = async () => {
             }
         }
 
-        // 12/10/2026: buoni Fidelity lavaggio (250 punti) emessi dal database.
+        // 12/10/2026: buoni Fidelity lavaggio (soglia da Centralina Pro) emessi dal database.
         try {
             inviati += await inviaBuoniFidelity(sb, now, Math.max(0, BUDGET_MESSAGGI_MS - (Date.now() - t0)))
         } catch (e) {

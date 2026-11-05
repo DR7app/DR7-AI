@@ -1224,9 +1224,23 @@ const BLOCCO_0: VoceTesto[] = [
         "schermata": "account-prenotazioni"
     },
     {
+        "chiave": "s:e1b6fab1",
+        "it": "Prenotazione cancellata. DR7 verificherà il pagamento e ti contatterà per il rimborso.",
+        "en": "Booking cancelled. DR7 will check the payment and contact you about the refund.",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
         "chiave": "s:56cca21b",
         "it": "Prenotazione cancellata. Rimborso del",
         "en": "Booking cancelled. Refund of",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:6850d419",
+        "it": "Prenotazione con acconto: DR7 verificherà quanto hai pagato e ti contatterà per il rimborso.",
+        "en": "Booking with a deposit paid: DR7 will check the amount paid and contact you about the refund.",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
     },
@@ -1241,6 +1255,13 @@ const BLOCCO_0: VoceTesto[] = [
         "chiave": "s:7e1ab501",
         "it": "Prenotazione modificata. Differenza di",
         "en": "Booking changed. A difference of",
+        "file": "pages/account/MyBookings.tsx",
+        "schermata": "account-prenotazioni"
+    },
+    {
+        "chiave": "s:1333c13d",
+        "it": "Prenotazione non ancora pagata: puoi annullarla senza costi, non ci sono importi da rimborsare.",
+        "en": "This booking has not been paid yet: you can cancel it at no cost, there is nothing to refund.",
         "file": "pages/account/MyBookings.tsx",
         "schermata": "account-prenotazioni"
     },
@@ -1581,9 +1602,16 @@ const BLOCCO_0: VoceTesto[] = [
         "schermata": "account-preventivi"
     },
     {
-        "chiave": "s:87478a34",
-        "it": "1 € speso al lavaggio = 1 punto · A 250 punti ricevi un buono di €25",
-        "en": "€1 spent on a wash = 1 point · At 250 points you get a €25 voucher",
+        "chiave": "s:39b83df5",
+        "it": "{euro} € spesi al lavaggio = 1 punto · A {soglia} punti ricevi €{importo} di credito lavaggio nel Credit Wallet, valido {giorni} giorni",
+        "en": "€{euro} spent on a wash = 1 point · At {soglia} points you get €{importo} of car wash credit in your Credit Wallet, valid {giorni} days",
+        "file": "pages/account/ProfileSettings.tsx",
+        "schermata": "account-profilo"
+    },
+    {
+        "chiave": "s:3bd909f6",
+        "it": "{euro} € spesi al lavaggio = 1 punto · A {soglia} punti ricevi un buono sconto lavaggio di €{importo}, valido {giorni} giorni",
+        "en": "€{euro} spent on a wash = 1 point · At {soglia} points you get a €{importo} car wash voucher, valid {giorni} days",
         "file": "pages/account/ProfileSettings.tsx",
         "schermata": "account-profilo"
     },
@@ -1633,6 +1661,13 @@ const BLOCCO_0: VoceTesto[] = [
         "chiave": "s:7d62c429",
         "it": "Cognome",
         "en": "Last name",
+        "file": "pages/account/ProfileSettings.tsx",
+        "schermata": "account-profilo"
+    },
+    {
+        "chiave": "s:48789ee4",
+        "it": "Credito vincolato",
+        "en": "Restricted credit",
         "file": "pages/account/ProfileSettings.tsx",
         "schermata": "account-profilo"
     },
@@ -1710,6 +1745,13 @@ const BLOCCO_0: VoceTesto[] = [
         "chiave": "s:edb0f023",
         "it": "Fidelity Card",
         "en": "Fidelity Card",
+        "file": "pages/account/ProfileSettings.tsx",
+        "schermata": "account-profilo"
+    },
+    {
+        "chiave": "s:fe180408",
+        "it": "fino al",
+        "en": "until",
         "file": "pages/account/ProfileSettings.tsx",
         "schermata": "account-profilo"
     },
@@ -1917,6 +1959,13 @@ const BLOCCO_0: VoceTesto[] = [
         "schermata": "account-profilo"
     },
     {
+        "chiave": "s:3c7b9d37",
+        "it": "Si usa da solo, prima del saldo, quando prenoti il servizio indicato.",
+        "en": "Used automatically, before your balance, when you book the service shown.",
+        "file": "pages/account/ProfileSettings.tsx",
+        "schermata": "account-profilo"
+    },
+    {
         "chiave": "s:268fe2c9",
         "it": "Tipo Cliente",
         "en": "Customer Type",
@@ -2069,7 +2118,10 @@ const BLOCCO_0: VoceTesto[] = [
         "en": "Invite a friend, get €50",
         "file": "pages/account/ReferralProgram.tsx",
         "schermata": "account-referral"
-    },
+    }
+]
+
+const BLOCCO_1: VoceTesto[] = [
     {
         "chiave": "s:46e46d0f",
         "it": "Se ricarichi il wallet con almeno €100, io ricevo un bonus di €50 e tu entri nel mondo DR7.",
@@ -2118,10 +2170,7 @@ const BLOCCO_0: VoceTesto[] = [
         "en": "Delete Account",
         "file": "pages/account/SecuritySettings.tsx",
         "schermata": "account-sicurezza"
-    }
-]
-
-const BLOCCO_1: VoceTesto[] = [
+    },
     {
         "chiave": "s:be372a24",
         "it": "ELIMINA DEFINITIVAMENTE",
@@ -3166,9 +3215,9 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
-        "chiave": "s:b13360fa",
-        "it": "Nessuna hypercar configurata in flotta al momento.",
-        "en": "No hypercar configured in the fleet right now.",
+        "chiave": "s:68bdeb8e",
+        "it": "Nessun veicolo di questa categoria disponibile in flotta al momento.",
+        "en": "No vehicle of this category available in the fleet right now.",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -3176,13 +3225,6 @@ const BLOCCO_1: VoceTesto[] = [
         "chiave": "s:5c001fda",
         "it": "Nessuna perdita totale dell'importo, salvo promozioni non rimborsabili o mancata presentazione.",
         "en": "No total loss of the amount, except for non-refundable promotions or no-shows.",
-        "file": "pages/CarWashBookingPage.tsx",
-        "schermata": "car-wash-booking"
-    },
-    {
-        "chiave": "s:45b6ad45",
-        "it": "Nessuna supercar configurata in flotta al momento.",
-        "en": "No supercar configured in the fleet right now.",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -3390,16 +3432,9 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
-        "chiave": "s:b01dc157",
-        "it": "Scegli la tua hypercar",
-        "en": "Choose your hypercar",
-        "file": "pages/CarWashBookingPage.tsx",
-        "schermata": "car-wash-booking"
-    },
-    {
-        "chiave": "s:5b4bce10",
-        "it": "Scegli la tua supercar",
-        "en": "Choose your supercar",
+        "chiave": "s:e24925d2",
+        "it": "Scegli il tuo veicolo",
+        "en": "Choose your vehicle",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -3425,23 +3460,16 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "car-wash-booking"
     },
     {
+        "chiave": "s:ae28dbe9",
+        "it": "Seleziona il veicolo per completare la prenotazione.",
+        "en": "Pick the vehicle to complete the booking.",
+        "file": "pages/CarWashBookingPage.tsx",
+        "schermata": "car-wash-booking"
+    },
+    {
         "chiave": "s:e7dfe4a8",
         "it": "Seleziona il veicolo: verrà bloccato per la finestra del tuo appuntamento.",
         "en": "Pick the vehicle: it will be blocked for your appointment window.",
-        "file": "pages/CarWashBookingPage.tsx",
-        "schermata": "car-wash-booking"
-    },
-    {
-        "chiave": "s:fa722b94",
-        "it": "Seleziona la hypercar per completare la prenotazione.",
-        "en": "Pick the hypercar to complete the booking.",
-        "file": "pages/CarWashBookingPage.tsx",
-        "schermata": "car-wash-booking"
-    },
-    {
-        "chiave": "s:84eda0a3",
-        "it": "Seleziona la supercar per completare la prenotazione.",
-        "en": "Pick the supercar to complete the booking.",
         "file": "pages/CarWashBookingPage.tsx",
         "schermata": "car-wash-booking"
     },
@@ -3768,13 +3796,6 @@ const BLOCCO_1: VoceTesto[] = [
         "schermata": "footer"
     },
     {
-        "chiave": "s:d519010b",
-        "it": "Lingua",
-        "en": "Language",
-        "file": "components/layout/Footer.tsx",
-        "schermata": "footer"
-    },
-    {
         "chiave": "s:85042bfd",
         "it": "Torna su",
         "en": "Back to top",
@@ -3834,6 +3855,13 @@ const BLOCCO_1: VoceTesto[] = [
         "chiave": "s:a743d018",
         "it": "Continua",
         "en": "Continue",
+        "file": "pages/CarWashServicesPage.tsx",
+        "schermata": "lavaggio"
+    },
+    {
+        "chiave": "s:c40ec275",
+        "it": "Disponibili",
+        "en": "Available",
         "file": "pages/CarWashServicesPage.tsx",
         "schermata": "lavaggio"
     },
@@ -4193,7 +4221,10 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "Unavailable",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    },
+    }
+]
+
+const BLOCCO_2: VoceTesto[] = [
     {
         "chiave": "s:3f7812e0",
         "it": "Numero Civico",
@@ -4221,10 +4252,7 @@ const BLOCCO_1: VoceTesto[] = [
         "en": "RSSMRA80A01H501U",
         "file": "pages/MechanicalBookingPage.tsx",
         "schermata": "mechanical-booking"
-    }
-]
-
-const BLOCCO_2: VoceTesto[] = [
+    },
     {
         "chiave": "s:9d34c717",
         "it": "Sconto Online -5%:",
@@ -6296,7 +6324,10 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "2. Passengers",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_3: VoceTesto[] = [
     {
         "chiave": "s:e3a14678",
         "it": "2020 in poi",
@@ -6324,10 +6355,7 @@ const BLOCCO_2: VoceTesto[] = [
         "en": "25/03/2026",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_3: VoceTesto[] = [
+    },
     {
         "chiave": "s:a9ffd9b2",
         "it": "26 anni o più",
@@ -6448,6 +6476,20 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:bebb7b6e",
+        "it": "Accedi al tuo account per inviare la richiesta.",
+        "en": "Sign in to send the request.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:01c706a7",
+        "it": "Accedi al tuo account per usare il codice.",
+        "en": "Sign in to use the code.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:81cd705a",
         "it": "ACCEDI E ACQUISTA",
         "en": "SIGN IN AND BUY",
@@ -6473,6 +6515,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Accedi per prenotare",
         "en": "Sign in to book",
         "file": "pages/NoleggioServicePage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:371ac508",
+        "it": "Accedi per prenotare, vedere i tuoi viaggi e usare il Wallet.",
+        "en": "Sign in to book, see your trips and use your Wallet.",
+        "file": "pages/app/AppAccount.tsx",
         "schermata": null
     },
     {
@@ -6522,6 +6571,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Acconsento a ricevere offerte e comunicazioni promozionali da partner selezionati da DR7 tramite email, telefono, SMS o WhatsApp.",
         "en": "I consent to receiving offers and promotional communications from partners selected by DR7 via email, phone, SMS or WhatsApp.",
         "file": "components/ui/MarketingConsentModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:59f8a2fc",
+        "it": "Account",
+        "en": "Account",
+        "file": "pages/app/AppAccount.tsx",
         "schermata": null
     },
     {
@@ -6633,7 +6689,7 @@ const BLOCCO_3: VoceTesto[] = [
         "chiave": "k:per_day",
         "it": "al giorno",
         "en": "per day",
-        "file": "components/ui/RentalCard.tsx",
+        "file": "pages/app/appFleet.tsx",
         "schermata": null
     },
     {
@@ -6697,6 +6753,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Apertura del pagamento…",
         "en": "Opening payment…",
         "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:00c0b1fb",
+        "it": "APPLICA",
+        "en": "APPLY",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -6766,7 +6829,7 @@ const BLOCCO_3: VoceTesto[] = [
         "chiave": "s:3b2ef204",
         "it": "Assicurazione inclusa",
         "en": "Insurance included",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "file": "pages/app/appFleet.tsx",
         "schermata": null
     },
     {
@@ -6847,6 +6910,13 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:dcabc719",
+        "it": "ATTENZIONE!",
+        "en": "WARNING!",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:e6dac0a6",
         "it": "Attiva",
         "en": "Active",
@@ -6917,10 +6987,24 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:0e12ebf1",
+        "it": "Benvenuto in DR7",
+        "en": "Welcome to DR7",
+        "file": "pages/app/AppAccount.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:b286363a",
         "it": "Benvenuto in DR7.\nCome posso assisterLa?\n\n⚠️ _Questo assistente è un'intelligenza artificiale. I prezzi e le informazioni fornite sono puramente indicativi e non vincolanti. Solo il prezzo mostrato nella pagina di prenotazione fa fede._",
         "en": "Welcome to DR7.\nHow may I assist you?\n\n⚠️ _This assistant is an artificial intelligence. Prices and information provided are indicative only and not binding. Only the price shown on the booking page is authoritative._",
         "file": "components/ui/DR7AIChat.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:92cae74f",
+        "it": "Benvenuto in DR7.\nCome posso assisterLa?\n\nQuesto assistente è un'intelligenza artificiale: prezzi e informazioni sono indicativi. Fa fede solo il prezzo della pagina di prenotazione.",
+        "en": "Welcome to DR7.\nHow may I assist you?\n\nThis assistant is an AI: prices and information are indicative. Only the price on the booking page is binding.",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {
@@ -6949,6 +7033,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Budget max:",
         "en": "Max budget:",
         "file": "components/ui/RentalFilters.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:04308d18",
+        "it": "Buongiorno DR7, vi scrivo dall'app.",
+        "en": "Hello DR7, I am writing from the app.",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {
@@ -6984,6 +7075,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Calcola il Codice Fiscale dai dati anagrafici",
         "en": "Calculate the Tax Code from personal details",
         "file": "components/ui/CalcolaCFButton.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:d1820b2e",
+        "it": "Calcolata sull'indirizzo",
+        "en": "Priced by address",
+        "file": "pages/app/AppVeicolo.tsx",
         "schermata": null
     },
     {
@@ -7274,6 +7372,13 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:ae66da37",
+        "it": "Che auto avete libere questo weekend?",
+        "en": "Which cars are free this weekend?",
+        "file": "pages/app/AppConcierge.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:3ffb3e91",
         "it": "CHI GUIDA",
         "en": "WHO IS DRIVING",
@@ -7281,9 +7386,23 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:ae956af6",
+        "it": "Chiama",
+        "en": "Call",
+        "file": "pages/app/AppConcierge.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:6806b7fb",
         "it": "Chilometri",
         "en": "Mileage",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:deebea97",
+        "it": "Chiudendo questa schermata potresti perdere il codice esclusivo per noleggiare senza cauzione!",
+        "en": "If you close this screen you may lose your exclusive code to rent with no deposit!",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -7414,9 +7533,9 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:8a76c98f",
-        "it": "Cliccando \"Salva Preventivo\" la tua richiesta verrà inviata al team DR7 per approvazione. Riceverai un messaggio WhatsApp con l'esito.",
-        "en": "By clicking \"Save Quote\" your request will be sent to the DR7 team for approval. You will receive a WhatsApp message with the outcome.",
+        "chiave": "s:58314837",
+        "it": "Cliccando \"Invia richiesta\" la richiesta va al team DR7. Se approvata, riceverai su WhatsApp un codice per prenotare senza cauzione.",
+        "en": "By clicking \"Send request\" your request goes to the DR7 team. If approved, you will receive a code on WhatsApp to book with no deposit.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -7554,6 +7673,34 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:ba85e15c",
+        "it": "Codice No Cauzione attivo",
+        "en": "No-Deposit code active",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a7367cf4",
+        "it": "Codice non valido.",
+        "en": "Invalid code.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:eeda648d",
+        "it": "Codice non verificabile in questo momento.",
+        "en": "Code cannot be checked right now.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:ffc4f64e",
+        "it": "Codice sconto",
+        "en": "Discount code",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:57e761c6",
         "it": "Codice Sconto (",
         "en": "Discount Code (",
@@ -7621,6 +7768,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Cognome obbligatorio.",
         "en": "Last name is required.",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:146bd8a2",
+        "it": "Come funziona il DR7 Club?",
+        "en": "How does DR7 Club work?",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {
@@ -7781,7 +7935,7 @@ const BLOCCO_3: VoceTesto[] = [
         "chiave": "s:7158b65f",
         "it": "Consegna a domicilio",
         "en": "Home delivery",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "file": "pages/app/AppVeicolo.tsx",
         "schermata": null
     },
     {
@@ -7803,6 +7957,13 @@ const BLOCCO_3: VoceTesto[] = [
         "it": "Contanti",
         "en": "Cash",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:181e558f",
+        "it": "Contattaci",
+        "en": "Contact us",
+        "file": "pages/app/AppAccount.tsx",
         "schermata": null
     },
     {
@@ -7949,7 +8110,7 @@ const BLOCCO_3: VoceTesto[] = [
         "chiave": "s:57cea976",
         "it": "Da",
         "en": "From",
-        "file": "components/ui/RentalCard.tsx",
+        "file": "pages/app/appFleet.tsx",
         "schermata": null
     },
     {
@@ -8135,13 +8296,6 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:1d9ebbeb",
-        "it": "Date o orari non validi. Torna allo step 1 e seleziona date e orari.",
-        "en": "Invalid dates or times. Go back to step 1 and select dates and times.",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:78829df7",
         "it": "Dati cliente",
         "en": "Your details",
@@ -8273,7 +8427,10 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "PAYMENT DETAILS",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_4: VoceTesto[] = [
     {
         "chiave": "k:Booking_Details",
         "it": "Dettagli Prenotazione",
@@ -8401,13 +8558,6 @@ const BLOCCO_3: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:c40ec275",
-        "it": "Disponibili",
-        "en": "Available",
-        "file": "pages/account/MiePrevendite.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:7b84a1f6",
         "it": "Disponibilita",
         "en": "Availability",
@@ -8427,10 +8577,7 @@ const BLOCCO_3: VoceTesto[] = [
         "en": "Daytime",
         "file": "components/ui/HelicopterBookingForm.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_4: VoceTesto[] = [
+    },
     {
         "chiave": "k:Documents",
         "it": "Documenti",
@@ -8576,6 +8723,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "DR7 Club — Pagamento separato",
         "en": "DR7 Club — Separate payment",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:4f3d6547",
+        "it": "DR7 Club · Concierge dedicato",
+        "en": "DR7 Club · Dedicated concierge",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {
@@ -9013,6 +9167,20 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:313ba495",
+        "it": "Esci",
+        "en": "Sign out",
+        "file": "pages/app/AppAccount.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:9fa75390",
+        "it": "Esci comunque",
+        "en": "Leave anyway",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:5b32668d",
         "it": "Esclusa",
         "en": "Excluded",
@@ -9125,13 +9293,6 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:fe180408",
-        "it": "fino al",
-        "en": "up to",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:a21a8528",
         "it": "Fino al",
         "en": "Until",
@@ -9230,9 +9391,9 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:731e27a9",
-        "it": "Gentile {nome},\n\nabbiamo ricevuto la sua richiesta per la formula senza cauzione relativa alla prenotazione appena effettuata.\n\nIl nostro team sta effettuando una verifica rapida per confermarne l'idoneità.\n\nRiceverà a breve un aggiornamento con l'esito e, in caso di approvazione, il link di pagamento per completare la prenotazione.\n\nRestiamo a disposizione.\n\nCordiali saluti,\nDR7",
-        "en": "Gentile {nome},\n\nabbiamo ricevuto la sua richiesta per la formula senza cauzione relativa alla prenotazione appena effettuata.\n\nIl nostro team sta effettuando una verifica rapida per confermarne l'idoneità.\n\nRiceverà a breve un aggiornamento con l'esito e, in caso di approvazione, il link di pagamento per completare la prenotazione.\n\nRestiamo a disposizione.\n\nCordiali saluti,\nDR7",
+        "chiave": "s:9e1caf49",
+        "it": "Gentile {nome},\n\nabbiamo ricevuto la sua richiesta per la formula senza cauzione.\n\nIl nostro team sta effettuando una verifica rapida per confermarne l'idoneità.\n\nRiceverà a breve un aggiornamento con l'esito e, in caso di approvazione, un codice da inserire sul sito nella scelta \"No Cauzione\" per completare la prenotazione.\n\nRestiamo a disposizione.\n\nCordiali saluti,\nDR7",
+        "en": "Gentile {nome},\n\nabbiamo ricevuto la sua richiesta per la formula senza cauzione.\n\nIl nostro team sta effettuando una verifica rapida per confermarne l'idoneità.\n\nRiceverà a breve un aggiornamento con l'esito e, in caso di approvazione, un codice da inserire sul sito nella scelta \"No Cauzione\" per completare la prenotazione.\n\nRestiamo a disposizione.\n\nCordiali saluti,\nDR7",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9363,6 +9524,20 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:5f3b9a89",
+        "it": "Hai già il codice No Cauzione?",
+        "en": "Already have a No-Deposit code?",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:6f1f91c2",
+        "it": "Hai un codice sconto per la prevendita? Si usa dalla scheda della prevendita (Scopri e acquista), non dal carrello.",
+        "en": "Got a discount code for the pre-sale? Use it from the pre-sale card (Discover and buy), not from the cart.",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:9420e1fb",
         "it": "Hai una prevendita valida per questa auto.",
         "en": "You have a pre-sale valid for this car.",
@@ -9388,6 +9563,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Home",
         "en": "Home",
         "file": "components/website/WbHeaderFooter.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:c1455bbd",
+        "it": "I codici sconto non sono disponibili per le prevendite.",
+        "en": "Discount codes are not available for pre-sales.",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -9458,6 +9640,20 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Il codice fiscale serve solo per la fattura: se non ce l'hai, non te lo chiediamo.",
         "en": "The Italian tax code is only needed for the invoice: if you do not have one, we will not ask for it.",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:3ba7bfa1",
+        "it": "Il Credit Wallet non e' disponibile per le prevendite: tutto l'ordine si paga con carta. Per usare il wallet sugli altri servizi, togli la spunta alla prevendita e pagala a parte.",
+        "en": "Credit Wallet is not available for pre-sales: the whole order is paid by card. To use your wallet on the other services, untick the pre-sale and pay for it separately.",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a542cfdd",
+        "it": "Il Credit Wallet non e' disponibile per le prevendite.",
+        "en": "Credit Wallet is not available for pre-sales.",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -9545,13 +9741,6 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:daa87f55",
-        "it": "Il sabato, la riconsegna in ufficio è dalle 09:00 alle 15:00.",
-        "en": "On Saturdays, office drop-off is from 09:00 to 15:00.",
-        "file": "components/ui/CarBookingWizard.tsx",
-        "schermata": null
-    },
-    {
         "chiave": "s:02f6e415",
         "it": "Il secondo conducente deve avere almeno 18 anni.",
         "en": "The second driver must be at least 18 years old.",
@@ -9563,6 +9752,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Il sistema di pagamento non è pronto. Riprova tra un istante.",
         "en": "The payment system is not ready. Please try again in a moment.",
         "file": "components/ui/AddCardModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:9b8a10c4",
+        "it": "Il team DR7 sta per risponderti.",
+        "en": "The DR7 team is about to reply.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -9584,6 +9780,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Il tuo livello",
         "en": "Your tier",
         "file": "components/ui/ClubTiersBoard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:3b5946a6",
+        "it": "Il tuo prossimo noleggio",
+        "en": "Your next rental",
+        "file": "pages/app/AppHome.tsx",
         "schermata": null
     },
     {
@@ -9611,6 +9814,13 @@ const BLOCCO_4: VoceTesto[] = [
         "chiave": "s:d28e80dc",
         "it": "Il veicolo non è disponibile a quest'orario. Disponibile dalle",
         "en": "The vehicle is not available at this time. Available from",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:b1dee3d5",
+        "it": "Il veicolo non e piu disponibile nelle date scelte. Scegli altre date o un altro veicolo.",
+        "en": "The vehicle is no longer available for the selected dates. Choose other dates or another vehicle.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9734,6 +9944,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:49f0071f",
+        "it": "In arrivo",
+        "en": "Upcoming",
+        "file": "pages/app/AppViaggi.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Processing",
         "it": "In Elaborazione...",
         "en": "Processing...",
@@ -9758,7 +9975,7 @@ const BLOCCO_4: VoceTesto[] = [
         "chiave": "s:8a3c1584",
         "it": "Inclusa",
         "en": "Included",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "file": "pages/app/AppVeicolo.tsx",
         "schermata": null
     },
     {
@@ -9793,13 +10010,20 @@ const BLOCCO_4: VoceTesto[] = [
         "chiave": "s:803c05c6",
         "it": "Incluso",
         "en": "Included",
-        "file": "components/ui/CarBookingWizard.tsx",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
         "chiave": "s:1d83e649",
         "it": "Incluso nel noleggio",
         "en": "Included in the rental",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:b3317b08",
+        "it": "Incluso nella prevendita",
+        "en": "Included in pre-sale",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -9937,6 +10161,20 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:601131e6",
+        "it": "Inserisci il codice",
+        "en": "Enter the code",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:03115dd8",
+        "it": "Inserisci il codice.",
+        "en": "Enter the code.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:98c47853",
         "it": "Inserisci il luogo di arrivo",
         "en": "Enter the arrival location",
@@ -10014,6 +10252,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:4ee903f8",
+        "it": "Inserisci un codice sconto.",
+        "en": "Enter a discount code.",
+        "file": "pages/PrevenditePage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:9f249ab6",
         "it": "Inserisci una targa valida",
         "en": "Enter a valid number plate",
@@ -10028,9 +10273,23 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:f0e63566",
+        "it": "Invia",
+        "en": "Send",
+        "file": "pages/app/AppConcierge.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:4f8d2284",
         "it": "Invia Richiesta",
         "en": "Send Request",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:00c41704",
+        "it": "INVIA RICHIESTA",
+        "en": "SEND REQUEST",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -10137,6 +10396,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "l'alloggio",
         "en": "l'alloggio",
         "file": "pages/NoleggioServicePage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:e8879bd7",
+        "it": "L’auto di questa prevendita non e’ prenotabile online in questo momento. Scrivici su WhatsApp.",
+        "en": "The car of this pre-sale cannot be booked online right now. Contact us on WhatsApp.",
+        "file": "pages/account/MiePrevendite.tsx",
         "schermata": null
     },
     {
@@ -10264,7 +10530,10 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "A photo of the ID document (back) is required.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_5: VoceTesto[] = [
     {
         "chiave": "s:7fbe50e9",
         "it": "La foto della patente (fronte) è obbligatoria.",
@@ -10378,9 +10647,9 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:a6996e30",
-        "it": "La tua richiesta per la formula senza cauzione è stata registrata. Il team DR7 la contatterà via WhatsApp con l'esito e, in caso di approvazione, il link di pagamento.",
-        "en": "Your request for the no-deposit option has been registered. The DR7 team will contact you on WhatsApp with the outcome and, if approved, the payment link.",
+        "chiave": "s:8a29ee0a",
+        "it": "La tua richiesta per la formula senza cauzione è stata inviata. Il team DR7 ti risponderà su WhatsApp: se approvata, riceverai un codice. Torna sul veicolo, scegli \"No Cauzione\", inserisci il codice e prenota.",
+        "en": "Your request for the no-deposit option has been sent. The DR7 team will reply on WhatsApp: if approved, you will receive a code. Come back to the vehicle, choose \"No Deposit\", enter the code and book.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -10392,10 +10661,24 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:0b714d39",
+        "it": "Le mie prenotazioni",
+        "en": "My bookings",
+        "file": "pages/app/AppViaggi.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:My_Bookings",
         "it": "Le Mie Prenotazioni",
         "en": "My Bookings",
         "file": "pages/AccountPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:70d94ea7",
+        "it": "Le mie prevendite",
+        "en": "My presales",
+        "file": "pages/app/AppViaggi.tsx",
         "schermata": null
     },
     {
@@ -10417,6 +10700,13 @@ const BLOCCO_4: VoceTesto[] = [
         "it": "Le password non corrispondono.",
         "en": "Passwords do not match.",
         "file": "pages/ResetPasswordPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:ba3d3454",
+        "it": "Le prevendite si pagano solo con carta: Credit Wallet e codice sconto non sono disponibili.",
+        "en": "Pre-sales are card only: Credit Wallet and discount codes are not available.",
+        "file": "pages/PrevenditePage.tsx",
         "schermata": null
     },
     {
@@ -10497,6 +10787,13 @@ const BLOCCO_4: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:d519010b",
+        "it": "Lingua",
+        "en": "Language",
+        "file": "pages/app/AppAccount.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:e21ef0b2",
         "it": "Link di pagamento non ricevuto.",
         "en": "No payment link received.",
@@ -10530,10 +10827,7 @@ const BLOCCO_4: VoceTesto[] = [
         "en": "Location",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_5: VoceTesto[] = [
+    },
     {
         "chiave": "s:861e6ce1",
         "it": "Luogo di nascita",
@@ -10692,7 +10986,7 @@ const BLOCCO_5: VoceTesto[] = [
         "chiave": "s:00c6075a",
         "it": "Menu",
         "en": "Menu",
-        "file": "components/website/WbHeaderFooter.tsx",
+        "file": "pages/app/AppShell.tsx",
         "schermata": null
     },
     {
@@ -10745,6 +11039,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:93d2de22",
+        "it": "Messaggio",
+        "en": "Message",
+        "file": "pages/app/AppConcierge.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:864191a5",
         "it": "Messaggio di benvenuto",
         "en": "Welcome message",
@@ -10780,6 +11081,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:cabe689b",
+        "it": "Mi dispiace, si è verificato un errore. Riprova tra poco oppure scrivici su WhatsApp.",
+        "en": "Sorry, something went wrong. Please try again shortly or message us on WhatsApp.",
+        "file": "pages/app/AppConcierge.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:06ca3f36",
         "it": "Mi dispiace, si è verificato un errore. Riprova tra poco.",
         "en": "Sorry, something went wrong. Please try again shortly.",
@@ -10812,6 +11120,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Modello di velivolo preferito (opzionale)",
         "en": "Preferred aircraft model (optional)",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:8e482833",
+        "it": "Modifica o annulla",
+        "en": "Change or cancel",
+        "file": "pages/app/AppViaggi.tsx",
         "schermata": null
     },
     {
@@ -10945,6 +11260,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Nessuna data disponibile al momento.",
         "en": "No dates available at the moment.",
         "file": "components/ui/TourBookingModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:078f3502",
+        "it": "Nessuna prenotazione in arrivo.",
+        "en": "No upcoming bookings.",
+        "file": "pages/app/AppViaggi.tsx",
         "schermata": null
     },
     {
@@ -11123,6 +11445,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:c9f12bce",
+        "it": "Non disponibile con una prevendita",
+        "en": "Not available with a pre-sale",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:3f0b4039",
         "it": "Non è necessario caricare nuovamente i documenti.",
         "en": "You do not need to upload the documents again.",
@@ -11141,6 +11470,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Non hai ancora usato questa prevendita.",
         "en": "You have not used this pre-sale yet.",
         "file": "pages/account/MiePrevendite.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:4b768fc2",
+        "it": "Non hai un codice? Invia la richiesta: se approvata, il team DR7 ti manda il codice su WhatsApp.",
+        "en": "No code yet? Send the request: if approved, the DR7 team sends you the code on WhatsApp.",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -11284,10 +11620,24 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:30b17aca",
+        "it": "Offerte",
+        "en": "Offers",
+        "file": "pages/app/AppShell.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:85e4b82f",
         "it": "OK",
         "en": "OK",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:e005f5bf",
+        "it": "Oltre l'ordinario.",
+        "en": "Beyond the ordinary.",
+        "file": "pages/app/AppTerra.tsx",
         "schermata": null
     },
     {
@@ -11494,6 +11844,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:dfa2a908",
+        "it": "Passate",
+        "en": "Past",
+        "file": "pages/app/AppViaggi.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:b06ce12a",
         "it": "PATENTE — FRONTE *",
         "en": "LICENCE — FRONT *",
@@ -11627,6 +11984,20 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:a327d12b",
+        "it": "Per prenotare senza cauzione serve il codice No Cauzione ricevuto dal team DR7.",
+        "en": "To book with no deposit you need the No-Deposit code from the DR7 team.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:50cffffc",
+        "it": "Per proseguire senza cauzione inserisci il codice No Cauzione ricevuto dal team DR7.",
+        "en": "To continue with no deposit, enter the No-Deposit code you received from the DR7 team.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "k:Verification_Required_Desc",
         "it": "Per una sicurezza ottimale, il tuo account deve essere completamente verificato prima di poter prenotare i nostri servizi. Completa il tuo profilo e la verifica dei documenti.",
         "en": "For optimal security, your account must be fully verified before you can book our services. Please complete your profile and document verification.",
@@ -11732,6 +12103,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:21ad3376",
+        "it": "Prenota",
+        "en": "Book",
+        "file": "pages/app/AppVeicolo.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:c7866cf6",
         "it": "PRENOTA",
         "en": "BOOK",
@@ -11757,6 +12135,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Prenota il Tuo Volo in Elicottero",
         "en": "Book Your Helicopter Flight",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a7cf4d60",
+        "it": "Prenota in tre tocchi",
+        "en": "Book in three taps",
+        "file": "pages/app/AppHome.tsx",
         "schermata": null
     },
     {
@@ -11826,6 +12211,13 @@ const BLOCCO_5: VoceTesto[] = [
         "chiave": "s:87d3a43f",
         "it": "Preparazione",
         "en": "Preparing",
+        "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:307ac0b0",
+        "it": "Prevendita nel carrello",
+        "en": "Pre-sale in your cart",
         "file": "pages/CheckoutPage.tsx",
         "schermata": null
     },
@@ -12082,6 +12474,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:6282f792",
+        "it": "Puoi completare la prenotazione senza cauzione.",
+        "en": "You can complete the booking with no deposit.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:814d5687",
         "it": "Puoi trovarlo nel tuo account in \"I Miei Preventivi\"",
         "en": "You can find it in your account under \"My Quotes\"",
@@ -12096,10 +12495,10 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
-        "chiave": "s:37cab85b",
-        "it": "Quando prenoti una di queste auto ti verra’ chiesto se vuoi usare la prevendita: noleggio e km inclusi sono gia’ pagati, paghi solo gli extra.",
-        "en": "When you book one of these cars you will be asked whether to use the pre-sale: rental and included km are already paid, you only pay extras.",
-        "file": "pages/account/MiePrevendite.tsx",
+        "chiave": "s:6965d0d0",
+        "it": "Quando ti serve?",
+        "en": "When do you need it?",
+        "file": "pages/app/AppHome.tsx",
         "schermata": null
     },
     {
@@ -12114,6 +12513,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Quanti bagagli avete in totale?",
         "en": "How many bags in total?",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:64fbe22f",
+        "it": "Quanto costa la consegna a domicilio?",
+        "en": "How much is home delivery?",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {
@@ -12156,6 +12562,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Questo veicolo ha una prenotazione successiva. Riconsegna entro il",
         "en": "This vehicle has a following booking. Return by",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:c223f178",
+        "it": "Questo veicolo non è più disponibile.",
+        "en": "This vehicle is no longer available.",
+        "file": "pages/app/AppVeicolo.tsx",
         "schermata": null
     },
     {
@@ -12220,7 +12633,10 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Return",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
-    },
+    }
+]
+
+const BLOCCO_6: VoceTesto[] = [
     {
         "chiave": "s:fd69f3ae",
         "it": "Ricarica il tuo Credit Wallet per pagare questo tour.",
@@ -12299,6 +12715,13 @@ const BLOCCO_5: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:54017bf5",
+        "it": "Richiesta inviata! Se approvata, il team DR7 ti manda il codice su WhatsApp: inseriscilo qui sopra e prenota.",
+        "en": "Request sent. If approved, the DR7 team sends you the code on WhatsApp: enter it above and book.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:ede80cc3",
         "it": "Richiesta NDA (Non Disclosure Agreement)",
         "en": "NDA request (Non Disclosure Agreement)",
@@ -12316,6 +12739,13 @@ const BLOCCO_5: VoceTesto[] = [
         "chiave": "s:83083b76",
         "it": "Richiesta No Cauzione inviata! Sarai contattato per conferma.",
         "en": "No-Deposit request sent. We will contact you to confirm.",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:411a260f",
+        "it": "Richiesta non inviata, riprova più tardi.",
+        "en": "Request not sent, please try again later.",
         "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
@@ -12450,6 +12880,13 @@ const BLOCCO_5: VoceTesto[] = [
         "it": "Rimani Aggiornato",
         "en": "Stay Updated",
         "file": "components/ui/MarketingConsentModal.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:39890cc8",
+        "it": "RIMANI IN CHAT",
+        "en": "STAY IN CHAT",
+        "file": "components/ui/CarBookingWizard.tsx",
         "schermata": null
     },
     {
@@ -12633,10 +13070,7 @@ const BLOCCO_5: VoceTesto[] = [
         "en": "Pick day and time",
         "file": "components/ui/RentalSearchBar.tsx",
         "schermata": null
-    }
-]
-
-const BLOCCO_6: VoceTesto[] = [
+    },
     {
         "chiave": "s:d9bed419",
         "it": "Scegli giorno e ora di riconsegna",
@@ -12687,10 +13121,24 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:df96215a",
+        "it": "Scegli l’auto:",
+        "en": "Choose the car:",
+        "file": "pages/account/MiePrevendite.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:0a9d68ef",
         "it": "Scegli la durata per prenotare",
         "en": "Choose a duration to book",
         "file": "components/ui/HeliTourPopup.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:a14d412c",
+        "it": "Scegli le date: noleggio e km inclusi sono gia’ pagati, paghi solo gli extra.",
+        "en": "Pick your dates: rental and included km are already paid, you only pay extras.",
+        "file": "pages/account/MiePrevendite.tsx",
         "schermata": null
     },
     {
@@ -12746,7 +13194,7 @@ const BLOCCO_6: VoceTesto[] = [
         "chiave": "s:a0eb0f57",
         "it": "Scrivi un messaggio...",
         "en": "Type a message...",
-        "file": "components/ui/DR7AIChat.tsx",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {
@@ -13058,6 +13506,20 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:6a0c8bb4",
+        "it": "Sezioni",
+        "en": "Sections",
+        "file": "pages/app/AppShell.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:40025f11",
+        "it": "Si",
+        "en": "Yes",
+        "file": "components/ui/CarrelloDrawer.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:3968ffc4",
         "it": "Si compila da sola",
         "en": "Filled automatically",
@@ -13153,6 +13615,13 @@ const BLOCCO_6: VoceTesto[] = [
         "it": "Solo Andata",
         "en": "One way",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:b21f9bea",
+        "it": "Solo carta: Credit Wallet non disponibile.",
+        "en": "Card only: Credit Wallet not available.",
+        "file": "components/ui/CarrelloDrawer.tsx",
         "schermata": null
     },
     {
@@ -13317,10 +13786,24 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:710f66e5",
+        "it": "Svuota carrello",
+        "en": "Empty cart",
+        "file": "components/ui/CarrelloDrawer.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:848de7f8",
         "it": "Svuota il carrello",
         "en": "Empty the cart",
         "file": "pages/CheckoutPage.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:ac856b6e",
+        "it": "Svuotare il carrello?",
+        "en": "Empty the cart?",
+        "file": "components/ui/CarrelloDrawer.tsx",
         "schermata": null
     },
     {
@@ -13492,6 +13975,13 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:e7a5e0db",
+        "it": "Torna alla flotta",
+        "en": "Back to the fleet",
+        "file": "pages/app/AppVeicolo.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:2f0ee32e",
         "it": "Torna alla Home",
         "en": "Back to Home",
@@ -13625,6 +14115,13 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:5cf4b931",
+        "it": "USA CODICE",
+        "en": "USE CODE",
+        "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:3a443f8a",
         "it": "Usa dati documento",
         "en": "Use document data",
@@ -13650,6 +14147,13 @@ const BLOCCO_6: VoceTesto[] = [
         "it": "USA QUESTA PREVENDITA",
         "en": "USE THIS PRE-SALE",
         "file": "components/ui/CarBookingWizard.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:94009f46",
+        "it": "USUFRUISCI ADESSO",
+        "en": "USE IT NOW",
+        "file": "pages/account/MiePrevendite.tsx",
         "schermata": null
     },
     {
@@ -13744,10 +14248,24 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:9b6a2865",
+        "it": "Vedi disponibilità",
+        "en": "See availability",
+        "file": "pages/app/AppVeicolo.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:5594ffdf",
         "it": "Vedi i tuoi utilizzi",
         "en": "See your uses",
         "file": "pages/account/MiePrevendite.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:f0d1711d",
+        "it": "Vedi le auto",
+        "en": "See the cars",
+        "file": "pages/app/AppHome.tsx",
         "schermata": null
     },
     {
@@ -13933,6 +14451,13 @@ const BLOCCO_6: VoceTesto[] = [
         "schermata": null
     },
     {
+        "chiave": "s:39de5778",
+        "it": "Viaggi",
+        "en": "Trips",
+        "file": "pages/app/AppViaggi.tsx",
+        "schermata": null
+    },
+    {
         "chiave": "s:bd1b804d",
         "it": "Video non disponibile.",
         "en": "Video not available.",
@@ -13951,6 +14476,13 @@ const BLOCCO_6: VoceTesto[] = [
         "it": "Volo diurno o notturno?",
         "en": "Day or night flight?",
         "file": "components/ui/HelicopterBookingForm.tsx",
+        "schermata": null
+    },
+    {
+        "chiave": "s:d040a225",
+        "it": "Vorrei un elicottero per Porto Cervo",
+        "en": "I need a helicopter to Porto Cervo",
+        "file": "pages/app/AppConcierge.tsx",
         "schermata": null
     },
     {

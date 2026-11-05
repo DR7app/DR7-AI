@@ -1,9 +1,10 @@
 /**
- * Allarme "Cliente a 250 punti lavaggio" (12/10/2026).
+ * Allarme "Cliente a N punti lavaggio" (12/10/2026; soglia e importo da
+ * Centralina Pro > Fidelity Lavaggio dal 06/11/2026, scritti sul premio).
  *
  * I punti li assegna il database (trigger trg_dr7_punti_lavaggio su bookings,
  * migrazione 20261012_punti_lavaggio_dal_database.sql) per ogni lavaggio
- * pagato, dal gestionale come dal sito. Ogni buono da 25 EUR emesso e' una
+ * pagato, dal gestionale come dal sito. Ogni premio emesso e' una
  * riga `fidelity_buoni`: qui la si trasforma nella finestra centrale con il
  * suono, finche' qualcuno non preme Risolto o passa la soglia (minuti dopo
  * l'emissione). Il messaggio al cliente lo manda alarm-engine-cron
