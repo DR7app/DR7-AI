@@ -6636,10 +6636,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         : (editService ? _calculatedPrice : editingBooking.price_total)
                       const updatedDuration = editService ? getEditTotalDuration() : (editingBooking.booking_details?.totalDuration || 0)
 
+                      // 05/11/2026: il cliente scelto col LeadPicker finiva solo nello
+                      // stato del modale (bookings non ha customer_id) e la modifica
+                      // non lo salvava: la prenotazione restava senza id e i punti
+                      // lavaggio non arrivavano. Si scrive in customer.customerId,
+                      // stessa chiave del percorso di creazione.
+                      const _clienteSceltoId = editingBooking.customer_id || ''
                       const updatedDetails = {
                         ...(editingBooking.booking_details || {}),
                         cartItems: editService ? editCartItems : leggiServiziPrenotati(editingBooking.booking_details),
                         totalDuration: updatedDuration,
+                        ...(_clienteSceltoId ? {
+                          customer: { ...(editingBooking.booking_details?.customer || {}), customerId: _clienteSceltoId },
+                        } : {}),
                       }
 
                       // If payment method changed away from Nexi Pay by Link, confirm the booking

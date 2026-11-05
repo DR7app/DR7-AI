@@ -118,6 +118,11 @@ interface DettaglioServizi {
   items: VoceCarrello[]
   prime_flex?: boolean
   prime_flex_price?: number   // EUR
+  // 05/11/2026: id della scheda cliente (customers_extended) scelta dal
+  // LeadPicker. noleggio_preventivi non ha una colonna cliente: si tiene qui
+  // e alla conversione finisce in booking_details.customer.customerId, cosi'
+  // il lavaggio prende i punti Fidelity del cliente giusto.
+  customerId?: string | null
 }
 
 interface RigaPreventivo {
@@ -192,6 +197,7 @@ interface Scelta { option: string; qty: number; seats?: string[] }
 const VUOTO = {
   customer_name: '',
   customer_phone: '',
+  customer_id: '',
   vehicle_name: '',
   vehicle_plate: '',
   main_tab: 'lavaggio' as 'lavaggio' | 'meccanica',
@@ -485,6 +491,7 @@ export default function PreventiviLavaggioView() {
     setForm({
       customer_name: p.customer_name || '',
       customer_phone: p.customer_phone || '',
+      customer_id: dett?.customerId || '',
       vehicle_name: p.vehicle_name || '',
       vehicle_plate: p.vehicle_plate || '',
       main_tab: (servizioDb?.main_tab === 'meccanica' ? 'meccanica' : 'lavaggio'),
@@ -515,6 +522,7 @@ export default function PreventiviLavaggioView() {
       items: carrello,
       prime_flex: form.prime_flex,
       prime_flex_price: form.prime_flex ? primeFlexPrezzo : 0,
+      ...(form.customer_id ? { customerId: form.customer_id } : {}),
     }
     const base: Record<string, unknown> = {
       service_type: 'car_wash',
@@ -735,6 +743,8 @@ export default function PreventiviLavaggioView() {
         booking_details: {
           from_preventivo_id: p.id,
           createdBy: 'admin_panel',
+          // Stessa chiave del form Prenotazioni lavaggio (CarWashBookingsTab).
+          ...(dett?.customerId ? { customer: { customerId: dett.customerId } } : {}),
           cartItems: items.map(i => ({
             serviceId: i.serviceId,
             serviceName: i.serviceName,
@@ -866,11 +876,11 @@ export default function PreventiviLavaggioView() {
             <h3 className="text-xs uppercase tracking-wide text-theme-text-muted">Cliente</h3>
             <LeadPicker
               initialQuery={form.customer_name}
-              onPick={(nome, tel) => setForm(f => ({ ...f, customer_name: nome || f.customer_name, customer_phone: tel || f.customer_phone }))}
+              onPick={(nome, tel, id) => setForm(f => ({ ...f, customer_name: nome || f.customer_name, customer_phone: tel || f.customer_phone, customer_id: id || '' }))}
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input className={INPUT_CLS} placeholder="Cliente" value={form.customer_name}
-                onChange={e => setForm({ ...form, customer_name: e.target.value })} />
+                onChange={e => setForm({ ...form, customer_name: e.target.value, customer_id: '' })} />
               <TelefonoConPrefisso
                 className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`}
                 mostraAnteprima={false} placeholder="Telefono (WhatsApp)"
