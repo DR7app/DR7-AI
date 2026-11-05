@@ -262,4 +262,65 @@ const bOk = await lavaggio({ userId: ACCOUNT, eur: 300 })
 ok(!!bOk, 'prenotazione salvata anche con la tabella premi assente')
 await db.exec('ALTER TABLE public.fidelity_buoni_x RENAME TO fidelity_buoni')
 
+tit('11. 20261105: lavaggi agganciati al cliente solo per email')
+// Caso reale 05/11: Melis a 95 invece di 179, i lavaggi da 35 e 49 avevano
+// solo l'email (nessun id cliente nella prenotazione).
+const PAOLA_ACC = '77777777-7777-7777-7777-777777777777'
+const PAOLA = '88888888-8888-8888-8888-888888888888'
+const STORICO = '99999999-9999-9999-9999-999999999999'
+const COND_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+const COND_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+await db.query('INSERT INTO auth.users (id, email) VALUES ($1,$2)', [PAOLA_ACC, 'paola@prova.it'])
+await db.query('INSERT INTO public.user_credit_balance (user_id, balance) VALUES ($1, 0)', [PAOLA_ACC])
+await db.query(`INSERT INTO public.customers_extended (id, user_id, email, nome, cognome, telefono, updated_at) VALUES
+  ($1,$2,'paola@prova.it','Paola','Prova','3334444444', now()),
+  ($3,NULL,'storico@prova.it','Sara','Storico','3335555555', now()),
+  ($4,NULL,'condivisa@prova.it','Uno','Condiviso','3336666666', now()),
+  ($5,NULL,'condivisa@prova.it','Due','Condiviso','3337777777', now())`,
+  [PAOLA, PAOLA_ACC, STORICO, COND_A, COND_B])
+const soloEmail = async (email, eur, userId = null) => (await uno(
+  `INSERT INTO public.bookings (user_id, customer_email, service_type, vehicle_name, price_total, amount_paid, payment_method, payment_status, status, booking_details)
+   VALUES ($1,$2,'car_wash','Lavaggio',$3,0,'Contanti','paid','confirmed','{}'::jsonb) RETURNING id`,
+  [userId, email, Math.round(eur * 100)])).id
+await lavaggio({ scheda: PAOLA, eur: 40 })
+await lavaggio({ scheda: PAOLA, eur: 55 })
+// Senza la 20261105 il trigger 20261104 ignora queste due: si inseriscono prima.
+await soloEmail(' Paola@Prova.it ', 35)
+await soloEmail('paola@prova.it', 49)
+ok((await carta(PAOLA)).punti === 95, `prima della 20261105: 95 (il bug, letto ${(await carta(PAOLA)).punti})`)
+// Storico: 100 per id + 300 solo email = 400 -> una soglia gia' superata.
+await lavaggio({ scheda: STORICO, eur: 100 })
+await soloEmail('storico@prova.it', 300)
+// Email condivisa da due clienti, email vuota, id che non porta a nessuno.
+await soloEmail('condivisa@prova.it', 60)
+await soloEmail('', 500)
+await soloEmail('paola@prova.it', 500, 'cccccccc-cccc-cccc-cccc-cccccccccccc')
+
+await db.exec(leggi('20261105_punti_lavaggio_anche_per_email.sql'))
+c = await carta(PAOLA)
+ok(c.punti === 179 && c.totale === 179, `dopo la 20261105: 179/250 (letto ${c.punti}/${c.totale})`)
+ok((await premi(PAOLA_ACC)).length === 0, 'nessun premio per Paola (sotto 250)')
+c = await carta(STORICO)
+ok(c.punti === 150 && c.totale === 400, `storico: 400 -> 150 sulla carta (letto ${c.punti}/${c.totale})`)
+ok((await premi(STORICO)).length === 0, 'storico: soglia passata ritrovata per email = nessun arretrato')
+ok((await carta(COND_A)).punti === 0 && (await carta(COND_B)).punti === 0, 'email condivisa: nessuno dei due prende i punti')
+ok((await carta(PAOLA)).totale === 179, 'email vuota e id inesistente: non finiscono a Paola')
+
+// Dal vivo: nuovo lavaggio solo email, pagato in negozio.
+const bLive = await soloEmail('PAOLA@prova.it', 71)
+c = await carta(PAOLA)
+ok(c.punti === 0 && c.totale === 250 && (await premi(PAOLA_ACC)).length === 1, `dal vivo: 250 -> premio come credito wallet (carta ${c.punti}/${c.totale})`)
+await db.query(`UPDATE public.bookings SET status='cancelled' WHERE id=$1`, [bLive])
+ok((await carta(PAOLA)).totale === 179, 'annullato: torna a 179, premio non ripetuto')
+// La scheda cambia email: i lavaggi agganciati per email la seguono.
+await db.query(`UPDATE public.customers_extended SET email='storico.nuova@prova.it' WHERE id=$1`, [STORICO])
+ok((await carta(STORICO)).totale === 100, 'scheda con email cambiata: restano solo i lavaggi per id')
+await db.query(`UPDATE public.customers_extended SET email='storico@prova.it' WHERE id=$1`, [STORICO])
+ok((await carta(STORICO)).totale === 400 && (await premi(STORICO)).length === 0, 'email ripristinata: 400 e ancora nessun arretrato')
+
+await db.exec(leggi('20261105_punti_lavaggio_anche_per_email.sql'))
+ok((await premi(PAOLA_ACC)).length === 1 && (await premi(ACCOUNT)).length === 2, 'migrazione rilanciata: nessun premio in piu')
+const fn = await q(`SELECT p.oid FROM pg_proc p WHERE p.proname = 'dr7_punti_titolare_prenotazione'`)
+ok(fn.length === 1, 'una sola versione della funzione (niente overload)')
+
 console.log('\nSCENARIO COMPLETO: tutto verificato.')
