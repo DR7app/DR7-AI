@@ -1,7 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { checkArubaStatus } from './aruba-utils'
-import { conMotivoScarto } from './utils/motivoScartoSdi'
+import { decidiAggiornamento } from './utils/statoSdiAruba'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -48,46 +48,33 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Map Aruba status to our internal status
-        // getByFilename may return invoice directly or inside invoices[] array
-        let sdiStatus = 'sent' // Default
-        const invoiceObj = remoteInvoice.invoices?.[0] || remoteInvoice
-        const invoiceStatus = invoiceObj.status || invoiceObj.invoiceStatus || ''
-        const remoteStatus = invoiceStatus.toLowerCase()
-        console.log('[SDI Status] Remote status:', remoteStatus, 'Full response keys:', Object.keys(remoteInvoice))
-
-        if (remoteStatus === 'consegnata') {
-            sdiStatus = 'accepted'
-        } else if (remoteStatus === 'scartata' || remoteStatus === 'mancata consegna') {
-            sdiStatus = 'rejected'
-        } else if (remoteStatus === 'errore elaborazione') {
-            sdiStatus = 'error'
-        } else if (remoteStatus === 'inviata') {
-            sdiStatus = 'sent'
-        }
-
+        // 07/11/2026: traduzione dello stato Aruba dalla tabella UNICA
+        // (utils/statoSdiAruba.ts). Prima qui "mancata consegna" era
+        // 'rejected' mentre il giro automatico la dava 'accepted', e uno
+        // stato non riconosciuto riscriveva la fattura a 'sent' (anche una
+        // accettata). Ora uno stato sconosciuto non tocca sdi_status.
+        //
         // 01/10/2026: Aruba dice "Scartata" ma statusDescription e' vuota
         // (DR7-2026-2102, Saia 1908-1913). Il client Aruba del repo non sa
         // scaricare la notifica di scarto: si salva un motivo esplicito, con
         // la causa probabile se CF/P.IVA non passano il controllo.
-        const rispostaConMotivo = conMotivoScarto(remoteInvoice, invoice)
+        const esito = decidiAggiornamento(invoice, remoteInvoice)
+        const sdiStatus = esito.a
+        console.log('[SDI Status] Stato Aruba:', esito.statoAruba, '->', sdiStatus, 'Full response keys:', Object.keys(remoteInvoice))
 
         // Update DB
         await supabase
             .from('fatture')
-            .update({
-                sdi_status: sdiStatus,
-                sdi_response: rispostaConMotivo
-            })
+            .update(esito.patch)
             .eq('id', invoiceId)
 
         // Log to history
         await supabase.from('invoice_status_logs').insert({
             invoice_id: invoiceId,
             status: sdiStatus,
-            message: rispostaConMotivo.motivo_scarto
-                ? `Aruba Status: ${remoteStatus} - ${rispostaConMotivo.motivo_scarto}`
-                : `Aruba Status: ${remoteStatus}`,
+            message: esito.motivo
+                ? `Aruba Status: ${esito.statoAruba} - ${esito.motivo}`
+                : `Aruba Status: ${esito.statoAruba}`,
             raw_response: remoteInvoice
         })
 
@@ -96,7 +83,8 @@ export const handler: Handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 status: sdiStatus,
-                motivo_scarto: rispostaConMotivo.motivo_scarto || null,
+                stato_aruba: esito.statoAruba || null,
+                motivo_scarto: esito.motivo || null,
                 details: remoteInvoice
             })
         }

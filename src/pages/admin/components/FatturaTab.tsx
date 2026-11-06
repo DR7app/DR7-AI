@@ -42,6 +42,10 @@ interface Invoice {
   // descrizione Aruba grezza, quando c'e'.
   sdi_motivo_scarto?: string | null
   sdi_status_description?: string | null
+  // 07/11/2026: lo stato come lo scrive Aruba ("Scartata", "Non consegnata")
+  // e l'ora dell'ultima lettura su Aruba (vedi utils/statoSdiAruba.ts).
+  sdi_stato_aruba?: string | null
+  sdi_verificato_il?: string | null
   // Nota di credito
   tipo_fattura?: string
   // Servono a riconoscere le fatture in doppio: che documento e' (una
@@ -581,6 +585,10 @@ export default function FatturaTab() {
   const [updatingStato, setUpdatingStato] = useState<string | null>(null)
   const [refreshingAll, setRefreshingAll] = useState(false)
   const [reconciling, setReconciling] = useState(false)
+  // 07/11/2026: verifica una per una di tutte le fatture trasmesse (function
+  // in background). Si tiene l'ora di avvio per mostrare l'avanzamento.
+  const [verificaTutteDal, setVerificaTutteDal] = useState<string | null>(null)
+  const [avviandoVerificaTutte, setAvviandoVerificaTutte] = useState(false)
   const [lastSdiRefresh, setLastSdiRefresh] = useState<number | null>(null)
 
   // Refresh stati SDI per TUTTE le fatture in 'sending'/'sent' su Aruba e
@@ -652,10 +660,16 @@ export default function FatturaTab() {
       if (rejected) parts.push(`${rejected} scartate`)
       if (error) parts.push(`${error} errore`)
       if (sent) parts.push(`${sent} inviate`)
+      // 07/11/2026: con 0 righe lette da Aruba non e' "gia' allineato": la
+      // lista non e' arrivata. Prima diceva "Già allineato: 0 fatture".
+      if (!json.totalRemote) {
+        toast.error('Aruba non ha restituito la lista delle fatture inviate: usa "Verifica tutte su Aruba".', { duration: 8000 })
+        return
+      }
       toast.success(
         json.updated > 0
-          ? `Riconciliazione: ${parts.join(', ')} su ${json.totalRemote} fatture Aruba`
-          : `Già allineato: ${json.totalRemote} fatture Aruba verificate`,
+          ? `Riconciliazione: ${parts.join(', ')} su ${json.totalRemote} fatture Aruba (${json.abbinate ?? '?'} abbinate)`
+          : `Già allineato: ${json.totalRemote} fatture Aruba lette, ${json.abbinate ?? '?'} abbinate al gestionale`,
         { duration: 6000 }
       )
       await loadInvoices()
@@ -664,6 +678,29 @@ export default function FatturaTab() {
       toast.error('Errore riconciliazione: ' + msg)
     } finally {
       setReconciling(false)
+    }
+  }
+
+  // 07/11/2026: rilegge su Aruba, una per una, TUTTE le fatture trasmesse
+  // (anche quelle gia' "Accettata") e allinea lo stato. Solo lettura verso
+  // Aruba: niente reinvii. Gira in background (~1 fattura al secondo):
+  // l'avanzamento si vede dalla lista ricaricata.
+  async function verificaTutteSuAruba() {
+    if (!confirm('Rileggere su Aruba lo stato di TUTTE le fatture già trasmesse?\n\nNessuna fattura viene reinviata: si aggiorna solo lo stato (es. Accettata -> Scartata). Ci vuole circa 1 secondo a fattura; si può continuare a lavorare.')) return
+    setAvviandoVerificaTutte(true)
+    try {
+      const avvio = new Date().toISOString()
+      const res = await authFetch('/.netlify/functions/riallinea-sdi-aruba-background', { method: 'POST' })
+      if (!res.ok && res.status !== 202) {
+        toast.error(`Verifica non avviata (errore ${res.status})`)
+        return
+      }
+      setVerificaTutteDal(avvio)
+      toast.success('Verifica avviata: gli stati si aggiornano man mano. Premi "Ricarica" per vedere l\'avanzamento.', { duration: 8000 })
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setAvviandoVerificaTutte(false)
     }
   }
 
@@ -736,6 +773,8 @@ export default function FatturaTab() {
     'sdi_auto_send_error:sdi_response->>auto_send_error',
     'sdi_motivo_scarto:sdi_response->>motivo_scarto',
     'sdi_status_description:sdi_response->invoices->0->>statusDescription',
+    'sdi_stato_aruba:sdi_response->>stato_aruba',
+    'sdi_verificato_il:sdi_response->>verificato_il',
   ].join(',')
 
   async function loadInvoices() {
@@ -1353,6 +1392,24 @@ export default function FatturaTab() {
               {reconciling ? 'Riconciliazione…' : 'Riconcilia con Aruba'}
             </button>
             <button
+              onClick={() => verificaTutteSuAruba()}
+              disabled={avviandoVerificaTutte}
+              className="px-4 py-2 rounded-full font-medium transition-colors bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50 flex items-center gap-2"
+              title="Rilegge su Aruba, una per una, lo stato di tutte le fatture già trasmesse (anche le Accettate). Nessun reinvio."
+            >
+              {avviandoVerificaTutte ? 'Avvio…' : 'Verifica tutte su Aruba'}
+            </button>
+            {verificaTutteDal && (() => {
+              const trasmesse = invoices.filter(i => ['sending', 'sent', 'accepted', 'rejected', 'scartata'].includes(String(i.sdi_status || '')))
+              const lette = trasmesse.filter(i => !!i.sdi_verificato_il && i.sdi_verificato_il >= verificaTutteDal).length
+              return (
+                <span className="text-xs text-theme-text-secondary flex items-center gap-2">
+                  Verifica Aruba: {lette} di {trasmesse.length} lette
+                  <button type="button" onClick={() => loadInvoices()} className="underline hover:text-theme-text-primary">Ricarica</button>
+                </span>
+              )
+            })()}
+            <button
               onClick={() => {
                 setMultiSelectMode(!multiSelectMode)
                 setSelectedIds([])
@@ -1672,6 +1729,16 @@ export default function FatturaTab() {
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${sdiClass}`} title={sdiBlockReason || undefined}>
                           {sdiLabel}
                         </span>
+                        {/* 07/11/2026: lo stato come lo scrive Aruba, per
+                            confrontarlo col pannello Aruba senza aprirlo. */}
+                        {invoice.sdi_stato_aruba && (
+                          <div
+                            className="text-[10px] text-theme-text-muted mt-0.5"
+                            title={invoice.sdi_verificato_il ? `Letto su Aruba il ${new Date(invoice.sdi_verificato_il).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : undefined}
+                          >
+                            Aruba: {invoice.sdi_stato_aruba}
+                          </div>
+                        )}
                         {/* 2026-08-28: perche' e' rimasta Bozza. Il motivo era
                             gia' salvato in sdi_response.auto_send_error dal
                             tentativo automatico, ma non lo leggeva nessuno:
