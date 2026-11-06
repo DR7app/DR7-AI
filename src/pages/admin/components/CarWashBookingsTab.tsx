@@ -16,7 +16,8 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
-import { inviaGadget } from '../../../utils/inviaGadget'
+import { inviaGadget, clientiConGadget } from '../../../utils/inviaGadget'
+import { gadgetGiaInviatoA } from '../../../utils/gadgetOmaggio'
 import { buildCarWashContext } from '../../../utils/adminLogHelpers'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
@@ -1818,6 +1819,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // 26/10/2026 (direzione): "Gadget" anche sui lavaggi. Una volta per persona
   // su qualunque servizio: il controllo e l'invio stanno in utils/gadgetOmaggio.
   const [gadgetSending, setGadgetSending] = useState<string | null>(null)
+  // 07/11/2026: la tab guardava solo la prenotazione stessa, quindi un gadget
+  // gia' mandato dal Noleggio (caso Nicola Talli) qui risultava "da inviare".
+  // gadgetClienti = chiavi id/email dei clienti che l'hanno gia' ricevuto da
+  // QUALUNQUE servizio, stessa regola di ReservationsTab (utils/gadgetOmaggio).
+  const [gadgetClienti, setGadgetClienti] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let vivo = true
+    clientiConGadget()
+      .then(ins => { if (vivo) setGadgetClienti(ins) })
+      .catch(e => console.warn('[gadget] caricamento invii fallito:', e?.message))
+    return () => { vivo = false }
+  }, [])
+  const gadgetGiaInviato = (b: CarWashBooking): boolean => gadgetGiaInviatoA(b, gadgetClienti)
   async function handleGadget(booking: CarWashBooking) {
     if (gadgetSending) return
     setGadgetSending(booking.id)
@@ -1825,11 +1839,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     try {
       const esito = await inviaGadget(booking)
       if (esito.stato !== 'inviato') {
-        if (esito.stato === 'gia_inviato') toast(esito.messaggio, { id: toastId, duration: 8000 })
+        if (esito.stato === 'gia_inviato') {
+          toast(esito.messaggio, { id: toastId, duration: 8000 })
+          clientiConGadget().then(setGadgetClienti).catch(() => {})
+        }
         else toast.error(esito.messaggio, { id: toastId, duration: 10000 })
         return
       }
       setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, booking_details: esito.booking_details } as CarWashBooking : b)))
+      setGadgetClienti(prev => new Set([...prev, ...esito.clienti.map(i => 'id:' + i)]))
       if (esito.avviso) toast.error(esito.avviso, { duration: 10000 })
       toast.success('Messaggio gadget inviato al cliente', { id: toastId })
       logAdminAction('gadget_omaggio_inviato', 'carwash_booking', booking.id, { customer_name: booking.customer_name })
@@ -5929,11 +5947,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                   visible: booking.customer_name !== 'Lavaggio Rientro',
                                 },
                                 {
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  label: (booking.booking_details as any)?.gadget_omaggio ? '✓ Gadget inviato' : gadgetSending === booking.id ? 'Invio...' : 'Gadget',
+                                  label: gadgetGiaInviato(booking) ? '✓ Gadget inviato' : gadgetSending === booking.id ? 'Invio...' : 'Gadget',
                                   onClick: () => handleGadget(booking),
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  disabled: !!(booking.booking_details as any)?.gadget_omaggio || !!gadgetSending,
+                                  disabled: gadgetGiaInviato(booking) || !!gadgetSending,
                                   visible: booking.customer_name !== 'Lavaggio Rientro' && booking.status !== 'cancelled',
                                 },
                               ],
@@ -6093,11 +6109,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 visible: !isRientro,
                               },
                               {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                label: (booking.booking_details as any)?.gadget_omaggio ? '✓ Gadget inviato' : gadgetSending === booking.id ? 'Invio...' : 'Gadget',
+                                label: gadgetGiaInviato(booking) ? '✓ Gadget inviato' : gadgetSending === booking.id ? 'Invio...' : 'Gadget',
                                 onClick: () => handleGadget(booking),
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                disabled: !!(booking.booking_details as any)?.gadget_omaggio || !!gadgetSending,
+                                disabled: gadgetGiaInviato(booking) || !!gadgetSending,
                                 visible: !isRientro && booking.status !== 'cancelled',
                               },
                             ],

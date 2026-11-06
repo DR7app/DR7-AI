@@ -140,7 +140,8 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
-import { chiaviPersona, type GadgetInviato } from '../../../utils/gadgetOmaggio'
+import { gadgetGiaInviatoA, type GadgetInviato } from '../../../utils/gadgetOmaggio'
+import { clientiConGadget, controllaGadgetCliente } from '../../../utils/inviaGadget'
 
 // --- Kasko Constants & Types ---
 // L'id di un'assicurazione e' quello che le da' Centralina Pro (un codice
@@ -1055,29 +1056,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [gadgetSending, setGadgetSending] = useState(false)
   const gadgetLockRef = useRef<Set<string>>(new Set())
   const [gadgetPersone, setGadgetPersone] = useState<Set<string>>(new Set())
+  // 07/11/2026: identita' per id cliente (scheda/account), mai per telefono o
+  // nome; email esatta solo senza id e se di una sola scheda. Stesso insieme
+  // della tab Lavaggi (utils/inviaGadget.clientiConGadget), cosi' un gadget
+  // mandato da un servizio risulta inviato anche sull'altro.
   const caricaGadgetPersone = useCallback(async (): Promise<Set<string>> => {
-    const chiavi = new Set<string>()
-    const PAGINA = 1000
-    for (let da = 0; ; da += PAGINA) {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('id, customer_phone, customer_email, gadget:booking_details->gadget_omaggio')
-        .not('booking_details->gadget_omaggio', 'is', null)
-        .range(da, da + PAGINA - 1)
-      if (error) throw error
-      for (const r of (data || []) as Array<{ customer_phone: string | null; customer_email: string | null; gadget: GadgetInviato | null }>) {
-        chiaviPersona(r.customer_phone, r.customer_email, r.gadget?.telefono, r.gadget?.email).forEach(k => chiavi.add(k))
-      }
-      if (!data || data.length < PAGINA) break
-    }
+    const chiavi = await clientiConGadget()
     setGadgetPersone(chiavi)
     return chiavi
   }, [])
   useEffect(() => { caricaGadgetPersone().catch(e => console.warn('[gadget] caricamento invii falliti:', e?.message)) }, [caricaGadgetPersone])
-  const gadgetGiaInviato = (b: Booking): boolean =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    !!(b.booking_details as any)?.gadget_omaggio
-    || chiaviPersona(b.customer_phone, b.customer_email).some(k => gadgetPersone.has(k))
+  const gadgetGiaInviato = (b: Booking): boolean => gadgetGiaInviatoA(b, gadgetPersone)
   // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
@@ -4458,16 +4447,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setGadgetSending(true)
     const toastId = toast.loading('Invio messaggio gadget...')
     try {
+      const controllo = await controllaGadgetCliente(booking)
+      setGadgetPersone(controllo.insieme)
+      if (controllo.gia) {
+        toast('Gadget già inviato a questo cliente (anche su un\'altra prenotazione): non si rimanda.', { id: toastId, duration: 8000 })
+        return
+      }
       const phone = await risolviTelefonoCliente(booking).catch(() => null)
       if (!phone) {
         toast.error('Nessun numero cliente — impossibile inviare WhatsApp. Aggiungi il telefono nella scheda cliente o nella prenotazione.', { id: toastId, duration: 8000 })
-        return
-      }
-      const giaRicevuto = await caricaGadgetPersone()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((booking.booking_details as any)?.gadget_omaggio
-        || chiaviPersona(String(phone), booking.customer_phone, booking.customer_email).some(k => giaRicevuto.has(k))) {
-        toast('Gadget già inviato a questo cliente (anche su un\'altra prenotazione): non si rimanda.', { id: toastId, duration: 8000 })
         return
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -4504,12 +4492,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         toast.error('Invio WhatsApp fallito', { id: toastId })
         return
       }
-      const registro: GadgetInviato = { inviato_at: new Date().toISOString(), telefono: String(phone), email: booking.customer_email || null }
+      const registro: GadgetInviato = {
+        inviato_at: new Date().toISOString(), telefono: String(phone), email: booking.customer_email || null,
+        clienti: controllo.clienti.length ? controllo.clienti : null,
+      }
       const newDetails = { ...(booking.booking_details || {}), gadget_omaggio: registro }
       const { error: errSegna } = await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
       setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
       setBookings(prev => prev.map(b => (b.id === booking.id ? { ...b, booking_details: newDetails } as Booking : b)))
-      setGadgetPersone(prev => new Set([...prev, ...chiaviPersona(String(phone), booking.customer_phone, booking.customer_email)]))
+      setGadgetPersone(prev => new Set([...prev, ...controllo.clienti.map(i => 'id:' + i)]))
       if (errSegna) toast.error('Messaggio inviato, ma non registrato sulla prenotazione: ' + errSegna.message, { duration: 10000 })
       toast.success('Messaggio gadget inviato al cliente', { id: toastId })
       logAdminAction('gadget_omaggio_inviato', 'booking', booking.id, buildBookingContext(booking))
