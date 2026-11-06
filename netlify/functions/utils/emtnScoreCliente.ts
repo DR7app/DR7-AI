@@ -1,0 +1,526 @@
+/**
+ * EMTN Score di UNA persona: dalle sue prenotazioni, danni, penali, multe,
+ * fatture, pratiche e storico della rete al risultato del motore
+ * (src/utils/emtnScore/motore.ts).
+ *
+ * 07/11/2026: estratto pari pari da emtn-search.ts, che resta il solo modo
+ * per CONSULTARE un cliente (con il log di accesso). Lo stesso calcolo serve
+ * anche a chi non consulta ma deve conoscere il numero: il badge EMTN nella
+ * lista prenotazioni (emtn-score-clienti) e il ricalcolo programmato
+ * (emtn-score-ricalcolo) che tiene aggiornato emtn_score_clienti, letto dal
+ * database per bloccare le prenotazioni dal sito sotto la soglia di
+ * Centralina Pro > EMTN. Un solo calcolo: nessuna seconda formula.
+ *
+ * `client` puo' essere null: la persona non e' mai stata cercata su EMTN e
+ * non ha una riga emtn_clients. Allora non ha ne' segnalazioni ne' pratiche
+ * ne' override (sono tutte legate a emtn_clients.id): il risultato e' lo
+ * stesso che darebbe emtn-search, ma senza creare la riga, senza storico e
+ * senza emtn_stats_cache.
+ */
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { cercaStoricoRete } from './emtnRete'
+import { categoriaEMTN } from '../../../src/utils/emtnMobilityRisk'
+import { calcolaEMTNScore, type RisultatoEMTNScore } from '../../../src/utils/emtnScore/motore'
+import { type StatoPagamentoEvento } from '../../../src/utils/emtnScore/normalizza'
+import {
+    contrattiPerBooking, eNoleggio, eventiDaEmtnEvents, eventiDaMulte, eventiDaPosizioni, eventiDaRete, eventiDaVociDr7,
+    leggiOverride, noleggiNormalizzati, registraStorico, type EmtnEventRow, type MultaRow, type PosizioneRow, type RigaStorico,
+} from './emtnScoreServer'
+
+export type ExtRow = {
+    nome: string | null; cognome: string | null
+    email: string | null; telefono: string | null
+    indirizzo: string | null; citta_residenza: string | null
+    codice_postale: string | null; data_nascita: string | null
+    codice_fiscale: string | null; created_at: string | null
+    metadata: Record<string, unknown> | null
+    sede_legale?: string | null
+}
+
+export interface IdentitaEMTN {
+    /** Codice fiscale normalizzato; vuoto per il cliente estero. */
+    cf: string
+    estero: boolean
+    nomeE: string
+    cognomeE: string
+    nascitaE: string
+}
+
+export interface ReportScoreCliente {
+    ext: ExtRow | null
+    /** Schede customers_extended trovate (per CF o, estero, per nome + nascita). */
+    profili: { id: string | null; user_id: string | null; email: string | null }[]
+    emtnScore: RisultatoEMTNScore
+    storicoScore: RigaStorico[]
+    sc: {
+        client_id: string | null
+        total_rentals: number
+        regular_rentals: number
+        negative_events: number
+        events_under_review: number
+        last_activity_date: string | null
+        updated_at: string
+    }
+    recentEvents: unknown[]
+    storicoRete: Awaited<ReturnType<typeof cercaStoricoRete>>
+    reteResiduo: number
+    dr7Damages: VoceStorico[]
+    dr7Penalties: VoceStorico[]
+    unpaidDamageTotal: number
+    unpaidPenaltyTotal: number
+    lastBookingDate: string | null
+    firstBookingDate: string | null
+    totalRentals: number
+    regularRentals: number
+}
+
+type VoceStorico = { bookingId: string; vehicle?: string | null; date?: string | null; label: string; amount: number; quantity: number; paid: boolean; note?: string; residuo: number; stato: StatoPagamentoEvento; contesto?: { paidAt?: string | null; dichiaratoDalCliente?: boolean | null; responsabilita?: string | null; gravita?: string | null } }
+
+export async function calcolaReportCliente(
+    sb: SupabaseClient,
+    { cf, estero, nomeE, cognomeE, nascitaE }: IdentitaEMTN,
+    client: { id: string } | null,
+    operatorEmail: string | null,
+): Promise<ReportScoreCliente> {
+    // ── Enrich client da customers_extended ────────────────
+    // emtn_clients tiene solo CF + nome + cognome + data_nascita. Per
+    // popolare la dashboard servono email, telefono, indirizzo,
+    // citta\', sesso ecc., che vivono su customers_extended. Lookup
+    // case-insensitive sul CF, fallback su nome+cognome.
+    let ext: ExtRow | null = null
+    {
+        const q = sb
+            .from('customers_extended')
+            .select('nome, cognome, email, telefono, indirizzo, citta_residenza, codice_postale, data_nascita, codice_fiscale, created_at, metadata, sede_legale')
+        const { data } = await (estero
+            ? q.ilike('nome', nomeE).ilike('cognome', cognomeE).eq('data_nascita', nascitaE)
+            : q.eq('codice_fiscale', cf))
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        ext = (data as ExtRow | null) || null
+    }
+
+    // ── Pull DR7's own record of this customer ─────────────
+    // Bookings con questo CF, espandi danni/penali da booking_details.
+    // Questo permette di vedere subito il record DR7 senza dover
+    // segnalare nulla su EMTN: e' la verita' interna che il network
+    // poi normalizza in eventi.
+    type DanniItem = {
+        label?: string; total?: number; amount?: number; quantity?: number; paymentStatus?: string; date?: string; note?: string
+        discount?: number; amountPaid?: number; paidAt?: string | null; payments?: Array<{ paidAt?: string | null }>
+        // 01/10/2026: contesto per l'EMTN Score (facoltativi, null = non risulta)
+        dichiaratoDalCliente?: boolean | null; responsabilita?: string | null; gravita?: string | null
+    }
+    type PenaliItem = DanniItem
+    interface DR7Booking {
+        id: string
+        pickup_date?: string | null
+        appointment_date?: string | null
+        vehicle_name?: string | null
+        vehicle_plate?: string | null
+        status?: string | null
+        payment_status?: string | null
+        service_type?: string | null
+        dropoff_date?: string | null
+        vehicle_id?: string | null
+        // NB: la chiave JSON usata da DR7 e\' `penalties` (inglese), non `penali`.
+        booking_details?: { danni?: DanniItem[]; penalties?: PenaliItem[]; extras?: unknown; parent_booking_id?: string | null } | null
+    }
+
+    // bookings non ha una colonna CF: l'unica colonna di linkage e\'
+    // user_id, che lega all'auth user e a customers_extended.user_id.
+    // Risolviamo prima gli user_id corrispondenti al CF e poi tiriamo
+    // le loro bookings. Fallback finale su booking_details (CF salvato
+    // nel JSON quando il cliente non era ancora autenticato).
+    // 28/09/2026: le prenotazioni create dall'admin NON hanno l'auth user in
+    // bookings.user_id ma l'id della scheda cliente (customers_extended.id),
+    // oppure lo tengono solo in booking_details.customer_id. Cercando solo
+    // per customers_extended.user_id (spesso NULL) un cliente come Nelson
+    // Badini risultava senza prenotazioni. Ora si cerca per: id scheda,
+    // user_id, customer_id nel JSON, email (case-insensitive) e CF nel JSON.
+    const { data: profileMatches } = estero
+        ? await sb
+            .from('customers_extended')
+            .select('id, user_id, email')
+            .ilike('nome', nomeE)
+            .ilike('cognome', cognomeE)
+            .eq('data_nascita', nascitaE)
+        : await sb
+            .from('customers_extended')
+            .select('id, user_id, email')
+            // 01/10/2026: un CF salvato in minuscolo non trovava la scheda.
+            .ilike('codice_fiscale', cf)
+    const profili = (profileMatches || []) as { id: string | null; user_id: string | null; email: string | null }[]
+    const matchedUserIds = Array.from(new Set(
+        profili.flatMap(p => [p.id, p.user_id]).filter(Boolean) as string[]
+    ))
+    const matchedEmails = Array.from(new Set(
+        profili.map(p => String(p.email || '').trim().toLowerCase()).filter(e => e.includes('@'))
+    ))
+
+    type RawBooking = DR7Booking & {
+        user_id?: string | null
+        customer_email?: string | null
+        booking_details?: (DR7Booking['booking_details'] & {
+            codice_fiscale?: string
+            codiceFiscale?: string
+            customer?: { codice_fiscale?: string; codiceFiscale?: string }
+        }) | null
+    }
+
+    const collected = new Map<string, RawBooking>()
+    const COLONNE_BOOKING = 'id, pickup_date, dropoff_date, appointment_date, vehicle_name, vehicle_plate, vehicle_id, status, payment_status, booking_details, user_id, customer_email, service_type'
+    const filtri: string[] = []
+    if (matchedUserIds.length > 0) {
+        const lista = matchedUserIds.join(',')
+        filtri.push(`user_id.in.(${lista})`)
+        filtri.push(`booking_details->>customer_id.in.(${lista})`)
+        filtri.push(`booking_details->customer->>customerId.in.(${lista})`)
+    }
+    for (const e of matchedEmails) {
+        // Virgole e parentesi romperebbero il filtro .or(): quelle email si saltano.
+        if (!/[,()]/.test(e)) filtri.push(`customer_email.ilike.${e}`)
+    }
+    if (!estero && cf) {
+        filtri.push(`booking_details->>codice_fiscale.eq.${cf}`)
+        filtri.push(`booking_details->>codiceFiscale.eq.${cf}`)
+        filtri.push(`booking_details->customer->>codice_fiscale.eq.${cf}`)
+        filtri.push(`booking_details->customer->>codiceFiscale.eq.${cf}`)
+    }
+    if (filtri.length > 0) {
+        for (let page = 0; page < 10; page++) {
+            const { data, error: bErr } = await sb
+                .from('bookings')
+                .select(COLONNE_BOOKING)
+                .or(filtri.join(','))
+                .order('pickup_date', { ascending: false })
+                .range(page * 1000, page * 1000 + 999)
+            if (bErr) { console.error('[emtn-search] bookings or() failed', bErr.message); break }
+            const got = (data || []) as RawBooking[]
+            for (const b of got) collected.set(b.id, b)
+            if (got.length < 1000) break
+        }
+    }
+
+    const bookings = Array.from(collected.values()) as DR7Booking[]
+    const dr7Damages: Array<{ bookingId: string; vehicle?: string | null; date?: string | null; label: string; amount: number; quantity: number; paid: boolean; note?: string; residuo: number; stato: StatoPagamentoEvento; contesto?: Pick<DanniItem, 'paidAt' | 'dichiaratoDalCliente' | 'responsabilita' | 'gravita'> }> = []
+    // 01/10/2026: data del saldo per l'EMTN Score (velocita' di pagamento):
+    // paidAt della voce, altrimenti l'ultimo pagamento registrato.
+    const ultimoPagamento = (it: DanniItem): string | null => {
+        const date = (it.payments || []).map(x => x?.paidAt).filter(Boolean) as string[]
+        return date.length ? date.sort().pop()! : null
+    }
+    // 01/10/2026: importo = listino meno sconto (come Danni/Penali); un
+    // pagamento parziale (amountPaid) lascia aperto solo il residuo.
+    const voceDr7 = (it: DanniItem) => {
+        const lordo = it.total != null ? Number(it.total) || 0 : (Number(it.amount) || 0) * (Number(it.quantity) || 1)
+        const total = Math.max(0, Math.round((lordo - (Number(it.discount) || 0)) * 100) / 100)
+        const ps = String(it.paymentStatus || '').toLowerCase()
+        const versato = Number(it.amountPaid) || 0
+        const stato: StatoPagamentoEvento = ps === 'paid' || (versato > 0 && versato >= total - 0.005) ? 'pagato'
+            : versato > 0 || ps === 'partial' ? 'parziale'
+            : 'aperto'
+        const residuo = stato === 'pagato' ? 0 : Math.max(0, Math.round((total - versato) * 100) / 100)
+        return { total, stato, residuo, paid: stato === 'pagato' }
+    }
+    const dr7Penalties: typeof dr7Damages = []
+    let unpaidDamageTotal = 0
+    let unpaidPenaltyTotal = 0
+    let lastBookingDate: string | null = null
+    let firstBookingDate: string | null = null
+
+    for (const b of bookings) {
+        const refDate = b.pickup_date || b.appointment_date || null
+        if (refDate && (!lastBookingDate || refDate > lastBookingDate)) lastBookingDate = refDate
+        if (refDate && (!firstBookingDate || refDate < firstBookingDate)) firstBookingDate = refDate
+        const danni = b.booking_details?.danni || []
+        for (const d of danni) {
+            const { total, stato, residuo, paid } = voceDr7(d)
+            unpaidDamageTotal += residuo
+            dr7Damages.push({
+                residuo,
+                stato,
+                bookingId: b.id,
+                vehicle: b.vehicle_name || b.vehicle_plate,
+                date: d.date || refDate,
+                // Alcune voci hanno solo `description` (es. "Penale - Sforo Km").
+                label: String(d.label || (d as { description?: string }).description || 'Danno'),
+                amount: total,
+                quantity: Number(d.quantity || 1),
+                paid,
+                note: d.note,
+                contesto: { paidAt: d.paidAt ?? ultimoPagamento(d), dichiaratoDalCliente: d.dichiaratoDalCliente ?? null, responsabilita: d.responsabilita ?? null, gravita: d.gravita ?? null },
+            })
+        }
+        const penali = b.booking_details?.penalties || []
+        for (const p of penali) {
+            const { total, stato, residuo, paid } = voceDr7(p)
+            unpaidPenaltyTotal += residuo
+            dr7Penalties.push({
+                residuo,
+                stato,
+                bookingId: b.id,
+                vehicle: b.vehicle_name || b.vehicle_plate,
+                date: p.date || refDate,
+                label: String(p.label || (p as { description?: string }).description || 'Penale'),
+                amount: total,
+                quantity: Number(p.quantity || 1),
+                paid,
+                note: p.note,
+                contesto: { paidAt: p.paidAt ?? ultimoPagamento(p), dichiaratoDalCliente: p.dichiaratoDalCliente ?? null, responsabilita: p.responsabilita ?? null, gravita: p.gravita ?? null },
+            })
+        }
+    }
+
+    // 28/09/2026: danni/penali presenti in fattura ma non nella lista della
+    // prenotazione (es. "Danno prenotazione 88CDFF9D - distrutta macchina",
+    // 13.000 EUR sulla Clio di Nelson Badini): la scheda cliente DR7 li
+    // mostra, EMTN no. Riga per riga: con gemella in booking_details la lista
+    // resta la fonte; senza gemella si conta, una volta sola anche se la
+    // fattura e' stata riemessa. Note di credito e fatture annullate escluse.
+    const conDanniInFattura = new Set<string>()
+    {
+        const bookingIds = bookings.map(b => b.id)
+        const vociLista = (b: DR7Booking | undefined): string[] => {
+            if (!b) return []
+            const voci = [...(b.booking_details?.danni || []), ...(b.booking_details?.penalties || [])] as (DanniItem & { description?: string })[]
+            return voci.map(it => String(it?.label || it?.description || '')).filter(Boolean)
+        }
+        // Stessa regola di GestioneDanniTab.stessaVoce: "Penale - X" == "X".
+        const nomeVoce = (t: string) => t.toLowerCase().trim().replace(/^(penale|danno)\s*-\s*/, '')
+        const stessaVoce = (etichetta: string, description: string): boolean => {
+            const a = nomeVoce(etichetta)
+            const b = nomeVoce(description)
+            if (!a || !b) return false
+            if (a === b) return true
+            const d = description.toLowerCase()
+            return a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a) || d.includes(a))
+        }
+        const righeContate = new Set<string>()
+        const byId = new Map(bookings.map(b => [b.id, b]))
+        type FatturaRiga = { description?: string; total?: number; unit_price?: number; quantity?: number; amountPaid?: number; paymentStatus?: string }
+        type FatturaDb = { id: string; booking_id: string | null; stato: string | null; data_emissione: string | null; items: FatturaRiga[] | null; tipo_fattura: string | null; related_invoice_id: string | null }
+        const fatture: FatturaDb[] = []
+        const COLONNE_FATTURA = 'id, booking_id, stato, data_emissione, items, tipo_fattura, related_invoice_id'
+        for (let i = 0; i < bookingIds.length; i += 100) {
+            const { data } = await sb.from('fatture').select(COLONNE_FATTURA).in('booking_id', bookingIds.slice(i, i + 100))
+            fatture.push(...((data || []) as FatturaDb[]))
+        }
+        for (const e of matchedEmails) {
+            const { data } = await sb.from('fatture').select(COLONNE_FATTURA).is('booking_id', null).ilike('customer_email', e)
+            fatture.push(...((data || []) as FatturaDb[]))
+        }
+        const annullate = new Set(fatture.filter(f => f.tipo_fattura === 'nota_di_credito' && f.related_invoice_id).map(f => String(f.related_invoice_id)))
+        const tipoRiga = (d: string): 'danno' | 'penale' | null => {
+            const x = d.toLowerCase().trim()
+            if (x.includes('danno prenotazione') || x.startsWith('danno')) return 'danno'
+            if (x.includes('penale prenotazione') || x.startsWith('penale')) return 'penale'
+            return null
+        }
+        const visti = new Set<string>()
+        for (const f of fatture) {
+            if (visti.has(f.id)) continue
+            visti.add(f.id)
+            if (!Array.isArray(f.items)) continue
+            if (f.tipo_fattura === 'nota_di_credito' || annullate.has(String(f.id))) continue
+            const gemelle = vociLista(f.booking_id ? byId.get(f.booking_id) : undefined)
+            const righe = f.items.filter(it => typeof it?.description === 'string').map(it => ({ it, tipo: tipoRiga(String(it.description)) }))
+            const righePenali = righe.filter(r => r.tipo !== null)
+            if (righePenali.length === 0) continue
+            const lineTotal = (it: FatturaRiga) => Number(it.total) || (Number(it.unit_price) || 0) * (Number(it.quantity) || 1)
+            const daContare = righePenali.filter(r => {
+                const desc = String(r.it.description)
+                if (gemelle.some(g => stessaVoce(g, desc))) return false
+                const chiave = `${f.booking_id || f.id}|${desc.toLowerCase().trim()}|${lineTotal(r.it).toFixed(2)}`
+                if (righeContate.has(chiave)) return false
+                righeContate.add(chiave)
+                return true
+            })
+            if (daContare.length === 0) continue
+            const altre = righe.filter(r => r.tipo === null && String(r.it.description).trim().toLowerCase() !== 'sconto')
+            const sconto = righe.filter(r => String(r.it.description).trim().toLowerCase() === 'sconto')
+                .reduce((t, r) => t + Math.abs(Number(r.it.total ?? r.it.unit_price) || 0), 0)
+            const lordo = righePenali.reduce((t, r) => t + lineTotal(r.it), 0)
+            const quota = altre.length === 0 && sconto > 0 && lordo > 0 ? Math.min(1, sconto / lordo) : 0
+            const stato = String(f.stato || '').toLowerCase()
+            const fatturaPagata = stato === 'paid' || stato === 'pagata'
+            const bk = f.booking_id ? byId.get(f.booking_id) : undefined
+            const refDate = bk?.pickup_date || bk?.appointment_date || f.data_emissione || null
+            for (const { it, tipo } of daContare) {
+                const total = Math.round(lineTotal(it) * (1 - quota) * 100) / 100
+                const pagato = it.amountPaid != null ? Number(it.amountPaid) * (1 - quota) : (fatturaPagata ? total : 0)
+                const ps = String(it.paymentStatus || '').toLowerCase()
+                const paid = ps === 'paid' || (ps !== 'pending' && ps !== 'partial' && pagato >= total - 0.005)
+                const residuoRiga = paid ? 0 : Math.max(0, Math.round((total - pagato) * 100) / 100)
+                const voce = {
+                    residuo: residuoRiga,
+                    stato: (paid ? 'pagato' : pagato > 0.005 ? 'parziale' : 'aperto') as StatoPagamentoEvento,
+                    bookingId: f.booking_id || '',
+                    vehicle: bk ? (bk.vehicle_name || bk.vehicle_plate) : null,
+                    date: refDate,
+                    label: String(it.description),
+                    amount: total,
+                    quantity: 1,
+                    paid,
+                    note: undefined as string | undefined,
+                    // La fattura di un danno/penale nasce all'incasso: la sua data e' la data del saldo.
+                    contesto: { paidAt: paid ? f.data_emissione : null },
+                }
+                if (f.booking_id) conDanniInFattura.add(f.booking_id)
+                if (tipo === 'danno') {
+                    if (!paid) unpaidDamageTotal += Math.max(0, total - pagato)
+                    dr7Damages.push(voce)
+                } else {
+                    if (!paid) unpaidPenaltyTotal += Math.max(0, total - pagato)
+                    dr7Penalties.push(voce)
+                }
+            }
+        }
+    }
+
+    // 01/10/2026: contano solo i noleggi veri (niente lavaggi, meccanica,
+    // annullati, veicoli TEST): prima gonfiavano il bonus dello score.
+    const noleggiVeri = bookings.filter(eNoleggio)
+    const totalRentals = noleggiVeri.length
+    const regularRentals = noleggiVeri.filter(b => {
+        const danni = b.booking_details?.danni || []
+        const penali = b.booking_details?.penalties || []
+        return danni.length === 0 && penali.length === 0 && !conDanniInFattura.has(b.id)
+    }).length
+
+    // Senza riga emtn_clients nessuna segnalazione e nessuna pratica.
+    const { data: events } = client
+        ? await sb
+            .from('emtn_events')
+            .select('*')
+            .eq('client_id', client.id)
+            .order('created_at', { ascending: false })
+            .limit(100)
+        : { data: null }
+    // '*' perche' `categorie` (migrazione 20260928) puo' mancare su un
+    // database non aggiornato; al browser vanno solo questi campi.
+    const recentEvents: unknown[] = (events || []).map((e: Record<string, unknown>) => ({
+        id: e.id, type: e.type, status: e.status, headline: e.headline,
+        occurred_at: e.occurred_at, created_at: e.created_at,
+        categorie: Array.isArray(e.categorie) && e.categorie.length > 0 ? e.categorie : [e.type],
+    }))
+
+    // 01/10/2026: le pratiche del nuovo flusso (emtn_posizioni) non
+    // comparivano in "Stato segnalazione" ne' in "Attivita' recenti":
+    // si leggevano solo i vecchi emtn_events. Una pratica approvata
+    // sembrava sparita.
+    const { data: posizioni } = client
+        ? await sb
+            .from('emtn_posizioni')
+            .select('id, stato, titolo, eventi, in_approvazione, pubblicata, decisione, inviata_at, approvata_at, created_at, booking_id')
+            .eq('client_id', client.id)
+            .order('created_at', { ascending: false })
+            .limit(100)
+        : { data: null }
+    for (const p of posizioni || []) {
+        const status = p.in_approvazione ? 'UNDER_REVIEW'
+            : p.pubblicata ? 'APPROVED'
+            : p.decisione === 'rifiuta' ? 'REJECTED'
+            : p.decisione === 'integrazione' ? 'PENDING_INTEGRATION'
+            : p.decisione === 'sospendi' ? 'SUSPENDED'
+            : 'DRAFT'
+        const codici = ((p.eventi || []) as Array<{ codice: number }>).map(e => e.codice)
+        recentEvents.push({
+            id: p.id, type: 'POSIZIONE', status, headline: p.titolo || 'Segnalazione EMTN',
+            occurred_at: p.approvata_at || p.inviata_at || p.created_at,
+            created_at: p.inviata_at || p.created_at,
+            categorie: codici.length ? codici.map(c => categoriaEMTN(c)?.label || String(c)) : ['Segnalazione EMTN'],
+        })
+    }
+    recentEvents.sort((x, y) => String((y as { created_at: string }).created_at).localeCompare(String((x as { created_at: string }).created_at)))
+
+    // 28/09/2026: storico della rete EMTN (copie vendute): solo per codice
+    // fiscale, anonimo. Un residuo non saldato altrove pesa come uno interno.
+    const storicoRete = estero ? [] : await cercaStoricoRete(sb, cf)
+    const reteResiduo = storicoRete.reduce((t, e) => t + (e.statoPagamento === 'paid' ? 0 : e.residuo), 0)
+
+    // ── EMTN Score ───────────────────────────────────────────
+    // 05/10/2026 (direzione, "MTN — Regole di punteggio clienti"): registro a
+    // punti fissi (src/utils/emtnScore/regole.ts). Tutte le fonti diventano
+    // eventi normalizzati con la loro categoria; il motore riparte da 50 e
+    // ripercorre la storia. Il numero di contratto accompagna ogni variazione.
+    const contratti = await contrattiPerBooking(sb, bookings.map(b => b.id))
+    // Multe rinotificate al conducente (multe_pec_log): un verbale = una detrazione.
+    const multe: MultaRow[] = []
+    {
+        const ids = bookings.map(b => b.id)
+        for (let i = 0; i < ids.length; i += 100) {
+            const { data } = await sb.from('multe_pec_log').select('id, booking_id, data_infrazione, importo, numero_verbale').in('booking_id', ids.slice(i, i + 100))
+            multe.push(...((data || []) as MultaRow[]))
+        }
+    }
+    // Data del saldo ricavata in automatico quando la voce non la ha:
+    // 1) pagamento Nexi riuscito sulla stessa prenotazione con lo stesso
+    //    importo (+-1 EUR), non prima dell'evento; 2) fattura pagata della
+    //    prenotazione che contiene la voce (data di emissione).
+    {
+        const senzaData = [...dr7Damages, ...dr7Penalties].filter(v => v.stato === 'pagato' && !v.contesto?.paidAt && v.bookingId)
+        const ids = Array.from(new Set(senzaData.map(v => v.bookingId)))
+        type Tx = { booking_id: string; amount_cents: number | null; created_at: string }
+        type Ft = { booking_id: string; data_emissione: string | null; items: Array<{ description?: string }> | null }
+        const txs: Tx[] = []
+        const fts: Ft[] = []
+        for (let i = 0; i < ids.length; i += 100) {
+            const fetta = ids.slice(i, i + 100)
+            const [{ data: t }, { data: f }] = await Promise.all([
+                sb.from('nexi_transactions').select('booking_id, amount_cents, created_at').in('booking_id', fetta).in('status', ['completed', 'preauth_captured']),
+                sb.from('fatture').select('booking_id, data_emissione, items').in('booking_id', fetta).in('stato', ['paid', 'pagata']).neq('tipo_fattura', 'nota_di_credito'),
+            ])
+            txs.push(...((t || []) as Tx[]))
+            fts.push(...((f || []) as Ft[]))
+        }
+        for (const v of senzaData) {
+            const dal = v.date ? Date.parse(v.date) - 86_400_000 : 0
+            const tx = txs
+                .filter(t => t.booking_id === v.bookingId && Math.abs((Number(t.amount_cents) || 0) / 100 - v.amount) <= 1 && Date.parse(t.created_at) >= dal)
+                .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
+            const nome = v.label.toLowerCase().replace(/^(penale|danno)\s*-\s*/, '').trim()
+            const ft = fts
+                .filter(f => f.booking_id === v.bookingId && f.data_emissione && (f.items || []).some(it => nome.length >= 3 && String(it?.description || '').toLowerCase().includes(nome)))
+                .sort((a, b) => String(a.data_emissione).localeCompare(String(b.data_emissione)))[0]
+            const quando = tx?.created_at || ft?.data_emissione || null
+            if (quando) v.contesto = { ...(v.contesto || {}), paidAt: quando }
+        }
+    }
+    const eventiScore = [
+        ...eventiDaVociDr7(dr7Damages, 'danno', contratti),
+        ...eventiDaVociDr7(dr7Penalties, 'penale', contratti),
+        ...eventiDaRete(storicoRete),
+        ...eventiDaMulte(multe, contratti),
+        ...eventiDaEmtnEvents((events || []) as EmtnEventRow[]),
+        ...eventiDaPosizioni((posizioni || []) as PosizioneRow[], [...dr7Damages, ...dr7Penalties].map(v => ({ bookingId: v.bookingId, amount: v.amount })), contratti),
+    ]
+    const override = client ? await leggiOverride(sb, client.id) : null
+    const emtnScore = calcolaEMTNScore({
+        eventi: eventiScore,
+        noleggi: noleggiNormalizzati(bookings, contratti),
+        identificato: !estero && !!ext,
+        override,
+    })
+    const storicoScore = client ? await registraStorico(sb, client.id, emtnScore, override?.id ?? null, operatorEmail ?? null) : []
+
+    // emtn_stats_cache (letto da /emtn-report): contatori veri, non piu'
+    // events_under_review = 0 in dura (il trigger non e' installato).
+    const sc = {
+        client_id: client?.id ?? null,
+        total_rentals: totalRentals,
+        regular_rentals: regularRentals,
+        negative_events: emtnScore.dettaglio.eventiConsiderati,
+        events_under_review: emtnScore.dettaglio.eventiInRevisione,
+        last_activity_date: lastBookingDate,
+        updated_at: new Date().toISOString(),
+    }
+    if (client) await sb.from('emtn_stats_cache').upsert(sc, { onConflict: 'client_id' })
+
+    return {
+        ext, profili, emtnScore, storicoScore, sc, recentEvents, storicoRete, reteResiduo,
+        dr7Damages, dr7Penalties, unpaidDamageTotal, unpaidPenaltyTotal, lastBookingDate, firstBookingDate,
+        totalRentals, regularRentals,
+    }
+}

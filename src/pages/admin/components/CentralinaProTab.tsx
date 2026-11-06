@@ -28,6 +28,7 @@ import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 import CauzioneScadenzaConfig from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import FidelityLavaggioSection from './FidelityLavaggioSection'
+import EmtnSoglieSection from './EmtnSoglieSection'
 import MulteConfigSection from './MulteConfigSection'
 import GestioneMailPecSection from './GestioneMailPecSection'
 import MeteoConfigSection from './MeteoConfigSection'
@@ -73,7 +74,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp' | 'fidelity-lavaggio'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp' | 'fidelity-lavaggio' | 'emtn'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -121,6 +122,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
   { id: 'fidelity-lavaggio', title: 'Fidelity Lavaggio' },
+  { id: 'emtn', title: 'EMTN' },
   { id: 'meteo', title: 'Allerta Meteo' },
   { id: 'p12', title: 'Orari' },
   { id: 'calendario-giornaliero', title: 'Calendario Giornaliero' },
@@ -2748,6 +2750,15 @@ export default function CentralinaProTab() {
                 <FidelityLavaggioSection readOnly={isCauzioniViewOnly} />
               </>
             )}
+            {/* 07/11/2026: soglie EMTN (allarme e blocco prenotazioni dal sito).
+                Globali (riga 'main'), salvataggio proprio come la Fidelity:
+                fuori dalle sync useEffect e dallo snapshot della SaveBar. */}
+            {section === 'emtn' && (
+              <>
+                <GlobaleBadge cosa="Le soglie EMTN" />
+                <EmtnSoglieSection readOnly={isCauzioniViewOnly} />
+              </>
+            )}
             {section === 'p12' && (
               <OrariSection
                 lavaggio={lavaggioHours}
@@ -2808,7 +2819,7 @@ export default function CentralinaProTab() {
           niente di quella sezione. */}
       {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti'
         && section !== 'sito' && section !== 'gestione-otp'
-        && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && section !== 'fidelity-lavaggio' && (
+        && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && section !== 'fidelity-lavaggio' && section !== 'emtn' && (
         <SaveBar
           changes={changes}
           justSaved={justSaved}

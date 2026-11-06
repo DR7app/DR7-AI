@@ -17,6 +17,7 @@ import { moduloPagamentiCauzioniContratti } from './pagamentiCauzioniContratti'
 import { moduloDocumentiFatture } from './documentiFatture'
 import { moduloNuovePrenotazioni } from './nuovePrenotazioni'
 import { moduloPuntiLavaggio } from './puntiLavaggio'
+import { moduloEmtnSoglia } from './emtnSoglia'
 
 export const MODULI_ALLARMI: ModuloAllarmi[] = [
     moduloDanniSinistri,
@@ -28,6 +29,7 @@ export const MODULI_ALLARMI: ModuloAllarmi[] = [
     moduloDocumentiFatture,
     moduloNuovePrenotazioni,
     moduloPuntiLavaggio,
+    moduloEmtnSoglia,
 ]
 
 export function detectorsDeiModuli(): Record<string, Detector> {

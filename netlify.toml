@@ -172,6 +172,13 @@
 [functions."alarm-engine-cron"]
   schedule = "* * * * *"
 
+# EMTN (07/11/2026): ricalcolo dei punteggi salvati in emtn_score_clienti,
+# letti dall'allarme "Cliente sotto la soglia EMTN" e dal blocco delle
+# prenotazioni dal sito (Centralina Pro > EMTN). Prima chi ha un noleggio
+# vivo, poi tutte le schede con codice fiscale dalle piu' vecchie.
+[functions."emtn-score-ricalcolo"]
+  schedule = "*/10 * * * *"
+
 # Marketing campaigns — every 2 min, materialise scheduled/recurring campaigns
 # whose scheduled_at has passed and pump the chunked send loop server-side.
 # 25s working budget per tick (out of the 30s scheduled-function timeout) so

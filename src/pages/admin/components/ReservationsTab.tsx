@@ -106,6 +106,7 @@ import { numeroLeggibile } from '../../../utils/prefissiPaesi'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import { useAutorizzazioneWallet, type AutorizzazioneWallet } from '../../../hooks/useAutorizzazioneWallet'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import EmtnScoreBadge, { idClienteEmtn } from '../../../components/EmtnScoreBadge'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
@@ -12972,6 +12973,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           userId={booking.user_id}
                           email={booking.customer_email || booking.booking_details?.customer?.email}
                         />
+                        {/* 07/11/2026 (direzione): EMTN Score del cliente, per id. */}
+                        {serviceType === 'rental' && !isCarWash && !isCourtesy && (
+                          <EmtnScoreBadge clienteId={idClienteEmtn(booking)} />
+                        )}
                       </div>
                       <div className="text-sm text-theme-text-muted"><NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" /></div>
                       {viewMode === 'uscite' && autistiDiUscita(booking).length > 0 && (
@@ -13201,10 +13206,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           <span className="block truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
                         </td>
                         <td className="px-2 py-2 text-sm whitespace-nowrap w-px">
-                          <ClientStatusBadge
-                            userId={booking.user_id}
-                            email={booking.customer_email || booking.booking_details?.customer?.email}
-                          />
+                          <span className="inline-flex items-center gap-1">
+                            <ClientStatusBadge
+                              userId={booking.user_id}
+                              email={booking.customer_email || booking.booking_details?.customer?.email}
+                            />
+                            {/* 07/11/2026 (direzione): EMTN Score del cliente, per id. */}
+                            {serviceType === 'rental' && booking.service_type !== 'car_wash' && !isCourtesy && (
+                              <EmtnScoreBadge clienteId={idClienteEmtn(booking)} />
+                            )}
+                          </span>
                         </td>
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                           <NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" />
