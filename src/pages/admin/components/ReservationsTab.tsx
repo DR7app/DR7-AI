@@ -5593,8 +5593,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             ...(newVehicle ? {
               previous_vehicle_id: extendingBooking.vehicle_id,
               previous_vehicle_name: extendingBooking.vehicle_name,
+              // 06/11/2026: le targhe servono al Calendario Giornaliero per
+              // mostrare rientro e uscita del giorno del cambio.
+              previous_vehicle_plate: extendingBooking.vehicle_plate || extendingBooking.booking_details?.vehicle?.plate || null,
               new_vehicle_id: newVehicle.id,
               new_vehicle_name: newVehicle.display_name,
+              new_vehicle_plate: newVehicle.plate || newVehicle.targa || null,
             } : {})
           }
         ]

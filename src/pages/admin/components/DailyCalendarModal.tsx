@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import {
-    resolveDailyCategories, categorizeDayBooking, categoryOf, badgeOf,
+    resolveDailyCategories, expandDayBooking, categoryOf, badgeOf,
     dailyBookingTime, dailyTimeSlots, orphanLaneCounts,
     DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
-    type DailyType, type DailyCategory, type DailyCategoryConfig,
+    type DailyType, type DailyCategory, type DailyCategoryConfig, type DaySegment,
 } from '../../../utils/dailyCalendarCategories'
+import { completaTargheSegmenti } from '../../../utils/vehicleSegments'
+import { targheVeicoli } from '../../../utils/targheVeicoli'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import BookingDetailsPanel from './BookingDetailsPanel'
 
@@ -24,6 +26,8 @@ interface Booking {
     booking_details: any
     status: string
     type: DailyType
+    // Estensione con cambio auto: veicolo del tratto (vedi expandDayBooking).
+    segment?: DaySegment
 }
 
 interface ActivityCardProps {
@@ -53,6 +57,7 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass, laneLabel
     }
 
     const getTarga = (booking: Booking): string => {
+        if (booking.segment) return booking.segment.plate || 'N/A'
         return booking.vehicle_plate ||
             booking.booking_details?.vehicle?.targa ||
             booking.booking_details?.vehicle?.plate ||
@@ -99,7 +104,7 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass, laneLabel
             </div>
 
             <div className="text-theme-text-secondary text-xs">
-                {booking.customer_name === 'Lavaggio Rientro' && booking.vehicle_name ? booking.vehicle_name : booking.vehicle_name}
+                {booking.customer_name === 'Lavaggio Rientro' && booking.vehicle_name ? booking.vehicle_name : (booking.segment?.name || booking.vehicle_name)}
             </div>
 
             {booking.customer_name === 'Lavaggio Rientro' && booking.vehicle_plate ? (
@@ -216,13 +221,17 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
+                // 06/11/2026: anche i noleggi IN CORSO (ritiro prima,
+                // riconsegna dopo): un cambio auto in estensione cade a
+                // meta' periodo e senza questo intervallo la riga non arriva.
                 .or(`and(pickup_date.gte.${qs},pickup_date.lt.${qe}),`
                   + `and(dropoff_date.gte.${qs},dropoff_date.lt.${qe}),`
+                  + `and(pickup_date.lt.${qe},dropoff_date.gte.${qs}),`
                   + `and(appointment_date.gte.${qs},appointment_date.lt.${qe})`)
 
             if (error) throw error
 
-            const categorized: Booking[] = []
+            let categorized: Booking[] = []
 
             // Helper to check if a date string falls on the selected local date in Europe/Rome timezone
             const isSameDay = (dateStr?: string) => {
@@ -244,10 +253,9 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
             // Straordinarie. Regole in utils/dailyCalendarCategories.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data?.forEach((booking: any) => {
-                for (const type of categorizeDayBooking(booking, isSameDay, customLanes)) {
-                    categorized.push({ ...booking, type })
-                }
+                categorized.push(...expandDayBooking(booking, isSameDay, customLanes))
             })
+            categorized = await completaTargheSegmenti(categorized, targheVeicoli)
 
             setBookings(categorized)
         } catch (error) {

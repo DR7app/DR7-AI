@@ -21,6 +21,8 @@
  *   Varie      varie
  */
 
+import { vehicleSegments } from './vehicleSegments'
+
 export type DailyType =
   | 'check-in' | 'check-out'
   | 'mare-in' | 'mare-out'
@@ -503,18 +505,78 @@ export function categorizeDayBooking(
   return out
 }
 
+/**
+ * Veicolo e momento di un evento del giorno quando la prenotazione ha piu'
+ * tratti (estensione con cambio auto). `at` c'e' solo per gli eventi del
+ * cambio: il ritiro iniziale e la riconsegna finale restano sugli orari della
+ * prenotazione.
+ */
+export interface DaySegment {
+  vehicleId: string | null
+  name: string
+  plate: string | null
+  at?: string
+}
+
+/**
+ * Eventi del giorno di una prenotazione, gia' pronti per la griglia
+ * (06/11/2026). Come `categorizeDayBooking`, ma un noleggio con cambio auto in
+ * estensione diventa un tratto per veicolo (utils/vehicleSegments): nel giorno
+ * del cambio compaiono il RIENTRO del veicolo precedente e l'USCITA di quello
+ * nuovo, all'ora della vecchia riconsegna. La prenotazione resta intatta: il
+ * veicolo del tratto viaggia a parte in `segment`, cosi' la scheda che si apre
+ * al click e' sempre la riga vera.
+ */
+export function expandDayBooking<B extends Record<string, unknown>>(
+  booking: B,
+  isSameDay: (d?: string) => boolean,
+  customLanes: Array<{ id: string; serviceTypes?: string[] }> = [],
+): Array<B & { type: DailyType; segment?: DaySegment }> {
+  const st = booking?.service_type as string | undefined
+  const noleggio = NOLEGGIO_LIKE.find(n => n.match(st))
+  const stLower = String(st || '').toLowerCase()
+  const dirottata = customLanes.some(l =>
+    (l.serviceTypes || []).map(x => String(x).toLowerCase().trim()).includes(stLower) && stLower !== '')
+  const tratti = noleggio && !dirottata ? vehicleSegments(booking) : []
+
+  if (!noleggio || tratti.length < 2) {
+    return categorizeDayBooking(booking, isSameDay, customLanes).map(type => ({ ...booking, type }))
+  }
+
+  const out: Array<B & { type: DailyType; segment?: DaySegment }> = []
+  const ultimo = tratti.length - 1
+  tratti.forEach((t, i) => {
+    const base = { vehicleId: t.vehicleId, name: t.name, plate: t.plate }
+    if (t.from && isSameDay(t.from)) {
+      out.push({ ...booking, type: `${noleggio.prefix}-in` as DailyType, segment: i === 0 ? base : { ...base, at: t.from } })
+    }
+    if (t.to && isSameDay(t.to)) {
+      out.push({ ...booking, type: `${noleggio.prefix}-out` as DailyType, segment: i === ultimo ? base : { ...base, at: t.to } })
+    }
+  })
+  return out
+}
+
 /** Orario da mostrare in griglia, per tipo. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function dailyBookingTime(booking: any, type: DailyType | string): string {
   const d = booking?.booking_details || {}
   const hhmm = (iso?: string) => iso
-    ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
+    ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
     : null
 
+  // Evento di un cambio auto in estensione: l'ora e' quella del cambio.
+  if (booking?.segment?.at) {
+    return hhmm(booking.segment.at) || '09:00'
+  }
   if (String(type).endsWith('-in')) {
     return d.pickupTime || d.pickup_time || hhmm(booking.pickup_date) || '09:00'
   }
   if (String(type).endsWith('-out')) {
+    // 06/11/2026: l'estensione sposta dropoff_date ma non riscrive
+    // returnTime, che resterebbe l'ora della riconsegna originale.
+    const estesa = Array.isArray(d.extension_history) && d.extension_history.length > 0
+    if (estesa && booking.dropoff_date) return hhmm(booking.dropoff_date) || '18:00'
     return d.returnTime || d.return_time || hhmm(booking.dropoff_date) || '18:00'
   }
   if (isCustomCategory(String(type))) {

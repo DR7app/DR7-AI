@@ -6,11 +6,13 @@ import { logger } from '../../../utils/logger'
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { authFetch } from '../../../utils/authFetch'
 import {
-    resolveDailyCategories, categorizeDayBooking, categoryOf, badgeOf,
+    resolveDailyCategories, expandDayBooking, categoryOf, badgeOf,
     dailyBookingTime, dailyTimeSlots, orphanLaneCounts,
     DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
-    type DailyType, type DailyCategory, type DailyCategoryConfig,
+    type DailyType, type DailyCategory, type DailyCategoryConfig, type DaySegment,
 } from '../../../utils/dailyCalendarCategories'
+import { completaTargheSegmenti } from '../../../utils/vehicleSegments'
+import { targheVeicoli } from '../../../utils/targheVeicoli'
 
 interface Booking {
     id: string
@@ -27,6 +29,8 @@ interface Booking {
     booking_details: any
     status: string
     type: DailyType
+    // Estensione con cambio auto: veicolo del tratto (vedi expandDayBooking).
+    segment?: DaySegment
 }
 
 // Generate 15-minute time slots for business hours (9 AM - 8 PM)
@@ -119,8 +123,12 @@ export default function DailyCalendarTab() {
                     .from('bookings')
                     .select('*')
                     .neq('status', 'cancelled')
+                    // 06/11/2026: anche i noleggi IN CORSO (ritiro prima,
+                    // riconsegna dopo): un cambio auto in estensione cade a
+                    // meta' periodo. Stessa finestra di list-bookings.
                     .or(`and(pickup_date.gte.${a},pickup_date.lt.${b}),`
                       + `and(dropoff_date.gte.${a},dropoff_date.lt.${b}),`
+                      + `and(pickup_date.lt.${b},dropoff_date.gte.${a}),`
                       + `and(appointment_date.gte.${a},appointment_date.lt.${b})`)
                     .order('created_at', { ascending: false })
                 if (error) throw error
@@ -128,7 +136,7 @@ export default function DailyCalendarTab() {
             }
             logger.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
 
-            const categorized: Booking[] = []
+            let categorized: Booking[] = []
 
             // Helper to check if a date string falls on the selected local date in Europe/Rome timezone
             const isSameDay = (dateStr?: string) => {
@@ -156,10 +164,9 @@ export default function DailyCalendarTab() {
             // Straordinarie. Regole in utils/dailyCalendarCategories.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             bookingsToProcess.forEach((booking: any) => {
-                for (const type of categorizeDayBooking(booking, isSameDay, customLanes)) {
-                    categorized.push({ ...booking, type })
-                }
+                categorized.push(...expandDayBooking(booking, isSameDay, customLanes))
             })
+            categorized = await completaTargheSegmenti(categorized, targheVeicoli)
 
             setBookings(categorized)
         } catch (error) {
@@ -208,6 +215,7 @@ export default function DailyCalendarTab() {
 
     // Get targa from booking
     const getTarga = (booking: Booking): string => {
+        if (booking.segment) return booking.segment.plate || 'N/A'
         return booking.vehicle_plate ||
             booking.booking_details?.vehicle?.targa ||
             booking.booking_details?.vehicle?.plate ||
@@ -380,7 +388,7 @@ export default function DailyCalendarTab() {
                                             {label}
                                         </div>
                                         <div className="font-bold text-xs lg:text-sm leading-tight truncate">{parseCustomerName(booking)}</div>
-                                        <div className="text-theme-text-primary/90 text-[10px] lg:text-xs mt-0.5 truncate">{booking.vehicle_name}</div>
+                                        <div className="text-theme-text-primary/90 text-[10px] lg:text-xs mt-0.5 truncate">{booking.segment?.name || booking.vehicle_name}</div>
                                         {booking.type !== 'lavaggio' && (
                                             <div className="text-theme-text-primary/80 font-mono text-[10px] mt-0.5">🚗 {getTarga(booking)}</div>
                                         )}
@@ -470,7 +478,7 @@ export default function DailyCalendarTab() {
                                             </div>
                                             <div className="font-bold text-sm text-theme-text-primary leading-tight truncate">{parseCustomerName(booking)}</div>
                                             <div className="text-xs text-theme-text-primary/80 mt-0.5 truncate">
-                                                {booking.vehicle_name}
+                                                {booking.segment?.name || booking.vehicle_name}
                                                 {booking.type !== 'lavaggio' && <span className="font-mono ml-1.5">{getTarga(booking)}</span>}
                                             </div>
                                             {booking.service_name && (
