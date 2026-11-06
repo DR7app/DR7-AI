@@ -2,6 +2,10 @@ import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { funzioneFerma } from "./utils/systemControl";
 import { nellaLinguaDelTelefono } from './utils/i18n'
+import { classificaRispostaGreenApi, leggiCorpo, type EsitoGreenApi } from "./utils/esitoGreenApi";
+import {
+    LIMITE_MESSAGGI_ORA, FINESTRA_MINUTI, FASCIA_ORA_DA, FASCIA_ORA_A, PRESA_SCADE_MINUTI, inFasciaInvio,
+} from "../../src/utils/campagneFrequenza";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -18,6 +22,10 @@ const CAMPAIGN_SENDS_ENABLED = true;
 // Process at most this many recipients per invocation. Dropped to 1 with
 // a 7s delay between sends to stay safely under WhatsApp's spam threshold
 // (~1 message per 7-10 seconds is the safe rate for Green API).
+// 07/11/2026: in piu', il tetto orario (50/ora su tutte le campagne) e la
+// fascia 9-21 Roma valgono QUI, per chiunque chiami: anche una scheda del
+// browser rimasta aperta non puo' piu' sparare a tutti di fila. Vedi
+// src/utils/campagneFrequenza.ts.
 const CHUNK_SIZE = 1;
 const PER_RECIPIENT_DELAY_MS = 7000;
 
@@ -29,6 +37,29 @@ function normalizePhone(raw: string | null | undefined): string {
     return phone;
 }
 
+// 07/11/2026: l'errore porta l'esito classificato. "istanza_non_disponibile"
+// = Green API ha rifiutato prima di consegnare (bot bloccato/non autorizzato):
+// il messaggio NON e' partito e il destinatario torna in coda senza rischio
+// di doppione. Ogni altro errore e' un esito incerto e non si rimanda da solo.
+class ErroreGreenApi extends Error {
+    esito: EsitoGreenApi;
+    constructor(esito: EsitoGreenApi) {
+        super(esito.tipo === "inviato" ? "ok" : esito.motivo);
+        this.esito = esito;
+    }
+}
+
+async function verificaRisposta(res: Response): Promise<void> {
+    const esito = classificaRispostaGreenApi(res.status, leggiCorpo(await res.text().catch(() => "")));
+    if (esito.tipo !== "inviato") throw new ErroreGreenApi(esito);
+}
+
+/** La migrazione 20261107 non e' ancora applicata (funzione assente). */
+function funzioneMancante(err: { code?: string; message?: string } | null): boolean {
+    if (!err) return false;
+    return err.code === "PGRST202" || err.code === "42883" || /could not find the function/i.test(err.message || "");
+}
+
 async function greenApiSendMessage(phone: string, message: string): Promise<void> {
     const url = `https://api.greenapi.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
     const res = await fetch(url, {
@@ -36,8 +67,7 @@ async function greenApiSendMessage(phone: string, message: string): Promise<void
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chatId: `${phone}@c.us`, message }),
     });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`);
+    await verificaRisposta(res);
 }
 
 async function greenApiSendFile(phone: string, urlFile: string, fileName: string, caption?: string): Promise<void> {
@@ -49,8 +79,7 @@ async function greenApiSendFile(phone: string, urlFile: string, fileName: string
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`);
+    await verificaRisposta(res);
 }
 
 function fileNameFromUrl(u: string, fallback: string): string {
@@ -126,18 +155,77 @@ export const handler: Handler = async (event) => {
             .eq("id", campaignId);
     }
 
-    // Pull the next chunk of unsent recipients (pending OR previously failed)
-    const { data: recs, error: recsErr } = await sb.from("marketing_campaign_recipients")
-        .select("id, customer_id, customer_name, phone, email")
-        .eq("campaign_id", campaignId)
-        .in("status", ["pending", "failed"])
-        .limit(CHUNK_SIZE);
-
-    if (recsErr) {
-        return { statusCode: 500, body: JSON.stringify({ error: `Errore lettura destinatari: ${recsErr.message}` }) };
+    // 07/11/2026 (direzione): frequenza automatica. Il destinatario si
+    // PRENOTA nel database (campagne_prenota_destinatario): fascia 9-21 Roma,
+    // tetto di LIMITE_MESSAGGI_ORA l'ora su tutte le campagne, presa atomica
+    // (nessun cliente due volte, nemmeno con due giri in parallelo).
+    // Se la migrazione 20261107 non e' ancora applicata si torna alla lettura
+    // di prima, con fascia e tetto calcolati qui.
+    type Destinatario = { id: string; customer_id: string | null; customer_name: string | null; phone: string | null; email: string | null };
+    let recs: Destinatario[] = [];
+    let conPresa = true;
+    const prenota = await sb.rpc("campagne_prenota_destinatario", {
+        p_campaign_id: campaignId,
+        p_limite_ora: LIMITE_MESSAGGI_ORA,
+        p_ora_da: FASCIA_ORA_DA,
+        p_ora_a: FASCIA_ORA_A,
+        p_finestra_minuti: FINESTRA_MINUTI,
+        p_presa_scade_minuti: PRESA_SCADE_MINUTI,
+    });
+    if (prenota.error) {
+        if (!funzioneMancante(prenota.error)) {
+            return { statusCode: 500, body: JSON.stringify({ error: `Errore coda invii: ${prenota.error.message}` }) };
+        }
+        conPresa = false;
+        if (!inFasciaInvio()) {
+            return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "fuori_fascia", processed: 0 }) };
+        }
+        const sinceIso = new Date(Date.now() - FINESTRA_MINUTI * 60_000).toISOString();
+        const { count: usati } = await sb.from("marketing_campaign_recipients")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "sent")
+            .gte("sent_at", sinceIso);
+        if ((usati || 0) >= LIMITE_MESSAGGI_ORA) {
+            return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "limite", processed: 0, usati }) };
+        }
+        const { data, error: recsErr } = await sb.from("marketing_campaign_recipients")
+            .select("id, customer_id, customer_name, phone, email")
+            .eq("campaign_id", campaignId)
+            .eq("status", "pending")
+            .order("created_at", { ascending: true })
+            .limit(CHUNK_SIZE);
+        if (recsErr) {
+            return { statusCode: 500, body: JSON.stringify({ error: `Errore lettura destinatari: ${recsErr.message}` }) };
+        }
+        recs = (data as Destinatario[] | null) || [];
+    } else {
+        const r = (prenota.data || {}) as { esito?: string; usati?: number; in_corso?: number; destinatario?: Destinatario };
+        if (r.esito === "fuori_fascia" || r.esito === "limite") {
+            return { statusCode: 200, body: JSON.stringify({ done: false, throttled: r.esito, processed: 0, usati: r.usati ?? null }) };
+        }
+        if (r.esito === "vuoto" && (r.in_corso || 0) > 0) {
+            // Un altro giro sta ancora inviando a qualcuno: si chiude dopo.
+            return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "in_corso", processed: 0, remaining: 0 }) };
+        }
+        if (r.esito === "preso" && r.destinatario) recs = [r.destinatario];
+        else if (r.esito !== "vuoto") {
+            // Risposta inattesa: mai chiudere la campagna per sbaglio.
+            return { statusCode: 500, body: JSON.stringify({ error: `Risposta coda invii inattesa: ${JSON.stringify(prenota.data)}` }) };
+        }
     }
 
-    if (!recs || recs.length === 0) {
+    if (recs.length === 0) {
+        // 07/11/2026: la schermata crea la campagna e POI inserisce i
+        // destinatari. Se il cron passa in mezzo non deve chiuderla vuota.
+        const appenaCreata = camp.created_at && Date.now() - new Date(camp.created_at).getTime() < 10 * 60_000;
+        if (appenaCreata) {
+            const { count: totali } = await sb.from("marketing_campaign_recipients")
+                .select("id", { count: "exact", head: true })
+                .eq("campaign_id", campaignId);
+            if ((totali || 0) === 0 && (camp.total_recipients || 0) > 0) {
+                return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "in_preparazione", processed: 0 }) };
+            }
+        }
         // No more work — finalize the campaign
         const { count: sentCount } = await sb.from("marketing_campaign_recipients")
             .select("id", { count: "exact", head: true })
@@ -171,6 +259,7 @@ export const handler: Handler = async (event) => {
 
     let chunkSent = 0;
     let chunkFailed = 0;
+    let istanzaNonDisponibile: string | null = null;
     const chunkErrors: string[] = [];
 
     for (const r of recs) {
@@ -184,21 +273,25 @@ export const handler: Handler = async (event) => {
             chunkFailed++;
             chunkErrors.push(`${displayName}: numero mancante o invalido`);
             await sb.from("marketing_campaign_recipients")
-                .update({ status: "skipped", error_message: "no/invalid phone" })
+                .update({ status: "skipped", error_message: "no/invalid phone", ...(conPresa ? { claimed_at: null } : {}) })
                 .eq("id", r.id);
             continue;
         }
 
-        // Nella lingua del prefisso del destinatario (+39 resta italiano).
-        const personalized = await nellaLinguaDelTelefono(phone, message
-            .replace(/{nome}/g, nome)
-            .replace(/{cognome}/g, cognome));
-
+        // Solo un rifiuto sul PRIMO invio garantisce che il cliente non abbia
+        // ricevuto niente (dopo, le foto/video successivi = testo gia' arrivato).
+        let primoPartito = false;
         try {
+            // Nella lingua del prefisso del destinatario (+39 resta italiano).
+            const personalized = await nellaLinguaDelTelefono(phone, message
+                .replace(/{nome}/g, nome)
+                .replace(/{cognome}/g, cognome));
+
             if (imageUrls.length === 0 && !videoUrl) {
                 await greenApiSendMessage(phone, personalized);
             } else if (imageUrls.length > 0) {
                 await greenApiSendFile(phone, imageUrls[0], fileNameFromUrl(imageUrls[0], "image.jpg"), personalized);
+                primoPartito = true;
                 for (let i = 1; i < imageUrls.length; i++) {
                     await new Promise(res => setTimeout(res, 400));
                     await greenApiSendFile(phone, imageUrls[i], fileNameFromUrl(imageUrls[i], `image-${i + 1}.jpg`));
@@ -210,6 +303,7 @@ export const handler: Handler = async (event) => {
             } else if (videoUrl) {
                 await greenApiSendFile(phone, videoUrl, fileNameFromUrl(videoUrl, "video.mp4"), personalized);
             }
+            primoPartito = true;
 
             chunkSent++;
             await sb.from("marketing_campaign_recipients")
@@ -217,8 +311,17 @@ export const handler: Handler = async (event) => {
                 .eq("id", r.id);
             await new Promise(res => setTimeout(res, PER_RECIPIENT_DELAY_MS));
         } catch (err: unknown) {
-            chunkFailed++;
             const msg = err instanceof Error ? err.message : String(err);
+            if (!primoPartito && err instanceof ErroreGreenApi && err.esito.tipo === "istanza_non_disponibile") {
+                // Bot bloccato o non autorizzato: non e' partito niente. Il
+                // destinatario torna in coda e il giro si ferma qui.
+                istanzaNonDisponibile = msg;
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "pending", error_message: msg, ...(conPresa ? { claimed_at: null } : {}) })
+                    .eq("id", r.id);
+                break;
+            }
+            chunkFailed++;
             chunkErrors.push(`${displayName}: ${msg}`);
             await sb.from("marketing_campaign_recipients")
                 .update({ status: "failed", error_message: msg })
@@ -248,6 +351,7 @@ export const handler: Handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
             done: false,
+            ...(istanzaNonDisponibile ? { throttled: "istanza_non_disponibile", message: istanzaNonDisponibile } : {}),
             processed: chunkSent + chunkFailed,
             sent: chunkSent,
             failed: chunkFailed,

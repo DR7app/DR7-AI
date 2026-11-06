@@ -176,6 +176,9 @@
 # whose scheduled_at has passed and pump the chunked send loop server-side.
 # 25s working budget per tick (out of the 30s scheduled-function timeout) so
 # each tick sends ~3 messages under the 7s anti-spam throttle (~90 msg/hour).
+# 07/11/2026: ora ogni invio massivo passa dalla coda: al massimo 50 messaggi
+# l'ora (tutte le campagne insieme), 2 per giro, solo 9-21 ora di Roma.
+# Limiti in src/utils/campagneFrequenza.ts (CRON_OGNI_MINUTI = questo schedule).
 [functions."process-scheduled-campaigns-cron"]
   schedule = "*/2 * * * *"
 

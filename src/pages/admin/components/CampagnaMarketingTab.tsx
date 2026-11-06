@@ -12,6 +12,10 @@ import NumeroTelefono from '../../../components/NumeroTelefono'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import {
+    LIMITE_MESSAGGI_ORA, FINESTRA_MINUTI, FASCIA_ORA_DA, FASCIA_ORA_A,
+    stimaFineInvio, formattaDataOraRoma, inFasciaInvio,
+} from '../../../utils/campagneFrequenza'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -139,14 +143,16 @@ const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
 const PER_PAGE = 50
 
 // 2026-07-18: preset frequenza "drip" (N destinatari ogni intervallo).
-const DRIP_PRESETS: { label: string; batch: number; interval: number }[] = [
-    { label: '50 ogni ora', batch: 50, interval: 60 },
-    { label: '100 ogni ora', batch: 100, interval: 60 },
-    { label: '250 ogni ora', batch: 250, interval: 60 },
-    { label: '500 ogni ora', batch: 500, interval: 60 },
-    { label: '50 ogni 30 minuti', batch: 50, interval: 30 },
-    { label: '100 ogni 2 ore', batch: 100, interval: 120 },
-]
+// 07/11/2026 (direzione): la frequenza non si sceglie piu'. Ogni invio
+// massivo va in coda e parte a LIMITE_MESSAGGI_ORA l'ora, dalle FASCIA_ORA_DA
+// alle FASCIA_ORA_A (Roma): con "Invia" a tutti in una volta il bot WhatsApp
+// veniva bloccato. Limiti in src/utils/campagneFrequenza.ts.
+const FREQUENZA_TESTO = `massimo ${LIMITE_MESSAGGI_ORA} messaggi l'ora, dalle ${String(FASCIA_ORA_DA).padStart(2, '0')}:00 alle ${String(FASCIA_ORA_A).padStart(2, '0')}:00`
+
+interface StatoCoda {
+    inCoda: number
+    inviatiUltimaOra: number
+}
 
 export default function CampagnaMarketingTab() {
     const [customers, setCustomers] = useState<Customer[]>([])
@@ -197,8 +203,9 @@ export default function CampagnaMarketingTab() {
     const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
     // 2026-07-18: frequenza invio — Manuale (invia ora / a N) o Automatica (drip
     // a scaglioni: N destinatari ogni intervallo, gestito dal cron).
-    const [sendMode, setSendMode] = useState<'manual' | 'auto'>('manual')
-    const [dripIdx, setDripIdx] = useState(0)
+    // 07/11/2026: solo automatica (vedi FREQUENZA_TESTO). Qui lo stato della
+    // coda per mostrare in attesa / inviati / fine stimata.
+    const [statoCoda, setStatoCoda] = useState<StatoCoda | null>(null)
 
     const [scheduledCampaigns, setScheduledCampaigns] = useState<CampaignRow[]>([])
 
@@ -217,12 +224,14 @@ export default function CampagnaMarketingTab() {
     const clientStatus = useClientStatus()
 
 
-    // Auto-refresh storico every 5s while a campaign is in flight ('pending' or 'sending'),
+    // Auto-refresh storico while a campaign is in flight ('pending' or 'sending'),
     // so progress counters update without the user clicking Aggiorna.
+    // 07/11/2026: ogni 30s (non 5s): con la coda a 50/ora una campagna resta
+    // in corso per ore e il ritmo e' di un messaggio ogni ~72 secondi.
     useEffect(() => {
         const inFlight = campaigns.some(c => c.status === 'pending' || c.status === 'sending')
         if (!inFlight) return
-        const t = setInterval(() => { loadCampaigns() }, 5000)
+        const t = setInterval(() => { loadCampaigns() }, 30000)
         return () => clearInterval(t)
     }, [campaigns])
 
@@ -322,6 +331,29 @@ export default function CampagnaMarketingTab() {
             console.error('Error loading campaigns:', err)
         } finally {
             setLoadingCampaigns(false)
+        }
+        loadStatoCoda()
+    }
+
+    // Coda degli invii massivi, tutte le campagne insieme ('sending' = preso
+    // da un invio in corso, esiste dopo la migrazione 20261107).
+    async function loadStatoCoda() {
+        try {
+            const sinceIso = new Date(Date.now() - FINESTRA_MINUTI * 60_000).toISOString()
+            const [coda, inviati] = await Promise.all([
+                supabase.from('marketing_campaign_recipients')
+                    .select('id', { count: 'exact', head: true })
+                    .in('status', ['pending', 'sending']),
+                supabase.from('marketing_campaign_recipients')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('status', 'sent')
+                    .gte('sent_at', sinceIso),
+            ])
+            if (coda.error) throw coda.error
+            if (inviati.error) throw inviati.error
+            setStatoCoda({ inCoda: coda.count || 0, inviatiUltimaOra: inviati.count || 0 })
+        } catch (err) {
+            console.error('Error loading coda invii:', err)
         }
     }
 
@@ -488,16 +520,23 @@ export default function CampagnaMarketingTab() {
         // altrimenti TUTTI gli eligible; poi taglia ai primi N.
         // sendMode 'auto' = drip: coda TUTTI i destinatari (snapshot) e lascia
         // che il cron li invii a scaglioni (drip_batch_size ogni intervallo).
-        const drip = (sendMode === 'auto' && !capLimit) ? DRIP_PRESETS[dripIdx] : null
-        if (!drip && !capLimit && selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
+        // 07/11/2026 (direzione): ogni invio e' automatico. Niente piu' invio
+        // "subito a tutti" dal browser: i destinatari vanno in coda e il cron
+        // li manda a LIMITE_MESSAGGI_ORA l'ora, solo in fascia 9-21.
+        const drip = { batch: LIMITE_MESSAGGI_ORA, interval: FINESTRA_MINUTI }
+        if (!capLimit && selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
 
         const pool = selectedIds.size > 0 ? customers.filter(c => selectedIds.has(c.id)) : eligible
         const recipients = (capLimit && capLimit > 0) ? pool.slice(0, capLimit) : pool
         if (recipients.length === 0) return toast.error('Nessun destinatario valido')
 
-        const confirmMsg = drip
-            ? `Avviare l'invio AUTOMATICO a ${recipients.length} clienti, ${drip.batch} ogni ${drip.interval >= 60 ? `${drip.interval / 60} ${drip.interval === 60 ? 'ora' : 'ore'}` : `${drip.interval} minuti`}? Il sistema invierà a scaglioni finché non li ha contattati tutti.`
-            : `Inviare la campagna a ${recipients.length} clienti? L'invio parte subito.`
+        // La stima tiene conto di cio' che e' gia' in coda prima di questa.
+        const giaInCoda = statoCoda?.inCoda || 0
+        const fine = stimaFineInvio(giaInCoda + recipients.length)
+        const confirmMsg = `Mettere in coda la campagna per ${recipients.length} clienti?\n\n`
+            + `Invio automatico: ${FREQUENZA_TESTO} (ora italiana). Quello che non parte oggi continua domani alle ${String(FASCIA_ORA_DA).padStart(2, '0')}:00.`
+            + (giaInCoda > 0 ? `\nGia' in coda da altre campagne: ${giaInCoda}.` : '')
+            + (fine ? `\nFine stimata: ${formattaDataOraRoma(fine)}.` : '')
         if (!confirm(confirmMsg)) return
 
         setSending(true)
@@ -525,11 +564,12 @@ export default function CampagnaMarketingTab() {
                     image_urls: imageUrls.length > 0 ? imageUrls : null,
                     video_url,
                     channel: 'whatsapp',
-                    audience: drip ? 'drip' : (selectedIds.size === eligible.length ? 'all' : 'selected'),
+                    audience: 'drip',
                     total_recipients: recipients.length,
                     status: 'pending',
                     // Drip: il cron rispetta il tetto per finestra. Colonne opzionali.
-                    ...(drip ? { drip_batch_size: drip.batch, drip_interval_minutes: drip.interval } : {}),
+                    drip_batch_size: drip.batch,
+                    drip_interval_minutes: drip.interval,
                 })
                 .select()
                 .single()
@@ -548,17 +588,10 @@ export default function CampagnaMarketingTab() {
                 .insert(recipientRows)
             if (recErr) throw recErr
 
-            if (drip) {
-                // Drip: NON inviare dal browser. Il cron rilascia gli scaglioni
-                // (drip_batch_size ogni drip_interval_minutes) finché finisce.
-                toast.success(`Invio automatico avviato: ${drip.batch} ogni ${drip.interval >= 60 ? `${drip.interval / 60} ${drip.interval === 60 ? 'ora' : 'ore'}` : `${drip.interval} min`}. Il sistema invierà a scaglioni.`)
-            } else {
-                // Browser-driven chunked send: keeps calling the chunk endpoint
-                // until 'done: true'. Stays under Netlify's 10s function timeout
-                // and works on the free tier (no background functions needed).
-                await runChunkedSend(campaign.id, recipients.length)
-                toast.success('Campagna inviata.')
-            }
+            // Drip: NON inviare dal browser. Il cron rilascia gli scaglioni
+            // (al massimo LIMITE_MESSAGGI_ORA l'ora, fascia 9-21) finché finisce.
+            // Si puo' chiudere la pagina: la coda resta nel database.
+            toast.success(`Campagna in coda: ${recipients.length} destinatari, ${FREQUENZA_TESTO}.${fine ? ` Fine stimata ${formattaDataOraRoma(fine)}.` : ''}`, { duration: 8000 })
 
             setTitle('')
             setMessage('')
@@ -655,84 +688,57 @@ export default function CampagnaMarketingTab() {
         }
     }
 
-    // Drives chunked sending: calls the chunk endpoint repeatedly until
-    // 'done: true'. Updates a toast with live progress so the operator
-    // sees X/Y as the run progresses.
-    async function runChunkedSend(campaignId: string, total: number) {
-        const toastId = `send-${campaignId}`
-        let lastSent = 0
-        let lastFailed = 0
-        let stalled = 0
-        toast.loading(`Invio in corso 0/${total}...`, { id: toastId })
-
-        for (let i = 0; i < 1000; i++) {
-            const res = await fetch('/.netlify/functions/send-whatsapp-campaign-chunk', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ campaignId }),
-            })
-            let result: any = null
-            try { result = await res.json() } catch { /* ignore */ }
-            if (!res.ok) {
-                toast.dismiss(toastId)
-                throw new Error(result?.error || `HTTP ${res.status}`)
-            }
-            const sentCount = result.sent_count ?? lastSent
-            const failedCount = result.failed_count ?? lastFailed
-            toast.loading(`Invio in corso: ${sentCount} inviati, ${failedCount} falliti, ${result.remaining ?? '?'} in attesa...`, { id: toastId })
-            loadCampaigns()
-
-            if (result.done) {
-                toast.dismiss(toastId)
-                return
-            }
-            // Detect a stalled run (no progress for 3 consecutive chunks) and bail
-            if (sentCount === lastSent && failedCount === lastFailed && result.processed === 0) {
-                stalled++
-                if (stalled >= 3) {
-                    toast.dismiss(toastId)
-                    throw new Error('Invio bloccato: nessun progresso. Controlla Green API e i log.')
-                }
-            } else {
-                stalled = 0
-            }
-            lastSent = sentCount
-            lastFailed = failedCount
-            await new Promise(r => setTimeout(r, 200))
-        }
-        toast.dismiss(toastId)
-    }
-
-    // @ts-expect-error -- kept for future re-enable; deliberately unused while CAMPAIGN_SENDS_ENABLED is false
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async function _handleResume(campaign: CampaignRow) {
+    // 07/11/2026: prima "Riprova" rimandava dal browser a tutti di fila
+    // (runChunkedSend) ed era sospeso. Ora rimette in coda SOLO i falliti:
+    // ripartono col cron, con la stessa frequenza automatica. I "falliti" non
+    // si rimandano da soli perche' l'esito e' incerto (possibile doppione):
+    // decide l'admin.
+    async function handleResume(campaign: CampaignRow) {
         const { count: retryable } = await supabase
             .from('marketing_campaign_recipients')
             .select('id', { count: 'exact', head: true })
             .eq('campaign_id', campaign.id)
-            .in('status', ['pending', 'failed'])
+            .eq('status', 'failed')
         if (!retryable || retryable === 0) {
-            toast('Nessun destinatario da riprovare')
+            toast('Nessun destinatario fallito da rimettere in coda')
             return
         }
-        if (!confirm(`Riprovare l'invio a ${retryable} destinatari (pending + falliti)?`)) return
+        if (!confirm(`Rimettere in coda ${retryable} destinatari falliti?\n\nAttenzione: per alcuni l'esito era incerto, potrebbero ricevere il messaggio due volte.\nInvio automatico: ${FREQUENZA_TESTO}.`)) return
 
         try {
-            // Reset failed → pending so they get picked up by the chunk loop
-            await supabase
+            const { error: recErr } = await supabase
                 .from('marketing_campaign_recipients')
                 .update({ status: 'pending', error_message: null })
                 .eq('campaign_id', campaign.id)
                 .eq('status', 'failed')
-
-            await runChunkedSend(campaign.id, retryable)
-            toast.success('Riprova completata.')
+            if (recErr) throw recErr
+            const { error: campErr } = await supabase
+                .from('marketing_campaigns')
+                .update({ status: 'pending', completed_at: null })
+                .eq('id', campaign.id)
+            if (campErr) throw campErr
+            toast.success(`${retryable} destinatari rimessi in coda.`)
             loadCampaigns()
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Errore riprova: ${msg}`)
+            toast.error(`Errore: ${errMsg(err)}`)
         }
     }
+
+    // Stima di fine per ogni campagna in coda: il cron le smaltisce dalla piu'
+    // vecchia, quindi ognuna finisce dopo quelle create prima di lei.
+    const fineStimata = useMemo(() => {
+        const mappa = new Map<string, Date | null>()
+        const inCorso = campaigns
+            .filter(c => c.status === 'pending' || c.status === 'sending')
+            .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        let cumulati = 0
+        const adesso = new Date()
+        for (const c of inCorso) {
+            cumulati += Math.max(0, (c.total_recipients || 0) - (c.sent_count || 0) - (c.failed_count || 0))
+            mappa.set(c.id, stimaFineInvio(cumulati, adesso))
+        }
+        return mappa
+    }, [campaigns])
 
     // Apply tier / DR7 Club filters BEFORE search + pagination so the
     // counts shown ("Seleziona tutti", "Selezionati") reflect what will
@@ -1006,45 +1012,44 @@ export default function CampagnaMarketingTab() {
 
                     <div className="pt-2 border-t border-theme-border space-y-3">
                         {/* 2026-07-18: Frequenza invio — Manuale o Automatica (drip). */}
-                        {!scheduleEnabled && (
-                            <div className="flex flex-wrap items-center gap-3">
-                                <span className="text-xs font-semibold text-theme-text-secondary">Frequenza:</span>
-                                <div className="inline-flex rounded-full border border-theme-border overflow-hidden">
-                                    <button type="button" onClick={() => setSendMode('manual')}
-                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${sendMode === 'manual' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
-                                        Manuale
-                                    </button>
-                                    <button type="button" onClick={() => setSendMode('auto')}
-                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${sendMode === 'auto' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
-                                        Automatica
-                                    </button>
-                                </div>
-                                {sendMode === 'auto' && (
-                                    <select value={dripIdx} onChange={(e) => setDripIdx(Number(e.target.value))}
-                                        className="px-3 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs">
-                                        {DRIP_PRESETS.map((p, i) => <option key={i} value={i}>{p.label}</option>)}
-                                    </select>
-                                )}
+                        {/* 07/11/2026: frequenza solo automatica, uguale per tutti gli invii massivi. */}
+                        <div className="rounded-lg border border-theme-border bg-theme-bg-secondary p-3 space-y-1">
+                            <div className="text-xs font-semibold text-theme-text-primary">
+                                Frequenza automatica: {FREQUENZA_TESTO} (ora italiana)
                             </div>
-                        )}
+                            <div className="text-xs text-theme-text-muted">
+                                Ogni invio va in coda e parte da solo, anche a pagina chiusa. Quello che non parte oggi continua domani alle {String(FASCIA_ORA_DA).padStart(2, '0')}:00. Ogni cliente riceve il messaggio una sola volta.
+                            </div>
+                            {statoCoda && (
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-theme-text-secondary pt-1">
+                                    <span>In coda: <span className="font-semibold text-theme-text-primary">{statoCoda.inCoda}</span></span>
+                                    <span>Inviati nell'ultima ora: <span className="font-semibold text-theme-text-primary">{statoCoda.inviatiUltimaOra}/{LIMITE_MESSAGGI_ORA}</span></span>
+                                    {statoCoda.inCoda > 0 && (() => {
+                                        const fine = stimaFineInvio(statoCoda.inCoda)
+                                        return fine ? <span>Fine stimata: <span className="font-semibold text-theme-text-primary">{formattaDataOraRoma(fine)}</span></span> : null
+                                    })()}
+                                    {statoCoda.inCoda > 0 && !inFasciaInvio() && (
+                                        <span className="text-amber-600 dark:text-amber-400">Fuori fascia: si riparte alle {String(FASCIA_ORA_DA).padStart(2, '0')}:00</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
                         <div className="flex items-center justify-between">
                             <div className="text-sm text-theme-text-muted">
                                 {scheduleEnabled
                                     ? <>Modalità: <span className="font-bold text-dr7-gold">Programmazione</span></>
-                                    : sendMode === 'auto'
-                                        ? <>Invio automatico a scaglioni</>
-                                        : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
+                                    : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
                                 }
                             </div>
                             <Button onClick={() => handleSend()}>
                                 {scheduleEnabled
                                     ? (recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza')
-                                    : sendMode === 'auto' ? 'Avvia invio automatico' : 'Invia ora'}
+                                    : 'Metti in coda'}
                             </Button>
                         </div>
-                        {/* Invio rapido a un numero di destinatari (solo modalità Manuale). */}
-                        {!scheduleEnabled && sendMode === 'manual' && (
+                        {/* Invio rapido a un numero di destinatari (anche questi in coda). */}
+                        {!scheduleEnabled && (
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs text-theme-text-muted">
                                     Invio rapido{selectedIds.size > 0 ? ` (su ${selectedIds.size} selezionati)` : ` (idonei: ${eligible.length})`}:
@@ -1258,7 +1263,7 @@ export default function CampagnaMarketingTab() {
                     <h3 className="font-semibold text-theme-text-primary">Storico campagne</h3>
                     <Button variant="secondary" onClick={loadCampaigns}>Aggiorna</Button>
                 </div>
-                {loadingCampaigns ? (
+                {loadingCampaigns && campaigns.length === 0 ? (
                     <ScheletroTabella righe={6} colonne={5} className="my-4" />
                 ) : (
                     <table className="w-full text-sm">
@@ -1270,6 +1275,7 @@ export default function CampagnaMarketingTab() {
                                 <th className="p-3 text-left">Destinatari</th>
                                 <th className="p-3 text-left">Inviati</th>
                                 <th className="p-3 text-left">Falliti</th>
+                                <th className="p-3 text-left">In coda</th>
                                 <th className="p-3 text-left">Stato</th>
                                 <th className="p-3 text-right">Azioni</th>
                             </tr>
@@ -1279,7 +1285,12 @@ export default function CampagnaMarketingTab() {
                                 // Show Riprova whenever there's any unsent work — covers stuck
                                 // 'sending' campaigns (bg function died) AND completed campaigns
                                 // with failures. Click handler bails out if nothing's actually retryable.
-                                const canResume = c.sent_count < c.total_recipients
+                                // 07/11/2026: i rimasti partono da soli (coda + cron); il
+                                // bottone serve solo per rimettere in coda i falliti.
+                                const inFlight = c.status === 'pending' || c.status === 'sending'
+                                const rimanenti = Math.max(0, (c.total_recipients || 0) - (c.sent_count || 0) - (c.failed_count || 0))
+                                const fine = inFlight ? fineStimata.get(c.id) : null
+                                const canResume = !inFlight && (c.failed_count || 0) > 0
                                 return (
                                 <tr key={c.id} className="hover:bg-theme-bg-hover/50">
                                     <td className="p-3 text-theme-text-muted text-xs">
@@ -1294,6 +1305,7 @@ export default function CampagnaMarketingTab() {
                                     <td className="p-3">{c.total_recipients}</td>
                                     <td className="p-3 text-green-400">{c.sent_count}</td>
                                     <td className="p-3 text-red-400">{c.failed_count}</td>
+                                    <td className="p-3 text-theme-text-primary">{inFlight ? rimanenti : '-'}</td>
                                     <td className="p-3">
                                         <span className={`px-2 py-0.5 rounded-full text-xs ${
                                             c.status === 'completed' ? 'bg-green-600/20 text-green-400' :
@@ -1303,15 +1315,21 @@ export default function CampagnaMarketingTab() {
                                         }`}>
                                             {c.status}
                                         </span>
+                                        {fine && (
+                                            <div className="text-[11px] text-theme-text-muted mt-1 whitespace-nowrap">
+                                                Fine stimata {formattaDataOraRoma(fine)}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="p-3 text-right">
                                         {canResume && (
                                             <button
-                                                disabled
-                                                title="Invio sospeso temporaneamente"
-                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-600 text-gray-300 cursor-not-allowed whitespace-nowrap"
+                                                type="button"
+                                                onClick={() => handleResume(c)}
+                                                title="Rimette in coda i destinatari falliti, con la stessa frequenza automatica"
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-secondary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover whitespace-nowrap"
                                             >
-                                                Sospeso
+                                                Rimetti in coda i falliti
                                             </button>
                                         )}
                                     </td>
@@ -1319,7 +1337,7 @@ export default function CampagnaMarketingTab() {
                                 )
                             })}
                             {campaigns.length === 0 && (
-                                <tr><td colSpan={8} className="p-6 text-center text-theme-text-muted">Nessuna campagna ancora inviata</td></tr>
+                                <tr><td colSpan={9} className="p-6 text-center text-theme-text-muted">Nessuna campagna ancora inviata</td></tr>
                             )}
                         </tbody>
                     </table>

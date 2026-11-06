@@ -23,6 +23,7 @@ import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
+import { inFasciaInvio, INVII_PER_GIRO } from '../../src/utils/campagneFrequenza'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -292,19 +293,20 @@ async function materialiseRun(
     return { runCampaignId, recipientCount: audience.length }
 }
 
-const FASCIA_INVIO = { da: 9, a: 21 }
-
-function inFasciaInvio(): boolean {
-    const ora = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date()))
-    return ora >= FASCIA_INVIO.da && ora < FASCIA_INVIO.a
-}
-
+// 07/11/2026 (direzione): fascia 9-21 e tetto 50/ora valgono per OGNI invio
+// massivo, non piu' solo per le campagne "a scaglioni". I limiti stanno in
+// src/utils/campagneFrequenza.ts; il tetto lo fa rispettare
+// send-whatsapp-campaign-chunk (su tutte le campagne insieme). Qui: niente
+// giri fuori fascia e al massimo INVII_PER_GIRO invii per giro, cosi' i 50
+// dell'ora si spalmano sull'ora intera.
 async function pumpChunkLoop(deadline: number) {
     if (!SITE_URL) return
+    if (!inFasciaInvio()) return
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
     })
-    while (Date.now() < deadline) {
+    let inviatiNelGiro = 0
+    while (Date.now() < deadline && inviatiNelGiro < INVII_PER_GIRO) {
         // 2026-07-18: drip/frequenza. Prendi più candidate e scegli la prima che
         // NON ha già raggiunto il tetto per la finestra (drip_batch_size ogni
         // drip_interval_minutes). Le campagne senza drip inviano senza limiti.
@@ -359,12 +361,17 @@ async function pumpChunkLoop(deadline: number) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ campaignId: chosenId }),
             })
-            const result = await res.json().catch(() => ({} as { done?: boolean }))
+            const result = await res.json().catch(() => ({} as { done?: boolean })) as { done?: boolean; throttled?: string; processed?: number }
             if (!res.ok) {
                 console.warn('[process-scheduled-campaigns-cron] chunk call non-200, stopping pump:', res.status)
                 return
             }
             if (result?.done) continue
+            // Fuori fascia, tetto dell'ora raggiunto, bot non disponibile o
+            // invio ancora in corso altrove: si riprova al prossimo giro.
+            if (result?.throttled) return
+            inviatiNelGiro += Number(result?.processed) || 0
+            if (!result?.processed) return
         } catch (e) {
             console.warn('[process-scheduled-campaigns-cron] chunk call threw, stopping pump:', e)
             return
