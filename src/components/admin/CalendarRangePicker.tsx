@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 // 2026-06-06: calendario a griglia per selezionare un intervallo arbitrario
 // (random range) cliccando le date. Volutamente NON usa <input type="date">
@@ -39,6 +40,11 @@ function mondayIndex(jsDay: number): number {
 export default function CalendarRangePicker({ from, to, onChange, className }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  // 09/11/2026: il calendario si apre in un portale sul body, in posizione
+  // fissa sotto il bottone: dentro la barra finiva SOTTO le card successive
+  // (es. "Nuovi Clienti" nel Report Clienti), che creano un proprio livello.
+  const popRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
   // Mese visualizzato nella griglia. Inizializzato sul "from" se presente.
   const initView = from ? new Date(from + 'T00:00:00') : new Date()
@@ -57,10 +63,38 @@ export default function CalendarRangePicker({ from, to, onChange, className }: P
   useEffect(() => {
     if (!open) return
     function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (ref.current?.contains(t) || popRef.current?.contains(t)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  // Posizione del calendario: sotto il bottone; se sotto non c'e' spazio,
+  // sopra. Mai fuori dallo schermo in orizzontale. Segue scroll e resize.
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return }
+    function calcola() {
+      const b = ref.current?.getBoundingClientRect()
+      if (!b) return
+      const larg = popRef.current?.offsetWidth || 288
+      const alt = popRef.current?.offsetHeight || 360
+      const margine = 8
+      let top = b.bottom + margine
+      if (top + alt > window.innerHeight - margine && b.top - margine - alt >= margine) top = b.top - margine - alt
+      const left = Math.max(margine, Math.min(b.left, window.innerWidth - larg - margine))
+      setPos({ top, left })
+    }
+    calcola()
+    const raf = requestAnimationFrame(calcola)
+    window.addEventListener('resize', calcola)
+    window.addEventListener('scroll', calcola, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', calcola)
+      window.removeEventListener('scroll', calcola, true)
+    }
   }, [open])
 
   // Stato interno di selezione: dopo il primo click teniamo solo "anchor"
@@ -122,8 +156,12 @@ export default function CalendarRangePicker({ from, to, onChange, className }: P
         {buttonLabel}
       </button>
 
-      {open && (
-        <div className="absolute top-full left-0 mt-2 z-30 w-72 p-3 rounded-xl border border-theme-border bg-theme-bg-primary shadow-lg">
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
+          className="z-[10000] w-72 p-3 rounded-xl border border-theme-border bg-theme-bg-primary shadow-lg"
+        >
           {/* Header: navigazione mese */}
           <div className="flex items-center justify-between mb-2">
             <button
@@ -187,7 +225,8 @@ export default function CalendarRangePicker({ from, to, onChange, className }: P
               className="px-3 py-1 text-xs font-medium rounded-full bg-dr7-gold text-white hover:opacity-90"
             >Applica</button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
