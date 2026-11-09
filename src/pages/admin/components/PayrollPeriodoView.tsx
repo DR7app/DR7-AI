@@ -4,7 +4,8 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
 import { caricaAccontiPeriodo, totaleAcconti, vedeTuttiGliAcconti, type AccontoBustaPaga } from '../../../utils/accontiBustaPaga'
-import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
+import { fetchPauseConfigAttive } from '../../../utils/pauseObbligatorie'
+import { caricaTimbraturePeriodo, costruisciGiornate, calcolaBustaPaga, giorniDelPeriodo, type TimbraturaBustaPaga } from '../../../utils/bustaPaga'
 import OperatorProfileModal from './OperatorProfileModal'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { tariffaGiornaliera, type FrequenzaStipendio } from '../../../utils/pagaGiornaliera'
@@ -161,26 +162,19 @@ export default function PayrollPeriodoView() {
             }
 
             // 3. Timesheet del range
-            const { data: entries, error: errEntries } = await supabase
-                .from('timesheet_entries')
-                .select('operatore_id, tipo, timestamp, data')
-                .gte('data', from)
-                .lte('data', to)
-                .order('timestamp', { ascending: true })
-            if (errEntries) throw new Error(`Timbrature: ${errEntries.message}`)
-
-            // Group entries by operator → day
-            const byOpDay = new Map<string, Map<string, { entrata: string | null; uscita: string | null; pi: string[]; pf: string[] }>>()
-            for (const e of (entries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
-                if (!byOpDay.has(e.operatore_id)) byOpDay.set(e.operatore_id, new Map())
-                const dayMap = byOpDay.get(e.operatore_id)!
-                const cur = dayMap.get(e.data) || { entrata: null, uscita: null, pi: [], pf: [] }
-                if (e.tipo === 'entrata') cur.entrata = e.timestamp
-                else if (e.tipo === 'uscita') cur.uscita = e.timestamp
-                else if (e.tipo === 'pausa_inizio') cur.pi.push(e.timestamp)
-                else if (e.tipo === 'pausa_fine') cur.pf.push(e.timestamp)
-                dayMap.set(e.data, cur)
+            // 09/11/2026: TUTTE le timbrature, paginate. Prima era una sola
+            // richiesta per tutti gli operatori: PostgREST si ferma a 1000 righe,
+            // gli ultimi giorni del mese sparivano per tutti e la lista dava ore
+            // e paga piu' basse del dettaglio. Ora filtrate per operatore e lette
+            // con la stessa funzione del dettaglio (utils/bustaPaga.ts).
+            const { data: entries, error: errEntries } = await caricaTimbraturePeriodo(from, to, opList.map(o => o.id))
+            if (errEntries) throw new Error(`Timbrature: ${errEntries}`)
+            const entriesByOp = new Map<string, TimbraturaBustaPaga[]>()
+            for (const e of entries) {
+                if (!entriesByOp.has(e.operatore_id)) entriesByOp.set(e.operatore_id, [])
+                entriesByOp.get(e.operatore_id)!.push(e)
             }
+            const giorni = giorniDelPeriodo(from, to)
 
             // 2026-08-02 (#32): pausa obbligatoria da contratto. Le buste paga la
             // ignoravano del tutto: un operatore con pausa fissa di 60 min non
@@ -202,123 +196,16 @@ export default function PayrollPeriodoView() {
             // 5. Calcolo per ogni operatore
             const result: PayrollRow[] = opList.map(op => {
                 const c = contractByOp.get(op.id) || null
-                const dayMap = byOpDay.get(op.id)
-                let totalMinLav = 0
-                let minOrdinari = 0
-                let minStraord = 0
-                let giornatePagate = 0
-                // 2026-05-22: paga oraria DERIVATA dal pacchetto contrattuale
-                // se non c'e' paga_oraria_eur esplicita. Es. contratto
-                // €1000/sett + 47h/sett → derived = 21.28€/h.
-                const oraExplicit = Number(c?.paga_oraria_eur || 0)
-                const stipendio = Number(c?.stipendio_mensile_eur || 0)
-                const freq = c?.stipendio_frequenza
-                const orariaDerived = (() => {
-                    if (oraExplicit > 0) return 0
-                    if (stipendio <= 0) return 0
-                    if (tariffaGiornaliera(c) > 0) return 0  // a giornata: si paga per giorno
-                    const settH = Number(c?.ore_target_settimanali || 0)
-                    const mensH = Number(c?.ore_target_mensili || 0)
-                    const giornH = Number(c?.ore_target_giornaliere || 0)
-                    if (freq === 'settimanale' && settH > 0) return stipendio / settH
-                    if (freq === 'mensile' && mensH > 0) return stipendio / mensH
-                    if (freq === 'mensile' && settH > 0) return stipendio / (settH * 4.33)
-                    if (freq === 'mensile' && giornH > 0) return stipendio / (giornH * 22)
-                    if (settH > 0) return stipendio / settH
-                    if (mensH > 0) return stipendio / mensH
-                    if (giornH > 0) return stipendio / (giornH * 22)
-                    return 0
-                })()
-                const oraria = oraExplicit > 0 ? oraExplicit : orariaDerived
-                const straord = Number(c?.paga_straordinario_eur || 0)
-                // 2026-06-01: STRAORDINARIO = supera la soglia GIORNALIERA (8h)
-                // OPPURE la SETTIMANALE (40h) — qualunque venga superata, senza
-                // doppio conteggio. Stesso calcolo del CalcolaPagaSection del
-                // profilo operatore (devono coincidere). Prima qui si usava SOLO
-                // una soglia giornaliera implicita (settimanali/5) per-giorno:
-                // per Salvatore (40h/sett, 6×8h=48h) dava 0 straord — sbagliato,
-                // la settimana supera 40h ⇒ 8h di straordinario.
-                // 2026-06-01: cap GIORNALIERO solo se esplicitamente configurato
-                // (soglia o ore_target_giornaliere). Se l'operatore ha SOLO il
-                // settimanale (Salvatore 40h/sett), niente cap 8h/giorno inventato:
-                // altrimenti un giorno >8h in una settimana ≤40h genererebbe
-                // straordinario inesistente. "Single field": vale solo la soglia
-                // impostata.
-                const dailyExplicit = c?.ore_soglia_straordinario ?? c?.ore_target_giornaliere
-                const dailyCapMin = (dailyExplicit != null && Number(dailyExplicit) > 0)
-                    ? Math.round(Number(dailyExplicit) * 60)
-                    : 0
-                const weeklyCapMin = (c?.ore_target_settimanali != null && c.ore_target_settimanali > 0)
-                    ? Math.round(c.ore_target_settimanali * 60)
-                    : 0
-                const sogliaMin = weeklyCapMin > 0 ? weeklyCapMin : dailyCapMin
-                const straordEnabled = c?.straordinario_abilitato !== false && straord > 0 && sogliaMin > 0
-
-                // ISO week key (YYYY-Www) — raggruppa giorni nella stessa settimana
-                const isoWeekKey = (dateStr: string): string => {
-                    const d = new Date(dateStr + 'T12:00:00Z')
-                    const day = d.getUTCDay() || 7
-                    d.setUTCDate(d.getUTCDate() + 4 - day)
-                    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-                    const weekNum = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-                    return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
-                }
-
-                if (dayMap) {
-                    // 1) minuti per giorno + straord giornaliero, raggruppati per settimana
-                    const weekTotal = new Map<string, number>()
-                    const weekDailyOT = new Map<string, number>()
-                    const pauseCfg = pauseCfgByOp.get(op.id)
-                    dayMap.forEach((t, dataKey) => {
-                        if (!t.entrata) return
-                        const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
-                        const lordo = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
-                        const manualiISO: { inizio: string; fine: string }[] = []
-                        for (let i = 0; i < t.pi.length; i++) {
-                            if (t.pf[i]) manualiISO.push({ inizio: t.pi[i], fine: t.pf[i] })
-                        }
-                        // Modello PER-FASCIA (#32): la pausa a mano sostituisce SOLO la
-                        // fascia di contratto che sovrappone; le altre fasce restano.
-                        // scalateMin = pause a mano (sempre) + contratto non-sovrapposto
-                        // (solo se non pagata).
-                        const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfg, dataKey)
-                        const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbl, t.uscita)
-                        const m = Math.max(0, lordo - combo.scalateMin)
-                        totalMinLav += m
-                        if (m <= 0) return
-                        if (t.uscita) giornatePagate++
-                        // Spezza la settimana al confine di MESE: i giorni della stessa
-                        // settimana ISO ma in mesi diversi vanno in bucket separati. Così
-                        // una settimana a cavallo (es. fine giugno / inizio luglio) NON
-                        // somma le ore dei due mesi e non genera straordinario fittizio:
-                        // 40h/sett viene misurato dentro al mese, le ore restano normali.
-                        const wk = isoWeekKey(dataKey) + '|' + dataKey.slice(0, 7)
-                        weekTotal.set(wk, (weekTotal.get(wk) || 0) + m)
-                        if (straordEnabled && dailyCapMin > 0 && m > dailyCapMin) {
-                            const dayOT = m - dailyCapMin
-                            weekDailyOT.set(wk, (weekDailyOT.get(wk) || 0) + dayOT)
-                            minStraord += dayOT
-                        }
-                    })
-                    // 2) straord settimanale residuo (oltre 40h, tolto il daily-OT)
-                    if (straordEnabled && weeklyCapMin > 0) {
-                        for (const [wk, total] of weekTotal) {
-                            const overWeek = total > weeklyCapMin ? total - weeklyCapMin : 0
-                            const alreadyDaily = weekDailyOT.get(wk) || 0
-                            minStraord += Math.max(0, overWeek - alreadyDaily)
-                        }
-                    }
-                    minOrdinari = Math.max(0, totalMinLav - minStraord)
-                }
-
-                // 21/10/2026: contratto a GIORNATA — giornata timbrata = pagata
-                // intera, niente decurtazione ore a recuperare (pagaGiornaliera.ts).
-                const tariffaGiorno = tariffaGiornaliera(c)
-                const pagaOrd = tariffaGiorno > 0 ? giornatePagate * tariffaGiorno : (minOrdinari / 60) * oraria
-                const pagaStraord = (minStraord / 60) * straord
-                const oreRec = Number(op.ore_a_recuperare_min || 0)
-                const correzione = tariffaGiorno > 0 ? 0 : -(oreRec / 60) * oraria
-                const totale = pagaOrd + pagaStraord + correzione
+                // 09/11/2026: stesso calcolo del dettaglio (Calcola Paga della scheda
+                // operatore), una sola funzione: giornate con pause per-fascia
+                // (#32, 2026-08-02), paga oraria esplicita o derivata (2026-05-22),
+                // straordinario giornaliero/settimanale senza doppio conteggio e
+                // settimana spezzata a fine mese (2026-06-01), contratto a giornata
+                // (21/10/2026). Prima qui c'era una copia del calcolo che arrotondava
+                // i minuti in modo diverso dal dettaglio.
+                const giornate = costruisciGiornate(entriesByOp.get(op.id) || [], giorni, pauseCfgByOp.get(op.id))
+                const calc = calcolaBustaPaga(giornate, c, Number(op.ore_a_recuperare_min || 0))
+                const { minLavorati: totalMinLav, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, oraria } = calc
                 const accontiRighe = acconti.perOperatore.get(op.id) || []
                 const accontiEur = totaleAcconti(accontiRighe)
 
