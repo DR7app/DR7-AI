@@ -23,7 +23,7 @@ import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
-import { inFasciaInvio, INVII_PER_GIRO } from '../../src/utils/campagneFrequenza'
+import { inFasciaInvio, INVII_PER_GIRO, filtriGiroMessaggiSistema } from '../../src/utils/campagneFrequenza'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -299,12 +299,35 @@ async function materialiseRun(
 // send-whatsapp-campaign-chunk (su tutte le campagne insieme). Qui: niente
 // giri fuori fascia e al massimo INVII_PER_GIRO invii per giro, cosi' i 50
 // dell'ora si spalmano sull'ora intera.
-async function pumpChunkLoop(deadline: number) {
+// 09/11/2026: la coda smaltisce anche i giri "Tutti i clienti" di Messaggi
+// Sistema Pro (audience AUDIENCE_MESSAGGI_SISTEMA): stesso tetto e stessa
+// fascia. `attive` dice quali origini possono partire in questo giro: le
+// campagne seguono l'interruttore campagne_marketing, i messaggi di sistema
+// messaggi_automatici, e un messaggio spento (o tolto dal cron) resta in coda
+// senza fermare gli altri.
+async function pumpChunkLoop(deadline: number, attive: { campagne: boolean; messaggiSistema: boolean }) {
     if (!SITE_URL) return
     if (!inFasciaInvio()) return
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
     })
+    // Messaggi di sistema accesi per il cron (is_enabled + cron_approved), letti una volta.
+    let messaggiAccesi: Set<string> | null = null
+    const messaggioAcceso = async (id: string): Promise<boolean> => {
+        if (!messaggiAccesi) {
+            const { data, error } = await sb.from('system_messages')
+                .select('id')
+                .eq('is_enabled', true)
+                .eq('cron_approved', true)
+            if (error) {
+                console.warn('[process-scheduled-campaigns-cron] lettura messaggi di sistema fallita, giri di sistema in pausa:', error.message)
+                messaggiAccesi = new Set()
+            } else {
+                messaggiAccesi = new Set(((data as { id: string }[] | null) || []).map(r => r.id))
+            }
+        }
+        return messaggiAccesi.has(id)
+    }
     let inviatiNelGiro = 0
     while (Date.now() < deadline && inviatiNelGiro < INVII_PER_GIRO) {
         // 2026-07-18: drip/frequenza. Prendi più candidate e scegli la prima che
@@ -312,22 +335,22 @@ async function pumpChunkLoop(deadline: number) {
         // drip_interval_minutes). Le campagne senza drip inviano senza limiti.
         // RESILIENTE: se le colonne drip non esistono ancora (migration non
         // eseguita), fallback al comportamento classico senza limiti.
-        type DripCand = { id: string; drip_batch_size: number | null; drip_interval_minutes: number | null }
+        type DripCand = { id: string; drip_batch_size: number | null; drip_interval_minutes: number | null; audience?: string | null; audience_filters?: unknown }
         let candidates: DripCand[] = []
         const dripSel = await sb
             .from('marketing_campaigns')
-            .select('id, drip_batch_size, drip_interval_minutes')
+            .select('id, drip_batch_size, drip_interval_minutes, audience, audience_filters')
             .in('status', ['pending', 'sending'])
             .order('created_at', { ascending: true })
             .limit(25)
         if (dripSel.error) {
             const plain = await sb
                 .from('marketing_campaigns')
-                .select('id')
+                .select('id, audience, audience_filters')
                 .in('status', ['pending', 'sending'])
                 .order('created_at', { ascending: true })
                 .limit(25)
-            candidates = ((plain.data as { id: string }[] | null) || []).map(c => ({ id: c.id, drip_batch_size: null, drip_interval_minutes: null }))
+            candidates = ((plain.data as { id: string; audience?: string | null; audience_filters?: unknown }[] | null) || []).map(c => ({ ...c, drip_batch_size: null, drip_interval_minutes: null }))
         } else {
             candidates = (dripSel.data as DripCand[] | null) || []
         }
@@ -335,6 +358,17 @@ async function pumpChunkLoop(deadline: number) {
 
         let chosenId: string | null = null
         for (const c of candidates) {
+            const giroSistema = filtriGiroMessaggiSistema(c)
+            if (giroSistema) {
+                if (!attive.messaggiSistema) continue
+                // Messaggio eliminato: il chunk chiude il giro; spento: resta in coda.
+                const { count: esiste } = await sb.from('system_messages')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('id', giroSistema.system_message_id)
+                if ((esiste || 0) > 0 && !(await messaggioAcceso(giroSistema.system_message_id))) continue
+            } else if (!attive.campagne) {
+                continue
+            }
             const batch = Number(c.drip_batch_size) || 0
             const intervalMin = Number(c.drip_interval_minutes) || 0
             if (batch > 0 && intervalMin > 0) {
@@ -386,8 +420,12 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
     // Interruttore System Control: campagne spente = niente destinatari
     // preparati e niente invii; le campagne pianificate aspettano.
+    // 09/11/2026: la coda porta anche i giri "Tutti i clienti" di Messaggi
+    // Sistema Pro, che seguono l'interruttore messaggi_automatici: il giro
+    // salta solo se sono spenti entrambi.
     const ferma = await funzioneFerma('campagne_marketing')
-    if (ferma) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: ferma }) }
+    const fermaMessaggi = await funzioneFerma('messaggi_automatici')
+    if (ferma && fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: ferma }) }
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
     })
@@ -408,7 +446,8 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 
     let materialised = 0
-    for (const tpl of (due as CampaignRow[] | null) || []) {
+    // Campagne spente: quelle pianificate aspettano (nessun destinatario preparato).
+    for (const tpl of (ferma ? [] : (due as CampaignRow[] | null) || [])) {
         const result = await materialiseRun(sb, tpl)
         if (result) materialised++
     }
@@ -419,7 +458,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     // instead of ~1. Combined with the */2 cron schedule, this gives
     // ~90 messages/hour via cron when the browser tab is closed.
     const deadline = start + 25000
-    await pumpChunkLoop(deadline)
+    await pumpChunkLoop(deadline, { campagne: !ferma, messaggiSistema: !fermaMessaggi })
 
     return {
         statusCode: 200,

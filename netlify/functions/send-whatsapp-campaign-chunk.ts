@@ -5,7 +5,9 @@ import { nellaLinguaDelTelefono } from './utils/i18n'
 import { classificaRispostaGreenApi, leggiCorpo, type EsitoGreenApi } from "./utils/esitoGreenApi";
 import {
     LIMITE_MESSAGGI_ORA, FINESTRA_MINUTI, FASCIA_ORA_DA, FASCIA_ORA_A, PRESA_SCADE_MINUTI, inFasciaInvio,
+    filtriGiroMessaggiSistema,
 } from "../../src/utils/campagneFrequenza";
+import { inviaDestinatarioMessaggiSistema } from "./utils/codaInviiMassivi";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -103,11 +105,8 @@ export const handler: Handler = async (event) => {
             }),
         };
     }
-    // Interruttore System Control: campagne spente = nessun messaggio inviato.
-    const ferma = await funzioneFerma("campagne_marketing");
-    if (ferma) {
-        return { statusCode: 503, body: JSON.stringify({ error: ferma }) };
-    }
+    // Interruttore System Control campagne_marketing / messaggi_automatici:
+    // si guarda dopo aver letto la campagna (dipende dall'origine del giro).
     // Interruttore System Control: WhatsApp spento = nessun messaggio (i
     // destinatari restano da inviare e ripartono alla riaccensione).
     const fermaWa = await funzioneFerma("invio_whatsapp");
@@ -140,6 +139,35 @@ export const handler: Handler = async (event) => {
     const { data: camp, error: campErr } = await sb.from("marketing_campaigns").select("*").eq("id", campaignId).single();
     if (campErr || !camp) {
         return { statusCode: 404, body: JSON.stringify({ error: "Campagna non trovata" }) };
+    }
+
+    // 09/11/2026: la stessa coda smaltisce anche i giri "Tutti i clienti" di
+    // Messaggi Sistema Pro (stesso tetto di 50/ora, stessa fascia). Per quelli
+    // vale l'interruttore dei messaggi automatici, non quello delle campagne,
+    // e il messaggio spento (o tolto dal cron) ferma gli invii rimasti.
+    const giroSistema = filtriGiroMessaggiSistema(camp);
+    const ferma = await funzioneFerma(giroSistema ? "messaggi_automatici" : "campagne_marketing");
+    if (ferma) {
+        return { statusCode: 503, body: JSON.stringify({ error: ferma }) };
+    }
+    if (giroSistema) {
+        const { data: tplAttivo, error: tplErr } = await sb.from("system_messages")
+            .select("id, is_enabled, cron_approved")
+            .eq("id", giroSistema.system_message_id)
+            .maybeSingle();
+        if (tplErr) {
+            return { statusCode: 500, body: JSON.stringify({ error: `Lettura messaggio di sistema: ${tplErr.message}` }) };
+        }
+        if (!tplAttivo) {
+            // Messaggio eliminato: chi era in coda non lo ricevera' piu'. Si
+            // chiude il giro (i destinatari restano visibili come saltati).
+            await sb.from("marketing_campaign_recipients")
+                .update({ status: "skipped", error_message: "Messaggio di sistema eliminato" })
+                .eq("campaign_id", campaignId)
+                .eq("status", "pending");
+        } else if (!(tplAttivo.is_enabled === true && tplAttivo.cron_approved === true)) {
+            return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "messaggio_spento", processed: 0 }) };
+        }
     }
 
     const message: string = camp.message_text;
@@ -275,6 +303,41 @@ export const handler: Handler = async (event) => {
             await sb.from("marketing_campaign_recipients")
                 .update({ status: "skipped", error_message: "no/invalid phone", ...(conPresa ? { claimed_at: null } : {}) })
                 .eq("id", r.id);
+            continue;
+        }
+
+        // 09/11/2026: giro "Tutti i clienti" di Messaggi Sistema Pro. Stesso
+        // testo dell'invio diretto di prima (template, variabili, lingua):
+        // passa da send-whatsapp-notification, che in questo caso non mette
+        // nulla nella ripresa del System Control (decide la coda).
+        if (giroSistema) {
+            const esito = await inviaDestinatarioMessaggiSistema(giroSistema, message || "", r, phone);
+            if (esito.tipo === "inviato") {
+                chunkSent++;
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null })
+                    .eq("id", r.id);
+                await new Promise(res => setTimeout(res, PER_RECIPIENT_DELAY_MS));
+            } else if (esito.tipo === "rimetti_in_coda") {
+                // Sicuramente non partito: torna in coda, il giro si ferma qui.
+                istanzaNonDisponibile = esito.motivo;
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "pending", error_message: esito.motivo, ...(conPresa ? { claimed_at: null } : {}) })
+                    .eq("id", r.id);
+                break;
+            } else if (esito.tipo === "saltato") {
+                chunkFailed++;
+                chunkErrors.push(`${displayName}: ${esito.motivo}`);
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "skipped", error_message: esito.motivo.slice(0, 500) })
+                    .eq("id", r.id);
+            } else {
+                chunkFailed++;
+                chunkErrors.push(`${displayName}: ${esito.motivo}`);
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "failed", error_message: esito.motivo.slice(0, 500) })
+                    .eq("id", r.id);
+            }
             continue;
         }
 

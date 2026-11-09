@@ -89,3 +89,98 @@ export function formattaDataOraRoma(d: Date): string {
     hour: '2-digit', minute: '2-digit', hour12: false,
   })
 }
+
+// ── 09/11/2026 (direzione): "Tutti i clienti" di Messaggi Sistema Pro ──────
+//
+// Anche il broadcast "Tutti i clienti" passa dalla STESSA coda delle campagne
+// (marketing_campaign_recipients): un solo numero WhatsApp, quindi un solo
+// tetto di LIMITE_MESSAGGI_ORA l'ora per le due strade insieme. Ogni giro del
+// broadcast e' una riga di marketing_campaigns con questa audience; il legame
+// col template sta in audience_filters (nessuna colonna nuova da migrare).
+
+/** marketing_campaigns.audience dei giri accodati da Messaggi Sistema Pro. */
+export const AUDIENCE_MESSAGGI_SISTEMA = 'messaggi_sistema_pro'
+
+/** Cosa c'e' in audience_filters di un giro di Messaggi Sistema Pro. */
+export interface FiltriGiroMessaggiSistema {
+  system_message_id: string
+  message_key: string
+  /** 'template' = testo del template (send-whatsapp-notification con messageKey); 'testo' = testo gia' composto in message_text. */
+  modo: 'template' | 'testo'
+  /** Chiave del giro (es. ricorrenza + giorno): serve a leggere i log. */
+  chiave_giro?: string
+  /** Variabili extra del finto "booking" passate al template (es. targa). */
+  variabili?: Record<string, string>
+  /** Etichetta del messaggio (log di send-whatsapp-notification). */
+  etichetta?: string
+}
+
+export interface CampagnaInCoda {
+  id: string
+  created_at: string
+  status: string | null
+  total_recipients: number | null
+  sent_count: number | null
+  failed_count: number | null
+  audience?: string | null
+  audience_filters?: unknown
+}
+
+/** Il giro e' un broadcast di Messaggi Sistema Pro? Restituisce i suoi filtri. */
+export function filtriGiroMessaggiSistema(c: { audience?: string | null; audience_filters?: unknown }): FiltriGiroMessaggiSistema | null {
+  if (c.audience !== AUDIENCE_MESSAGGI_SISTEMA) return null
+  const f = c.audience_filters as Partial<FiltriGiroMessaggiSistema> | null | undefined
+  if (!f || typeof f !== 'object' || !f.system_message_id || !f.message_key) return null
+  return {
+    system_message_id: String(f.system_message_id),
+    message_key: String(f.message_key),
+    modo: f.modo === 'testo' ? 'testo' : 'template',
+    chiave_giro: f.chiave_giro ? String(f.chiave_giro) : undefined,
+    variabili: f.variabili && typeof f.variabili === 'object' ? f.variabili as Record<string, string> : undefined,
+    etichetta: f.etichetta ? String(f.etichetta) : undefined,
+  }
+}
+
+function rimanentiDi(c: CampagnaInCoda): number {
+  return Math.max(0, (Number(c.total_recipients) || 0) - (Number(c.sent_count) || 0) - (Number(c.failed_count) || 0))
+}
+
+export interface RiepilogoCodaMessaggio {
+  /** Destinatari del template ancora da inviare (giri in corso). */
+  inCoda: number
+  inviati: number
+  falliti: number
+  /** Messaggi di ALTRE campagne/broadcast che partono prima (coda condivisa). */
+  davanti: number
+  fineStimata: Date | null
+}
+
+/**
+ * Stato in coda del broadcast di un template. `attive` = TUTTE le campagne
+ * ancora in corso (pending/sending), di qualsiasi origine: la coda e' una sola
+ * e il cron la smaltisce dalla piu' vecchia, quindi la fine stimata conta
+ * anche quello che e' in coda prima.
+ */
+export function riepilogoCodaMessaggio(attive: CampagnaInCoda[], systemMessageId: string, adesso: Date = new Date()): RiepilogoCodaMessaggio {
+  const inCorso = attive
+    .filter(c => c.status === 'pending' || c.status === 'sending')
+    .slice()
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+  const delTemplate = (c: CampagnaInCoda) => filtriGiroMessaggiSistema(c)?.system_message_id === systemMessageId
+  let ultimo = -1
+  inCorso.forEach((c, i) => { if (delTemplate(c)) ultimo = i })
+  let inCoda = 0, inviati = 0, falliti = 0, davanti = 0, cumulati = 0
+  inCorso.forEach((c, i) => {
+    if (i > ultimo) return
+    const r = rimanentiDi(c)
+    cumulati += r
+    if (delTemplate(c)) {
+      inCoda += r
+      inviati += Number(c.sent_count) || 0
+      falliti += Number(c.failed_count) || 0
+    } else {
+      davanti += r
+    }
+  })
+  return { inCoda, inviati, falliti, davanti, fineStimata: inCoda > 0 ? stimaFineInvio(cumulati, adesso) : null }
+}

@@ -40,6 +40,7 @@ import { getAdminNotificationPhone } from './utils/notificationPhone';
 import { getEmailFromSmtp } from './utils/emailFrom'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
 import { recuperaRichiesteIbanMancanti } from './utils/richiestaIbanCauzione'
+import { accodaGiroMessaggiSistema } from './utils/codaInviiMassivi'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 import { settimanaDiTurno } from './utils/settimanaDiTurno';
@@ -216,6 +217,8 @@ interface ResolvedRecipient {
     nome: string;
     phone: string;
     email?: string | null;
+    /** customers_extended.id (solo "Tutti i clienti"): finisce nella coda invii. */
+    customerId?: string | null;
 }
 
 /** Normalizza un numero a sole cifre (Green API rifiuta i caratteri nascosti). */
@@ -267,11 +270,11 @@ async function resolveConfiguredRecipients(tpl: SystemMessage): Promise<Resolved
         // 2026-08-23: la select era senza paginazione, quindi PostgREST
         // tagliava a 1000 righe e i clienti oltre la millesima non ricevevano
         // MAI il messaggio — silenziosamente, senza errore.
-        const rows: Array<{ nome?: string; cognome?: string; telefono?: string; email?: string }> = [];
+        const rows: Array<{ id?: string; nome?: string; cognome?: string; telefono?: string; email?: string }> = [];
         for (let page = 0; page < 50; page++) {
             const { data: batch } = await supabase
                 .from('customers_extended')
-                .select('nome, cognome, telefono, email')
+                .select('id, nome, cognome, telefono, email')
                 .not('telefono', 'is', null)
                 .order('id', { ascending: true })
                 .range(page * 1000, page * 1000 + 999);
@@ -286,6 +289,7 @@ async function resolveConfiguredRecipients(tpl: SystemMessage): Promise<Resolved
                     nome: [c.nome, c.cognome].filter(Boolean).join(' ') || 'Cliente',
                     phone,
                     email: c.email || null,
+                    customerId: c.id || null,
                 });
             }
         }
@@ -375,6 +379,26 @@ async function processRecurringSchedule(
 
     const dayKey = getRomeParts(now).date;
     let sent = 0, skipped = 0, errors = 0;
+
+    // 09/11/2026 (direzione): "Tutti i clienti" non parte piu' a tutti di
+    // fila. Il giro entra nella coda degli invii massivi (la stessa delle
+    // Campagne Marketing): al massimo 50 l'ora per le due strade insieme,
+    // solo 9-21 ora di Roma, il resto il giorno dopo. Lo smaltisce
+    // process-scheduled-campaigns-cron. Un giro per (messaggio, giorno).
+    if ((tpl.recipient_mode || '').trim() === 'all_customers') {
+        const chiaveGiro = `coda-${tpl.id}-${dayKey}`;
+        const esito = await accodaGiroMessaggiSistema(supabase, {
+            tpl,
+            chiaveGiro,
+            logKey: dedupKey(chiaveGiro),
+            destinatari: recipients,
+            modo: 'template',
+            // Stesse variabili dell'invio diretto di prima.
+            variabili: { targa: tpl.target_plate || '', vehicle_plate: tpl.target_plate || '' },
+        });
+        console.log(`[scheduled-msgs] ricorrenza "${tpl.label}" (${dayKey}) "Tutti i clienti" -> coda invii: ${esito.esito}, accodati ${esito.accodati}, gia' in coda ${esito.giaInCoda}${esito.motivo ? ` (${esito.motivo})` : ''}`);
+        return { sent: 0, skipped: esito.esito === 'accodato' ? 0 : 1, errors: esito.esito === 'errore' ? 1 : 0 };
+    }
 
     for (const r of recipients) {
         // entityId = chiave di dedup: un invio per destinatario per giornata.
@@ -1100,6 +1124,27 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
         // barca non parte dai luoghi del Noleggio Terra.
         const rowId = USCITA_CONFIG_ROW[uscitaBusinessOfRow(booking)] || 'main';
         const luoghi = (luoghiPerBusiness[rowId]?.length ? luoghiPerBusiness[rowId] : luoghiPerBusiness['main']) || [];
+
+        // 09/11/2026: "Tutti i clienti" su un'uscita = invio massivo: in coda
+        // come gli altri (50/ora insieme alle campagne, 9-21). Il nome di
+        // ciascun cliente lo mette la coda al posto di {nome}.
+        if (mode === 'all_customers') {
+            const vars = uscitaTemplateVars(booking, '{nome}', bookingCollegato, luoghi);
+            let testo = rawBody;
+            for (const [k, v] of Object.entries(vars)) testo = testo.split(`{${k}}`).join(v);
+            const esito = await accodaGiroMessaggiSistema(supabase, {
+                tpl,
+                chiaveGiro: `coda-${tpl.id}-${booking.id}`,
+                // Stessa chiave di dedup dell'invio diretto: un'uscita, un giro.
+                logKey: String(booking.id),
+                destinatari: configured,
+                modo: 'testo',
+                testo,
+            });
+            console.log(`[scheduled-msgs] uscita ${booking.id} "Tutti i clienti" -> coda invii: ${esito.esito}, accodati ${esito.accodati}${esito.motivo ? ` (${esito.motivo})` : ''}`);
+            if (esito.esito === 'errore') errors++; else if (esito.esito !== 'accodato') skipped++;
+            continue;
+        }
 
         const autisti = Array.isArray(booking.booking_details.uscita.autisti)
             ? booking.booking_details.uscita.autisti as Array<{ full_name?: string; phone?: string }>

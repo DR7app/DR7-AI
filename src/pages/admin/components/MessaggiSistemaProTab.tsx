@@ -10,6 +10,7 @@ import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import ElencoTelefoniConPrefisso from '../../../components/ElencoTelefoniConPrefisso'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
+import CodaTuttiIClientiStato from './CodaTuttiIClientiStato'
 import { corrispondeRicerca, cifreTelefono } from '../../../utils/ricerca'
 
 interface SystemMessage {
@@ -1738,7 +1739,7 @@ const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
   { value: 'customer', label: 'Clienti', hint: 'Il cliente della prenotazione che ha fatto scattare l\'evento (comportamento standard).' },
   { value: 'custom_phones', label: 'Numero specifico', hint: 'Uno o più numeri scritti da te. Separali con virgola o a capo.' },
   { value: 'admin_roles', label: 'Dipendenti', hint: 'Tutti i dipendenti con i ruoli scelti (numero preso da "Contatto interno" nella loro scheda in Operatori).' },
-  { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica — ANCHE chi non ha nulla in corso e i clienti del lavaggio. Usare con cautela.' },
+  { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica — ANCHE chi non ha nulla in corso e i clienti del lavaggio. Usare con cautela. Parte in coda: al massimo 50 messaggi l\'ora insieme alle Campagne Marketing, solo dalle 9 alle 21; il resto il giorno dopo.' },
   // 2026-08-23: prima mancava del tutto. Per raggiungere "chi ha adesso il
   // mezzo" l'unica strada era "Tutti i clienti", che ignora prenotazioni,
   // Tipo servizio e Stati ammessi.
@@ -1820,7 +1821,7 @@ function recipientSummary(t: { recipient_mode?: string | null; recipient_phones?
     return roles.length === 0 ? 'dipendenti — NESSUN ruolo scelto, non partirà' : `dipendenti con ruolo: ${roles.join(', ')}`
   }
   if (mode === 'uscita_autisti') return 'gli autisti assegnati all\'uscita straordinaria'
-  if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica (anche senza noleggio in corso)'
+  if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica (anche senza noleggio in corso), in coda a 50 l\'ora dalle 9 alle 21'
   if (mode === 'active_bookings') return 'clienti che hanno il mezzo in questo momento'
   return 'il cliente della pratica'
 }
@@ -5345,6 +5346,10 @@ export default function MessaggiSistemaProTab() {
                                                             <p className="text-[11px] text-theme-text-muted">
                                                                 {RECIPIENT_MODES.find(m => m.value === (template.recipient_mode || 'customer'))?.hint || ''}
                                                             </p>
+                                                            {/* 09/11/2026: "Tutti i clienti" va nella coda degli invii massivi (50/ora con le campagne, 9-21). */}
+                                                            {(template.recipient_mode || 'customer') === 'all_customers' && (
+                                                                <CodaTuttiIClientiStato templateId={template.id} />
+                                                            )}
                                                         </div>
 
                                                         {/* 04/09/2026: la riga qui sotto e' la programmazione del CRON.

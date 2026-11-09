@@ -113,6 +113,9 @@ const inviaUno: Handler = async (event) => {
     }
   }
   const { booking, type, customPhone, skipHeader, templateKey, templateVars } = body;
+  // 09/11/2026: invio chiamato dalla coda degli invii massivi
+  // (send-whatsapp-campaign-chunk). Vedi il ramo di errore Green API.
+  const daCodaMassiva = body?.codaInviiMassivi === true;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
   // Optional override: caller can force a specific Pro template key (used by
@@ -1113,7 +1116,12 @@ const inviaUno: Handler = async (event) => {
         ...payloadRichiesta,
         _waPrimoTentativoAt: typeof primoTentativoAt === 'string' ? primoTentativoAt : new Date().toISOString(),
       };
-      const automatica = reinvioAutomaticoSicuro(esito, payloadCoda, sanifica(payloadCoda));
+      // 09/11/2026: un invio della coda massiva ("Tutti i clienti" di
+      // Messaggi Sistema Pro) NON va nella ripresa del System Control: la
+      // ripresa lo rimanderebbe fuori dal tetto di 50/ora e, se la coda lo
+      // rimette in fila, due volte. Decide la coda (send-whatsapp-campaign-chunk)
+      // leggendo `esito` nella risposta.
+      const automatica = daCodaMassiva ? false : reinvioAutomaticoSicuro(esito, payloadCoda, sanifica(payloadCoda));
       await scriviLog(esito, automatica);
       try {
         await segnaChiamata('green_api', false, { errore: esito.motivo, status: esito.status });
@@ -1123,7 +1131,7 @@ const inviaUno: Handler = async (event) => {
           integrazione: 'green_api', severita: 'medio',
           contesto: { destinatario: targetPhone, tipo: body?.type || null, esito: esito.tipo },
         });
-        await accodaOperazione({
+        if (!daCodaMassiva) await accodaOperazione({
           tipo: 'messaggio_whatsapp',
           chiaveIdempotenza: chiaveWa,
           descrizione: `Messaggio WhatsApp a ${targetPhone}${body?.type ? ` (${body.type})` : ''}`,
@@ -1151,8 +1159,9 @@ const inviaUno: Handler = async (event) => {
         body: JSON.stringify({
           message: 'Error sending WhatsApp notification',
           error: esito.motivo,
-          queued: true,
+          queued: !daCodaMassiva,
           autoRetry: automatica,
+          esito: esito.tipo,
         }),
       };
     }
@@ -1230,7 +1239,8 @@ const inviaUno: Handler = async (event) => {
         integrazione: 'green_api', severita: 'medio',
         contesto: { destinatario: targetPhone, tipo: body?.type || null },
       });
-      await accodaOperazione({
+      // Coda massiva: l'esito incerto lo gestisce la coda, mai una ripresa qui.
+      if (!daCodaMassiva) await accodaOperazione({
         tipo: 'messaggio_whatsapp',
         chiaveIdempotenza: chiaveWa,
         descrizione: `Messaggio WhatsApp a ${targetPhone}${body?.type ? ` (${body.type})` : ''}`,

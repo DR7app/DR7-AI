@@ -35,6 +35,7 @@ END $$;
 CREATE TABLE public.marketing_campaigns (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text, status text, total_recipients int DEFAULT 0,
+  audience text, audience_filters jsonb,
   created_at timestamptz DEFAULT now()
 );
 CREATE TABLE public.marketing_campaign_recipients (
@@ -137,7 +138,32 @@ await db.query(`UPDATE marketing_campaign_recipients SET status='sent', sent_at=
 r = await prendi(C, 2)
 ok(r.esito === 'limite', 'inviati senza claimed_at (prima della migrazione) contano con sent_at')
 
-console.log('\n── 8. Permessi ─────────────────────────────────────────────────')
+console.log('\n── 8. "Tutti i clienti" di Messaggi Sistema Pro: stesso tetto ──')
+// 09/11/2026: i giri del broadcast sono righe di marketing_campaigns con
+// audience 'messaggi_sistema_pro'. Prese alternate campagna / messaggio di
+// sistema: in un'ora non escono mai piu' di 50 messaggi in totale.
+await db.query(`UPDATE marketing_campaign_recipients SET claimed_at = now() - interval '2 hours', sent_at = now() - interval '2 hours' WHERE claimed_at IS NOT NULL OR sent_at IS NOT NULL`)
+const M = await campagna(40, 'M')
+const S = (await uno(`INSERT INTO marketing_campaigns (title, status, total_recipients, audience, audience_filters)
+                      VALUES ('Messaggi Sistema Pro: Promo', 'pending', 40, 'messaggi_sistema_pro', '{"system_message_id":"t1","message_key":"pro_custom_promo","modo":"template"}') RETURNING id`)).id
+for (let i = 0; i < 40; i++) {
+  await db.query(`INSERT INTO marketing_campaign_recipients (campaign_id, customer_name, phone) VALUES ($1, $2, $3)`, [S, `S ${i}`, `39344000${String(i).padStart(4, '0')}`])
+}
+let totale = 0
+const presiS = new Set()
+for (let i = 0; i < 80; i++) {
+  r = await prendi(i % 2 === 0 ? M : S)
+  if (r.esito !== 'preso') { ok(r.esito === 'limite', `presa ${i + 1}: oltre il tetto = limite`); continue }
+  ok(!presiS.has(r.destinatario.id), `presa ${i + 1}: destinatario nuovo`)
+  presiS.add(r.destinatario.id)
+  totale++
+  await segnaInviato(r.destinatario.id)
+}
+ok(totale === 50, `campagne + messaggi di sistema insieme: ${totale} nell'ora (tetto 50)`)
+const restanti = await uno(`SELECT count(*)::int n FROM marketing_campaign_recipients WHERE campaign_id IN ($1,$2) AND status='pending'`, [M, S])
+ok(restanti.n === 30, 'gli altri 30 restano in coda per l\'ora dopo (nessuna perdita)')
+
+console.log('\n── 9. Permessi ─────────────────────────────────────────────────')
 const perm = await uno(`SELECT has_function_privilege('authenticated', 'public.campagne_prenota_destinatario(uuid,integer,integer,integer,integer,integer)', 'EXECUTE') AS a,
                                has_function_privilege('service_role', 'public.campagne_prenota_destinatario(uuid,integer,integer,integer,integer,integer)', 'EXECUTE') AS s`)
 ok(!perm.a && perm.s, 'solo il server (service_role) prenota i destinatari')
