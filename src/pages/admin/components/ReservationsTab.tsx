@@ -1090,9 +1090,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     extension_payment_method: '',
     link_expiration_hours: '1',
     notes: '',
-    change_vehicle: false,
-    new_vehicle_id: '',
-    show_all_vehicles: false,
     extension_km_added: '',
     extension_unlimited_km: false,
     // 2026-07-16: come la "Conferma Prenotazione" del noleggio normale. Se
@@ -5460,9 +5457,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       extension_payment_method: '',
       link_expiration_hours: '1',
       notes: '',
-      change_vehicle: false,
-      new_vehicle_id: '',
-      show_all_vehicles: false,
       extension_km_added: '',
       extension_unlimited_km: currentUnlimitedKm || false,
       conferma: false
@@ -5512,32 +5506,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         }
       }
 
-      // Resolve new vehicle if car change requested
-      let newVehicle: Vehicle | null = null
-      if (extendData.change_vehicle && extendData.new_vehicle_id) {
-        newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
-      }
-
-      // 17/10/2026: cambio veicolo nell'estensione = l'assicurazione segue la
-      // categoria del NUOVO mezzo. Prima restava l'id della vecchia categoria
-      // (SL55 urban -> Audi RS3 aziendali) e il contratto stampava le
-      // franchigie della vettura precedente. Si cerca la stessa formula (per
-      // nome) nella nuova categoria, altrimenti RCA, altrimenti la prima.
-      const assicurazioneNuovoVeicolo = (() => {
-        if (!newVehicle) return null
-        const bdIns = extendingBooking.booking_details || {}
-        const attuale = String(bdIns.insuranceOption || bdIns.insurance_option || '')
-        const tierRaw = String(bdIns.driver_tier || '')
-        const tier = (tierRaw === 'TIER_1' || tierRaw === 'TIER_2' || tierRaw === 'BLOCKED' ? tierRaw : undefined) as DriverTier | undefined
-        const opzioni = getInsuranceOptions(newVehicle, tier, configOverlay, rentalConfig)
-        if (!opzioni.length) return null
-        if (opzioni.some(o => o.id === attuale)) return attuale
-        const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '')
-        const nomeAttuale = rentalConfig && attuale ? (getInsuranceNameById(rentalConfig, attuale) || '') : ''
-        const stessoNome = nomeAttuale ? opzioni.find(o => norm(o.label || '') === norm(nomeAttuale)) : null
-        const rca = opzioni.find(o => /^\s*rca\b/i.test(o.label || ''))
-        return String((stessoNome || rca || opzioni[0]).id)
-      })()
+      // 09/11/2026 (direzione): l'estensione non cambia piu' il veicolo,
+      // allunga solo le date sulla stessa auto. Le estensioni gia' salvate
+      // con cambio auto restano leggibili (extension_history,
+      // utils/vehicleSegments).
 
       // Calculate KM limit update
       const extensionKmAdded = parseInt(extendData.extension_km_added) || 0
@@ -5569,17 +5541,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         day_before_reminder_sent_at: null,
         km_limit: newKmLimit,
         unlimited_km: extendData.extension_unlimited_km,
-        // Update vehicle info in booking_details if car changed
-        ...(newVehicle ? {
-          vehicle: {
-            ...extendingBooking.booking_details?.vehicle,
-            id: newVehicle.id,
-            name: newVehicle.display_name,
-            plate: newVehicle.plate || newVehicle.targa || '',
-          },
-          vehicle_id: newVehicle.id,
-          ...(assicurazioneNuovoVeicolo ? { insuranceOption: assicurazioneNuovoVeicolo } : {}),
-        } : {}),
         extension_history: [
           ...(extendingBooking.booking_details?.extension_history || []),
           {
@@ -5591,16 +5552,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             notes: extendData.notes,
             km_added: extensionKmAdded > 0 ? extensionKmAdded : undefined,
             unlimited_km: extendData.extension_unlimited_km || undefined,
-            ...(newVehicle ? {
-              previous_vehicle_id: extendingBooking.vehicle_id,
-              previous_vehicle_name: extendingBooking.vehicle_name,
-              // 06/11/2026: le targhe servono al Calendario Giornaliero per
-              // mostrare rientro e uscita del giorno del cambio.
-              previous_vehicle_plate: extendingBooking.vehicle_plate || extendingBooking.booking_details?.vehicle?.plate || null,
-              new_vehicle_id: newVehicle.id,
-              new_vehicle_name: newVehicle.display_name,
-              new_vehicle_plate: newVehicle.plate || newVehicle.targa || null,
-            } : {})
           }
         ]
       }
@@ -5612,22 +5563,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         price_total: newTotal,
         booking_details: updatedBookingDetails,
         updated_at: new Date().toISOString()
-      }
-
-      // If car changed, update vehicle fields on the booking
-      if (newVehicle) {
-        // Su Mare/Aria/Soggiorni il mezzo e' del catalogo: la colonna
-        // vehicle_id riferisce la flotta auto e resta NULL, l'id vive in
-        // booking_details (come alla creazione).
-        if (isAltroBusiness) {
-          bookingUpdate.vehicle_id = null
-          updatedBookingDetails.vehicle_id = newVehicle.id
-          bookingUpdate.booking_details = updatedBookingDetails
-        } else {
-          bookingUpdate.vehicle_id = newVehicle.id
-        }
-        bookingUpdate.vehicle_name = newVehicle.display_name
-        bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
 
       // Update the booking directly - NO validation checks
@@ -5685,12 +5620,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         let extensionMsg = `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
         extensionMsg += `*ID:* DR7-${bookingIdShort}\n`
         extensionMsg += `*Cliente:* ${extendingBooking.customer_name || extendingBooking.booking_details?.customer?.fullName || 'N/A'}\n`
-        if (newVehicle) {
-          extensionMsg += `*Veicolo precedente:* ${extendingBooking.vehicle_name || 'N/A'}\n`
-          extensionMsg += `*Nuovo veicolo:* ${newVehicle.display_name} (${newVehicle.plate || newVehicle.targa || ''})\n`
-        } else {
-          extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
-        }
+        extensionMsg += `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`
         extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
@@ -5736,11 +5666,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // "Da saldare" / "Pagato" / "Da saldare" secondo il caso.
           const updatedBooking = {
             ...extendingBooking,
-            ...(newVehicle ? {
-              vehicle_id: newVehicle.id,
-              vehicle_name: newVehicle.display_name,
-              vehicle_plate: newVehicle.plate || newVehicle.targa || '',
-            } : {}),
             dropoff_date: newDropoffDateTime.toISOString(),
             booking_details: updatedBookingDetails,
             // 2026-05-28: il template {payment_status} riflette lo stato
@@ -5809,11 +5734,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // non la leggeva: impostarla su Rifirma non produceva niente e il
               // cliente riceveva comunque il contratto gia' firmato sulle nuove
               // date. Ora la scelta della direzione vale anche per l'estensione.
-              // 17/10/2026: con cambio veicolo vale anche la voce "Cambio
-              // veicolo" (Rifirma di default): prima contava solo "Estensione"
-              // e il cliente riceveva ricondotto il contratto della vettura
-              // che non aveva mai firmato.
-              const vociEstensione = newVehicle ? ['estensione', 'veicolo'] : ['estensione']
+              // 09/11/2026: l'estensione non cambia piu' veicolo, vale solo
+              // la voce "Estensione".
+              const vociEstensione = ['estensione']
               const vociRifirmaEstensione = vociEstensione.filter(v => richiedeNuovaFirma([v], contrattoRegole))
               const rifirmaEstensione = vociRifirmaEstensione.length > 0
               // Stessa traccia del flusso di modifica: senza il flag, un
@@ -5889,7 +5812,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           body: JSON.stringify({
             bookingId: extendingBooking.id,
             customerId: extendingBooking.user_id,
-            vehicleId: newVehicle ? newVehicle.id : extendingBooking.vehicle_id,
+            vehicleId: extendingBooking.vehicle_id,
             returnDate: newDropoffDateTime.toISOString(),
             depositAmount: depositAmount,
             paymentMethod: extendingBooking.payment_method || 'carta',
@@ -14128,47 +14051,6 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     ))}
                   </select>
                 </div>
-
-                {/* Vehicle Change Toggle */}
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={extendData.change_vehicle}
-                      onChange={(e) => setExtendData({ ...extendData, change_vehicle: e.target.checked, new_vehicle_id: '' })}
-                      className="w-4 h-4 accent-purple-500"
-                    />
-                    <span className="text-sm font-medium text-theme-text-secondary">Cambio Veicolo</span>
-                  </label>
-                </div>
-
-                {extendData.change_vehicle && (
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-sm font-medium text-theme-text-secondary">Nuovo Veicolo</label>
-                      <button
-                        type="button"
-                        onClick={() => setExtendData({ ...extendData, show_all_vehicles: !extendData.show_all_vehicles })}
-                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                      >
-                        {extendData.show_all_vehicles ? 'Nascondi ritirati' : 'Mostra tutte le disponibilità'}
-                      </button>
-                    </div>
-                    <select
-                      value={extendData.new_vehicle_id}
-                      onChange={(e) => setExtendData({ ...extendData, new_vehicle_id: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="">-- Seleziona veicolo --</option>
-                      {vehicles
-                        .filter(v => (extendData.show_all_vehicles || v.status !== 'retired') && v.id !== extendingBooking?.vehicle_id)
-                        .map(v => (
-                          <option key={v.id} value={v.id}>{v.display_name} ({v.plate || v.targa || 'N/A'}){v.status === 'retired' ? ' [Ritirato]' : ''}</option>
-                        ))
-                      }
-                    </select>
-                  </div>
-                )}
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo Aggiuntivo (€)</label>
