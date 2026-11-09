@@ -5,9 +5,9 @@ import { nellaLinguaDelTelefono } from './utils/i18n'
 import { classificaRispostaGreenApi, leggiCorpo, type EsitoGreenApi } from "./utils/esitoGreenApi";
 import {
     LIMITE_MESSAGGI_ORA, FINESTRA_MINUTI, FASCIA_ORA_DA, FASCIA_ORA_A, PRESA_SCADE_MINUTI, inFasciaInvio,
-    filtriGiroMessaggiSistema,
+    filtriGiroMessaggiSistema, filtriGiroPromo, promoScaduta,
 } from "../../src/utils/campagneFrequenza";
-import { inviaDestinatarioMessaggiSistema } from "./utils/codaInviiMassivi";
+import { inviaDestinatarioMessaggiSistema, inviaDestinatarioPromo, promoInviabile, registraInvioPromo } from "./utils/codaInviiMassivi";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -167,6 +167,25 @@ export const handler: Handler = async (event) => {
                 .eq("status", "pending");
         } else if (!(tplAttivo.is_enabled === true && tplAttivo.cron_approved === true)) {
             return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "messaggio_spento", processed: 0 }) };
+        }
+    }
+
+    // 09/11/2026: giri del broadcast di Promo Incassi / Maxi Promo Gap. Segue
+    // l'interruttore campagne_marketing (quello che gia' fermava quei cron).
+    // Promo scaduta (buco passato, mese finito) = chi e' ancora in coda viene
+    // saltato; modo non piu' "broadcast" o template spento = fermi in coda.
+    const giroPromo = filtriGiroPromo(camp);
+    if (giroPromo) {
+        if (promoScaduta(giroPromo)) {
+            await sb.from("marketing_campaign_recipients")
+                .update({ status: "skipped", error_message: "Promo scaduta prima dell'invio" })
+                .eq("campaign_id", campaignId)
+                .eq("status", "pending");
+        } else {
+            const inviabile = await promoInviabile(sb, giroPromo);
+            if (!inviabile.ok) {
+                return { statusCode: 200, body: JSON.stringify({ done: false, throttled: "promo_spenta", motivo: inviabile.motivo, processed: 0 }) };
+            }
         }
     }
 
@@ -332,6 +351,43 @@ export const handler: Handler = async (event) => {
                     .update({ status: "skipped", error_message: esito.motivo.slice(0, 500) })
                     .eq("id", r.id);
             } else {
+                chunkFailed++;
+                chunkErrors.push(`${displayName}: ${esito.motivo}`);
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "failed", error_message: esito.motivo.slice(0, 500) })
+                    .eq("id", r.id);
+            }
+            continue;
+        }
+
+        // 09/11/2026: giro del broadcast di una promo. Stessa chiamata del
+        // cron di prima (templateKey, templateVars, lingua del prefisso); se
+        // parte, la riga va nel registro della promo come prima.
+        if (giroPromo) {
+            const esito = await inviaDestinatarioPromo(giroPromo, phone);
+            if (esito.tipo === "inviato") {
+                chunkSent++;
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null })
+                    .eq("id", r.id);
+                await registraInvioPromo(sb, giroPromo, phone);
+                await new Promise(res => setTimeout(res, PER_RECIPIENT_DELAY_MS));
+            } else if (esito.tipo === "rimetti_in_coda") {
+                // Sicuramente non partito (bot non disponibile, WhatsApp o
+                // template spento): torna in coda, il giro si ferma qui.
+                istanzaNonDisponibile = esito.motivo;
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "pending", error_message: esito.motivo, ...(conPresa ? { claimed_at: null } : {}) })
+                    .eq("id", r.id);
+                break;
+            } else if (esito.tipo === "saltato") {
+                chunkFailed++;
+                chunkErrors.push(`${displayName}: ${esito.motivo}`);
+                await sb.from("marketing_campaign_recipients")
+                    .update({ status: "skipped", error_message: esito.motivo.slice(0, 500) })
+                    .eq("id", r.id);
+            } else {
+                // Esito incerto: fallito, mai rimandato da solo.
                 chunkFailed++;
                 chunkErrors.push(`${displayName}: ${esito.motivo}`);
                 await sb.from("marketing_campaign_recipients")

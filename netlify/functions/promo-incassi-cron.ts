@@ -19,6 +19,8 @@ import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { computeVehicleMonthlyRevenue } from './utils/vehicleRevenue'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
+import { accodaGiroPromo, clientiConTelefono, filtriPromoIncassi, type DestinatarioCoda } from './utils/codaInviiMassivi'
+import { giornoRoma } from '../../src/utils/campagneFrequenza'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -108,22 +110,22 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 
     // ── 2. Recipients ──
+    // 09/11/2026 (direzione): in broadcast niente piu' invio a tutti di fila.
+    // I destinatari (tutta la base clienti, a pagine oltre le 1000 righe)
+    // entrano nella coda degli invii massivi: vedi utils/codaInviiMassivi.ts.
     let recipients: string[] = []
+    let clientiCoda: DestinatarioCoda[] = []
     if (mode === 'pilot') {
         const r = normalisePhone(settings?.pilot_phone || '')
         if (!r) return skip('mode=pilot but pilot_phone empty/invalid')
         recipients = [r]
     } else {
-        const { data: custRows } = await supabase
-            .from('customers_extended')
-            .select('telefono')
-            .not('telefono', 'is', null)
-        const seen = new Set<string>()
-        for (const row of (custRows || [])) {
-            const n = normalisePhone(row.telefono || '')
-            if (n && !seen.has(n)) { seen.add(n); recipients.push(n) }
+        try {
+            clientiCoda = await clientiConTelefono(supabase, normalisePhone)
+        } catch (e) {
+            return { statusCode: 500, body: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }
         }
-        if (recipients.length === 0) return skip('mode=broadcast but no customers with phone')
+        if (clientiCoda.length === 0) return skip('mode=broadcast but no customers with phone')
     }
 
     // ── 3. Vehicle revenue targets from Centralina Pro ──
@@ -212,7 +214,35 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     // The DB unique index on (vehicle_id, year_month, recipient) is the
     // hard transactional guarantee — concurrent cron runs cannot double-fire
     // the same (vehicle, customer, month) tuple.
+    const code: Array<{ vehicle: string; esito: string; accodati: number; giaRaggiunti: number; motivo?: string }> = []
     for (const pick of triggering) {
+        const templateVars = {
+            vehicle: pick.v.display_name,
+            veicolo: pick.v.display_name,
+            vehicle_specs: pick.v.display_name,
+            coefficient: String(pick.activeCoeff),
+            coefficiente: String(pick.activeCoeff),
+            incasso_attuale: pick.totalRevenue.toFixed(0),
+            incasso: pick.totalRevenue.toFixed(0),
+            soglia: String(pick.thresholdMin),
+            month: String(month),
+            year: String(year),
+            year_month: ym,
+        }
+
+        // 09/11/2026: broadcast = un giro in coda per (veicolo, mese), al
+        // massimo uno al giorno; stesso templateKey e stesse variabili.
+        if (mode === 'broadcast') {
+            const esito = await accodaGiroPromo(supabase, {
+                filtri: filtriPromoIncassi(pick.v, ym, year, month, pick.activeCoeff, templateVars),
+                giorno: giornoRoma(),
+                destinatari: clientiCoda,
+            })
+            code.push({ vehicle: pick.v.display_name, esito: esito.esito, accodati: esito.accodati, giaRaggiunti: esito.giaInCoda, motivo: esito.motivo })
+            if (esito.esito === 'errore') totalFailed++
+            continue
+        }
+
         for (const phone of recipients) {
             const dedupKey = `${pick.v.id}|${phone}`
             if (sentSet.has(dedupKey)) {
@@ -245,20 +275,6 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                 continue
             }
             sentSet.add(dedupKey)
-
-            const templateVars = {
-                vehicle: pick.v.display_name,
-                veicolo: pick.v.display_name,
-                vehicle_specs: pick.v.display_name,
-                coefficient: String(pick.activeCoeff),
-                coefficiente: String(pick.activeCoeff),
-                incasso_attuale: pick.totalRevenue.toFixed(0),
-                incasso: pick.totalRevenue.toFixed(0),
-                soglia: String(pick.thresholdMin),
-                month: String(month),
-                year: String(year),
-                year_month: ym,
-            }
 
             try {
                 const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
@@ -304,12 +320,13 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
             mode,
             year_month: ym,
             threshold_coeff: thresholdCoeff,
-            recipients: recipients.length,
+            recipients: mode === 'broadcast' ? clientiCoda.length : recipients.length,
             hour,
             sent: totalSent,
             skipped: totalSkipped,
             failed: totalFailed,
             results,
+            ...(mode === 'broadcast' ? { coda: code } : {}),
         }),
     }
 }

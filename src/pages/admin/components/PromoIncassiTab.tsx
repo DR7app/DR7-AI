@@ -4,6 +4,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import CodaPromoStato from './CodaPromoStato'
 
 /**
  * Promo Incassi.
@@ -218,8 +219,11 @@ export default function PromoIncassiTab() {
                         <p className="text-xs text-theme-text-muted mt-2">
                             {draftMode === 'off' && 'Il cron non invia nulla. Usa questa modalità per mettere in pausa.'}
                             {draftMode === 'pilot' && 'Invia SOLO al numero pilota qui sotto. Niente broadcast.'}
-                            {draftMode === 'broadcast' && 'Invia a tutti i clienti con telefono in customers_extended (blacklist inclusa). Lista caricata automaticamente, NON serve inserirli a mano.'}
+                            {draftMode === 'broadcast' && 'Invia a tutti i clienti con telefono in customers_extended (blacklist inclusa). Lista caricata automaticamente, NON serve inserirli a mano. I messaggi entrano nella coda degli invii massivi e partono a ritmo controllato.'}
                         </p>
+                        <div className="mt-2">
+                            <CodaPromoStato promo="promo_incassi" />
+                        </div>
                     </div>
 
                     {draftMode === 'pilot' && (
@@ -264,7 +268,8 @@ export default function PromoIncassiTab() {
                                     toast.dismiss(t)
                                     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
                                     setLastResult(data)
-                                    toast.success(`Inviati ${data.sent ?? 0} · Saltati ${data.skipped ?? 0} · Falliti ${data.failed ?? 0}`)
+                                    if (data.coda) toast.success(`Messi in coda ${data.accodati ?? 0} · Falliti ${data.failed ?? 0}`)
+                                    else toast.success(`Inviati ${data.sent ?? 0} · Saltati ${data.skipped ?? 0} · Falliti ${data.failed ?? 0}`)
                                 } catch (err: any) {
                                     toast.dismiss(t)
                                     toast.error('Errore: ' + (err.message || String(err)))

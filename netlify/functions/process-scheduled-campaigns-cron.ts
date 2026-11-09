@@ -23,7 +23,8 @@ import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
-import { inFasciaInvio, INVII_PER_GIRO, filtriGiroMessaggiSistema } from '../../src/utils/campagneFrequenza'
+import { inFasciaInvio, INVII_PER_GIRO, filtriGiroMessaggiSistema, filtriGiroPromo, promoScaduta } from '../../src/utils/campagneFrequenza'
+import { promoInviabile } from './utils/codaInviiMassivi'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -328,6 +329,8 @@ async function pumpChunkLoop(deadline: number, attive: { campagne: boolean; mess
         }
         return messaggiAccesi.has(id)
     }
+    // Promo automatiche inviabili in questo giro (modo + template), lette una volta per promo.
+    const promoAttive = new Map<string, boolean>()
     let inviatiNelGiro = 0
     while (Date.now() < deadline && inviatiNelGiro < INVII_PER_GIRO) {
         // 2026-07-18: drip/frequenza. Prendi più candidate e scegli la prima che
@@ -368,6 +371,20 @@ async function pumpChunkLoop(deadline: number, attive: { campagne: boolean; mess
                 if ((esiste || 0) > 0 && !(await messaggioAcceso(giroSistema.system_message_id))) continue
             } else if (!attive.campagne) {
                 continue
+            } else {
+                // 09/11/2026: giro del broadcast di una promo automatica
+                // (Promo Incassi / Maxi Promo Gap). Scaduta: il chunk lo chiude.
+                // Modo non piu' "broadcast" o template spento: resta in coda
+                // senza fermare le altre campagne.
+                const giroPromo = filtriGiroPromo(c)
+                if (giroPromo && !promoScaduta(giroPromo)) {
+                    let stato = promoAttive.get(giroPromo.promo)
+                    if (stato === undefined) {
+                        stato = (await promoInviabile(sb, giroPromo)).ok
+                        promoAttive.set(giroPromo.promo, stato)
+                    }
+                    if (!stato) continue
+                }
             }
             const batch = Number(c.drip_batch_size) || 0
             const intervalMin = Number(c.drip_interval_minutes) || 0

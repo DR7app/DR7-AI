@@ -163,7 +163,70 @@ ok(totale === 50, `campagne + messaggi di sistema insieme: ${totale} nell'ora (t
 const restanti = await uno(`SELECT count(*)::int n FROM marketing_campaign_recipients WHERE campaign_id IN ($1,$2) AND status='pending'`, [M, S])
 ok(restanti.n === 30, 'gli altri 30 restano in coda per l\'ora dopo (nessuna perdita)')
 
-console.log('\n── 9. Permessi ─────────────────────────────────────────────────')
+console.log('\n── 9. Broadcast di Promo Incassi / Maxi Promo Gap: stesso tetto ──')
+// 09/11/2026: i giri del broadcast delle promo sono righe di
+// marketing_campaigns con audience 'promo_automatiche'. Campagna, messaggio di
+// sistema e promo a turno: in un'ora non escono mai piu' di 50 messaggi.
+await db.query(`UPDATE marketing_campaign_recipients SET claimed_at = now() - interval '2 hours', sent_at = now() - interval '2 hours' WHERE claimed_at IS NOT NULL OR sent_at IS NOT NULL`)
+const M2 = await campagna(30, 'M2')
+const S2 = (await uno(`INSERT INTO marketing_campaigns (title, status, total_recipients, audience, audience_filters)
+                       VALUES ('Messaggi Sistema Pro: Promo 2', 'pending', 30, 'messaggi_sistema_pro', '{"system_message_id":"t2","message_key":"pro_custom_promo","modo":"template"}') RETURNING id`)).id
+const P = (await uno(`INSERT INTO marketing_campaigns (title, status, total_recipients, audience, audience_filters)
+                      VALUES ('Promo Incassi: Macan', 'pending', 30, 'promo_automatiche', '{"promo":"promo_incassi","template_key":"promo_incassi_whatsapp","chiave_unita":"v1|2026-11","registro":{"vehicle_id":"v1"}}') RETURNING id`)).id
+for (let i = 0; i < 30; i++) {
+  await db.query(`INSERT INTO marketing_campaign_recipients (campaign_id, customer_name, phone) VALUES ($1, $2, $3)`, [S2, `S2 ${i}`, `39345000${String(i).padStart(4, '0')}`])
+  await db.query(`INSERT INTO marketing_campaign_recipients (campaign_id, customer_name, phone) VALUES ($1, $2, $3)`, [P, `P ${i}`, `39346000${String(i).padStart(4, '0')}`])
+}
+let totale3 = 0
+const presi3 = new Set()
+for (let i = 0; i < 90; i++) {
+  r = await prendi([M2, S2, P][i % 3])
+  if (r.esito !== 'preso') { ok(r.esito === 'limite', `presa ${i + 1}: oltre il tetto = limite`); continue }
+  ok(!presi3.has(r.destinatario.id), `presa ${i + 1}: destinatario nuovo`)
+  presi3.add(r.destinatario.id)
+  totale3++
+  await segnaInviato(r.destinatario.id)
+}
+ok(totale3 === 50, `campagne + messaggi di sistema + promo insieme: ${totale3} nell'ora (tetto 50)`)
+const restanti3 = await uno(`SELECT count(*)::int n FROM marketing_campaign_recipients WHERE campaign_id IN ($1,$2,$3) AND status='pending'`, [M2, S2, P])
+ok(restanti3.n === 40, 'gli altri 40 restano in coda per l\'ora dopo (nessuna perdita)')
+
+console.log('\n── 10. Promo: un giro al giorno con l\'indice unico del registro ─')
+// Il "posto" del giro e' una riga recipient='coda:<giorno>' nel registro della
+// promo: gli indici unici gia' in produzione (migrazioni 20260427/20260429)
+// bastano, nessuna migrazione nuova. Qui le stesse migrazioni su PGlite.
+await db.exec(`
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT NULL::uuid $$;
+CREATE TABLE IF NOT EXISTS public.admins (user_id uuid);
+`)
+for (const f of ['20260427_maxi_promo_sent_log.sql', '20260427_maxi_promo_sent_log_signature.sql', '20260428_promo_incassi.sql', '20260429_promo_incassi_dedup_fix.sql']) {
+  await db.exec(fs.readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8'))
+}
+const V = '00000000-0000-0000-0000-000000000001'
+const posto = (giorno) => db.query(`INSERT INTO promo_incassi_sent_log (vehicle_id, year_month, threshold_coeff, recipient, template_key) VALUES ($1, '2026-11', 0.7, $2, 'pro_promo_incassi')`, [V, `coda:${giorno}`])
+await posto('2026-11-09')
+let doppio = null
+try { await posto('2026-11-09') } catch (e) { doppio = e }
+ok(doppio?.code === '23505', 'Promo Incassi: secondo giro nello stesso giorno rifiutato (23505)')
+await posto('2026-11-10')
+ok(true, 'Promo Incassi: il giorno dopo il giro si puo\' accodare')
+// Coefficiente diverso nello stesso mese: resta lo stesso posto (indice senza threshold_coeff).
+let doppioCoeff = null
+try { await db.query(`INSERT INTO promo_incassi_sent_log (vehicle_id, year_month, threshold_coeff, recipient) VALUES ($1, '2026-11', 0.6, 'coda:2026-11-09')`, [V]) } catch (e) { doppioCoeff = e }
+ok(doppioCoeff?.code === '23505', 'Promo Incassi: coefficiente sceso non apre un secondo giro nello stesso giorno')
+const postoGap = () => db.query(`INSERT INTO maxi_promo_sent_log (vehicle_id, gap_date, gap_signature, recipient, template_key) VALUES ($1, '2026-11-11', '1|2', 'coda:2026-11-09', 'pro_maxi_promo_gap_1gg')`, [V])
+await postoGap()
+let doppioGap = null
+try { await postoGap() } catch (e) { doppioGap = e }
+ok(doppioGap?.code === '23505', 'Maxi Promo Gap: secondo giro per lo stesso buco nello stesso giorno rifiutato (23505)')
+// Il destinatario vero dopo l'invio: una riga sola.
+await db.query(`INSERT INTO promo_incassi_sent_log (vehicle_id, year_month, threshold_coeff, recipient) VALUES ($1, '2026-11', 0.7, '393330000001')`, [V])
+let doppioDest = null
+try { await db.query(`INSERT INTO promo_incassi_sent_log (vehicle_id, year_month, threshold_coeff, recipient) VALUES ($1, '2026-11', 0.7, '393330000001')`, [V]) } catch (e) { doppioDest = e }
+ok(doppioDest?.code === '23505', 'Promo Incassi: lo stesso cliente non entra due volte nel registro dello stesso mese')
+
+console.log('\n── 11. Permessi ────────────────────────────────────────────────')
 const perm = await uno(`SELECT has_function_privilege('authenticated', 'public.campagne_prenota_destinatario(uuid,integer,integer,integer,integer,integer)', 'EXECUTE') AS a,
                                has_function_privilege('service_role', 'public.campagne_prenota_destinatario(uuid,integer,integer,integer,integer,integer)', 'EXECUTE') AS s`)
 ok(!perm.a && perm.s, 'solo il server (service_role) prenota i destinatari')

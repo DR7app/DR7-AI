@@ -24,6 +24,8 @@ import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
+import { accodaGiroPromo, clientiConTelefono, filtriMaxiPromoGap, type DestinatarioCoda } from './utils/codaInviiMassivi'
+import { giornoRoma } from '../../src/utils/campagneFrequenza'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -120,22 +122,23 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   // Build the recipient list.
   // - pilot     → 1 number from settings.pilot_phone
   // - broadcast → every customers_extended row with telefono not null (blacklist included)
+  // 09/11/2026 (direzione): in broadcast niente piu' invio a tutti di fila:
+  // un giro in coda per buco (veicolo + firma), al massimo uno al giorno,
+  // nella coda degli invii massivi (50/ora insieme alle campagne, 9-21).
+  // Tutta la base clienti, a pagine oltre le 1000 righe.
   let recipients: string[] = []
+  let clientiCoda: DestinatarioCoda[] = []
   if (mode === 'pilot') {
     const r = normalisePhone(settings?.pilot_phone || '')
     if (!r) return skip('mode=pilot but pilot_phone empty/invalid')
     recipients = [r]
   } else {
-    const { data: custRows } = await supabase
-      .from('customers_extended')
-      .select('telefono')
-      .not('telefono', 'is', null)
-    const seen = new Set<string>()
-    for (const row of (custRows || [])) {
-      const n = normalisePhone(row.telefono || '')
-      if (n && !seen.has(n)) { seen.add(n); recipients.push(n) }
+    try {
+      clientiCoda = await clientiConTelefono(supabase, normalisePhone)
+    } catch (e) {
+      return { statusCode: 500, body: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }
     }
-    if (recipients.length === 0) return skip('mode=broadcast but no customers with phone')
+    if (clientiCoda.length === 0) return skip('mode=broadcast but no customers with phone')
   }
 
   const now = new Date()
@@ -295,6 +298,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   let skipped = 0
   let failed = 0
   const results: Array<{ vehicle: string; recipient: string; reason: string; ok: boolean; detail?: string }> = []
+  const code: Array<{ vehicle: string; esito: string; accodati: number; giaRaggiunti: number; motivo?: string }> = []
 
   for (const c of candidates) {
     const v = c.vehicle
@@ -340,6 +344,16 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       ore: String(c.gapHours),
       ore_disponibili: String(c.gapHours),
       durata_ore: String(c.gapHours),
+    }
+
+    if (mode === 'broadcast') {
+      const esito = await accodaGiroPromo(supabase, {
+        filtri: filtriMaxiPromoGap(v, c.gapDateDb, c.gapSignature, new Date(c.gapEndDate.getTime() + 1), templateVars),
+        giorno: giornoRoma(),
+        destinatari: clientiCoda,
+      })
+      code.push({ vehicle: v.display_name, esito: esito.esito, accodati: esito.accodati, giaRaggiunti: esito.giaInCoda, motivo: esito.motivo })
+      if (esito.esito === 'errore') failed++
     }
 
     for (const phone of recipients) {
@@ -430,11 +444,12 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     body: JSON.stringify({
       ok: true,
       mode,
-      recipients: recipients.length,
+      recipients: mode === 'broadcast' ? clientiCoda.length : recipients.length,
       hour,
       candidates: candidates.length,
       sent, skipped, failed,
       results,
+      ...(mode === 'broadcast' ? { coda: code } : {}),
     }),
   }
 }

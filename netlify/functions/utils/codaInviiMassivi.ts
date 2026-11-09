@@ -18,7 +18,10 @@
  * testo di prima: send-whatsapp-notification con il template del messaggio.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { AUDIENCE_MESSAGGI_SISTEMA, type FiltriGiroMessaggiSistema } from '../../../src/utils/campagneFrequenza'
+import {
+  AUDIENCE_MESSAGGI_SISTEMA, AUDIENCE_PROMO_AUTOMATICHE, ETICHETTA_PROMO, romaLocaleAUtc,
+  type FiltriGiroMessaggiSistema, type FiltriGiroPromo, type TipoPromoAutomatica,
+} from '../../../src/utils/campagneFrequenza'
 
 export interface DestinatarioCoda {
   nome: string
@@ -251,6 +254,15 @@ export async function inviaDestinatarioMessaggiSistema(
           ...(filtri.variabili || {}),
         },
       }
+  return chiamaNotifica(baseUrl, corpo)
+}
+
+/**
+ * Una chiamata a send-whatsapp-notification, con l'esito letto come la coda
+ * lo vuole. `rimettiSe` = altri motivi di "saltato" per cui il messaggio
+ * sicuramente non e' partito e deve restare in coda (es. promo spenta).
+ */
+async function chiamaNotifica(baseUrl: string, corpo: Record<string, unknown>, rimettiSe: string[] = []): Promise<EsitoInvioCoda> {
   let res: Response
   try {
     res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
@@ -266,10 +278,320 @@ export async function inviaDestinatarioMessaggiSistema(
   if (res.ok) {
     const motivo = String(json.reason || json.message || 'saltato')
     if (json.reason === 'invio_whatsapp_off') return { tipo: 'rimetti_in_coda', motivo }
+    if (json.reason && rimettiSe.includes(json.reason)) return { tipo: 'rimetti_in_coda', motivo }
     return { tipo: 'saltato', motivo }
   }
   if (json.esito === 'istanza_non_disponibile') {
     return { tipo: 'rimetti_in_coda', motivo: String(json.error || 'Istanza WhatsApp non disponibile') }
   }
   return { tipo: 'fallito', motivo: String(json.error || json.message || `HTTP ${res.status}`) }
+}
+
+// ── 09/11/2026 (direzione): modo "broadcast" di Promo Incassi e Maxi Promo Gap ──
+//
+// Prima il broadcast mandava a tutta la base clienti di fila, senza tetto.
+// Ora ogni giro entra nella stessa coda (audience AUDIENCE_PROMO_AUTOMATICHE):
+// 50 l'ora insieme a campagne e Messaggi Sistema Pro, 9-21 ora di Roma, il
+// resto il giorno dopo. Nessuna tabella ne' funzione SQL nuova.
+//
+// Registro della promo (sent_log): resta il registro di chi l'ha RICEVUTA.
+// La riga del destinatario si scrive quando il messaggio e' partito (lo fa la
+// coda). In piu', una riga "posto" con recipient `coda:<giorno>` per unita'
+// della promo: l'indice unico gia' esistente del registro garantisce un solo
+// giro al giorno per promo anche con due cron in parallelo.
+//
+// Nessun codice promo per cliente: queste promo non ne generano (il testo e'
+// il template con le variabili del veicolo), quindi non c'e' nulla da creare
+// per chi non ricevera' il messaggio.
+
+/** Registro di ciascuna promo e colonne che identificano l'unita' della promo. */
+export const REGISTRO_PROMO: Record<TipoPromoAutomatica, { tabella: string; chiave: string[]; impostazioni: string }> = {
+  promo_incassi: { tabella: 'promo_incassi_sent_log', chiave: ['vehicle_id', 'year_month'], impostazioni: 'promo_incassi_settings' },
+  maxi_promo_gap: { tabella: 'maxi_promo_sent_log', chiave: ['vehicle_id', 'gap_signature'], impostazioni: 'maxi_promo_settings' },
+}
+
+/** recipient delle righe "posto" nel registro (non sono destinatari veri). */
+export const PREFISSO_POSTO_PROMO = 'coda:'
+
+/**
+ * Filtri del giro di Promo Incassi per (veicolo, mese). Registro come il cron
+ * di prima (promo_incassi_sent_log). Scade a fine mese: il mese dopo
+ * l'incasso del veicolo riparte da zero e la promo non e' piu' vera.
+ */
+export function filtriPromoIncassi(
+  v: { id: string; display_name: string },
+  ym: string, anno: number, mese: number, activeCoeff: number,
+  templateVars: Record<string, string>,
+): FiltriGiroPromo {
+  return {
+    promo: 'promo_incassi',
+    template_key: 'promo_incassi_whatsapp',
+    template_vars: templateVars,
+    chiave_unita: `${v.id}|${ym}`,
+    registro: { vehicle_id: v.id, year_month: ym, threshold_coeff: activeCoeff, template_key: 'pro_promo_incassi' },
+    scade_il: romaLocaleAUtc(anno, mese + 1, 1, 0).toISOString(),
+    etichetta: v.display_name,
+  }
+}
+
+/**
+ * Filtri del giro di Maxi Promo Gap per (veicolo, firma del buco). Registro
+ * come il cron di prima (maxi_promo_sent_log). Scade quando il buco finisce
+ * (ritiro della prenotazione successiva).
+ */
+export function filtriMaxiPromoGap(
+  v: { id: string; display_name: string },
+  gapDateDb: string, gapSignature: string, fineBuco: Date,
+  templateVars: Record<string, string>,
+): FiltriGiroPromo {
+  return {
+    promo: 'maxi_promo_gap',
+    template_key: 'maxi_promo_gap_whatsapp',
+    template_vars: templateVars,
+    chiave_unita: `${v.id}|${gapSignature}`,
+    registro: { vehicle_id: v.id, gap_date: gapDateDb, gap_signature: gapSignature, template_key: 'pro_maxi_promo_gap_1gg' },
+    scade_il: fineBuco.toISOString(),
+    etichetta: v.display_name,
+  }
+}
+
+/**
+ * Tutta la base clienti con telefono (customers_extended), a pagine: prima il
+ * broadcast leggeva una sola richiesta e PostgREST si fermava a 1000 righe.
+ * `normalizza` = la stessa pulizia del numero che usava il cron; un numero
+ * per persona, il primo cliente vince.
+ */
+export async function clientiConTelefono(
+  sb: SupabaseClient,
+  normalizza: (raw: string) => string | null,
+): Promise<DestinatarioCoda[]> {
+  const out: DestinatarioCoda[] = []
+  const visti = new Set<string>()
+  for (let page = 0; page < 200; page++) {
+    const { data, error } = await sb
+      .from('customers_extended')
+      .select('id, nome, cognome, telefono, email')
+      .not('telefono', 'is', null)
+      .order('id', { ascending: true })
+      .range(page * 1000, page * 1000 + 999)
+    if (error) throw new Error(`lettura clienti: ${error.message}`)
+    const righe = (data || []) as Array<{ id?: string; nome?: string | null; cognome?: string | null; telefono?: string | null; email?: string | null }>
+    for (const c of righe) {
+      const n = normalizza(c.telefono || '')
+      if (!n || visti.has(n)) continue
+      visti.add(n)
+      out.push({
+        nome: [c.nome, c.cognome].filter(Boolean).join(' ') || 'Cliente',
+        phone: n,
+        email: c.email || null,
+        customerId: c.id || null,
+      })
+    }
+    if (righe.length < 1000) break
+  }
+  return out
+}
+
+/** Motivi per cui send-whatsapp-notification salta perche' il template della promo e' spento o non assegnato. */
+const PROMO_SPENTA = ['template_disabled', 'pro_template_unavailable', 'legacy_template_blocked']
+
+async function numeriGiaRaggiuntiPromo(sb: SupabaseClient, filtri: FiltriGiroPromo): Promise<Set<string>> {
+  const out = new Set<string>()
+  const reg = REGISTRO_PROMO[filtri.promo]
+  // 1. Chi l'ha gia' ricevuta (registro della promo, anche invii di prima della coda).
+  for (let page = 0; page < 200; page++) {
+    let q = sb.from(reg.tabella).select('id, recipient')
+    for (const col of reg.chiave) q = q.eq(col, filtri.registro[col] as string)
+    const { data, error } = await q.order('id', { ascending: true }).range(page * 1000, page * 1000 + 999)
+    if (error) throw new Error(`lettura registro promo: ${error.message}`)
+    const righe = (data || []) as Array<{ recipient: string | null }>
+    for (const r of righe) {
+      const rec = String(r.recipient || '')
+      if (rec.startsWith(PREFISSO_POSTO_PROMO)) continue
+      const c = cifreNumero(rec)
+      if (c) out.add(c)
+    }
+    if (righe.length < 1000) break
+  }
+  // 2. Chi e' gia' passato dalla coda per la stessa promo, con QUALSIASI esito:
+  //    in coda, inviato, fallito (esito incerto: mai rimandato da solo), saltato.
+  const { data: giri, error } = await sb
+    .from('marketing_campaigns')
+    .select('id')
+    .eq('audience', AUDIENCE_PROMO_AUTOMATICHE)
+    .eq('audience_filters->>promo', filtri.promo)
+    .eq('audience_filters->>chiave_unita', filtri.chiave_unita)
+  if (error) throw new Error(`lettura giri della promo: ${error.message}`)
+  const ids = ((giri || []) as Array<{ id: string }>).map(g => g.id)
+  if (ids.length === 0) return out
+  for (let page = 0; page < 200; page++) {
+    const { data, error: recErr } = await sb
+      .from('marketing_campaign_recipients')
+      .select('id, phone')
+      .in('campaign_id', ids)
+      .order('id', { ascending: true })
+      .range(page * 1000, page * 1000 + 999)
+    if (recErr) throw new Error(`lettura destinatari della promo: ${recErr.message}`)
+    const righe = (data || []) as Array<{ phone: string | null }>
+    for (const r of righe) {
+      const c = cifreNumero(r.phone)
+      if (c) out.add(c)
+    }
+    if (righe.length < 1000) break
+  }
+  return out
+}
+
+/**
+ * Mette in coda UN giro del broadcast di una promo (una unita': veicolo +
+ * mese o veicolo + buco), al massimo una volta per `giorno`.
+ *
+ * - Nessun doppione: chi ha gia' ricevuto la promo (registro) o e' gia'
+ *   passato dalla coda per la stessa promo (in coda, inviato, fallito,
+ *   saltato) non si accoda di nuovo.
+ * - Nessuna perdita: se l'accodamento si interrompe il posto si libera e il
+ *   giro dopo del cron completa; chi era gia' entrato viene saltato.
+ */
+export async function accodaGiroPromo(sb: SupabaseClient, opts: {
+  filtri: FiltriGiroPromo
+  /** YYYY-MM-DD ora di Roma. */
+  giorno: string
+  destinatari: DestinatarioCoda[]
+}): Promise<EsitoAccodamento> {
+  const { filtri, giorno } = opts
+  const reg = REGISTRO_PROMO[filtri.promo]
+  const etichetta = `${ETICHETTA_PROMO[filtri.promo]}${filtri.etichetta ? `: ${filtri.etichetta}` : ''}`
+
+  const unici = new Map<string, DestinatarioCoda>()
+  for (const d of opts.destinatari) {
+    const c = cifreNumero(d.phone)
+    if (c.length >= 8 && !unici.has(c)) unici.set(c, { ...d, phone: c })
+  }
+  if (unici.size === 0) return { esito: 'nessuno', accodati: 0, giaInCoda: 0 }
+
+  // 1. Il posto del giro di oggi (indice unico del registro).
+  const { data: posto, error: postoErr } = await sb
+    .from(reg.tabella)
+    .insert({ ...filtri.registro, recipient: `${PREFISSO_POSTO_PROMO}${giorno}` })
+    .select('id')
+    .maybeSingle()
+  if (postoErr || !posto?.id) {
+    const duplicato = (postoErr as { code?: string } | null)?.code === '23505'
+    if (duplicato || !postoErr) return { esito: 'gia_accodato', accodati: 0, giaInCoda: 0 }
+    return { esito: 'errore', accodati: 0, giaInCoda: 0, motivo: postoErr.message }
+  }
+  const postoId = (posto as { id: string }).id
+  const liberaPosto = async () => {
+    await sb.from(reg.tabella).delete().eq('id', postoId)
+  }
+
+  // 2. Chi l'ha gia' avuta o e' gia' passato dalla coda per questa promo.
+  let raggiunti: Set<string>
+  try {
+    raggiunti = await numeriGiaRaggiuntiPromo(sb, filtri)
+  } catch (e) {
+    await liberaPosto()
+    return { esito: 'errore', accodati: 0, giaInCoda: 0, motivo: e instanceof Error ? e.message : String(e) }
+  }
+  const daAccodare = [...unici.values()].filter(d => !raggiunti.has(d.phone))
+  const giaInCoda = unici.size - daAccodare.length
+  // Nessuno di nuovo: il posto resta (il giro di oggi c'e' stato, vuoto).
+  if (daAccodare.length === 0) return { esito: 'nessuno', accodati: 0, giaInCoda }
+
+  // 3. Il giro.
+  const { data: giro, error: giroErr } = await sb
+    .from('marketing_campaigns')
+    .insert({
+      title: etichetta,
+      message_text: `Testo del template della promo (${filtri.template_key})`,
+      channel: 'whatsapp',
+      audience: AUDIENCE_PROMO_AUTOMATICHE,
+      audience_filters: { ...filtri, giorno },
+      total_recipients: daAccodare.length,
+      status: 'pending',
+      recurrence_type: 'none',
+    })
+    .select('id')
+    .single()
+  if (giroErr || !giro) {
+    await liberaPosto()
+    return { esito: 'errore', accodati: 0, giaInCoda, motivo: giroErr?.message || 'giro non creato' }
+  }
+  const giroId = (giro as { id: string }).id
+
+  // 4. I destinatari, a blocchi.
+  let accodati = 0
+  let motivoErrore: string | null = null
+  for (let i = 0; i < daAccodare.length; i += BLOCCO_INSERT) {
+    const righe = daAccodare.slice(i, i + BLOCCO_INSERT).map(d => ({
+      campaign_id: giroId,
+      customer_id: d.customerId && UUID_RE.test(d.customerId) ? d.customerId : null,
+      customer_name: d.nome || 'Cliente',
+      phone: d.phone,
+      email: d.email || null,
+      status: 'pending',
+    }))
+    let { error } = await sb.from('marketing_campaign_recipients').insert(righe)
+    if (error) ({ error } = await sb.from('marketing_campaign_recipients').insert(righe))
+    if (error) { motivoErrore = error.message; break }
+    accodati += righe.length
+  }
+  if (motivoErrore) {
+    if (accodati === 0) await sb.from('marketing_campaigns').delete().eq('id', giroId)
+    else await sb.from('marketing_campaigns').update({ total_recipients: accodati }).eq('id', giroId)
+    await liberaPosto()
+    return { esito: 'errore', accodati, giaInCoda, motivo: motivoErrore }
+  }
+  return { esito: 'accodato', accodati, giaInCoda }
+}
+
+/**
+ * La promo puo' partire adesso? Il modo deve essere ancora "broadcast" (modo
+ * spento o tornato pilota = invii fermi in coda) e il template della promo
+ * acceso e assegnato in Messaggi di Sistema Pro.
+ */
+export async function promoInviabile(sb: SupabaseClient, filtri: FiltriGiroPromo): Promise<{ ok: boolean; motivo?: string }> {
+  const reg = REGISTRO_PROMO[filtri.promo]
+  const { data: imp, error } = await sb.from(reg.impostazioni).select('mode').eq('id', 1).maybeSingle()
+  if (error) return { ok: false, motivo: `lettura impostazioni promo: ${error.message}` }
+  const mode = String((imp as { mode?: string } | null)?.mode || 'off')
+  if (mode !== 'broadcast') return { ok: false, motivo: `promo in modo ${mode}` }
+  try {
+    const { resolveKeyForContext } = await import('./messageTemplates')
+    const chiave = await resolveKeyForContext(filtri.template_key, { serviceType: 'rental' })
+    if (!chiave) return { ok: false, motivo: 'template della promo non assegnato' }
+    const { data: tpl } = await sb.from('system_messages').select('is_enabled').eq('message_key', chiave).maybeSingle()
+    if (tpl && (tpl as { is_enabled?: boolean }).is_enabled === false) return { ok: false, motivo: 'template della promo spento' }
+  } catch (e) {
+    return { ok: false, motivo: `template della promo non verificabile: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  return { ok: true }
+}
+
+/**
+ * Manda UN destinatario di un giro di una promo: stessa chiamata del cron di
+ * prima (stesso templateKey, booking, templateVars), solo verso quel numero
+ * e fuori dalla ripresa del System Control (decide la coda).
+ */
+export async function inviaDestinatarioPromo(filtri: FiltriGiroPromo, phone: string): Promise<EsitoInvioCoda> {
+  const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
+  return chiamaNotifica(baseUrl, {
+    templateKey: filtri.template_key,
+    booking: { service_type: 'rental' },
+    templateVars: filtri.template_vars,
+    customPhone: phone,
+    soloQuestoNumero: true,
+    codaInviiMassivi: true,
+  }, PROMO_SPENTA)
+}
+
+/** Dopo un invio riuscito: la riga del destinatario nel registro della promo. */
+export async function registraInvioPromo(sb: SupabaseClient, filtri: FiltriGiroPromo, phone: string): Promise<void> {
+  const reg = REGISTRO_PROMO[filtri.promo]
+  const { error } = await sb.from(reg.tabella).insert({ ...filtri.registro, recipient: phone })
+  // 23505 = gia' nel registro (es. invio pilota): va bene cosi'. Altro errore:
+  // il destinatario resta comunque "sent" nella coda, che basta a non rimandarlo.
+  if (error && (error as { code?: string }).code !== '23505') {
+    console.warn(`[coda-invii] registro ${reg.tabella} non scritto per ${phone}: ${error.message}`)
+  }
 }

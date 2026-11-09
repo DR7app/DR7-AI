@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import CodaPromoStato from './CodaPromoStato'
 
 /**
  * Maxi Promo Gap Marketing — dashboard.
@@ -117,6 +118,9 @@ export default function MaxiPromoGapTab() {
         const { data: logs } = await supabase
             .from('maxi_promo_sent_log')
             .select('vehicle_id, gap_date, recipient, sent_at')
+            // 09/11/2026: le righe "coda:<giorno>" sono il posto del giro in
+            // coda (broadcast), non invii a un cliente.
+            .not('recipient', 'like', 'coda:%')
             .gte('sent_at', fromIso)
             .lte('sent_at', toIso)
             .order('sent_at', { ascending: false })
@@ -444,6 +448,9 @@ export default function MaxiPromoGapTab() {
                             className="mt-3 w-full px-3 py-2 bg-dr7-gold text-black rounded font-semibold text-xs hover:opacity-90 disabled:opacity-50">
                             {savingSettings ? 'Salvataggio…' : 'Salva impostazioni'}
                         </button>
+                        <div className="mt-3">
+                            <CodaPromoStato promo="maxi_promo_gap" />
+                        </div>
                     </div>
 
                     {/* ANTEPRIMA WHATSAPP */}
