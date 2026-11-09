@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
 import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
+import { caricaTimbraturePeriodo } from '../../../utils/bustaPaga'
 import OperatorProfileModal from './OperatorProfileModal'
 import InviteOperatoreModal from './InviteOperatoreModal'
 import DateRangeFilter from '../../../components/DateRangeFilter'
@@ -525,16 +526,14 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             // ha mai timbrato) usciva "330h lavorate / 240h target = 138%
             // produttivita" perche' 330h era il totale di tutti gli altri.
             const restrictedOpIds = (isRestrictedToOwn ? opIds : null)
-            let timesheetQuery = supabase
-                .from('timesheet_entries')
-                .select('operatore_id, tipo, timestamp, data')
-                .gte('data', rangeFrom)
-                .lte('data', rangeTo)
-                .order('timestamp', { ascending: true })
-            if (restrictedOpIds && restrictedOpIds.length > 0) {
-                timesheetQuery = timesheetQuery.in('operatore_id', restrictedOpIds)
-            }
-            const { data: rangeEntries } = await timesheetQuery
+            // 09/11/2026: lettura paginata (utils/bustaPaga.ts). La richiesta
+            // unica si fermava a 1000 righe: su un mese gli ultimi giorni
+            // sparivano dalle ore e dai costi personale di tutti.
+            const { data: rangeEntries } = await caricaTimbraturePeriodo(
+                rangeFrom,
+                rangeTo,
+                restrictedOpIds && restrictedOpIds.length > 0 ? restrictedOpIds : undefined
+            )
             const byOpDay = new Map<string, Map<string, { entrata: string | null; uscita: string | null; pi: string[]; pf: string[] }>>()
             for (const e of (rangeEntries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
                 if (!byOpDay.has(e.operatore_id)) byOpDay.set(e.operatore_id, new Map())

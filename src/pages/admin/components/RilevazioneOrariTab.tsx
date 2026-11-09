@@ -15,6 +15,7 @@ import {
     PAUSA_NON_CONFIGURATA,
     type PausaObbligatoria,
 } from '../../../utils/pauseObbligatorie'
+import { caricaTimbraturePeriodo } from '../../../utils/bustaPaga'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 interface Operatore {
@@ -410,13 +411,15 @@ export default function RilevazioneOrariTab() {
                 const pauseWinByOpDay = new Map<string, { inizio: string; fine: string }[]>()
                 const uscitaByOpDay = new Map<string, string>()
                 if (periodRange.days.length > 0) {
-                    const { data: pauseEntries } = await supabase
-                        .from('timesheet_entries')
-                        .select('operatore_id, tipo, timestamp, data')
-                        .gte('data', periodRange.days[0])
-                        .lte('data', periodRange.days[periodRange.days.length - 1])
-                        .in('tipo', ['pausa_inizio', 'pausa_fine', 'uscita'])
-                        .order('timestamp', { ascending: true })
+                    // 09/11/2026: lettura paginata (utils/bustaPaga.ts). Una sola
+                    // richiesta per tutti gli operatori si fermava a 1000 righe:
+                    // su un mese le pause/uscite degli ultimi giorni sparivano.
+                    const { data: pauseEntries } = await caricaTimbraturePeriodo(
+                        periodRange.days[0],
+                        periodRange.days[periodRange.days.length - 1],
+                        undefined,
+                        { tipi: ['pausa_inizio', 'pausa_fine', 'uscita'] }
+                    )
                     const aperte = new Map<string, string[]>()
                     for (const e of (pauseEntries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
                         const key = `${e.operatore_id}|${e.data}`

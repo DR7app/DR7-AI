@@ -93,11 +93,15 @@ export function giorniDelPeriodo(from: string, to: string): string[] {
  * Timbrature del periodo, TUTTE: paginate a 1000 righe (tetto PostgREST).
  * Ordine stabile timestamp + id, cosi' nessuna riga salta tra una pagina e
  * l'altra. `data` e' la data Europe/Rome generata dal database.
+ * `operatoreIds` assente = tutti gli operatori visibili (RLS); `tipi` limita
+ * i tipi di timbratura letti. Usata da Buste Paga, Calcola Paga, Report
+ * Operatori e Rilevazione Orari: nessuna lettura di periodo si ferma a 1000.
  */
 export async function caricaTimbraturePeriodo(
     from: string,
     to: string,
-    operatoreIds?: string[]
+    operatoreIds?: string[],
+    opzioni?: { tipi?: string[] }
 ): Promise<{ data: TimbraturaBustaPaga[]; error: string | null }> {
     if (operatoreIds && operatoreIds.length === 0) return { data: [], error: null }
     const res = await fetchAllRows<TimbraturaBustaPaga>((da, a) => {
@@ -107,6 +111,7 @@ export async function caricaTimbraturePeriodo(
             .gte('data', from)
             .lte('data', to)
         if (operatoreIds && operatoreIds.length > 0) q = q.in('operatore_id', operatoreIds)
+        if (opzioni?.tipi && opzioni.tipi.length > 0) q = q.in('tipo', opzioni.tipi)
         return q
             .order('timestamp', { ascending: true })
             .order('id', { ascending: true })

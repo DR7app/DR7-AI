@@ -153,3 +153,22 @@ describe('giorniDelPeriodo', () => {
         expect(g).toEqual(['2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27'])
     })
 })
+
+// Report Operatori e Rilevazione Orari leggono tutti gli operatori (senza
+// filtro) e Rilevazione solo pause/uscite: anche queste letture superano 1000.
+describe('caricaTimbraturePeriodo: letture di Report e Rilevazione', () => {
+    beforeEach(() => { db.righe = seminaOttobre(); db.richieste = 0 })
+
+    it('senza filtro operatori legge tutte le 1296 righe del mese', async () => {
+        const res = await caricaTimbraturePeriodo('2026-10-01', '2026-10-31')
+        expect(res.data.length).toBe(1296)
+        expect(res.data.some(e => e.data === '2026-10-31')).toBe(true)
+    })
+
+    it('filtro per tipo: pause e uscite, nessuna entrata, ultimi giorni compresi', async () => {
+        const res = await caricaTimbraturePeriodo('2026-10-01', '2026-10-31', undefined, { tipi: ['pausa_inizio', 'pausa_fine', 'uscita'] })
+        expect(res.data.length).toBe(972)
+        expect(res.data.every(e => e.tipo !== 'entrata')).toBe(true)
+        expect(res.data.filter(e => e.data === '2026-10-31' && e.tipo === 'uscita').length).toBe(12)
+    })
+})
