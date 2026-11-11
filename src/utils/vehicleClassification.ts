@@ -10,7 +10,7 @@
  */
 import { classifyVehicle as classifyWashVehicle } from './classifyWashVehicle'
 
-export type VehicleCategory = 'urban' | 'maxi' | 'moto'
+export type VehicleCategory = 'urban' | 'maxi' | 'moto' | 'furgone'
 
 export interface ClassificationResult {
   category: VehicleCategory

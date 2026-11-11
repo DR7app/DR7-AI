@@ -698,7 +698,7 @@ export const handler: Handler = async (event) => {
             // Try exact match, with prefix, and without prefix
             const phoneVariants = [phone]
             if (phone.startsWith('39') && phone.length === 12) phoneVariants.push(phone.substring(2)) // without 39
-            if (!phone.startsWith('39') && phone.length === 10) phoneVariants.push('39' + phone) // with 39
+            if (phone.length === 10) phoneVariants.push('39' + phone) // with 39
             phoneVariants.push('+' + phone) // with +
 
             // roadmap #19: due o piu' lead possono condividere lo STESSO numero e

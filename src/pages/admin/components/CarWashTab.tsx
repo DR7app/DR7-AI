@@ -326,6 +326,7 @@ export default function CarWashTab() {
                 <option value="maxi">MAXI CLASS</option>
                 <option value="extra">EXTRA CARE</option>
                 <option value="moto">MOTO</option>
+                <option value="furgone">FURGONE</option>
                 <option value="experience">EXPERIENCE</option>
                 <option value="tech">TECH SERVICE</option>
               </select>

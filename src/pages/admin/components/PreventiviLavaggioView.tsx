@@ -71,10 +71,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   maxi: 'Maxi',
   extra: 'Extra',
   moto: 'Moto',
+  furgone: 'Furgone',
   experience: 'Experience',
   tech: 'Tech',
 }
-const ORDINE_CATEGORIE = ['urban', 'maxi', 'moto', 'tech', 'experience', 'extra']
+const ORDINE_CATEGORIE = ['urban', 'maxi', 'moto', 'furgone', 'tech', 'experience', 'extra']
 
 /** "45 min" / "2 ore" -> minuti. Stessa lettura del form Prenotazioni. */
 function durataInMinuti(duration: string | null | undefined): number {
@@ -705,7 +706,7 @@ export default function PreventiviLavaggioView() {
       // riserva per la durata quando totalDuration non c'e'.
       const principale = items.find(i => i.principale) || items[0] || null
       const servizioPrincipale = principale ? servizi.find(x => x.id === principale.serviceId) : null
-      const categoria = servizioPrincipale && ['urban', 'maxi', 'moto'].includes(servizioPrincipale.category)
+      const categoria = servizioPrincipale && ['urban', 'maxi', 'moto', 'furgone'].includes(servizioPrincipale.category)
         ? servizioPrincipale.category
         : null
       const durataBooking = p.duration_minutes || items.reduce((t, i) => t + (i.durationMinutes || 0), 0) || null

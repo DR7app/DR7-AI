@@ -126,6 +126,6 @@ export function numeroWhatsapp(telefono?: string | null): string | null {
     if (!clean) return null
     if (clean.startsWith('00')) clean = clean.slice(2)
     if (clean.startsWith('0')) clean = '39' + clean.slice(1)
-    if (!clean.startsWith('39') && clean.length === 10) clean = '39' + clean
+    if (clean.length === 10) clean = '39' + clean
     return clean.length >= 11 ? clean : null
 }

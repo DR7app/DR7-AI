@@ -29,7 +29,7 @@ function normalisePhone(raw: string): string | null {
     if (!clean) return null
     if (clean.startsWith('00')) clean = clean.slice(2)
     if (clean.startsWith('0')) clean = '39' + clean.slice(1)
-    if (!clean.startsWith('39') && clean.length === 10) clean = '39' + clean
+    if (clean.length === 10) clean = '39' + clean
     if (clean.length < 11) return null
     return clean
 }

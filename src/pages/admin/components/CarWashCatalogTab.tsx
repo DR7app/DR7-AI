@@ -48,11 +48,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   maxi: 'Maxi',
   extra: 'Extra',
   moto: 'Moto',
+  furgone: 'Furgone',
   experience: 'Experience',
   tech: 'Tech',
 }
 
-const LAVAGGIO_ORDER = ['urban', 'maxi', 'extra', 'moto', 'experience']
+const LAVAGGIO_ORDER = ['urban', 'maxi', 'extra', 'moto', 'furgone', 'experience']
 const MECCANICA_ORDER = ['tech']
 
 export default function CarWashCatalogTab() {

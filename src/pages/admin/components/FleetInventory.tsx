@@ -473,7 +473,7 @@ export default function FleetInventory() {
             cleaned = '39' + cleaned.substring(1)
         }
         // Add Italy prefix if 10 digits without prefix
-        if (!cleaned.startsWith('39') && cleaned.length === 10) {
+        if (cleaned.length === 10) {
             cleaned = '39' + cleaned
         }
         return cleaned

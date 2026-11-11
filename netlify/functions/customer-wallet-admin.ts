@@ -274,7 +274,7 @@ const handler: Handler = async (event) => {
           let cleanPhone = custPhone.replace(/\D/g, '')
           const phoneVariants = [cleanPhone]
           if (cleanPhone.startsWith('39') && cleanPhone.length === 12) phoneVariants.push(cleanPhone.substring(2))
-          if (!cleanPhone.startsWith('39') && cleanPhone.length === 10) phoneVariants.push('39' + cleanPhone)
+          if (cleanPhone.length === 10) phoneVariants.push('39' + cleanPhone)
           phoneVariants.push('+39' + cleanPhone.replace(/^39/, ''))
 
           let participant: any = null

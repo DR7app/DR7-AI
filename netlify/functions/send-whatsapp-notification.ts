@@ -172,7 +172,7 @@ const inviaUno: Handler = async (event) => {
   if (targetPhone.startsWith('00')) targetPhone = targetPhone.substring(2);
   // Numero italiano senza prefisso (10 cifre): si antepone 39. NON si tocca
   // un numero estero (es. francese 336..., 11 cifre), che e' gia' completo.
-  if (!targetPhone.startsWith('39') && targetPhone.length === 10) targetPhone = '39' + targetPhone;
+  if (targetPhone.length === 10) targetPhone = '39' + targetPhone;
   if (targetPhone.length < 8) {
     console.error('[send-whatsapp] numero inutilizzabile dopo la pulizia:', JSON.stringify(resolvedPhone), '->', targetPhone);
     return {

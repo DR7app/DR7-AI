@@ -792,12 +792,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (s.category === 'extra' || s.category === 'experience') return false
     // Moto mode: only show moto services
     if (vehicleCategory === 'moto') return s.category === 'moto'
+    // 11/11/2026 — Furgone: listino proprio come la moto (categoria `furgone`
+    // del Catalogo Lavaggio). Prima un furgone si prenotava come Maxi e
+    // pagava il prezzo auto.
+    if (vehicleCategory === 'furgone') return s.category === 'furgone'
     // If vehicle is classified (urban/maxi), only show matching services
     if (vehicleCategory && (s.category === 'urban' || s.category === 'maxi')) {
       return s.category === vehicleCategory
     }
     // Hide moto from general view (must be explicitly selected)
-    if (s.category === 'moto') return false
+    if (s.category === 'moto' || s.category === 'furgone') return false
     return true
   })
   // 2026-06-04: separa gli EXPERIENCE (Prime Courtesy Drive, Supercar, Icon)
@@ -3484,6 +3488,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (code === 'prenotazione_lavaggio_conferma') {
       const duration = getTotalDuration()
       const categoryLabel = vehicleCategory === 'moto' ? 'Moto'
+        : vehicleCategory === 'furgone' ? 'Furgone'
         : vehicleCategory === 'urban' ? 'Auto urban'
         : vehicleCategory === 'maxi' ? 'Auto maxi / SUV'
         : vehicleCategory === 'aziendali' ? 'Aziendale'
@@ -3571,6 +3576,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // l'OTP, e include ogni dettaglio operativo utile per autorizzare.
     if (code === 'carta_punti_lavaggio') {
       const categoryLabel = vehicleCategory === 'moto' ? 'Moto'
+        : vehicleCategory === 'furgone' ? 'Furgone'
         : vehicleCategory === 'urban' ? 'Auto urban'
         : vehicleCategory === 'maxi' ? 'Auto maxi / SUV'
         : vehicleCategory === 'aziendali' ? 'Aziendale'
@@ -3841,19 +3847,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </span>
                 </div>
 
-                {/* Tipo Targa tabs — Italiana | Estera | Moto */}
+                {/* Tipo Targa tabs — Italiana | Estera | Moto | Furgone */}
                 <div>
                   <label className="block text-[11px] uppercase tracking-wider font-semibold text-theme-text-muted mb-2">Tipo Targa</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {([
                       { key: 'italiana', label: 'Italiana' },
                       { key: 'estera', label: 'Estera' },
                       { key: 'moto', label: 'Moto' },
+                      { key: 'furgone', label: 'Furgone' },
                     ] as const).map(t => {
                       const active =
                         (t.key === 'moto' && vehicleCategory === 'moto') ||
+                        (t.key === 'furgone' && vehicleCategory === 'furgone') ||
                         (t.key === 'estera' && targaVehicleInfo?.brand === 'Targa Estera') ||
-                        (t.key === 'italiana' && vehicleCategory !== 'moto' && targaVehicleInfo?.brand !== 'Targa Estera')
+                        (t.key === 'italiana' && vehicleCategory !== 'moto' && vehicleCategory !== 'furgone' && targaVehicleInfo?.brand !== 'Targa Estera')
                       return (
                         <button
                           key={t.key}
@@ -3862,6 +3870,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             if (t.key === 'moto') {
                               setVehicleCategory(vehicleCategory === 'moto' ? null : 'moto')
                               setTargaVehicleInfo(vehicleCategory === 'moto' ? null : { brand: 'Moto', model: '' })
+                            } else if (t.key === 'furgone') {
+                              // La targa di un furgone spesso non viene riconosciuta:
+                              // si sceglie qui e resta comunque scrivibile a mano.
+                              setVehicleCategory(vehicleCategory === 'furgone' ? null : 'furgone')
+                              setTargaVehicleInfo(vehicleCategory === 'furgone' ? null : { brand: 'Furgone', model: '' })
+                              setClassificationSource('manual')
                             } else if (t.key === 'estera') {
                               setShowForeignPlateModal(true)
                             } else {
@@ -4127,6 +4141,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-colors">Maxi</button>
                         <button type="button" onClick={() => { setVehicleCategory('moto'); setClassificationSource('manual') }}
                           className="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 transition-colors">Moto</button>
+                        <button type="button" onClick={() => { setVehicleCategory('furgone'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 transition-colors">Furgone</button>
                       </div>
                     </div>
                   ) : (
@@ -4156,9 +4172,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         ? 'bg-blue-600 text-white'
                         : 'bg-orange-600 text-white'
                     }`}>
-                      {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                      {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'furgone' ? 'FURGONE' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                     </span>
-                    <span className="text-theme-text-primary font-medium">{vehicleCategory === 'moto' ? 'Moto / Scooter' : vehicleMakeModel}</span>
+                    <span className="text-theme-text-primary font-medium">{vehicleCategory === 'moto' ? 'Moto / Scooter' : vehicleCategory === 'furgone' ? (vehicleMakeModel || 'Furgone') : vehicleMakeModel}</span>
                   </div>
                 </div>
               )}
@@ -4179,6 +4195,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${vehicleCategory === 'maxi' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}>Maxi</button>
                     <button type="button" onClick={() => { setVehicleCategory('moto'); setClassificationSource('manual') }}
                       className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${vehicleCategory === 'moto' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}>Moto</button>
+                    <button type="button" onClick={() => { setVehicleCategory('furgone'); setClassificationSource('manual') }}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${vehicleCategory === 'furgone' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}>Furgone</button>
                   </div>
                   {classificationSource === 'manual' && (
                     <p className="text-xs text-cyan-400 mt-2">Categoria impostata manualmente.</p>
@@ -4482,7 +4500,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       : vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400'
                       : 'bg-orange-500/20 text-orange-400'
                   }`}>
-                    {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                    {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'furgone' ? 'FURGONE' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                   </span>
                   {vehicleMakeModel && vehicleCategory !== 'moto' && (
                     <span className="text-theme-text-muted text-xs">({vehicleMakeModel})</span>
@@ -4833,7 +4851,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 : vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-300'
                                 : 'bg-orange-500/20 text-orange-300'
                             }`}>
-                              {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                              {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'furgone' ? 'FURGONE' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                             </span>
                           )}
                         </div>
@@ -4978,7 +4996,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           : vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400'
                           : 'bg-orange-500/20 text-orange-400'
                       }`}>
-                        {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                        {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'furgone' ? 'FURGONE' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                       </span>
                     )}
                   </div>
@@ -5830,7 +5848,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                       : booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-400'
                                       : 'bg-orange-500/15 text-orange-400'
                                   }`}>
-                                    {booking.booking_details.vehicleCategory === 'moto' ? 'MO' : booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
+                                    {booking.booking_details.vehicleCategory === 'moto' ? 'MO' : booking.booking_details.vehicleCategory === 'furgone' ? 'F' : booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
                                   </span>
                                 )}
                               </div>
@@ -6049,7 +6067,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                   : booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-500'
                                   : 'bg-orange-500/15 text-orange-500'
                               }`}>
-                                {booking.booking_details.vehicleCategory === 'moto' ? 'MOTO' : booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                                {booking.booking_details.vehicleCategory === 'moto' ? 'MOTO' : booking.booking_details.vehicleCategory === 'furgone' ? 'FURGONE' : booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                               </span>
                             )}
                           </div>

@@ -139,7 +139,7 @@ const reviewHandler: Handler = async (event) => {
         if (cleanPhone.startsWith('0')) {
           cleanPhone = '39' + cleanPhone.substring(1);
         }
-        if (!cleanPhone.startsWith('39') && cleanPhone.length === 10) {
+        if (cleanPhone.length === 10) {
           cleanPhone = '39' + cleanPhone;
         }
         if (cleanPhone.length < 10) {
