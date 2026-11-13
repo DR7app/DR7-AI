@@ -180,6 +180,70 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     return () => { annullato = true }
   }, [customer?.id, customer?.user_id])
 
+  // 13/11/2026 (direzione): si ritirano le vecchie carte di cartone e i punti
+  // gia' maturati vanno azzerati, UNA volta sola per cliente ("altrimenti si
+  // possono fare danni"). Lo fa il database (dr7_fidelity_lavaggio_azzera,
+  // migrazione 20261113): qui si legge se e' gia' stato fatto. Tabella non
+  // ancora creata = pulsante nascosto, il resto della scheda non cambia.
+  const [azzeramentoFidelity, setAzzeramentoFidelity] = useState<
+    { stato: 'caricamento' | 'non_disponibile' | 'possibile' } |
+    { stato: 'fatto'; azzerato_at: string; punti_azzerati: number; azzerato_da_email: string | null }
+  >({ stato: 'caricamento' })
+  const [azzeraInCorso, setAzzeraInCorso] = useState(false)
+  useEffect(() => {
+    if (!customer?.id) { setAzzeramentoFidelity({ stato: 'caricamento' }); return }
+    let annullato = false
+    const ids = [customer.id, customer.user_id].filter(Boolean) as string[]
+    ;(async () => {
+      const { data, error } = await supabase.from('fidelity_lavaggio_azzeramenti')
+        .select('azzerato_at, punti_azzerati, azzerato_da_email')
+        .in('titolare', ids)
+        .order('azzerato_at', { ascending: true }).limit(1)
+      if (annullato) return
+      if (error) {
+        logger.warn('[Scheda cliente] azzeramento fidelity non leggibile:', error)
+        setAzzeramentoFidelity({ stato: 'non_disponibile' })
+        return
+      }
+      const r = (data || [])[0]
+      setAzzeramentoFidelity(r
+        ? { stato: 'fatto', azzerato_at: r.azzerato_at, punti_azzerati: Number(r.punti_azzerati) || 0, azzerato_da_email: r.azzerato_da_email || null }
+        : { stato: 'possibile' })
+    })()
+    return () => { annullato = true }
+  }, [customer?.id, customer?.user_id])
+
+  async function azzeraPuntiFidelity() {
+    if (!customer?.id || azzeraInCorso) return
+    const punti = Math.max(0, Number(customer.fidelity_points || 0))
+    if (!window.confirm(
+      `Azzerare i ${punti} punti della Fidelity Card lavaggio di questo cliente?\n\n`
+      + 'Si puo fare UNA sola volta per cliente e non si puo annullare. '
+      + 'Il totale storico e i premi gia emessi restano.'
+    )) return
+    setAzzeraInCorso(true)
+    try {
+      const { data, error } = await supabase.rpc('dr7_fidelity_lavaggio_azzera', { p_scheda: customer.id })
+      if (error) throw error
+      const esito = (data || {}) as { ok?: boolean; motivo?: string; azzerato_at?: string; punti_azzerati?: number; azzerato_da_email?: string | null }
+      if (esito.ok) {
+        setCustomer(prev => prev ? { ...prev, fidelity_points: 0 } : prev)
+        setAzzeramentoFidelity({ stato: 'fatto', azzerato_at: new Date().toISOString(), punti_azzerati: Number(esito.punti_azzerati) || 0, azzerato_da_email: null })
+        toast.success('Punti Fidelity azzerati')
+      } else if (esito.motivo === 'gia_azzerata') {
+        setAzzeramentoFidelity({ stato: 'fatto', azzerato_at: esito.azzerato_at || '', punti_azzerati: Number(esito.punti_azzerati) || 0, azzerato_da_email: esito.azzerato_da_email || null })
+        toast.error('Questo cliente e gia stato azzerato una volta')
+      } else {
+        throw new Error('Risposta non valida')
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String((err as { message?: string })?.message || err)
+      toast.error('Azzeramento non riuscito: ' + msg)
+    } finally {
+      setAzzeraInCorso(false)
+    }
+  }
+
   // Foto cliente (roadmap 21): upload diretto dalla scheda + salva su DB.
   async function uploadFoto(file: File) {
     if (!file.type.startsWith('image/')) { toast.error('Solo file immagine'); return }
@@ -1261,6 +1325,26 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                         : <span>Nessun premio nuovo finche il programma resta spento. I premi gia emessi restano validi.</span>}
                       <span>Totale punti: <span className="font-bold text-theme-text-primary tabular-nums">{totale}</span> · Premi: <span className="font-bold text-theme-text-primary tabular-nums">{premiFidelity.length}</span></span>
                     </div>
+                    {/* 13/11/2026: azzeramento una sola volta (ritiro della carta vecchia). */}
+                    {azzeramentoFidelity.stato === 'possibile' && attivo && (
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-theme-border pt-3">
+                        <span className="text-[11px] text-theme-text-muted">Ritiro della carta vecchia: si puo azzerare una sola volta.</span>
+                        <button
+                          type="button"
+                          onClick={azzeraPuntiFidelity}
+                          disabled={azzeraInCorso || punti === 0}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-500/40 text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {azzeraInCorso ? 'Azzeramento...' : 'Azzera punti'}
+                        </button>
+                      </div>
+                    )}
+                    {azzeramentoFidelity.stato === 'fatto' && (
+                      <div className="mt-3 border-t border-theme-border pt-3 text-[11px] text-theme-text-muted">
+                        Punti azzerati {azzeramentoFidelity.azzerato_at ? `il ${fmtDate(azzeramentoFidelity.azzerato_at)}` : ''}
+                        {' '}({azzeramentoFidelity.punti_azzerati} punti{azzeramentoFidelity.azzerato_da_email ? `, ${azzeramentoFidelity.azzerato_da_email}` : ''}). Non si puo azzerare di nuovo.
+                      </div>
+                    )}
                     {premiFidelity.length > 0 && (
                       <div className="mt-3 space-y-1">
                         {premiFidelity.slice(0, 5).map(pr => (
