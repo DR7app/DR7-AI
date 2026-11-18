@@ -160,6 +160,7 @@ interface Booking {
 import { useAdminRole as useAdminRoleInternal } from '../../../hooks/useAdminRole'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import { haServiziExtra } from '../../../utils/serviziExtraPrenotazione'
 
 /**
  * 2026-08-14 (roadmap #11) — `serviceType` rende questo calendario utilizzabile
@@ -1400,6 +1401,9 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
                       const finalWidth = Math.max(cellWidth, clampedRight - clampedLeft)
 
                       const bookingHasNotes = !!(evt.booking.booking_details?.notes && String(evt.booking.booking_details.notes).trim())
+                      // 18/11/2026: servizi extra prenotati (rose, ecc.) = bordo VIOLA,
+                      // come le note sono gialle. Con entrambi: viola fuori, giallo dentro.
+                      const bookingHasExtra = haServiziExtra(evt.booking)
 
                       return (
                         <div
@@ -1415,6 +1419,12 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
                             top: top,
                             height: barH,
                             ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {}),
+                            ...(bookingHasExtra ? {
+                              boxShadow: bookingHasNotes
+                                ? 'inset 0 0 0 2.5px #8B5CF6, inset 0 0 0 5px #FACC15'
+                                : 'inset 0 0 0 2.5px #8B5CF6',
+                              borderColor: '#8B5CF6',
+                            } : {}),
                             ...(isCollaboratoreCal ? { cursor: 'default' } : {}),
                           }}
                           onClick={(e) => {

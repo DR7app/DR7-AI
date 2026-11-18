@@ -26,8 +26,10 @@ import {
     type ModuloAllarmi,
 } from '../alarmDetectors'
 import { getRomeDateComponents } from '../timezoneUtils'
+import { serviziExtraPrenotati, serviziExtraInBreve, type ServizioExtraCatalogo } from '../serviziExtraPrenotazione'
 
 export const EXTRA_NUOVE_PRENOTAZIONI = 'nuove_prenotazioni'
+export const EXTRA_CATALOGO_SERVIZI_EXTRA = 'catalogo_servizi_extra'
 
 /** Quanto indietro si legge: la soglia massima sensata dal gestionale. */
 const ORE_LETTURA = 72
@@ -71,14 +73,23 @@ async function carica(now: Date, sb: ClienteAllarmi): Promise<Record<string, unk
     const da = new Date(now.getTime() - ORE_LETTURA * 60 * 60_000).toISOString()
     const { data, error } = await sb
         .from('bookings')
-        .select('id, created_at, service_type, service_name, vehicle_id, vehicle_name, customer_name, status, pickup_date, appointment_date, booking_source, booking_details')
+        .select('id, created_at, service_type, service_name, vehicle_id, vehicle_name, customer_name, status, pickup_date, dropoff_date, appointment_date, booking_source, booking_details')
         .gte('created_at', da)
         .neq('status', 'cancelled')
         .neq('status', 'annullata')
         .order('created_at', { ascending: false })
         .range(0, 999)
     if (error) throw error
-    return { [EXTRA_NUOVE_PRENOTAZIONI]: data || [] }
+    // 18/11/2026: nomi e prezzi dei servizi extra per l'allarme dedicato.
+    // Se la Centralina non si legge l'allarme suona lo stesso, con gli id.
+    let catalogo: ServizioExtraCatalogo[] = []
+    try {
+        const { data: cfg } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const exp = (cfg as any)?.config?.servizi?.experience
+        if (Array.isArray(exp)) catalogo = exp
+    } catch { /* ripiego: id grezzi */ }
+    return { [EXTRA_NUOVE_PRENOTAZIONI]: data || [], [EXTRA_CATALOGO_SERVIZI_EXTRA]: catalogo }
 }
 
 const booking_creata: Detector = (cfg, ctx, arg) => {
@@ -101,8 +112,40 @@ const booking_creata: Detector = (cfg, ctx, arg) => {
         }))
 }
 
+/**
+ * 18/11/2026: "Servizi extra prenotati". Un cliente ha prenotato 6 rose dal
+ * sito e nessuno se n'e' accorto. Si apre per ogni prenotazione viva creata
+ * entro la soglia (minuti dopo la creazione) che ha almeno un servizio extra;
+ * il dettaglio dice quali e quanti. Resta aperto finche' qualcuno preme Risolto.
+ */
+const servizi_extra_prenotati: Detector = (cfg, ctx) => {
+    const finestra = sogliaMs(cfg)
+    const righe = (ctx.extra?.[EXTRA_NUOVE_PRENOTAZIONI] || []) as BookingLite[]
+    const catalogo = (ctx.extra?.[EXTRA_CATALOGO_SERVIZI_EXTRA] || []) as ServizioExtraCatalogo[]
+    const out: Array<{ bookingId: string; vehicleId?: string; entita: string; dettaglio: string }> = []
+    for (const b of righe) {
+        if (!isViva(b)) continue
+        const servizio = servizioDellaPrenotazione(b)
+        if (!servizio) continue
+        const creata = new Date(String(b.created_at || '')).getTime()
+        if (!Number.isFinite(creata)) continue
+        const eta = ctx.now.getTime() - creata
+        if (eta < -60_000 || eta > finestra) continue
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const extra = serviziExtraPrenotati(b as any, catalogo)
+        if (!extra.length) continue
+        out.push({
+            bookingId: String(b.id),
+            vehicleId: b.vehicle_id ? String(b.vehicle_id) : undefined,
+            entita: etichetta(b, servizio),
+            dettaglio: serviziExtraInBreve(extra),
+        })
+    }
+    return out
+}
+
 export const moduloNuovePrenotazioni: ModuloAllarmi = {
     nome: 'nuove_prenotazioni',
-    detectors: { booking_creata },
+    detectors: { booking_creata, servizi_extra_prenotati },
     carica,
 }

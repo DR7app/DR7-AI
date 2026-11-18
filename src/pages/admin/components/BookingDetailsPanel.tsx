@@ -10,6 +10,8 @@ import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import { risolviTelefonoCliente } from '../../../utils/telefonoCliente'
+import { useRentalConfig } from '../../../hooks/useRentalConfig'
+import { serviziExtraPrenotati } from '../../../utils/serviziExtraPrenotazione'
 
 interface BookingDetailsPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +33,10 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   // Lavaggio e Meccanica sono lo stesso business (Prime Wash) e condividono
   // l'evento Pro "Pronta / servizio finito".
   const isPrimeWash = ['car_wash', 'mechanical'].includes(String(booking.service_type || '').toLowerCase())
+  // 18/11/2026: servizi extra (rose, ecc.) prenotati dal cliente. Prima la
+  // scheda non li mostrava: 6 rose prenotate dal sito, nessuno lo sapeva.
+  const { config: rentalConfigExtra } = useRentalConfig(booking.service_type)
+  const serviziExtra = serviziExtraPrenotati(booking, rentalConfigExtra?.experience_services || [])
 
   // 25/08/2026: Esc chiude il pannello. Aperto dal Calendario Giornaliero
   // (modale) l'unica via d'uscita era la X, che li' finiva sotto la barra in
@@ -527,6 +533,31 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 18/11/2026: Servizi extra prenotati — quantita' e prezzo. */}
+          {serviziExtra.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wider">Servizi Extra Prenotati</h3>
+              <div className="rounded border-2 border-violet-500 bg-violet-50 dark:bg-violet-500/10 divide-y divide-violet-200 dark:divide-violet-500/30">
+                {serviziExtra.map(r => (
+                  <div key={r.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-theme-text-primary">{r.nome}</div>
+                      <div className="text-xs text-theme-text-muted">
+                        {r.aGiorno
+                          ? `${r.quantita} x ${r.giorni} gg${r.prezzoUnita > 0 ? ` a ${formatEUR(Math.round(r.prezzoUnita * 100))}/giorno` : ''}`
+                          : `Quantita': ${r.quantita}${r.prezzoUnita > 0 ? ` a ${formatEUR(Math.round(r.prezzoUnita * 100))} cad.` : ''}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-lg font-bold text-violet-700 dark:text-violet-300 tabular-nums">x {r.quantita}</span>
+                      {r.totale > 0 && <span className="text-sm font-semibold text-theme-text-primary tabular-nums">{formatEUR(Math.round(r.totale * 100))}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
