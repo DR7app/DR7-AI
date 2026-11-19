@@ -9,7 +9,7 @@ import { invalidateCustomersCache } from '../utils/customersCache'
 import CalcolaCFButton from './CalcolaCFButton'
 import EuropeanDateInput from './EuropeanDateInput'
 import TelefonoConPrefisso from '../components/TelefonoConPrefisso'
-import { svuotaCacheClienti } from '../utils/authFetch'
+import { svuotaCacheClienti, authFetch } from '../utils/authFetch'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -498,6 +498,23 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // Il cliente appena salvato deve comparire subito nelle ricerche.
       svuotaCacheClienti()
       toast.success(editingId ? 'Cliente aggiornato con successo!' : 'Cliente creato con successo!')
+
+      // 19/11/2026: link di pagamento gia' pagati da questo cliente ma senza
+      // fattura perche' mancavano i dati: appena la scheda e' completa la
+      // fattura parte. Non blocca il salvataggio.
+      if (result?.id) {
+        authFetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ purchaseType: 'link_cliente', customerId: result.id }),
+        })
+          .then(r => r.json().catch(() => ({})))
+          .then((j: { esiti?: Array<{ numero?: string; nuova?: boolean }> }) => {
+            const emesse = (j?.esiti || []).filter(e => e.nuova && e.numero).map(e => e.numero)
+            if (emesse.length) toast.success(`Fattura emessa per link di pagamento: ${emesse.join(', ')}`)
+          })
+          .catch(() => { /* non bloccante */ })
+      }
 
       if (onClientCreated && result) {
         onClientCreated(result.id)

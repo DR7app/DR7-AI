@@ -2107,6 +2107,26 @@ const handler: Handler = async (event) => {
             } catch (linkErr) {
                 console.error('[nexi-payment-callback] Link cliente: registrazione carta fallita (non bloccante):', linkErr);
             }
+
+            // 19/11/2026: fattura del link cliente. Prima non partiva mai.
+            // Dati di fatturazione mancanti = la funzione la mette in attesa e
+            // parte al salvataggio della scheda cliente (CustomersTab).
+            if ((transaction.metadata?.payment_purpose || '') === 'cliente') {
+                try {
+                    const invRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}`,
+                        },
+                        body: JSON.stringify({ purchaseType: 'link_cliente', purchaseId: transaction.id }),
+                    });
+                    const esito = await invRes.json().catch(() => ({}));
+                    console.log(`[nexi-payment-callback] Link cliente fattura: HTTP ${invRes.status}`, JSON.stringify(esito).slice(0, 300));
+                } catch (invErr) {
+                    console.error('[nexi-payment-callback] Link cliente fattura fallita (non bloccante):', invErr);
+                }
+            }
         }
 
         return {

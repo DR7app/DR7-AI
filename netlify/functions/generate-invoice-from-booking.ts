@@ -350,6 +350,17 @@ export const handler: Handler = async (event) => {
     // else: no auth but has bookingId → proceed; the payment_status guard
     // below (line ~57) is the capability check.
 
+    // ── FATTURA LINK PAGAMENTO CLIENTE (19/11/2026) ──────────────────────
+    // Link creato dal tab Clienti, senza prenotazione: il cliente pagava e
+    // la fattura non partiva mai (nessuno la agganciava). Solo con
+    // autenticazione (callback Nexi con ADMIN_API_TOKEN, o il gestionale).
+    // purchaseId = una transazione; customerId = tutte quelle del cliente
+    // rimaste in attesa perche' mancavano i dati di fatturazione.
+    if (purchaseType === 'link_cliente') {
+        if (!hasAuthHeader) return { statusCode: 401, body: JSON.stringify({ error: 'Missing Authorization header' }) }
+        return handleLinkClienteFattura(purchaseId || null, explicitCustomerId || null)
+    }
+
     try {
 
         if (!bookingId) {
@@ -2329,6 +2340,153 @@ async function handlePrevenditaFattura(
         }
     } catch (error: any) {
         console.error('[Prevendita Fattura] Errore inatteso:', error)
+        return { statusCode: 500, body: JSON.stringify({ error: error.message || 'Unexpected error' }) }
+    }
+}
+
+/**
+ * 19/11/2026: fattura dei link di pagamento creati dal tab Clienti.
+ *
+ * Regola della direzione: se il cliente ha i dati di fatturazione la fattura
+ * parte al pagamento; se mancano non parte, e parte appena vengono inseriti
+ * (il tab Clienti richiama questa funzione con customerId dopo il salvataggio).
+ * Dati minimi: codice fiscale o partita IVA, e indirizzo.
+ * Idempotente: chiave `link_cliente:<transaction id>` unica a database.
+ */
+async function handleLinkClienteFattura(
+    transactionId: string | null,
+    customerId: string | null,
+): Promise<{ statusCode: number; body: string }> {
+    try {
+        let q = supabase.from('nexi_transactions').select('*').is('booking_id', null).in('status', ['completed', 'succeeded', 'paid'])
+        if (transactionId) q = q.eq('id', transactionId)
+        else if (customerId) q = q.eq('metadata->>customer_id', customerId)
+        else return { statusCode: 400, body: JSON.stringify({ error: 'purchaseId o customerId obbligatorio' }) }
+        const { data: transazioni, error: errTx } = await q.limit(50)
+        if (errTx) return { statusCode: 500, body: JSON.stringify({ error: errTx.message }) }
+        const righe = (transazioni || []).filter((t: any) => (t.metadata?.payment_purpose || '') === 'cliente')
+        if (!righe.length) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'nessun_link_cliente_pagato' }) }
+
+        const dynamicVatRate = await loadVatRate()
+        const esiti: any[] = []
+        for (const tx of righe) {
+            const notesMarker = `link_cliente:${tx.id}`
+            const { data: esistente } = await supabase.from('fatture').select('id, numero_fattura').eq('fattura_dedup_key', notesMarker).maybeSingle()
+            if (esistente) { esiti.push({ id: tx.id, skipped: 'gia_emessa', numero: esistente.numero_fattura }); continue }
+
+            const meta = tx.metadata || {}
+            const email = String(tx.customer_email || meta.customer_email || '').toLowerCase().trim()
+            let customerData: any = null
+            if (meta.customer_id) {
+                const { data } = await supabase.from('customers_extended').select('*').eq('id', meta.customer_id).maybeSingle()
+                customerData = data
+            }
+            if (!customerData && email) {
+                const { data } = await supabase.from('customers_extended').select('*').eq('email', email).maybeSingle()
+                customerData = data
+            }
+
+            const fullAddress = componiIndirizzo({
+                via: customerData?.indirizzo || '',
+                civico: customerData?.numero_civico || '',
+                cap: customerData?.codice_postale || customerData?.cap || '',
+                citta: customerData?.citta || customerData?.citta_residenza || '',
+                provincia: customerData?.provincia || customerData?.provincia_residenza || '',
+            })
+            const taxCode = String(customerData?.codice_fiscale || '').trim()
+            const vat = String(customerData?.partita_iva || '').trim()
+            if (!customerData || (!taxCode && !vat) || !String(customerData?.indirizzo || '').trim()) {
+                // Dati mancanti: niente fattura ora, si riprova al salvataggio del cliente.
+                await supabase.from('nexi_transactions').update({
+                    metadata: { ...meta, fattura_in_attesa_dati: true },
+                    updated_at: new Date().toISOString(),
+                }).eq('id', tx.id)
+                esiti.push({ id: tx.id, skipped: 'dati_mancanti' })
+                continue
+            }
+
+            const paidAmount = Number(tx.amount_cents || 0) / 100
+            if (!(paidAmount > 0)) { esiti.push({ id: tx.id, skipped: 'importo_zero' }); continue }
+            const netUnit = Number((paidAmount / (1 + dynamicVatRate / 100)).toFixed(2))
+            const items = [{
+                description: String(tx.description || 'Pagamento DR7').trim(),
+                unit_price: netUnit,
+                quantity: 1,
+                vat_rate: dynamicVatRate,
+                total: netUnit,
+            }]
+            const vatAmount = Number((paidAmount - netUnit).toFixed(2))
+
+            const currentYear = new Date().getFullYear()
+            let invoiceNumber = ''
+            for (let attempt = 0; attempt < 5; attempt++) {
+                const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+                if (seqError || seqResult == null) break
+                const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+                const { data: exist } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+                if (!exist) { invoiceNumber = candidate; break }
+            }
+            if (!invoiceNumber) { esiti.push({ id: tx.id, error: 'numero_fattura' }); continue }
+
+            const isAzienda = customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione'
+            const customerName = isAzienda
+                ? (customerData?.ragione_sociale || customerData?.denominazione || 'Cliente')
+                : (customerData?.nome ? `${customerData.nome} ${customerData.cognome || ''}`.trim() : (customerData?.ragione_sociale || customerData?.full_name || 'Cliente'))
+
+            const invoiceData: Record<string, any> = {
+                numero_fattura: invoiceNumber,
+                data_emissione: new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }),
+                importo_totale: paidAmount,
+                stato: 'paid',
+                customer_name: customerName,
+                customer_address: fullAddress,
+                customer_phone: customerData?.telefono || customerData?.phone || '',
+                customer_email: customerData?.email || email,
+                customer_tax_code: taxCode,
+                customer_vat: vat,
+                booking_id: null,
+                items,
+                subtotal: netUnit,
+                vat_amount: vatAmount,
+                exempt_amount: 0,
+                sdi_status: 'draft',
+                note: notesMarker,
+                fattura_dedup_key: notesMarker,
+                updated_at: new Date().toISOString(),
+            }
+            const { data: invoice, error: insertError } = await supabase.from('fatture').insert([invoiceData]).select().single()
+            if (insertError && (insertError as any).code === '23505') { esiti.push({ id: tx.id, skipped: 'gia_in_emissione' }); continue }
+            if (insertError || !invoice) { esiti.push({ id: tx.id, error: insertError?.message || 'insert' }); continue }
+
+            await supabase.from('nexi_transactions').update({
+                metadata: { ...meta, fattura_in_attesa_dati: false, fattura_id: invoice.id, fattura_numero: invoice.numero_fattura },
+                updated_at: new Date().toISOString(),
+            }).eq('id', tx.id)
+
+            const pdfUrl = await sendWalletFatturaPdfAndWhatsApp(invoice as any, customerData)
+            try {
+                const xmlContent = generateFatturaXML(invoice as any)
+                const filename = generateInvoiceFilename(invoice as any)
+                const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+                await supabase.from('fatture').update({
+                    sdi_status: 'sending',
+                    aruba_invoice_id: arubaResult.id,
+                    xml_filename: filename,
+                    aruba_upload_filename: arubaResult.filename,
+                    sdi_sent_at: new Date().toISOString(),
+                }).eq('id', invoice.id)
+            } catch (sdiErr: any) {
+                console.error('[Link Cliente Fattura] Invio SDI fallito (bozza):', sdiErr?.message)
+                await supabase.from('fatture').update({
+                    sdi_response: { auto_send_error: String(sdiErr?.message || sdiErr), at: new Date().toISOString() }
+                }).eq('id', invoice.id)
+            }
+            console.log(`[Link Cliente Fattura] ${invoice.numero_fattura} per transazione ${tx.id}`)
+            esiti.push({ id: tx.id, numero: invoice.numero_fattura, pdfUrl, nuova: true })
+        }
+        return { statusCode: 200, body: JSON.stringify({ success: true, esiti }) }
+    } catch (error: any) {
+        console.error('[Link Cliente Fattura] Errore inatteso:', error)
         return { statusCode: 500, body: JSON.stringify({ error: error.message || 'Unexpected error' }) }
     }
 }
