@@ -1149,27 +1149,41 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   async function createTourBooking(dep: TourDeparture) {
     const ids = Array.from(cartSeats)
     if (!ids.length) return
-    if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
-    // 17/09/2026: il Credit Wallet appartiene a una scheda Lead: senza, non si sa a chi chiedere il codice.
-    if (isCreditWallet(tourPayMethod) && !cust.id) { setError('Credit Wallet: seleziona il cliente dai Lead.'); return }
     const chosen = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
+    await prenotaPosti(dep, chosen)
+  }
+
+  // 19/11/2026: cuore della prenotazione tour, usato dal carrello posti E da
+  // "Prenota corsa" (corsa con autista in un solo passaggio). Ritorna true se
+  // la prenotazione e' stata creata.
+  async function prenotaPosti(dep: TourDeparture, chosen: TourSeat[]): Promise<boolean> {
+    if (!chosen.length) return false
+    if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return false }
+    // 17/09/2026: il Credit Wallet appartiene a una scheda Lead: senza, non si sa a chi chiedere il codice.
+    if (isCreditWallet(tourPayMethod) && !cust.id) { setError('Credit Wallet: seleziona il cliente dai Lead.'); return false }
     const priceOf = (s: TourSeat) => s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))
     // Prezzo manuale: se l'operatore ha scritto un importo, quello è il TOTALE
     // della prenotazione (override completo). Vuoto = totale automatico.
     const autoTotalCents = chosen.reduce((t, s) => t + priceOf(s), 0)
     const totalCents = tourPriceOverride.trim() ? eurToCents(tourPriceOverride) : autoTotalCents
     const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
+    // 19/11/2026: la riconsegna era uguale al ritiro (durata zero). Con la
+    // durata della partenza il mezzo risulta occupato per tutta la corsa.
+    const dropoffISO = dep.duration_minutes
+      ? new Date(new Date(pickupISO).getTime() + dep.duration_minutes * 60_000).toISOString()
+      : pickupISO
     const labelsStr = chosen.map(s => s.seat_label).join(', ')
     setBooking(true); setError('')
     // 17/09/2026 (direzione): senza il codice del cliente il Credit Wallet non si usa.
     const esitoWallet = await autWallet.chiediSeWallet(tourPayMethod, richiestaWalletTour(totalCents / 100))
-    if (esitoWallet === null) { setBooking(false); return }
+    if (esitoWallet === null) { setBooking(false); return false }
     const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (seatNames[s.id] || '').trim() || cust.name.trim(), phone: (seatPhones[s.id] || '').trim() || undefined }))
     const passengersLabel = passengersDetail.map(p => `Posto ${p.seat}: ${p.name}`).join('\n')
+    const dettagliPrenotazione = { tour_departure_id: dep.id, ...(selectedAsset?.id ? { vehicle_id: selectedAsset.id } : {}), seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, ...(dep.duration_minutes ? { duration_minutes: dep.duration_minutes } : {}), ...(dep.duration_label ? { duration_label: dep.duration_label } : {}), manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}), ...perBookingDetails(esitoWallet) }
     const { data: bk, error: be } = await supabase.from('bookings').insert({
       service_type: serviceType,
       vehicle_name: selectedAsset?.name || labels.title,
-      pickup_date: pickupISO, dropoff_date: pickupISO,
+      pickup_date: pickupISO, dropoff_date: dropoffISO,
       price_total: totalCents,
       // Stato come Noleggio/Car Wash: Da Saldare senza Conferma -> 'pending'
       // (va in "In attesa di pagamento"); Pagato o Conferma spuntata -> 'confirmed'.
@@ -1183,10 +1197,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       // manually_confirmed NON è una colonna di bookings: va in booking_details (come ReservationsTab).
       // vehicle_id = id del mezzo a catalogo: e' l'aggancio che il Report usa
       // per attribuire l'incasso. Senza, resta solo il nome esatto (vedi sopra).
-      booking_details: { tour_departure_id: dep.id, ...(selectedAsset?.id ? { vehicle_id: selectedAsset.id } : {}), seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}), ...perBookingDetails(esitoWallet) },
+      booking_details: dettagliPrenotazione,
       created_at: new Date().toISOString(),
     }).select('id').single()
-    if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
+    if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return false }
     const bookingId = (bk as { id: string }).id
     // Aggiorna ogni posto col proprio nome passeggero (fallback al contatto).
     for (const s of chosen) {
@@ -1214,8 +1228,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
         const linkData = await linkRes.json()
         if (linkRes.ok && linkData.paymentUrl) {
           await supabase.from('bookings').update({
+            // 19/11/2026: si aggiunge il link ai dettagli, senza perdere
+            // vehicle_id, note, conferma e wallet (prima venivano cancellati).
             booking_details: {
-              tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail,
+              ...dettagliPrenotazione,
               nexi_payment_link: linkData.paymentUrl,
               nexi_order_id: linkData.orderId || null,
               payment_link_created_at: new Date().toISOString(),
@@ -1319,6 +1335,58 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
 
     setBooking(false); clearCart()
     loadSeats(dep.id)
+    return true
+  }
+
+  // ── PRENOTA CORSA (19/11/2026) ──────────────────────────────────────────
+  // Richiesta della direzione: una corsa con autista (o un tour) e' un
+  // servizio: si sceglie cliente, data, durata, prezzo e pagamento in un solo
+  // passaggio, senza creare prima la partenza e i posti. Dietro le quinte si
+  // crea una partenza da 1 posto e si usa lo stesso flusso del carrello:
+  // link Nexi, conferma WhatsApp, fattura al pagamento.
+  const [showCorsa, setShowCorsa] = useState(false)
+  const [corsa, setCorsa] = useState({ date: '', time: '10:00', duration_label: '', duration_minutes: '' })
+  function apriCorsa() {
+    clearCart(); setError('')
+    setCorsa({ date: '', time: '10:00', duration_label: '', duration_minutes: '' })
+    setShowCorsa(true)
+  }
+  async function prenotaCorsa() {
+    if (!assetId) { setError('Seleziona prima il veicolo.'); return }
+    if (!corsa.date) { setError('Inserisci la data della corsa.'); return }
+    if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
+    if (!tourPriceOverride.trim() || !(eurToCents(tourPriceOverride) > 0)) { setError('Inserisci il prezzo della corsa.'); return }
+    if (!tourPayMethod) { setError('Scegli il metodo di pagamento.'); return }
+    if (isCreditWallet(tourPayMethod) && !cust.id) { setError('Credit Wallet: seleziona il cliente dai Lead.'); return }
+    setSaving(true); setError('')
+    const minuti = corsa.duration_minutes ? parseInt(corsa.duration_minutes, 10) : null
+    const { data, error: e } = await supabase.from('noleggio_tour_departures').insert({
+      [tourColonnaMezzo(serviceType)]: assetId,
+      departure_date: corsa.date,
+      departure_time: corsa.time || '10:00',
+      total_seats: 1,
+      price_per_seat_cents: eurToCents(tourPriceOverride),
+      duration_minutes: minuti,
+      duration_label: corsa.duration_label || null,
+      status: 'scheduled',
+    }).select('*').single()
+    if (e || !data) { setSaving(false); setError(tourTableHint(e?.message || 'Errore creazione corsa')); return }
+    const dep = data as TourDeparture
+    const { data: seat, error: se } = await supabase.from('noleggio_tour_seats')
+      .insert({ departure_id: dep.id, seat_label: '1', seat_position: 1 }).select('*').single()
+    if (se || !seat) {
+      await supabase.from('noleggio_tour_departures').delete().eq('id', dep.id)
+      setSaving(false); setError('Errore creazione corsa: ' + (se?.message || '')); return
+    }
+    const ok = await prenotaPosti(dep, [seat as TourSeat])
+    setSaving(false)
+    if (!ok) {
+      // Prenotazione non creata (wallet annullato, errore): niente partenza vuota in giro.
+      await supabase.from('noleggio_tour_departures').delete().eq('id', dep.id)
+      return
+    }
+    setShowCorsa(false)
+    loadDepartures(assetId)
   }
 
   function openNewDeparture() {
@@ -1419,7 +1487,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   return (
     <div className="space-y-4">
       <Header title={`${labels.title} — Tour & Posti`} action={
-        <button onClick={openNewDeparture} disabled={!assetId} className={BTN_PRIMARY}>+ Nuova partenza</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={apriCorsa} disabled={!assetId} className={BTN_PRIMARY}>+ Prenota corsa</button>
+          <button onClick={openNewDeparture} disabled={!assetId} className={BTN_GHOST}>+ Nuova partenza (posti)</button>
+        </div>
       } />
       {error && <ErrorBox msg={error} />}
       {autWallet.modale}
@@ -1627,6 +1698,105 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {showCorsa && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4" onClick={() => !saving && !booking && setShowCorsa(false)}>
+          <div className="min-h-full flex items-start sm:items-center justify-center">
+          <div className="my-4 bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Prenota corsa — {selectedAsset?.name || ''}</h3>
+              <p className="text-xs text-theme-text-muted mt-0.5">Cliente, data, prezzo e pagamento. Il link Nexi, la conferma e la fattura partono come per gli altri servizi.</p>
+            </div>
+            {error && <ErrorBox msg={error} />}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-theme-text-muted">Data *</label>
+                <EuropeanDateInput className={INPUT_CLS} value={corsa.date} onChange={(__v: string) => setCorsa({ ...corsa, date: __v })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Orario *</label>
+                <input className={INPUT_CLS} type="time" value={corsa.time} onChange={e => setCorsa({ ...corsa, time: e.target.value })} />
+              </div>
+            </div>
+            {selectedAsset?.tour_durations && selectedAsset.tour_durations.length > 0 && (
+              <div>
+                <label className="text-xs text-theme-text-muted">Durata (preset)</label>
+                <select
+                  className={INPUT_CLS}
+                  value={selectedAsset.tour_durations.some(x => x.label === corsa.duration_label) ? corsa.duration_label : '__custom__'}
+                  onChange={e => {
+                    if (e.target.value === '__custom__') return
+                    const d = selectedAsset!.tour_durations!.find(x => x.label === e.target.value)
+                    if (d) { setCorsa(c => ({ ...c, duration_label: d.label, duration_minutes: String(d.minutes) })); setTourPriceOverride(String(d.price)) }
+                  }}
+                >
+                  {selectedAsset.tour_durations.map((d, i) => (
+                    <option key={i} value={d.label}>{d.label} — €{d.price}</option>
+                  ))}
+                  <option value="__custom__">Personalizzata…</option>
+                </select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-theme-text-muted">Durata (etichetta)</label>
+                <input className={INPUT_CLS} placeholder="es. 2 ore" value={corsa.duration_label} onChange={e => setCorsa({ ...corsa, duration_label: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Minuti</label>
+                <input className={INPUT_CLS} inputMode="numeric" placeholder="es. 120" value={corsa.duration_minutes} onChange={e => setCorsa({ ...corsa, duration_minutes: e.target.value.replace(/\D/g, '') })} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-theme-text-muted">Prezzo corsa (€) *</label>
+              <input className={INPUT_CLS} inputMode="decimal" placeholder="es. 150" value={tourPriceOverride} onChange={e => setTourPriceOverride(e.target.value)} />
+            </div>
+            <LeadPicker onPick={(name, phone, id) => setCust({ name: name || cust.name, phone: phone || cust.phone, id })} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input className={INPUT_CLS} placeholder="Nome cliente *" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value, id: undefined })} />
+              <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false}
+                placeholder="Telefono *" value={cust.phone} onChange={v => setCust({ ...cust, phone: v })} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-theme-text-muted">Stato Pagamento</label>
+                <select className={INPUT_CLS} value={tourPayStatus} onChange={e => setTourPayStatus(e.target.value)}>
+                  {PAY_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Metodo di Pagamento *</label>
+                <select className={INPUT_CLS} value={tourPayMethod} onChange={e => {
+                  const m = e.target.value
+                  setTourPayMethod(m)
+                  if (isCreditWallet(m) && cust.id) {
+                    autWallet.chiediSeWallet(m, richiestaWalletTour(eurToCents(tourPriceOverride || '0') / 100))
+                  } else if (isCreditWallet(m)) {
+                    toast.error('Credit Wallet: seleziona il cliente dai Lead per chiedere il codice.')
+                  }
+                }}>
+                  <option value="">— seleziona —</option>
+                  {tourPaymentMethods.filter(m => m.is_enabled !== false).map(m => <option key={m.key || m.label} value={m.label}>{m.label}</option>)}
+                </select>
+              </div>
+            </div>
+            {isNexiPbl(tourPayMethod) && tourPayStatus === 'pending' && <p className="text-[11px] text-theme-text-muted">Verra' generato e inviato il link di pagamento Nexi al cliente. Al pagamento parte la fattura.</p>}
+            <div>
+              <label className="text-xs text-theme-text-muted">Note (opzionale)</label>
+              <textarea className={INPUT_CLS} rows={2} placeholder="Percorso, punto di incontro, autista…" value={tourNote} onChange={e => setTourNote(e.target.value)} />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-theme-text-secondary cursor-pointer">
+              <input type="checkbox" checked={tourConfirm} onChange={e => setTourConfirm(e.target.checked)} />
+              Conferma Prenotazione (invia messaggio di conferma al cliente)
+            </label>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setShowCorsa(false)} disabled={saving || booking} className={BTN_GHOST}>Annulla</button>
+              <button onClick={prenotaCorsa} disabled={saving || booking} className={BTN_PRIMARY}>{saving || booking ? 'Creazione…' : 'Prenota corsa'}</button>
+            </div>
+          </div>
+          </div>
         </div>
       )}
 
