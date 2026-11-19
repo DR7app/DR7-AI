@@ -39,6 +39,7 @@ import MeteoConfigSection from './MeteoConfigSection'
 import lazyWithRetry from '../../../utils/lazyWithRetry'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 import { isVoceSforoKm } from '../../../utils/sforoKmContratto'
+import { OPZIONI_PREAVVISO_ORE, etichettaPreavviso } from '../../../utils/preavvisoServizi'
 const SitoSection = lazyWithRetry(() => import('./SitoTab'))
 // 05/10/2026 (direzione): Gestione OTP non e' piu' nel menu laterale, vive
 // qui (stesso componente, nessuna copia) insieme ai popup di avviso e ai suoni.
@@ -165,6 +166,8 @@ type ExperienceService = {
    *  essere selezionabili nel wizard del sito — es. Pacchetto KM Extra). */
   admin_only?: boolean
   tier_only: string // '' = all fasce, otherwise fascia.id
+  /** 19/11/2026: ore minime prima del ritiro per poterlo prenotare sul sito. 0/assente = nessun limite. */
+  preavviso_ore?: number
 }
 
 type PickupLocation = {
@@ -202,7 +205,8 @@ type ServiziConfig = {
    * mappa `categoryId → €/km` ed e' la sorgente di verita' per il
    * calcolo. Le categorie sono lette dinamicamente da `categories`.
    */
-  delivery: { price_per_km: number | ''; by_category?: Record<string, number | ''> }
+  /** preavviso_ore (19/11/2026): ore minime prima del ritiro/riconsegna per la consegna o il ritiro a domicilio. */
+  delivery: { price_per_km: number | ''; by_category?: Record<string, number | ''>; preavviso_ore?: number }
   second_driver: Record<string, number | ''> // keyed by fascia.id
   /**
    * Pickup locations the admin can pick from when creating a preventivo or
@@ -3254,6 +3258,7 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       if (p.unit !== s.unit) out.push(`Servizi / ${s.name}: unita ${UNIT_LABELS[p.unit]} → ${UNIT_LABELS[s.unit]}`)
       if (p.tier_only !== s.tier_only) out.push(`Servizi / ${s.name}: restrizione fascia modificata`)
       if (p.is_active !== s.is_active) out.push(`Servizi / ${s.name}: ${s.is_active ? 'attivato' : 'disattivato'}`)
+      if ((Number(p.preavviso_ore) || 0) !== (Number(s.preavviso_ore) || 0)) out.push(`Servizi / ${s.name}: preavviso ${etichettaPreavviso(p.preavviso_ore)} → ${etichettaPreavviso(s.preavviso_ore)}`)
     })
 
     const cf = current.servizi.dr7_flex
@@ -3265,6 +3270,7 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
 
     if (saved.servizi.lavaggio.fee !== current.servizi.lavaggio.fee) out.push(`Pulizia Finale: €${saved.servizi.lavaggio.fee} → €${current.servizi.lavaggio.fee}`)
     if (saved.servizi.lavaggio.mandatory !== current.servizi.lavaggio.mandatory) out.push(`Pulizia Finale: ${current.servizi.lavaggio.mandatory ? 'obbligatoria' : 'facoltativa'}`)
+    if ((Number(saved.servizi.delivery.preavviso_ore) || 0) !== (Number(current.servizi.delivery.preavviso_ore) || 0)) out.push(`Consegna a domicilio: preavviso ${etichettaPreavviso(saved.servizi.delivery.preavviso_ore)} → ${etichettaPreavviso(current.servizi.delivery.preavviso_ore)}`)
     if (saved.servizi.delivery.price_per_km !== current.servizi.delivery.price_per_km) out.push(`Consegna a domicilio (default): €${saved.servizi.delivery.price_per_km} → €${current.servizi.delivery.price_per_km}/km`)
     {
       const savedByCat = saved.servizi.delivery.by_category ?? {}
@@ -5216,6 +5222,18 @@ function ServiziSection({
                     <option key={f.id} value={f.id}>Solo {f.label}</option>
                   ))}
                 </select>
+                <label className="inline-flex items-center gap-1.5 text-[12px] text-theme-text-secondary" title="Quanto tempo prima del ritiro il cliente deve prenotarlo. Sul sito, se il ritiro e' piu' vicino, il servizio non si puo' scegliere.">
+                  Preavviso
+                  <select
+                    value={Number(s.preavviso_ore) || 0}
+                    onChange={(e) => patchExp(s.id, { preavviso_ore: Number(e.target.value) })}
+                    className="bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  >
+                    {OPZIONI_PREAVVISO_ORE.map((h) => (
+                      <option key={h} value={h}>{etichettaPreavviso(h)}</option>
+                    ))}
+                  </select>
+                </label>
                 <label className="inline-flex items-center gap-1.5 cursor-pointer text-[12px] text-theme-text-secondary" title="Visibile SOLO in admin, nascosto dal wizard del sito.">
                   <input
                     type="checkbox"
@@ -5412,6 +5430,23 @@ function ServiziSection({
             className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-4 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
+
+          {/* 19/11/2026: preavviso minimo per consegna/ritiro a domicilio. */}
+          <label className="flex items-center justify-between gap-3 mb-4">
+            <span className="text-[13px] text-theme-text-primary">
+              Preavviso minimo
+              <span className="block text-[12px] text-theme-text-secondary">Sul sito la consegna o il ritiro a domicilio non si possono scegliere se mancano meno ore di cosi'.</span>
+            </span>
+            <select
+              value={Number(servizi.delivery.preavviso_ore) || 0}
+              onChange={(e) => setServizi({ ...servizi, delivery: { ...servizi.delivery, preavviso_ore: Number(e.target.value) } })}
+              className="bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 shrink-0"
+            >
+              {OPZIONI_PREAVVISO_ORE.map((h) => (
+                <option key={h} value={h}>{etichettaPreavviso(h)}</option>
+              ))}
+            </select>
+          </label>
 
           {/* Per-category prices (no flat fallback — se manca un prezzo, consegna = €0).
               2026-05-29: layout stack (label sopra, input sotto) cosi' i nomi
