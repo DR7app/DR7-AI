@@ -33,11 +33,11 @@
 import { schedule } from '@netlify/functions';
 import { createHash } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { matchesAdvancedFilters, matchesServiceType, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
-import { getEmailFromSmtp } from './utils/emailFrom'
+import { getEmailFrom } from './utils/emailFrom'
 import { conSystemControl, funzioneFerma } from './utils/systemControl'
 import { recuperaRichiesteIbanMancanti } from './utils/richiestaIbanCauzione'
 import { accodaGiroMessaggiSistema } from './utils/codaInviiMassivi'
@@ -98,14 +98,9 @@ const WEATHER_TEMPLATE_KEYS = new Set(['pro_allerta_meteo', 'pro_allerta_meteo_m
 // 07:00. Copre l'intero cron (template clienti + promemoria autista + rimborso
 // cauzioni). Prima le colonne quiet_hours_start/end esistevano ma non venivano
 // mai applicate: qualsiasi messaggio poteva partire di notte.
-// SMTP condiviso con le altre funzioni (info@dr7.app): serve all'avviso di
-// scadenza cauzione quando in Centralina Pro e' impostata anche un'email.
-const avvisoTransporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-});
+// Email dell'avviso di scadenza cauzione: via Resend come le altre email del
+// gestionale (22/11/2026). Con l'SMTP gli avvisi arrivavano solo su WhatsApp.
+const avvisoResend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const QUIET_START_HOUR = 22; // incluso: da 22:00
 const QUIET_END_HOUR = 7;    // escluso: fino alle 06:59, riparte alle 07:00
@@ -1464,8 +1459,9 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
         // Email: stesso testo, agli indirizzi scelti in Centralina Pro.
         for (const to of (fermaEmail ? [] : cfg.email)) {
             try {
-                await avvisoTransporter.sendMail({
-                    from: await getEmailFromSmtp('"DR7 Cauzioni" <info@dr7.app>'),
+                if (!avvisoResend) throw new Error('RESEND_API_KEY non configurata su Netlify');
+                const { error: resendErr } = await avvisoResend.emails.send({
+                    from: await getEmailFrom('DR7 Cauzioni <info@dr7.app>'),
                     to,
                     subject: `Scadenza cauzione — ${nome}`,
                     text: body,
@@ -1473,6 +1469,7 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
                         body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                     }</pre>`,
                 });
+                if (resendErr) throw new Error(resendErr.message || 'Resend: invio rifiutato');
                 ok = true;
                 email.inviate++;
             } catch (e) {
