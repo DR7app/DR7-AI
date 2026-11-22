@@ -25,7 +25,7 @@ import MoneyInput from '../../../components/MoneyInput'
 import AlarmInventoryModal from '../../../components/admin/AlarmInventoryModal'
 import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
-import CauzioneScadenzaConfig from './CauzioneScadenzaConfig'
+import CauzioneScadenzaConfig, { type CauzioneScadenzaHandle } from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import FidelityLavaggioSection from './FidelityLavaggioSection'
 import EmtnSoglieSection from './EmtnSoglieSection'
@@ -2407,8 +2407,15 @@ export default function CentralinaProTab() {
     ]
   )
 
+  // Pannello Cauzioni > Scadenza/Avviso: scrive su cauzioni_config, non sulla
+  // config di Centralina. Le sue modifiche entrano nella barra in basso e il
+  // Salva della barra le salva (prima andavano perse, 22/11/2026).
+  const cauzioneScadenzaRef = useRef<CauzioneScadenzaHandle>(null)
+  const [cauzioneChanges, setCauzioneChanges] = useState<string[]>([])
+
   const submitLockRef = useRef(false)
   function handleSave() {
+    if (cauzioneChanges.length > 0) void cauzioneScadenzaRef.current?.save()
     if (submitLockRef.current) return
     submitLockRef.current = true
     try {
@@ -2468,6 +2475,7 @@ export default function CentralinaProTab() {
   }
 
   function handleDiscard() {
+    cauzioneScadenzaRef.current?.reload()
     setCategories(savedCategories)
     setFasce(savedFasce)
     setInsurance(savedInsurance)
@@ -2649,7 +2657,7 @@ export default function CentralinaProTab() {
                       Prima era scritta in due posti in disaccordo (trigger DB a
                       giorni di calendario, Netlify a 14 lavorativi in duro). */}
                   <GlobaleBadge cosa="La scadenza di restituzione della cauzione" />
-                  <CauzioneScadenzaConfig />
+                  <CauzioneScadenzaConfig ref={cauzioneScadenzaRef} onChangesChange={setCauzioneChanges} />
                   <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
                 </>
               )
@@ -2825,7 +2833,7 @@ export default function CentralinaProTab() {
         && section !== 'sito' && section !== 'gestione-otp'
         && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && section !== 'fidelity-lavaggio' && section !== 'emtn' && (
         <SaveBar
-          changes={changes}
+          changes={cauzioneChanges.length > 0 ? [...changes, ...cauzioneChanges] : changes}
           justSaved={justSaved}
           onSave={handleSave}
           onDiscard={handleDiscard}

@@ -1300,8 +1300,11 @@ function romeDatePlus(now: number, giorni: number): string {
     return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
 }
 
-export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?: boolean }): Promise<{ sent: number; skipped: number; errors: number; reason?: string }> {
+export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?: boolean }): Promise<{ sent: number; skipped: number; errors: number; reason?: string; email?: { inviate: number; errori: string[]; ferma?: string } }> {
     let sent = 0, skipped = 0, errors = 0;
+    // Esito delle email, restituito a "Invia ora": prima un errore SMTP veniva
+    // contato e basta, e lo staff vedeva solo che "arriva solo WhatsApp".
+    const email = { inviate: 0, errori: [] as string[], ferma: undefined as string | undefined };
     const force = opts?.force === true;
 
     // 1) Template varianti approvate (toggle ON/OFF in Messaggi di Sistema Pro).
@@ -1447,7 +1450,7 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
         const fermaWa = await funzioneFerma('invio_whatsapp');
         const fermaEmail = await funzioneFerma('invio_email');
         if (fermaWa) console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWa);
-        if (fermaEmail) console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaEmail);
+        if (fermaEmail) { console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaEmail); email.ferma = fermaEmail; }
         let ok = false;
         for (const r of (fermaWa ? [] : recipients)) {
             try {
@@ -1471,7 +1474,13 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
                     }</pre>`,
                 });
                 ok = true;
-            } catch { errors++; }
+                email.inviate++;
+            } catch (e) {
+                errors++;
+                const msg = `${to}: ${(e as Error)?.message || String(e)}`.slice(0, 200);
+                console.error('[scadenza-cauzione] email non inviata', msg);
+                if (!email.errori.includes(msg)) email.errori.push(msg);
+            }
         }
         if (ok) {
             sent++;
@@ -1483,7 +1492,7 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
         }
     }
 
-    return { sent, skipped, errors };
+    return { sent, skipped, errors, email };
 }
 
 export async function processCauzioniRimborsoStaffReminder(now: number, opts?: { force?: boolean }): Promise<{ sent: number; skipped: number; errors: number; reason?: string }> {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { ScheletroTesto } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -59,7 +59,40 @@ function calcolaScadenza(da: Date, giorni: number, modalita: 'lavorativi' | 'cal
 
 const DATA_IT = (d: Date) => d.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 
-export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?: boolean }) {
+/** Valori del pannello cosi' come stanno nel database (per capire cosa e' cambiato). */
+type Salvato = {
+  giorni: number | ''
+  modalita: 'lavorativi' | 'calendario'
+  orarioInvio: number | ''
+  avvisoModalita: 'automatico' | 'manuale'
+  avvisoOffsets: number[]
+  avvisoWhatsapp: string
+  avvisoEmail: string
+}
+
+/**
+ * Comandi esposti a Centralina Pro: il pulsante Salva della barra in basso
+ * salva anche questo pannello (22/11/2026). Prima lo salvava SOLO il piccolo
+ * "Salva" in cima al pannello: chi cambiava numeri o email dell'avviso e
+ * premeva il Salva in basso vedeva "Modifiche salvate" ma al ricarico
+ * ritrovava i valori vecchi (la barra scrive centralina_pro_config, questo
+ * pannello scrive cauzioni_config).
+ */
+export type CauzioneScadenzaHandle = {
+  save: () => Promise<boolean>
+  reload: () => void
+}
+
+type Props = {
+  readOnly?: boolean
+  /** Elenco leggibile delle modifiche non salvate, per la barra in basso. */
+  onChangesChange?: (changes: string[]) => void
+}
+
+const ordina = (a: number[]) => [...a].sort((x, y) => x - y).join(',')
+const normTesto = (v: string) => v.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean).join('\n')
+
+const CauzioneScadenzaConfig = forwardRef<CauzioneScadenzaHandle, Props>(function CauzioneScadenzaConfig({ readOnly = false, onChangesChange }, ref) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [giorni, setGiorni] = useState<number | ''>(14)
@@ -77,11 +110,35 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
   // parte (nessuna cauzione in scadenza, nessun destinatario, template spento)
   // il motivo deve restare a schermo, altrimenti il pulsante sembra rotto.
   const [esitoInvio, setEsitoInvio] = useState<{ ok: boolean; testo: string } | null>(null)
+  const [salvato, setSalvato] = useState<Salvato | null>(null)
 
   useEffect(() => { void load() }, [])
 
+  const modifiche = useMemo(() => {
+    if (!salvato || readOnly) return [] as string[]
+    const out: string[] = []
+    if (String(giorni) !== String(salvato.giorni)) out.push(`Cauzioni: giorni di restituzione ${giorni || '(vuoto)'}`)
+    if (modalita !== salvato.modalita) out.push(`Cauzioni: giorni ${modalita === 'calendario' ? 'di calendario' : 'lavorativi'}`)
+    if (String(orarioInvio) !== String(salvato.orarioInvio)) out.push(`Cauzioni: ora avviso ${String(orarioInvio).padStart(2, '0')}:00`)
+    if (avvisoModalita !== salvato.avvisoModalita) out.push(`Avviso scadenza cauzione: invio ${avvisoModalita}`)
+    if (ordina(avvisoOffsets) !== ordina(salvato.avvisoOffsets)) out.push('Avviso scadenza cauzione: quando inviarlo')
+    if (normTesto(avvisoWhatsapp) !== normTesto(salvato.avvisoWhatsapp)) out.push('Avviso scadenza cauzione: numeri WhatsApp')
+    if (normTesto(avvisoEmail) !== normTesto(salvato.avvisoEmail)) out.push('Avviso scadenza cauzione: email')
+    return out
+  }, [salvato, readOnly, giorni, modalita, orarioInvio, avvisoModalita, avvisoOffsets, avvisoWhatsapp, avvisoEmail])
+
+  useEffect(() => { onChangesChange?.(modifiche) }, [modifiche, onChangesChange])
+  // Pannello smontato (cambio sezione): niente modifiche fantasma nella barra.
+  useEffect(() => () => { onChangesChange?.([]) }, [onChangesChange])
+
+  useImperativeHandle(ref, () => ({
+    save: () => (modifiche.length > 0 ? save() : Promise.resolve(true)),
+    reload: () => { void load() },
+  }))
+
   async function load() {
     setLoading(true)
+    const snap: Salvato = { giorni: 14, modalita: 'lavorativi', orarioInvio: 8, avvisoModalita: 'automatico', avvisoOffsets: [0], avvisoWhatsapp: '', avvisoEmail: '' }
     try {
       // La colonna `modalita_calcolo` arriva con la migrazione 20260824: se non
       // e' ancora stata eseguita, PostgREST fa fallire l'INTERA select. Si
@@ -100,13 +157,13 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
           .eq('id', 'main')
           .maybeSingle()
         if (legacy.data) {
-          setGiorni(legacy.data.giorni_restituzione_default ?? 14)
-          setOrarioInvio(legacy.data.orario_invio ?? 8)
+          snap.giorni = legacy.data.giorni_restituzione_default ?? 14
+          snap.orarioInvio = legacy.data.orario_invio ?? 8
         }
       } else if (full.data) {
-        setGiorni(full.data.giorni_restituzione_default ?? 14)
-        setModalita(full.data.modalita_calcolo === 'calendario' ? 'calendario' : 'lavorativi')
-        setOrarioInvio(full.data.orario_invio ?? 8)
+        snap.giorni = full.data.giorni_restituzione_default ?? 14
+        snap.modalita = full.data.modalita_calcolo === 'calendario' ? 'calendario' : 'lavorativi'
+        snap.orarioInvio = full.data.orario_invio ?? 8
       }
       // Colonne dell'avviso: select separata, cosi' se la migration
       // 20260824_cauzioni_avviso_scadenza_config non e' stata eseguita il
@@ -119,12 +176,20 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
       if (avviso.error) {
         setAvvisoMancante(true)
       } else if (avviso.data) {
-        setAvvisoModalita(avviso.data.avviso_modalita === 'manuale' ? 'manuale' : 'automatico')
+        snap.avvisoModalita = avviso.data.avviso_modalita === 'manuale' ? 'manuale' : 'automatico'
         const offs = Array.isArray(avviso.data.avviso_offsets) ? avviso.data.avviso_offsets.map(Number) : [0]
-        setAvvisoOffsets(offs.filter(n => Number.isInteger(n) && n >= -3 && n <= 3))
-        setAvvisoWhatsapp(avviso.data.avviso_whatsapp || '')
-        setAvvisoEmail(avviso.data.avviso_email || '')
+        snap.avvisoOffsets = offs.filter(n => Number.isInteger(n) && n >= -3 && n <= 3)
+        snap.avvisoWhatsapp = avviso.data.avviso_whatsapp || ''
+        snap.avvisoEmail = avviso.data.avviso_email || ''
       }
+      setGiorni(snap.giorni)
+      setModalita(snap.modalita)
+      setOrarioInvio(snap.orarioInvio)
+      setAvvisoModalita(snap.avvisoModalita)
+      setAvvisoOffsets(snap.avvisoOffsets)
+      setAvvisoWhatsapp(snap.avvisoWhatsapp)
+      setAvvisoEmail(snap.avvisoEmail)
+      setSalvato(snap)
     } catch (e) {
       toast.error('Errore nel caricamento: ' + (e instanceof Error ? e.message : 'riprova'))
     } finally {
@@ -142,7 +207,7 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
       // errore del server diventava lo stesso "Niente da inviare" di quando non
       // c'e' davvero nulla da mandare, e il pulsante sembrava non fare niente.
       const raw = await res.text()
-      let data: { ok?: boolean; message?: string; error?: string; sent?: number; skipped?: number; errors?: number } = {}
+      let data: { ok?: boolean; message?: string; error?: string; sent?: number; skipped?: number; errors?: number; email?: { inviate: number; errori: string[]; ferma?: string } } = {}
       try { data = JSON.parse(raw) } catch { /* risposta non JSON */ }
       if (!res.ok) {
         const dettaglio = data.error || data.message || raw.slice(0, 120).trim()
@@ -153,7 +218,12 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
         toast.error(testo, { duration: 8000 })
         return
       }
-      if (data.ok) {
+      const emailKo = !!data.email && (!!data.email.ferma || data.email.errori.length > 0)
+      if (data.ok && emailKo) {
+        const testo = data.message || 'WhatsApp inviato, email non inviate'
+        setEsitoInvio({ ok: false, testo })
+        toast.error(testo, { duration: 10000 })
+      } else if (data.ok) {
         const testo = data.message || 'Avviso inviato'
         setEsitoInvio({ ok: true, testo })
         toast.success(testo)
@@ -171,11 +241,11 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
     }
   }
 
-  async function save() {
+  async function save(): Promise<boolean> {
     const g = Number(giorni)
     if (!Number.isFinite(g) || g < 1 || g > 120) {
       toast.error('Inserisci un numero di giorni tra 1 e 120')
-      return
+      return false
     }
     const h = Number(orarioInvio)
     setSaving(true)
@@ -202,12 +272,19 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
         .select('id')
       if (error) throw error
       if (!data || data.length === 0) {
-        toast.error('Riga di configurazione non trovata (cauzioni_config id=main).')
-        return
+        toast.error('Cauzioni: salvataggio non riuscito (riga cauzioni_config non trovata o permesso negato).')
+        return false
       }
-      toast.success('Scadenza cauzione aggiornata')
+      setSalvato({
+        giorni: g, modalita, orarioInvio: Number.isFinite(h) ? h : 8, avvisoModalita,
+        avvisoOffsets: avvisoOffsets.length > 0 ? avvisoOffsets : [0],
+        avvisoWhatsapp: avvisoWhatsapp.trim(), avvisoEmail: avvisoEmail.trim(),
+      })
+      toast.success('Cauzioni: impostazioni salvate')
+      return true
     } catch (e) {
-      toast.error('Errore: ' + (e instanceof Error ? e.message : 'riprova'))
+      toast.error('Cauzioni, errore nel salvataggio: ' + (e instanceof Error ? e.message : 'riprova'))
+      return false
     } finally {
       setSaving(false)
     }
@@ -237,7 +314,7 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
         {!readOnly && (
           <button
             type="button"
-            onClick={save}
+            onClick={() => { void save() }}
             disabled={saving || !giorniValidi}
             className="shrink-0 px-3 h-9 rounded-lg bg-dr7-gold text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
@@ -441,4 +518,6 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
       </div>
     </div>
   )
-}
+})
+
+export default CauzioneScadenzaConfig

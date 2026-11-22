@@ -19,6 +19,14 @@ export const handler: Handler = async (event) => {
         // "Niente da inviare", indistinguibile da un pulsante che non funziona.
         else if (res.skipped > 0) message = `${res.skipped} cauzione/i saltate: gia' avvisate oggi, variante del messaggio spenta, o importo da restituire pari a zero.`;
         else message = 'Niente da inviare.';
+        // Esito email accanto a quello WhatsApp: se l'email non parte, il motivo
+        // va detto qui (SMTP, interruttore System Control), non solo nei log.
+        const em = res.email;
+        if (em && (res.sent > 0 || res.errors > 0)) {
+            if (em.ferma) message += ` Email NON inviate: ${em.ferma}`;
+            else if (em.errori.length > 0) message += ` Email NON inviate: ${em.errori.join(' | ')}`;
+            else if (em.inviate > 0) message += ` Email inviate: ${em.inviate}.`;
+        }
         return { statusCode: 200, headers, body: JSON.stringify({ ok, ...res, message }) };
     } catch (e) {
         return { statusCode: 500, headers, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
