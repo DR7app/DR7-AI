@@ -22,6 +22,9 @@ import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 import { risorsa } from '../../../utils/basePath'
 import { Header, Badge, ErrorBox, EmptyBox } from './noleggioUiBits'
 import PreventiviLavaggioView from './PreventiviLavaggioView'
+import SceltaVeicoloTerra, { OrarioNoleggioSelect } from './SceltaVeicoloTerra'
+import { confermaRitiroNelPassato } from '../../../utils/confermaSlotOccupato'
+import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
@@ -876,6 +879,8 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
 interface TourDeparture {
   id: string
   catalog_id: string
+  /** Noleggio Terra: il mezzo e' un veicolo della flotta. */
+  vehicle_id?: string | null
   departure_date: string
   departure_time: string
   total_seats: number
@@ -896,7 +901,7 @@ interface TourSeat {
   customer_phone: string | null
   booking_id: string | null
 }
-const EMPTY_DEP_FORM = { departure_date: '', departure_time: '10:00', total_seats: '6', price_eur: '', duration_label: '', duration_minutes: '' }
+const EMPTY_DEP_FORM = { departure_date: '', departure_time: '10:00', total_seats: '6', price_eur: '', duration_label: '', duration_minutes: '', rientro_date: '', rientro_time: '12:00', vehicle_id: '', vehicle_name: '' }
 function fmtYmd(ymd: string): string {
   if (!ymd) return '—'
   const [y, m, d] = ymd.split('-')
@@ -1065,12 +1070,14 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     return () => { cancelled = true }
   }, [serviceType])
 
+  // 23/11/2026 (direzione): Noleggio Terra senza tendina "Veicolo" in cima:
+  // si vedono le partenze di TUTTI i veicoli, il mezzo si sceglie nel form.
+  const isTerra = tourUsaFlotta(serviceType)
   const loadDepartures = useCallback(async (id: string) => {
-    if (!id) { setDepartures([]); return }
+    if (!id && !isTerra) { setDepartures([]); return }
     setLoading(true); setError('')
-    const { data, error: e } = await supabase
-      .from('noleggio_tour_departures')
-      .select('*').eq(tourColonnaMezzo(serviceType), id)
+    const base = supabase.from('noleggio_tour_departures').select('*')
+    const { data, error: e } = await (isTerra ? base.not('vehicle_id', 'is', null) : base.eq(tourColonnaMezzo(serviceType), id))
       .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
     if (e) setError(tourTableHint(e.message))
     else {
@@ -1142,6 +1149,11 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
   }
 
+  function assetOf(dep: TourDeparture): CatalogRow | undefined {
+    if (isTerra) return assets.find(a => a.id === dep.vehicle_id)
+    return assets.find(a => a.id === assetId)
+  }
+
   function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setSeatNames({}); setSeatPhones({}); setTourNote(''); setTourPriceOverride(''); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
 
   // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
@@ -1158,6 +1170,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   // la prenotazione e' stata creata.
   async function prenotaPosti(dep: TourDeparture, chosen: TourSeat[]): Promise<boolean> {
     if (!chosen.length) return false
+    // Terra: il mezzo e' quello della partenza, non una tendina della pagina.
+    const selectedAsset = assetOf(dep)
     if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return false }
     // 17/09/2026: il Credit Wallet appartiene a una scheda Lead: senza, non si sa a chi chiedere il codice.
     if (isCreditWallet(tourPayMethod) && !cust.id) { setError('Credit Wallet: seleziona il cliente dai Lead.'); return false }
@@ -1346,28 +1360,57 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   // link Nexi, conferma WhatsApp, fattura al pagamento.
   const [showCorsa, setShowCorsa] = useState(false)
   const [corsa, setCorsa] = useState({ date: '', time: '10:00', duration_label: '', duration_minutes: '' })
+  // 23/11/2026 (direzione): Terra come le Prenotazioni noleggio: uscita e
+  // rientro, poi il veicolo tra quelli disponibili in quella finestra.
+  const CORSA_TERRA_VUOTA = { uscitaData: '', uscitaOra: '10:00', rientroData: '', rientroOra: '12:00', vehicleId: '', vehicleName: '' }
+  const [corsaTerra, setCorsaTerra] = useState(CORSA_TERRA_VUOTA)
   function apriCorsa() {
     clearCart(); setError('')
     setCorsa({ date: '', time: '10:00', duration_label: '', duration_minutes: '' })
+    setCorsaTerra(CORSA_TERRA_VUOTA)
     setShowCorsa(true)
   }
   async function prenotaCorsa() {
-    if (!assetId) { setError('Seleziona prima il veicolo.'); return }
-    if (!corsa.date) { setError('Inserisci la data della corsa.'); return }
+    let mezzoId = assetId
+    let dataCorsa = corsa.date
+    let oraCorsa = corsa.time || '10:00'
+    let minuti: number | null = corsa.duration_minutes ? parseInt(corsa.duration_minutes, 10) : null
+    let etichetta: string | null = corsa.duration_label || null
+    if (isTerra) {
+      if (!corsaTerra.uscitaData || !corsaTerra.rientroData) { setError('Inserisci data di uscita e data di rientro.'); return }
+      if (!corsaTerra.vehicleId) { setError('Scegli il veicolo.'); return }
+      const ini = new Date(romeIsoFromParts(corsaTerra.uscitaData, corsaTerra.uscitaOra)).getTime()
+      const fin = new Date(romeIsoFromParts(corsaTerra.rientroData, corsaTerra.rientroOra)).getTime()
+      if (!(fin > ini)) { setError('Il rientro deve essere dopo l\'uscita.'); return }
+      // Stesso popup rosso delle Prenotazioni noleggio per l'uscita nel passato.
+      if (ini < Date.now()) {
+        const [aa, mm, gg] = corsaTerra.uscitaData.split('-')
+        if (!(await confermaRitiroNelPassato(`L'uscita e' impostata al ${gg}/${mm}/${aa} alle ${corsaTerra.uscitaOra}, che e' gia' passato.\nControlla data e ora di uscita.`))) return
+      }
+      mezzoId = corsaTerra.vehicleId
+      dataCorsa = corsaTerra.uscitaData
+      oraCorsa = corsaTerra.uscitaOra
+      minuti = Math.round((fin - ini) / 60_000)
+      if (!etichetta) {
+        const h = Math.floor(minuti / 60), m = minuti % 60
+        etichetta = h >= 24 ? `${Math.round(minuti / 1440 * 10) / 10} giorni` : `${h > 0 ? `${h}h` : ''}${m > 0 ? ` ${m}min` : ''}`.trim()
+      }
+    }
+    if (!mezzoId) { setError('Seleziona prima il veicolo.'); return }
+    if (!dataCorsa) { setError('Inserisci la data della corsa.'); return }
     if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
     if (!tourPriceOverride.trim() || !(eurToCents(tourPriceOverride) > 0)) { setError('Inserisci il prezzo della corsa.'); return }
     if (!tourPayMethod) { setError('Scegli il metodo di pagamento.'); return }
     if (isCreditWallet(tourPayMethod) && !cust.id) { setError('Credit Wallet: seleziona il cliente dai Lead.'); return }
     setSaving(true); setError('')
-    const minuti = corsa.duration_minutes ? parseInt(corsa.duration_minutes, 10) : null
     const { data, error: e } = await supabase.from('noleggio_tour_departures').insert({
-      [tourColonnaMezzo(serviceType)]: assetId,
-      departure_date: corsa.date,
-      departure_time: corsa.time || '10:00',
+      [tourColonnaMezzo(serviceType)]: mezzoId,
+      departure_date: dataCorsa,
+      departure_time: oraCorsa,
       total_seats: 1,
       price_per_seat_cents: eurToCents(tourPriceOverride),
       duration_minutes: minuti,
-      duration_label: corsa.duration_label || null,
+      duration_label: etichetta,
       status: 'scheduled',
     }).select('*').single()
     if (e || !data) { setSaving(false); setError(tourTableHint(e?.message || 'Errore creazione corsa')); return }
@@ -1401,12 +1444,37 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       price_eur: dep.price_per_seat_cents != null ? centsToEur(dep.price_per_seat_cents) : '',
       duration_label: dep.duration_label || '',
       duration_minutes: dep.duration_minutes != null ? String(dep.duration_minutes) : '',
+      ...(() => {
+        // Terra: rientro = uscita + durata, veicolo della partenza.
+        if (!isTerra) return { rientro_date: '', rientro_time: '12:00', vehicle_id: '', vehicle_name: '' }
+        const ini = new Date(romeIsoFromParts(dep.departure_date, (dep.departure_time || '10:00').slice(0, 5))).getTime()
+        const fin = new Date(ini + (dep.duration_minutes || 60) * 60_000)
+        const ymd = fin.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        const hm = fin.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
+        return { rientro_date: ymd, rientro_time: hm, vehicle_id: dep.vehicle_id || '', vehicle_name: assetOf(dep)?.name || '' }
+      })(),
     })
     setError(''); setShowForm(true)
   }
 
   async function createDeparture() {
-    if (!assetId) { setError('Seleziona prima un asset dal catalogo.'); return }
+    // Terra: veicolo e durata dal form (uscita/rientro), come le Prenotazioni.
+    let mezzoId = assetId
+    let durataTerra: number | null = null
+    if (isTerra) {
+      if (!form.departure_date || !form.rientro_date) { setError('Inserisci data di uscita e data di rientro.'); return }
+      if (!form.vehicle_id) { setError('Scegli il veicolo.'); return }
+      const ini = new Date(romeIsoFromParts(form.departure_date, form.departure_time || '10:00')).getTime()
+      const fin = new Date(romeIsoFromParts(form.rientro_date, form.rientro_time || '12:00')).getTime()
+      if (!(fin > ini)) { setError('Il rientro deve essere dopo l\'uscita.'); return }
+      if (!editingDepId && ini < Date.now()) {
+        const [aa, mm, gg] = form.departure_date.split('-')
+        if (!(await confermaRitiroNelPassato(`L'uscita e' impostata al ${gg}/${mm}/${aa} alle ${form.departure_time}, che e' gia' passato.\nControlla data e ora di uscita.`))) return
+      }
+      mezzoId = form.vehicle_id
+      durataTerra = Math.round((fin - ini) / 60_000)
+    }
+    if (!mezzoId) { setError('Seleziona prima un asset dal catalogo.'); return }
     if (!form.departure_date) { setError('Inserisci la data della partenza.'); return }
     const total = Math.max(1, parseInt(form.total_seats, 10) || 1)
     setSaving(true); setError('')
@@ -1416,11 +1484,12 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       // mancanti, se diminuiscono NON tocca i posti esistenti (evita di
       // cancellare posti venduti). I posti già presenti restano invariati.
       const { error: ue } = await supabase.from('noleggio_tour_departures').update({
+        ...(isTerra ? { vehicle_id: mezzoId } : {}),
         departure_date: form.departure_date,
         departure_time: form.departure_time || '10:00',
         total_seats: total,
         price_per_seat_cents: form.price_eur ? eurToCents(form.price_eur) : null,
-        duration_minutes: form.duration_minutes ? parseInt(form.duration_minutes, 10) : null,
+        duration_minutes: durataTerra ?? (form.duration_minutes ? parseInt(form.duration_minutes, 10) : null),
         duration_label: form.duration_label || null,
       }).eq('id', editingDepId)
       if (ue) { setSaving(false); setError(tourTableHint(ue.message)); return }
@@ -1437,12 +1506,12 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     }
 
     const { data, error: e } = await supabase.from('noleggio_tour_departures').insert({
-      [tourColonnaMezzo(serviceType)]: assetId,
+      [tourColonnaMezzo(serviceType)]: mezzoId,
       departure_date: form.departure_date,
       departure_time: form.departure_time || '10:00',
       total_seats: total,
       price_per_seat_cents: form.price_eur ? eurToCents(form.price_eur) : null,
-      duration_minutes: form.duration_minutes ? parseInt(form.duration_minutes, 10) : null,
+      duration_minutes: durataTerra ?? (form.duration_minutes ? parseInt(form.duration_minutes, 10) : null),
       duration_label: form.duration_label || null,
       status: 'scheduled',
     }).select('id').single()
@@ -1488,8 +1557,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     <div className="space-y-4">
       <Header title={`${labels.title} — Tour & Posti`} action={
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={apriCorsa} disabled={!assetId} className={BTN_PRIMARY}>+ Prenota corsa</button>
-          <button onClick={openNewDeparture} disabled={!assetId} className={BTN_GHOST}>+ Nuova partenza (posti)</button>
+          <button onClick={apriCorsa} disabled={!assetId && !isTerra} className={BTN_PRIMARY}>+ Prenota corsa</button>
+          <button onClick={openNewDeparture} disabled={!assetId && !isTerra} className={BTN_GHOST}>+ Nuova partenza (posti)</button>
         </div>
       } />
       {error && <ErrorBox msg={error} />}
@@ -1499,7 +1568,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
         <EmptyBox msg={`Nessun ${labels.asset.toLowerCase()} nel catalogo. Aggiungi prima un ${labels.asset.toLowerCase()} nella tab Catalogo: sarà il tour da programmare.`} />
       )}
 
-      {assets.length > 0 && (
+      {assets.length > 0 && !isTerra && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-theme-text-muted">{labels.asset}:</span>
           <select className={INPUT_CLS + ' max-w-xs'} value={assetId} onChange={e => setAssetId(e.target.value)}>
@@ -1510,8 +1579,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
 
       {loading && <ScheletroTabella righe={6} colonne={5} />}
 
-      {!loading && assetId && departures.length === 0 && !error && (
-        <EmptyBox msg={`Nessuna partenza per ${selectedAsset?.name || 'questo tour'}. Crea la prima con "+ Nuova partenza".`} />
+      {!loading && (assetId || isTerra) && departures.length === 0 && !error && (
+        <EmptyBox msg={isTerra ? 'Nessuna partenza. Crea la prima con "+ Prenota corsa" o "+ Nuova partenza".' : `Nessuna partenza per ${selectedAsset?.name || 'questo tour'}. Crea la prima con "+ Nuova partenza".`} />
       )}
 
       {departures.length > 0 && (
@@ -1521,6 +1590,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
               <div className="flex items-center justify-between gap-3 px-4 py-3 bg-theme-bg-tertiary">
                 <button onClick={() => toggleExpand(dep.id)} className="flex items-center gap-3 text-left flex-1 flex-wrap">
                   <span className="text-theme-text-muted">{expanded === dep.id ? '▾' : '▸'}</span>
+                  {isTerra && <span className="text-theme-text-primary font-semibold">{assetOf(dep)?.name || 'Veicolo'}</span>}
                   <span className="text-theme-text-primary font-medium tabular-nums">{fmtYmd(dep.departure_date)}</span>
                   <span className="text-theme-text-secondary tabular-nums">{dep.departure_time.slice(0, 5)}</span>
                   {dep.duration_label && (
@@ -1580,7 +1650,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                     // Totale calcolato AUTOMATICAMENTE: posti selezionati × prezzo posto
                     // (override posto -> prezzo partenza -> prezzo catalogo).
                     const cartAutoTotalCents = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
-                      .reduce((t, s) => t + (s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))), 0)
+                      .reduce((t, s) => t + (s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (assetOf(dep)?.price_per_day || 0))), 0)
                     // Prezzo manuale: se compilato, sostituisce il totale automatico.
                     const hasOverride = tourPriceOverride.trim() !== ''
                     const cartTotalCents = hasOverride ? eurToCents(tourPriceOverride) : cartAutoTotalCents
@@ -1706,49 +1776,80 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
           <div className="min-h-full flex items-start sm:items-center justify-center">
           <div className="my-4 bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div>
-              <h3 className="text-lg font-semibold text-theme-text-primary">Prenota corsa — {selectedAsset?.name || ''}</h3>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Prenota corsa{(isTerra ? corsaTerra.vehicleName : selectedAsset?.name) ? ` — ${isTerra ? corsaTerra.vehicleName : selectedAsset?.name}` : ''}</h3>
               <p className="text-xs text-theme-text-muted mt-0.5">Cliente, data, prezzo e pagamento. Il link Nexi, la conferma e la fattura partono come per gli altri servizi.</p>
             </div>
             {error && <ErrorBox msg={error} />}
+            {isTerra ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Data uscita *</label>
+                    <EuropeanDateInput className={INPUT_CLS} value={corsaTerra.uscitaData} onChange={(__v: string) => setCorsaTerra(c => ({ ...c, uscitaData: __v, rientroData: c.rientroData || __v, vehicleId: '', vehicleName: '' }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Ora uscita *</label>
+                    <OrarioNoleggioSelect tipo="pickup" data={corsaTerra.uscitaData} value={corsaTerra.uscitaOra} onChange={v => setCorsaTerra(c => ({ ...c, uscitaOra: v, vehicleId: '', vehicleName: '' }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Data rientro *</label>
+                    <EuropeanDateInput className={INPUT_CLS} value={corsaTerra.rientroData} onChange={(__v: string) => setCorsaTerra(c => ({ ...c, rientroData: __v, vehicleId: '', vehicleName: '' }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Ora rientro *</label>
+                    <OrarioNoleggioSelect tipo="return" data={corsaTerra.rientroData} value={corsaTerra.rientroOra} onChange={v => setCorsaTerra(c => ({ ...c, rientroOra: v, vehicleId: '', vehicleName: '' }))} />
+                  </div>
+                </div>
+                <SceltaVeicoloTerra
+                  uscitaData={corsaTerra.uscitaData} uscitaOra={corsaTerra.uscitaOra}
+                  rientroData={corsaTerra.rientroData} rientroOra={corsaTerra.rientroOra}
+                  value={corsaTerra.vehicleId}
+                  onChange={(id, nome) => setCorsaTerra(c => ({ ...c, vehicleId: id, vehicleName: nome }))}
+                />
+              </>
+            ) : (
+            <>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-theme-text-muted">Data *</label>
-                <EuropeanDateInput className={INPUT_CLS} value={corsa.date} onChange={(__v: string) => setCorsa({ ...corsa, date: __v })} />
+                <div>
+                  <label className="text-xs text-theme-text-muted">Data *</label>
+                  <EuropeanDateInput className={INPUT_CLS} value={corsa.date} onChange={(__v: string) => setCorsa({ ...corsa, date: __v })} />
+                </div>
+                <div>
+                  <label className="text-xs text-theme-text-muted">Orario *</label>
+                  <input className={INPUT_CLS} type="time" value={corsa.time} onChange={e => setCorsa({ ...corsa, time: e.target.value })} />
+                </div>
               </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Orario *</label>
-                <input className={INPUT_CLS} type="time" value={corsa.time} onChange={e => setCorsa({ ...corsa, time: e.target.value })} />
+              {selectedAsset?.tour_durations && selectedAsset.tour_durations.length > 0 && (
+                <div>
+                  <label className="text-xs text-theme-text-muted">Durata (preset)</label>
+                  <select
+                    className={INPUT_CLS}
+                    value={selectedAsset.tour_durations.some(x => x.label === corsa.duration_label) ? corsa.duration_label : '__custom__'}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') return
+                      const d = selectedAsset!.tour_durations!.find(x => x.label === e.target.value)
+                      if (d) { setCorsa(c => ({ ...c, duration_label: d.label, duration_minutes: String(d.minutes) })); setTourPriceOverride(String(d.price)) }
+                    }}
+                  >
+                    {selectedAsset.tour_durations.map((d, i) => (
+                      <option key={i} value={d.label}>{d.label} — €{d.price}</option>
+                    ))}
+                    <option value="__custom__">Personalizzata…</option>
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-theme-text-muted">Durata (etichetta)</label>
+                  <input className={INPUT_CLS} placeholder="es. 2 ore" value={corsa.duration_label} onChange={e => setCorsa({ ...corsa, duration_label: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-theme-text-muted">Minuti</label>
+                  <input className={INPUT_CLS} inputMode="numeric" placeholder="es. 120" value={corsa.duration_minutes} onChange={e => setCorsa({ ...corsa, duration_minutes: e.target.value.replace(/\D/g, '') })} />
+                </div>
               </div>
-            </div>
-            {selectedAsset?.tour_durations && selectedAsset.tour_durations.length > 0 && (
-              <div>
-                <label className="text-xs text-theme-text-muted">Durata (preset)</label>
-                <select
-                  className={INPUT_CLS}
-                  value={selectedAsset.tour_durations.some(x => x.label === corsa.duration_label) ? corsa.duration_label : '__custom__'}
-                  onChange={e => {
-                    if (e.target.value === '__custom__') return
-                    const d = selectedAsset!.tour_durations!.find(x => x.label === e.target.value)
-                    if (d) { setCorsa(c => ({ ...c, duration_label: d.label, duration_minutes: String(d.minutes) })); setTourPriceOverride(String(d.price)) }
-                  }}
-                >
-                  {selectedAsset.tour_durations.map((d, i) => (
-                    <option key={i} value={d.label}>{d.label} — €{d.price}</option>
-                  ))}
-                  <option value="__custom__">Personalizzata…</option>
-                </select>
-              </div>
+            </>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-theme-text-muted">Durata (etichetta)</label>
-                <input className={INPUT_CLS} placeholder="es. 2 ore" value={corsa.duration_label} onChange={e => setCorsa({ ...corsa, duration_label: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Minuti</label>
-                <input className={INPUT_CLS} inputMode="numeric" placeholder="es. 120" value={corsa.duration_minutes} onChange={e => setCorsa({ ...corsa, duration_minutes: e.target.value.replace(/\D/g, '') })} />
-              </div>
-            </div>
             <div>
               <label className="text-xs text-theme-text-muted">Prezzo corsa (€) *</label>
               <input className={INPUT_CLS} inputMode="decimal" placeholder="es. 150" value={tourPriceOverride} onChange={e => setTourPriceOverride(e.target.value)} />
@@ -1803,7 +1904,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
           <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-theme-text-primary">{editingDepId ? 'Modifica partenza' : 'Nuova partenza'} — {selectedAsset?.name || ''}</h3>
+            <h3 className="text-lg font-semibold text-theme-text-primary">{editingDepId ? 'Modifica partenza' : 'Nuova partenza'}{(isTerra ? form.vehicle_name : selectedAsset?.name) ? ` — ${isTerra ? form.vehicle_name : selectedAsset?.name}` : ''}</h3>
             {error && <ErrorBox msg={error} />}
             {/* Durata: preset rapido (se presenti) + campi LIBERI sempre modificabili.
                 Niente prezzi/durate bloccati: l'admin può impostare qualsiasi durata e prezzo. */}
@@ -1839,6 +1940,35 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              {isTerra ? (
+                <>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Data uscita *</label>
+                    <EuropeanDateInput className={INPUT_CLS} value={form.departure_date} onChange={(__v: string) => setForm(f => ({ ...f, departure_date: __v, rientro_date: f.rientro_date || __v, vehicle_id: '', vehicle_name: '' }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Ora uscita *</label>
+                    <OrarioNoleggioSelect tipo="pickup" data={form.departure_date} value={form.departure_time} onChange={v => setForm(f => ({ ...f, departure_time: v, vehicle_id: '', vehicle_name: '' }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Data rientro *</label>
+                    <EuropeanDateInput className={INPUT_CLS} value={form.rientro_date} onChange={(__v: string) => setForm(f => ({ ...f, rientro_date: __v, vehicle_id: '', vehicle_name: '' }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-muted">Ora rientro *</label>
+                    <OrarioNoleggioSelect tipo="return" data={form.rientro_date} value={form.rientro_time} onChange={v => setForm(f => ({ ...f, rientro_time: v, vehicle_id: '', vehicle_name: '' }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <SceltaVeicoloTerra
+                      uscitaData={form.departure_date} uscitaOra={form.departure_time}
+                      rientroData={form.rientro_date} rientroOra={form.rientro_time}
+                      value={form.vehicle_id}
+                      onChange={(id, nome) => setForm(f => ({ ...f, vehicle_id: id, vehicle_name: nome }))}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
               <div>
                 <label className="text-xs text-theme-text-muted">Data</label>
                 <EuropeanDateInput className={INPUT_CLS} value={form.departure_date} onChange={(__v: string) => setForm({ ...form, departure_date: __v })} />
@@ -1847,6 +1977,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                 <label className="text-xs text-theme-text-muted">Orario</label>
                 <input className={INPUT_CLS} type="time" value={form.departure_time} onChange={e => setForm({ ...form, departure_time: e.target.value })} />
               </div>
+                </>
+              )}
               <div>
                 <label className="text-xs text-theme-text-muted">Posti totali</label>
                 <input className={INPUT_CLS} type="number" min={1} value={form.total_seats} onChange={e => setForm({ ...form, total_seats: e.target.value })} />
