@@ -387,7 +387,8 @@ async function processRecurringSchedule(
     } else if (!recurringDueNow(tpl, now)) return { sent: 0, skipped: 0, errors: 0 };
 
     const recipients = await resolveConfiguredRecipients(tpl);
-    if (recipients.length === 0) {
+    const emailSpazzatura = isMessaggioSpazzatura(tpl) ? emailDelMessaggio(tpl) : [];
+    if (recipients.length === 0 && emailSpazzatura.length === 0) {
         console.log(`[scheduled-msgs] ricorrenza "${tpl.label}": nessun destinatario configurato (mode=${tpl.recipient_mode})`);
         return { sent: 0, skipped: 1, errors: 0 };
     }
@@ -430,8 +431,98 @@ async function processRecurringSchedule(
         if (res.error) errors++;
     }
 
+    // Ritiro spazzatura: stesso testo anche per email (una per indirizzo al giorno).
+    for (const to of emailSpazzatura) {
+        const r = await inviaEmailSpazzatura(tpl, `recur-email-${tpl.id}-${dayKey}-${to}`, to, testoSpazzatura(tpl, tipiRitiro, dayKey));
+        if (r === 'sent') sent++; else if (r === 'skipped') skipped++; else errors++;
+    }
+
     console.log(`[scheduled-msgs] ricorrenza "${tpl.label}" (${dayKey}): ${sent} inviati, ${skipped} saltati, ${errors} errori`);
     return { sent, skipped, errors };
+}
+
+/** Email del messaggio (colonna recipient_emails, migrazione 20261123). */
+function emailDelMessaggio(tpl: SystemMessage): string[] {
+    const raw = String((tpl as { recipient_emails?: string | null }).recipient_emails || '');
+    return [...new Set(raw.split(/[\n,;]+/).map(x => x.trim().toLowerCase()).filter(x => /\S+@\S+\.\S+/.test(x)))];
+}
+
+/** Testo del ritiro con {rifiuti} e {data} gia' sostituiti (per l'email). */
+function testoSpazzatura(tpl: SystemMessage, tipi: string[], ymd: string): string {
+    const [y, m, d] = ymd.split('-');
+    const vals: Record<string, string> = { rifiuti: tipi.join(', '), data: `${d}/${m}/${y}` };
+    let t = String((tpl as { message_body?: string }).message_body || '');
+    for (const [k, v] of Object.entries(vals)) t = t.split(`{{${k}}}`).join(v).split(`{${k}}`).join(v);
+    return t;
+}
+
+/** Email via Resend con claim sul log (at-most-once per chiave). */
+async function inviaEmailSpazzatura(tpl: SystemMessage, chiave: string, to: string, testo: string): Promise<'sent' | 'skipped' | 'error'> {
+    if (await funzioneFerma('invio_email')) return 'skipped';
+    const { data: claim, error: claimErr } = await supabase
+        .from('system_message_send_log')
+        .insert({ system_message_id: tpl.id, booking_id: dedupKey(chiave), customer_phone: to, status: 'sending' })
+        .select('id').maybeSingle();
+    if (claimErr || !claim?.id) return 'skipped';
+    try {
+        if (!avvisoResend) throw new Error('RESEND_API_KEY non configurata su Netlify');
+        const { error: re } = await avvisoResend.emails.send({
+            from: await getEmailFrom('DR7 <info@dr7.app>'),
+            to,
+            subject: tpl.label || 'Ritiro spazzatura',
+            text: testo,
+            html: `<pre style="font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:14px;white-space:pre-wrap">${testo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`,
+        });
+        if (re) throw new Error(re.message || 'Resend: invio rifiutato');
+        await supabase.from('system_message_send_log').update({ status: 'sent' }).eq('id', claim.id);
+        return 'sent';
+    } catch (e) {
+        const msg = (e as Error)?.message || String(e);
+        console.error('[scheduled-msgs] email ritiro spazzatura non inviata', to, msg);
+        await supabase.from('system_message_send_log').update({ status: 'error', error: msg.slice(0, 500) }).eq('id', claim.id);
+        return 'error';
+    }
+}
+
+/**
+ * "Invia ora" della tab Immondizia: manda subito il messaggio del ritiro a
+ * tutti i destinatari (WhatsApp ed email), ignorando ora e calendario. Nel
+ * testo {rifiuti} = i ritiri di oggi, o del prossimo ritiro del calendario.
+ */
+export async function inviaRitiroSpazzaturaOra(templateId: string): Promise<{ ok: boolean; message: string }> {
+    const { data: tpl, error } = await supabase.from('system_messages').select('*').eq('id', templateId).maybeSingle();
+    if (error || !tpl) return { ok: false, message: 'Messaggio non trovato' };
+    const t = tpl as SystemMessage;
+    const { data: regole } = await supabase
+        .from('immondizia_calendario')
+        .select('tipo_rifiuto, mode, day_of_week, pickup_date, note')
+        .eq('active', true);
+    const elenco = (regole || []) as { tipo_rifiuto: string; mode: string; day_of_week: number | null; pickup_date: string | null; note: string | null }[];
+    let giorno = getRomeParts(Date.now()).date;
+    let ritiri = ritiriDelGiorno(elenco, giorno);
+    for (let i = 1; i <= 62 && ritiri.length === 0; i++) {
+        const g = getRomeParts(Date.now() + i * 86400_000).date;
+        const r = ritiriDelGiorno(elenco, g);
+        if (r.length > 0) { giorno = g; ritiri = r; }
+    }
+    const tipi = ritiri.map(r => r.tipo_rifiuto + (r.note ? ` (${r.note})` : ''));
+    const recipients = await resolveConfiguredRecipients(t);
+    const emails = emailDelMessaggio(t);
+    if (recipients.length === 0 && emails.length === 0) return { ok: false, message: 'Nessun destinatario: aggiungi un numero o un\'email e salva.' };
+    const istante = Date.now();
+    let wa = 0, waErr = 0, em = 0, emErr = 0;
+    if (!(await funzioneFerma('invio_whatsapp'))) {
+        for (const r of recipients) {
+            const res = await fireToCustomer(t, `manuale-${t.id}-${istante}-${r.phone}`, r.nome, null, r.phone, { rifiuti: tipi.join(', ') });
+            if (res.sent) wa++; else if (res.error) waErr++;
+        }
+    }
+    for (const to of emails) {
+        const r = await inviaEmailSpazzatura(t, `manuale-email-${t.id}-${istante}-${to}`, to, testoSpazzatura(t, tipi, giorno));
+        if (r === 'sent') em++; else emErr++;
+    }
+    const parti = [`WhatsApp inviati: ${wa}${waErr ? ` (errori: ${waErr})` : ''}`, `Email inviate: ${em}${emErr ? ` (errori: ${emErr})` : ''}`];
+    return { ok: wa + em > 0, message: parti.join(' · ') + (tipi.length ? ` · Ritiro: ${tipi.join(', ')}` : ' · Nessun ritiro nei prossimi 2 mesi') };
 }
 
 /**
@@ -1728,13 +1819,25 @@ const cronHandler = async () => {
     // 2026-10-26: `recurrence_every_weeks` (migration 20261026) si prova per
     // prima e da sola: se mancasse, si perde solo "ogni N settimane" e non
     // tutte le colonne della ricorrenza (orario, destinatari...).
-    const withEveryWeeks = await supabase
+    // 23/11/2026: `recipient_emails` (migration 20261123, email del Ritiro
+    // spazzatura) si prova in testa: se manca si perdono solo le email.
+    const withEmails = await supabase
         .from('system_messages')
-        .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}, recurrence_every_weeks`)
+        .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}, recurrence_every_weeks, recipient_emails`)
         .eq('is_automatic', true)
         .eq('is_enabled', true);
-    templates = (withEveryWeeks.data as unknown as SystemMessage[] | null);
-    tplErr = withEveryWeeks.error;
+    templates = (withEmails.data as unknown as SystemMessage[] | null);
+    tplErr = withEmails.error;
+    if (tplErr) {
+        console.warn('[scheduled-msgs] select con recipient_emails fallita (migration 20261123?), riprovo senza:', tplErr.message);
+        const withEveryWeeks = await supabase
+            .from('system_messages')
+            .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}, recurrence_every_weeks`)
+            .eq('is_automatic', true)
+            .eq('is_enabled', true);
+        templates = (withEveryWeeks.data as unknown as SystemMessage[] | null);
+        tplErr = withEveryWeeks.error;
+    }
 
     if (tplErr) {
         console.warn('[scheduled-msgs] select con recurrence_every_weeks fallita (migration 20261026?), riprovo senza:', tplErr.message);

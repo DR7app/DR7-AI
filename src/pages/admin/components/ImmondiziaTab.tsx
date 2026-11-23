@@ -34,6 +34,8 @@ interface MessaggioRitiro {
   // 26/10/2026: ogni N settimane, contate dalla settimana di recurrence_start_date.
   recurrence_every_weeks?: number | null
   recurrence_start_date?: string | null
+  // 23/11/2026: email del ritiro (migrazione 20261123_system_messages_recipient_emails).
+  recipient_emails?: string | null
 }
 
 // 23/10/2026: oltre a settimanale e data singola, ogni 2 settimane e ogni
@@ -76,6 +78,10 @@ export default function ImmondiziaTab() {
   // 26/10/2026: senza la migrazione 20261026 la colonna recurrence_every_weeks
   // non esiste: si ricarica senza, e il messaggio resta settimanale.
   const [conOgniSettimane, setConOgniSettimane] = useState(true)
+  // 23/11/2026: false = migrazione recipient_emails non ancora eseguita.
+  const [conEmail, setConEmail] = useState(true)
+  const [invioOra, setInvioOra] = useState<string | null>(null)
+  const [esitoInvio, setEsitoInvio] = useState<Record<string, { ok: boolean; testo: string }>>({})
   const caricaMessaggi = async () => {
     const leggi = (colonne: string) => supabase
       .from('system_messages')
@@ -84,7 +90,9 @@ export default function ImmondiziaTab() {
       .or('label.ilike.%spazzatura%,label.ilike.%immondizia%,label.ilike.%rifiut%,message_key.ilike.%spazzatura%,message_key.ilike.%immondizia%')
       .order('label', { ascending: true })
     const base = 'id, label, message_body, is_enabled, target_days_of_week, send_hour, send_minute, recipient_phones, recurrence_start_date'
-    let { data, error } = await leggi(base + ', recurrence_every_weeks')
+    let { data, error } = await leggi(base + ', recurrence_every_weeks, recipient_emails')
+    setConEmail(!error)
+    if (error) ({ data, error } = await leggi(base + ', recurrence_every_weeks'))
     setConOgniSettimane(!error)
     if (error) ({ data, error } = await leggi(base))
     if (error) { toast.error('Errore caricamento messaggio: ' + error.message); return }
@@ -111,6 +119,7 @@ export default function ImmondiziaTab() {
         send_hour: m.send_hour ?? 9,
         send_minute: m.send_minute ?? 0,
         recipient_phones: (m.recipient_phones || '').trim() || null,
+        ...(conEmail ? { recipient_emails: (m.recipient_emails || '').trim() || null } : {}),
         recurrence_start_date: m.recurrence_start_date || null,
         ...(conOgniSettimane ? { recurrence_every_weeks: ogni } : {}),
         updated_at: new Date().toISOString(),
@@ -122,6 +131,24 @@ export default function ImmondiziaTab() {
     if (!data || data.length === 0) { toast.error('Nessuna riga aggiornata (permessi?)'); return }
     toast.success('Messaggio salvato')
     caricaMessaggi()
+  }
+
+  // "Invia ora": manda subito con le impostazioni SALVATE (WhatsApp + email).
+  const inviaOra = async (m: MessaggioRitiro) => {
+    setInvioOra(m.id)
+    try {
+      const res = await fetch('/.netlify/functions/trigger-immondizia-messaggio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }),
+      })
+      const d = await res.json().catch(() => ({} as { ok?: boolean; message?: string }))
+      const testo = d.message || (res.ok ? 'Inviato' : `Errore server ${res.status}`)
+      setEsitoInvio(e => ({ ...e, [m.id]: { ok: !!d.ok, testo } }))
+      if (d.ok) toast.success(testo, { duration: 8000 }); else toast.error(testo, { duration: 10000 })
+    } catch (e) {
+      toast.error('Errore: ' + (e instanceof Error ? e.message : 'riprova'))
+    } finally {
+      setInvioOra(null)
+    }
   }
 
   const add = async () => {
@@ -246,7 +273,7 @@ export default function ImmondiziaTab() {
       {/* Messaggio WhatsApp del ritiro */}
       <div className="p-4 rounded-xl border border-theme-border bg-theme-bg-secondary space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-theme-text-primary">Messaggio WhatsApp del ritiro</h3>
+          <h3 className="text-sm font-semibold text-theme-text-primary">Messaggio del ritiro</h3>
           <p className="text-xs text-theme-text-muted mt-0.5">Lo stesso messaggio di Messaggi di Sistema Pro: le modifiche fatte qui valgono anche li'.</p>
         </div>
         {messaggi.length === 0 ? (
@@ -288,14 +315,36 @@ export default function ImmondiziaTab() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-theme-text-muted block mb-1">Destinatari</label>
+                <label className="text-xs text-theme-text-muted block mb-1">Destinatari WhatsApp</label>
                 <ElencoTelefoniConPrefisso value={m.recipient_phones} onChange={v => modificaMsg(m.id, { recipient_phones: v })} />
               </div>
             </div>
-            <button onClick={() => salvaMessaggio(m)} disabled={salvataggioMsg === m.id}
-              className="px-4 py-2 rounded-lg bg-dr7-gold text-black text-sm font-semibold disabled:opacity-50">
-              {salvataggioMsg === m.id ? 'Salvataggio…' : 'Salva messaggio'}
-            </button>
+            <div>
+              <label className="text-xs text-theme-text-muted block mb-1">Email</label>
+              <textarea value={m.recipient_emails || ''} onChange={e => modificaMsg(m.id, { recipient_emails: e.target.value })} rows={2}
+                disabled={!conEmail} placeholder="nome@dr7.app, uno per riga"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary disabled:opacity-50" />
+              {!conEmail && (
+                <p className="text-[11px] text-amber-600 mt-1">Per le email serve la migrazione 20261123_system_messages_recipient_emails sul database.</p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => salvaMessaggio(m)} disabled={salvataggioMsg === m.id}
+                className="px-4 py-2 rounded-lg bg-dr7-gold text-black text-sm font-semibold disabled:opacity-50">
+                {salvataggioMsg === m.id ? 'Salvataggio…' : 'Salva messaggio'}
+              </button>
+              <button onClick={() => inviaOra(m)} disabled={invioOra === m.id}
+                title="Manda subito il messaggio ai destinatari salvati (WhatsApp ed email)"
+                className="px-4 py-2 rounded-lg border border-theme-border text-theme-text-primary text-sm font-semibold hover:bg-theme-bg-hover disabled:opacity-50">
+                {invioOra === m.id ? 'Invio…' : 'Invia ora'}
+              </button>
+            </div>
+            {esitoInvio[m.id] && (
+              <p className={`text-xs ${esitoInvio[m.id].ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {esitoInvio[m.id].testo}
+                <span className="block text-theme-text-muted">"Invia ora" usa le impostazioni salvate: se hai appena cambiato testo o destinatari, premi prima Salva messaggio.</span>
+              </p>
+            )}
           </div>
         ))}
       </div>
