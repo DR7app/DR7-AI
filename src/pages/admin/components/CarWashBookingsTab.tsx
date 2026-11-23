@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
 import { ScheletroPagina } from '../../../components/Scheletro'
 import Paginazione from './Paginazione'
@@ -27,7 +27,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
 import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock, type LavaggioBlock } from '../../../utils/lavaggioHours'
-import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
+import { isVehicleAvailable, getRentalBufferMinutes, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { confermaSlotOccupato, confermaLavaggioBloccato } from '../../../utils/confermaSlotOccupato'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink, isWalletOrGift, isCreditWallet } from '../../../utils/paymentMethodMatchers'
@@ -46,6 +46,8 @@ import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../uti
 import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import SceltaAutoCortesia, { type SceltaCortesia } from './SceltaAutoCortesia'
+import { intervalliOccupati, type PrenotazioneFlotta } from '../../../utils/autoCortesia'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -314,6 +316,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // row per la finestra della cortesia (appuntamento + durata).
   const [courtesyFleet, setCourtesyFleet] = useState<SupercarFleetVehicle[]>([])
   const [courtesyVehicle, setCourtesyVehicle] = useState<SupercarFleetVehicle | null>(null)
+  // 23/11/2026: auto di cortesia scelta tra le AUTO VERE (SceltaAutoCortesia):
+  // veicolo, scheda/durata e finestra reale (parte quando l'auto e' libera).
+  // Quando c'e', i vecchi percorsi per nome (Prime Courtesy / Supercar
+  // Experience) restano spenti.
+  const [cortesiaScelta, setCortesiaScelta] = useState<SceltaCortesia | null>(null)
 
   // Buffer for an edit-click blocked by the paid_wash_modify OTP gate.
   // Resumed by the useEffect below once the override is approved.
@@ -673,6 +680,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setVehicleMakeModel('')
     setVehicleCategory(null)
     setExperienceVehicle(null)
+    setCortesiaScelta(null)
     setClassificationSource(null)
     setLookingUpTarga(false)
     setTargaVehicleInfo(null)
@@ -810,6 +818,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // (cera, cerchi, nano, ...) restano nello step Extra.
   const normalExtraServices = filteredByTab.filter(s => s.category === 'extra')
   const experienceServices = filteredByTab.filter(s => s.category === 'experience')
+  // 23/11/2026: scelta dell'auto di cortesia = una sola scheda experience nel
+  // carrello, con la durata scelta. Il prezzo resta quello del catalogo.
+  const scegliCortesia = useCallback((sc: SceltaCortesia | null) => {
+    setCortesiaScelta(sc)
+    const idsExp = new Set(carWashServices.filter(x => x.category === 'experience').map(x => x.id))
+    setSelectedExtras(prev => {
+      const senza = prev.filter(x => !idsExp.has(x.id))
+      if (!sc) return senza.length === prev.length ? prev : senza
+      const scheda = carWashServices.find(x => x.id === sc.scheda.id)
+      return scheda ? [...senza, scheda] : senza
+    })
+    setExtraPriceOptions(prev => {
+      const n = { ...prev }
+      let cambiato = false
+      for (const id of Object.keys(n)) if (idsExp.has(id)) { delete n[id]; cambiato = true }
+      if (sc) { n[sc.scheda.id] = sc.opzione; cambiato = true }
+      return cambiato ? n : prev
+    })
+  }, [carWashServices])
 
   const servicesByCategory = mainServices.reduce<Record<string, CarWashService[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = []
@@ -822,7 +849,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // "Icon Experience" entry. Both experiences book a real supercar from
   // the fleet for the chosen duration (price_options: 1h/2h/.../7h).
   const SUPERCAR_EXPERIENCE_RE = /supercar\s*experience|icon\s*experience/i
-  const supercarExperienceExtra = selectedExtras.find(e => SUPERCAR_EXPERIENCE_RE.test(e.name))
+  const supercarExperienceExtra = cortesiaScelta ? undefined : selectedExtras.find(e => SUPERCAR_EXPERIENCE_RE.test(e.name))
   const supercarExperienceOption = supercarExperienceExtra
     ? extraPriceOptions[supercarExperienceExtra.id] || null
     : null
@@ -876,7 +903,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // carwash_slot_occupied). L'extra è "Prime Courtesy Drive" con price_options
   // 1h..7h, distinto da Supercar/Icon Experience.
   const PRIME_COURTESY_RE = /prime\s*courtesy|courtesy\s*drive|auto\s*(di\s*)?cortesia/i
-  const primeCourtesyExtra = selectedExtras.find(e => PRIME_COURTESY_RE.test(e.name))
+  const primeCourtesyExtra = cortesiaScelta ? undefined : selectedExtras.find(e => PRIME_COURTESY_RE.test(e.name))
   const primeCourtesyOption = primeCourtesyExtra
     ? extraPriceOptions[primeCourtesyExtra.id] || null
     : null
@@ -2169,6 +2196,37 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
+    // 23/11/2026: auto di cortesia scelta tra le auto vere. Il blocco in
+    // database (is_courtesy_block) salta il controllo sovrapposizioni del
+    // trigger: si ricontrolla QUI, appena prima di salvare, che nessuno
+    // l'abbia presa nel frattempo (buffer solo dopo le altre prenotazioni).
+    if (cortesiaScelta) {
+      try {
+        const ini = new Date(cortesiaScelta.inizio).getTime()
+        const fin = new Date(cortesiaScelta.fine).getTime()
+        const buffer = getRentalBufferMinutes() * 60_000
+        const { data: righe, error: errRighe } = await supabase
+          .from('bookings')
+          .select('id, vehicle_id, vehicle_plate, service_type, status, pickup_date, dropoff_date')
+          .neq('service_type', 'car_wash')
+          .lt('pickup_date', new Date(fin).toISOString())
+          .gt('dropoff_date', new Date(ini - 24 * 3600_000).toISOString())
+        if (errRighe) throw errRighe
+        const conflitto = intervalliOccupati(cortesiaScelta.veicolo, (righe || []) as PrenotazioneFlotta[])
+          .some(i => i.inizio < fin && i.fine + buffer > ini)
+        if (conflitto) {
+          toast.error(`${cortesiaScelta.veicolo.display_name} non e' piu' libera in quell'orario: scegli di nuovo l'auto di cortesia.`, { duration: 8000 })
+          setCortesiaScelta(null)
+          createBookingLockRef.current = false
+          return
+        }
+      } catch (e) {
+        toast.error('Verifica auto di cortesia non riuscita: ' + (e instanceof Error ? e.message : 'riprova'))
+        createBookingLockRef.current = false
+        return
+      }
+    }
+
     // Test bookings (vehicle TEST*) bypassano TUTTI gli OTP: l'operatore QA
     // non deve ricevere conferme direzionali per i test interni.
     const currentVehicleIsTest = isTestVehicle(vehicleMakeModel, vehiclePlate)
@@ -2700,6 +2758,105 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const msg = err instanceof Error ? err.message : String(err)
         console.error('[CarWashBookingsTab] courtesy shadow insert exception:', err)
         toast.error(`Errore blocco auto di cortesia: ${msg}`)
+      }
+    }
+
+    // ─── Auto di cortesia (23/11/2026): noleggio vero sull'auto scelta ──────
+    // Finestra reale (parte quando l'auto e' libera), prezzo 0: il costo e'
+    // gia' sul lavaggio (niente doppio conteggio in report e fatture). Poi il
+    // contratto come per un noleggio: generate-contract e signature-init, che
+    // rispetta Centralina Pro > Invio contratto (es. 1 ora prima del ritiro).
+    if (cortesiaScelta) {
+      const sc = cortesiaScelta
+      try {
+        const washIsPaid = ['paid', 'completed', 'succeeded'].includes((formData.payment_status || '').toLowerCase())
+        const { data: riga, error: errRiga } = await supabase
+          .from('bookings')
+          .insert([{
+            service_type: 'rental',
+            service_name: `Auto di Cortesia — ${customerName}`,
+            vehicle_name: sc.veicolo.display_name,
+            vehicle_plate: sc.veicolo.plate || null,
+            vehicle_id: sc.veicolo.id,
+            customer_name: customerName,
+            customer_email: customerEmail || null,
+            customer_phone: customerPhone || null,
+            guest_name: customerName,
+            guest_email: customerEmail || null,
+            guest_phone: customerPhone || null,
+            pickup_date: sc.inizio,
+            dropoff_date: sc.fine,
+            pickup_location: 'DR7 - Auto di Cortesia',
+            dropoff_location: 'DR7 - Auto di Cortesia',
+            price_total: 0,
+            currency: 'EUR',
+            status: 'confirmed',
+            payment_status: washIsPaid ? 'paid' : 'pending',
+            payment_method: formData.payment_method || null,
+            booking_details: {
+              is_courtesy_block: true,
+              parent_carwash_booking_id: data.id,
+              courtesy_duration_minutes: sc.ore * 60,
+              courtesy_service_id: sc.scheda.id,
+              courtesy_service_name: sc.scheda.name,
+              courtesy_option: sc.opzione,
+              incluso_nel_lavaggio: true,
+              customer: { customerId: formData.customer_id },
+              createdBy: 'admin_panel_auto_cortesia',
+            },
+          }])
+          .select('id')
+          .single()
+        if (errRiga) throw errRiga
+        await supabase.from('bookings').update({
+          booking_details: {
+            ...(data.booking_details || {}),
+            courtesy_drive: {
+              vehicle_id: sc.veicolo.id,
+              vehicle_name: sc.veicolo.display_name,
+              vehicle_plate: sc.veicolo.plate || null,
+              duration_minutes: sc.ore * 60,
+              duration_label: sc.opzione.label,
+              window_start: sc.inizio,
+              window_end: sc.fine,
+              service_id: sc.scheda.id,
+              service_name: sc.scheda.name,
+              shadow_booking_id: riga.id,
+            },
+          },
+        }).eq('id', data.id)
+        toast.success(`Auto di cortesia ${sc.veicolo.display_name} bloccata`)
+
+        // Contratto: se la scheda cliente e' incompleta il server dice cosa
+        // manca (422) e il contratto si rigenera dal calendario noleggio.
+        try {
+          const gc = await authFetch('/.netlify/functions/generate-contract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: riga.id, verificaDati: true }),
+          })
+          const gcData = await gc.json().catch(() => ({} as Record<string, unknown>))
+          if (gc.status === 422 && Array.isArray((gcData as { datiMancanti?: unknown }).datiMancanti)) {
+            toast.error(`Contratto auto di cortesia non generato: mancano ${(gcData as { datiMancanti: string[] }).datiMancanti.join(', ')}. Completa la scheda cliente e genera il contratto dal Calendario Noleggio.`, { duration: 12000 })
+          } else if (!gc.ok || !(gcData as { url?: string }).url) {
+            toast.error('Contratto auto di cortesia non generato: ' + String((gcData as { error?: string }).error || (gcData as { reason?: string }).reason || `HTTP ${gc.status}`), { duration: 10000 })
+          } else {
+            const sig = await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId: riga.id }),
+            })
+            const sigData = await sig.json().catch(() => ({} as { programmato?: boolean; message?: string; error?: string }))
+            if (!sig.ok) toast.error('Contratto auto di cortesia generato, invio firma non riuscito: ' + (sigData.error || `HTTP ${sig.status}`), { duration: 10000 })
+            else toast.success(sigData.programmato ? (sigData.message || 'Invio contratto auto di cortesia programmato') : 'Contratto auto di cortesia inviato per la firma', { duration: 6000 })
+          }
+        } catch (e) {
+          toast.error('Contratto auto di cortesia: ' + (e instanceof Error ? e.message : 'errore'), { duration: 10000 })
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[CarWashBookingsTab] auto di cortesia insert failed:', err)
+        toast.error(`Lavaggio creato ma auto di cortesia NON bloccata: ${msg}`, { duration: 10000 })
       }
     }
 
@@ -5288,48 +5445,33 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
               {/* ─── EXPERIENCE: selezione (Cortesia / Supercar / Icon) ─────
                   2026-06-04: spostata QUI (ultimo step, dopo data+ora) così la
-                  disponibilità del veicolo è reale. Si scelgono l'experience e
-                  la durata; sotto compaiono i picker veicolo (supercar/cortesia). */}
+                  disponibilità del veicolo è reale.
+                  23/11/2026 (direzione, video Valerio): non si scelgono piu' le
+                  categorie ma le AUTO VERE libere all'ora del lavaggio o piu'
+                  tardi, ognuna con le ore possibili (1h..7h) e il prezzo della
+                  sua scheda. Il noleggio parte quando l'auto e' libera. */}
               {experienceServices.length > 0 && (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
-                  <h4 className="text-sm font-semibold text-emerald-400">Experience (facoltativo)</h4>
-                  <p className="text-xs text-theme-text-muted -mt-1">Auto di cortesia, Supercar o Icon Experience. Scegli la durata; la disponibilità del veicolo viene verificata sull'orario qui sopra.</p>
-                  <div className="space-y-2">
-                    {experienceServices.map(exp => {
-                      const isSel = selectedExtras.some(x => x.id === exp.id)
-                      const chosenOpt = extraPriceOptions[exp.id]
-                      return (
-                        <div key={exp.id} className={`rounded-lg border p-3 ${isSel ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-theme-border bg-theme-bg-tertiary'}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-semibold text-theme-text-primary">{exp.name}</span>
-                            <button type="button"
-                              onClick={() => {
-                                if (isSel) {
-                                  setSelectedExtras(prev => prev.filter(x => x.id !== exp.id))
-                                  setExtraPriceOptions(prev => { const n = { ...prev }; delete n[exp.id]; return n })
-                                } else {
-                                  setSelectedExtras(prev => [...prev, exp])
-                                }
-                              }}
-                              className={`px-3 py-1 rounded text-xs font-semibold ${isSel ? 'bg-emerald-500 text-black' : 'bg-theme-bg-secondary text-theme-text-secondary border border-theme-border'}`}>
-                              {isSel ? 'Aggiunto' : 'Aggiungi'}
-                            </button>
-                          </div>
-                          {isSel && (exp.price_options?.length ?? 0) > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {exp.price_options!.map(opt => (
-                                <button key={opt.label} type="button"
-                                  onClick={() => setExtraPriceOptions(prev => ({ ...prev, [exp.id]: opt }))}
-                                  className={`px-2.5 py-1 rounded text-xs font-medium ${chosenOpt?.label === opt.label ? 'bg-emerald-500 text-black' : 'bg-theme-bg-secondary text-theme-text-secondary border border-theme-border hover:border-emerald-500'}`}>
-                                  {opt.label} · €{opt.price.toFixed(2)}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-emerald-500">Auto di cortesia / Experience (facoltativo)</h4>
+                      <p className="text-xs text-theme-text-muted mt-0.5">Scegli l'auto e le ore. Viene bloccata in calendario e il contratto parte come per un noleggio.</p>
+                    </div>
+                    {cortesiaScelta && (
+                      <button type="button"
+                        onClick={() => scegliCortesia(null)}
+                        className="shrink-0 text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1">
+                        Nessuna auto
+                      </button>
+                    )}
                   </div>
+                  <SceltaAutoCortesia
+                    data={formData.appointment_date}
+                    ora={formData.appointment_time}
+                    schede={experienceServices}
+                    scelta={cortesiaScelta}
+                    onScelta={scegliCortesia}
+                  />
                 </div>
               )}
 
@@ -6804,10 +6946,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       // alla nuova data/ora del lavaggio (durata invariata) e
                       // rispecchia lo stato annullato.
                       try {
-                        const cd = (editingBooking.booking_details as { courtesy_drive?: { shadow_booking_id?: string | null; duration_minutes?: number } } | undefined)?.courtesy_drive
+                        const cd = (editingBooking.booking_details as { courtesy_drive?: { shadow_booking_id?: string | null; duration_minutes?: number; window_start?: string } } | undefined)?.courtesy_drive
                         const cShadowId = cd?.shadow_booking_id
                         if (cShadowId && _apptIso && cd?.duration_minutes) {
-                          const start = new Date(_apptIso)
+                          // 23/11/2026: l'auto di cortesia puo' partire DOPO il
+                          // lavaggio (era ancora fuori). Spostando il lavaggio si
+                          // conserva quello scarto invece di riportarla all'ora
+                          // del lavaggio, dove l'auto non e' libera.
+                          const origAppt = bookings.find(b => b.id === editingBooking.id)?.appointment_date
+                          const scarto = cd.window_start && origAppt
+                            ? Math.max(0, new Date(cd.window_start).getTime() - new Date(origAppt).getTime())
+                            : 0
+                          const start = new Date(new Date(_apptIso).getTime() + (Number.isFinite(scarto) ? scarto : 0))
                           const end = new Date(start.getTime() + cd.duration_minutes * 60_000)
                           await supabase.from('bookings').update({
                             pickup_date: start.toISOString(),
@@ -6820,6 +6970,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               : 'confirmed',
                           }).eq('id', cShadowId)
                           logger.log('[Auto Cortesia] Cascaded edit to shadow', cShadowId)
+                          // La finestra salvata sul lavaggio segue il blocco:
+                          // serve allo scarto della prossima modifica.
+                          const { data: pRow } = await supabase.from('bookings').select('booking_details').eq('id', editingBooking.id).maybeSingle()
+                          const pDet = (pRow?.booking_details || {}) as Record<string, unknown>
+                          const pCd = pDet.courtesy_drive as Record<string, unknown> | undefined
+                          if (pCd) {
+                            await supabase.from('bookings').update({
+                              booking_details: { ...pDet, courtesy_drive: { ...pCd, window_start: start.toISOString(), window_end: end.toISOString() } },
+                            }).eq('id', editingBooking.id)
+                          }
                         }
                       } catch (cascadeErr) {
                         console.error('[Auto Cortesia] cascade-edit failed:', cascadeErr)
