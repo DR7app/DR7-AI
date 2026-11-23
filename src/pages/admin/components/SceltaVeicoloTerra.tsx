@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 import { isWithinOfficeHoursForDate } from '../../../utils/noleggioHours'
-import { isVehicleAvailable, type Vehicle, type Booking } from '../../../utils/vehicleAvailability'
+import { isVehicleAvailable, getRentalBufferMinutes, type Vehicle, type Booking } from '../../../utils/vehicleAvailability'
 import { confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
 
 /**
@@ -90,6 +90,37 @@ export default function SceltaVeicoloTerra({ uscitaData, uscitaOra, rientroData,
     return m
   }, [veicoli, prenotazioni, finestraOk, uscitaData, rientroData, uscitaOra, rientroOra])
 
+  // Come in Prenotazioni noleggio (vehicleEarliestTimes): se il mezzo rientra
+  // lo stesso giorno, si mostra "(disponibile dalle HH:MM)" = fine della
+  // prenotazione che si sovrappone + buffer post-noleggio della Centralina.
+  const dalleOre = useMemo(() => {
+    const m = new Map<string, Date>()
+    if (!finestraOk) return m
+    const ini = new Date(romeIsoFromParts(uscitaData, uscitaOra))
+    const fin = new Date(romeIsoFromParts(rientroData, rientroOra))
+    const targa = (t?: string | null) => String(t || '').replace(/\s/g, '').toUpperCase()
+    for (const v of veicoli) {
+      let fine: Date | null = null
+      for (const b of prenotazioni) {
+        if (b.status === 'cancelled') continue
+        const stesso = (b.vehicle_id && b.vehicle_id === v.id) || (!b.vehicle_id && !!targa(v.plate) && targa(b.vehicle_plate) === targa(v.plate))
+        if (!stesso) continue
+        const bIni = new Date(b.pickup_date), bFin = new Date(b.dropoff_date)
+        if (ini < bFin && fin > bIni && (!fine || bFin > fine)) fine = bFin
+      }
+      if (fine) m.set(v.id, new Date(fine.getTime() + getRentalBufferMinutes() * 60_000))
+    }
+    return m
+  }, [veicoli, prenotazioni, finestraOk, uscitaData, uscitaOra, rientroData, rientroOra])
+
+  const oraRoma = (d: Date) => d.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
+  const giornoRoma = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+  // Rientro in giornata (entro le 19) = proposto con l'orario, come nel noleggio.
+  const liberoPiuTardi = (id: string) => {
+    const d = dalleOre.get(id)
+    return !!d && giornoRoma(d) === uscitaData && Number(oraRoma(d).slice(0, 2)) < 19
+  }
+
   if (!finestraOk) {
     return (
       <div className="p-3 bg-yellow-500/10 border border-yellow-600/50 rounded-lg">
@@ -98,7 +129,7 @@ export default function SceltaVeicoloTerra({ uscitaData, uscitaOra, rientroData,
     )
   }
 
-  const lista = mostraTutte ? veicoli : veicoli.filter(v => esiti.get(v.id)?.available || v.id === value)
+  const lista = mostraTutte ? veicoli : veicoli.filter(v => esiti.get(v.id)?.available || liberoPiuTardi(v.id) || v.id === value)
   const disponibili = veicoli.filter(v => esiti.get(v.id)?.available).length
 
   return (
@@ -123,9 +154,10 @@ export default function SceltaVeicoloTerra({ uscitaData, uscitaOra, rientroData,
         {lista.map(v => {
           const targa = v.plate || v.targa
           const occupato = !esiti.get(v.id)?.available
+          const dalle = occupato && liberoPiuTardi(v.id) ? dalleOre.get(v.id) : null
           return (
             <option key={v.id} value={v.id}>
-              {targa ? `${v.display_name} (Targa: ${targa})` : v.display_name}{occupato ? ' — occupato' : ''}
+              {targa ? `${v.display_name} (Targa: ${targa})` : v.display_name}{dalle ? ` (disponibile dalle ${oraRoma(dalle)})` : occupato ? ' — occupato' : ''}
             </option>
           )
         })}
