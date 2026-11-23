@@ -1843,6 +1843,14 @@ function buildScheduleSummary(
     const daysText = days.length === 7 ? 'tutti i giorni' : days.sort((a, b) => a - b).map(d => dayNames[d]).join(', ')
     const hh = String(t.send_hour == null ? 9 : t.send_hour).padStart(2, '0')
     const mm = String(t.send_minute ?? 0).padStart(2, '0')
+    if (eMessaggioSpazzatura(t)) {
+      // 23/11/2026: il giorno lo decide il calendario Immondizia, non i giorni/date del messaggio.
+      lines.push(t.is_automatic
+        ? `Giorni dal calendario Immondizia · la mattina di ogni ritiro alle ${hh}:${mm} (Roma)`
+        : `Giorni dal calendario Immondizia (alle ${hh}:${mm}) — "Invio Automatico" è OFF, quindi non parte`)
+      lines.push(`Destinatari · ${recipientSummary(t)}`)
+      return lines
+    }
     if (t.is_automatic) {
       lines.push(`Ricorrente · ${daysText} alle ${hh}:${mm} (Roma)`)
     } else {
@@ -2817,6 +2825,14 @@ DR7`
 // Wrappers are never numbered and never bulk-deleted by "Elimina non attivi"
 const WRAPPER_KEYS = new Set(['pro_wrapper_header', 'pro_wrapper_footer'])
 
+
+/** Messaggio del ritiro spazzatura: i giorni li decide il calendario Immondizia
+ *  (stesso filtro del server, netlify/functions/utils/immondiziaCalendario.ts). */
+function eMessaggioSpazzatura(t: { label?: string | null; message_key?: string | null; trigger_event?: string | null }): boolean {
+  if (t.trigger_event && t.trigger_event !== 'on_schedule') return false
+  const x = `${t.label || ''} ${t.message_key || ''}`.toLowerCase()
+  return x.includes('spazzatura') || x.includes('immondizia')
+}
 
 export default function MessaggiSistemaProTab() {
     // Template state
@@ -5193,6 +5209,12 @@ export default function MessaggiSistemaProTab() {
                                                             preciso + finestra di validità, senza prenotazione. */}
                                                         {template.trigger_event === 'on_schedule' && (
                                                             <div className="rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 p-3 space-y-3">
+                                                                {eMessaggioSpazzatura(template) && (
+                                                                    <p className="text-xs text-theme-text-secondary">
+                                                                        I giorni li decide il <span className="font-semibold">calendario della tab Immondizia</span>: il messaggio parte la mattina di ogni ritiro, all'orario qui sotto. Giorni e date del messaggio non contano.
+                                                                    </p>
+                                                                )}
+                                                                {!eMessaggioSpazzatura(template) && (
                                                                 <div>
                                                                     <div className="flex items-center justify-between">
                                                                         <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Giorni di invio</span>
@@ -5244,6 +5266,7 @@ export default function MessaggiSistemaProTab() {
                                                                         </p>
                                                                     )}
                                                                 </div>
+                                                                )}
                                                                 <div className="flex flex-wrap items-center gap-3">
                                                                     <div className="flex items-center gap-1">
                                                                         <span className="text-[11px] text-theme-text-muted">Orario</span>
@@ -5264,6 +5287,7 @@ export default function MessaggiSistemaProTab() {
                                                                         </select>
                                                                         <span className="text-[11px] text-theme-text-muted">Roma</span>
                                                                     </div>
+                                                                    {!eMessaggioSpazzatura(template) && (
                                                                     <div className="flex items-center gap-1">
                                                                         <span className="text-[11px] text-theme-text-muted">dal</span>
                                                                         <input type="date" value={template.recurrence_start_date ?? ''}
@@ -5274,6 +5298,7 @@ export default function MessaggiSistemaProTab() {
                                                                             onChange={e => handleUpdateAutomation(template.id, 'recurrence_end_date', e.target.value || null)}
                                                                             className="text-xs bg-theme-bg-tertiary border border-theme-border rounded-md px-1.5 py-1 text-theme-text-primary focus:outline-none" />
                                                                     </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         )}
