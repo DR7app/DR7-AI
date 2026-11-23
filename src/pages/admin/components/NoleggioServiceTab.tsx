@@ -23,7 +23,7 @@ import { risorsa } from '../../../utils/basePath'
 import { Header, Badge, ErrorBox, EmptyBox } from './noleggioUiBits'
 import PreventiviLavaggioView from './PreventiviLavaggioView'
 import SceltaVeicoloTerra, { OrarioNoleggioSelect } from './SceltaVeicoloTerra'
-import { confermaRitiroNelPassato } from '../../../utils/confermaSlotOccupato'
+import { confermaRitiroNelPassato, confermaSlotOccupato } from '../../../utils/confermaSlotOccupato'
 import { romeIsoFromParts } from '../../../utils/timezoneUtils'
 import { percorsoStorage } from '../../../utils/percorsoStorage'
 
@@ -1398,6 +1398,30 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     }
     if (!mezzoId) { setError('Seleziona prima il veicolo.'); return }
     if (!dataCorsa) { setError('Inserisci la data della corsa.'); return }
+    // 23/11/2026 (direzione): stessi avvisi delle Prenotazioni anche per Mare,
+    // Aria e Soggiorni: corsa nel passato e mezzo gia' impegnato a quell'ora.
+    if (!isTerra) {
+      const ini = new Date(romeIsoFromParts(dataCorsa, oraCorsa)).getTime()
+      const fin = ini + (minuti || 60) * 60_000
+      if (ini < Date.now()) {
+        const [aa, mm, gg] = dataCorsa.split('-')
+        if (!(await confermaRitiroNelPassato(`La corsa e' impostata al ${gg}/${mm}/${aa} alle ${oraCorsa}, che e' gia' passato.\nControlla data e orario.`))) return
+      }
+      const { data: stesse } = await supabase.from('noleggio_tour_departures')
+        .select('departure_date, departure_time, duration_minutes')
+        .eq(tourColonnaMezzo(serviceType), mezzoId)
+        .gte('departure_date', new Date(ini - 86400_000).toISOString().slice(0, 10))
+        .lte('departure_date', new Date(fin + 86400_000).toISOString().slice(0, 10))
+      const conflitto = (stesse || []).find((d: { departure_date: string; departure_time: string; duration_minutes: number | null }) => {
+        const dIni = new Date(romeIsoFromParts(d.departure_date, (d.departure_time || '10:00').slice(0, 5))).getTime()
+        const dFin = dIni + (d.duration_minutes || 60) * 60_000
+        return dIni < fin && dFin > ini
+      })
+      if (conflitto) {
+        const [aa, mm, gg] = conflitto.departure_date.split('-')
+        if (!(await confermaSlotOccupato(`${selectedAsset?.name || labels.asset} ha gia' una partenza il ${gg}/${mm}/${aa} alle ${(conflitto.departure_time || '').slice(0, 5)}${conflitto.duration_minutes ? ` (${conflitto.duration_minutes} min)` : ''}, che si sovrappone a questa corsa.`))) return
+      }
+    }
     if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
     if (!tourPriceOverride.trim() || !(eurToCents(tourPriceOverride) > 0)) { setError('Inserisci il prezzo della corsa.'); return }
     if (!tourPayMethod) { setError('Scegli il metodo di pagamento.'); return }
