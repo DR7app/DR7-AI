@@ -275,6 +275,9 @@ const CauzioneScadenzaConfig = forwardRef<CauzioneScadenzaHandle, Props>(functio
         toast.error('Cauzioni: salvataggio non riuscito (riga cauzioni_config non trovata o permesso negato).')
         return false
       }
+      // Nessun momento scelto = giorno stesso: lo stato si allinea a cio' che
+      // e' stato salvato, altrimenti la barra resterebbe "da salvare".
+      if (avvisoOffsets.length === 0) setAvvisoOffsets([0])
       setSalvato({
         giorni: g, modalita, orarioInvio: Number.isFinite(h) ? h : 8, avvisoModalita,
         avvisoOffsets: avvisoOffsets.length > 0 ? avvisoOffsets : [0],
@@ -438,7 +441,7 @@ const CauzioneScadenzaConfig = forwardRef<CauzioneScadenzaHandle, Props>(functio
         {avvisoMancante && (
           <p className="mb-3 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
             Migrazione <code>20260824_cauzioni_avviso_scadenza_config.sql</code> non ancora eseguita: fino ad allora
-            l'avviso parte il giorno stesso della scadenza, solo via WhatsApp ai numeri staff della Centralina.
+            numeri ed email dell'avviso non si possono salvare e gli avvisi cauzioni allo staff non partono.
           </p>
         )}
 

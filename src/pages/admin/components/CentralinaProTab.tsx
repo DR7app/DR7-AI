@@ -2415,7 +2415,20 @@ export default function CentralinaProTab() {
 
   const submitLockRef = useRef(false)
   function handleSave() {
-    if (cauzioneChanges.length > 0) void cauzioneScadenzaRef.current?.save()
+    // Solo il pannello Cauzioni e' cambiato: si salva solo quello (niente
+    // riscrittura della config Centralina, che e' per business) e il verde
+    // "Modifiche salvate" compare solo se il salvataggio e' riuscito.
+    if (cauzioneChanges.length > 0 && changes.length === 0) {
+      void cauzioneScadenzaRef.current?.save().then(ok => {
+        if (!ok) return
+        setJustSaved(true)
+        setTimeout(() => setJustSaved(false), 2000)
+      })
+      return
+    }
+    if (cauzioneChanges.length > 0) {
+      void cauzioneScadenzaRef.current?.save().then(ok => { if (!ok) setJustSaved(false) })
+    }
     if (submitLockRef.current) return
     submitLockRef.current = true
     try {

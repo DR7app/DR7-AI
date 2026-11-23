@@ -42,8 +42,6 @@ interface MessaggioRitiro {
 type Modo = 'weekly' | 'biweekly' | 'monthly' | 'date'
 const RICORRENTI: Modo[] = ['weekly', 'biweekly', 'monthly']
 
-// Lunedi' per primo, come in un calendario; il valore resta 0 = domenica.
-const ORDINE_GIORNI = [1, 2, 3, 4, 5, 6, 0]
 
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 const TIPI_RIFIUTO = ['Organico', 'Plastica/Lattine', 'Carta/Cartone', 'Vetro', 'Secco/Indifferenziato', 'Ingombranti', 'Verde/Sfalci']
@@ -97,21 +95,12 @@ export default function ImmondiziaTab() {
   const modificaMsg = (id: string, campi: Partial<MessaggioRitiro>) =>
     setMessaggi(prev => prev.map(m => m.id === id ? { ...m, ...campi } : m))
 
-  const giorniDi = (m: MessaggioRitiro) =>
-    String(m.target_days_of_week ?? '').split(',').map(x => x.trim()).filter(x => x !== '').map(Number)
-
-  const toggleGiorno = (m: MessaggioRitiro, g: number) => {
-    const attuali = giorniDi(m)
-    const nuovi = attuali.includes(g) ? attuali.filter(x => x !== g) : [...attuali, g]
-    modificaMsg(m.id, { target_days_of_week: nuovi.sort((a, b) => a - b).join(',') })
-  }
 
   const salvaMessaggio = async (m: MessaggioRitiro) => {
     if (!m.message_body.trim()) { toast.error('Il testo del messaggio non puo\' essere vuoto'); return }
-    if (giorniDi(m).length === 0) { toast.error('Seleziona almeno un giorno'); return }
+    // 23/11/2026: giorni e frequenza del messaggio non contano piu' (decide il
+    // calendario qui sotto): niente controlli su quei campi.
     const ogni = Number(m.recurrence_every_weeks ?? 1) || 1
-    if (ogni > 1 && !conOgniSettimane) { toast.error('Ogni 2 settimane: manca la migrazione 20261026_system_messages sul database.'); return }
-    if (ogni > 1 && !m.recurrence_start_date) { toast.error('Ogni 2 settimane: scegli la data del primo invio'); return }
     setSalvataggioMsg(m.id)
     const { data, error } = await supabase
       .from('system_messages')
@@ -276,36 +265,13 @@ export default function ImmondiziaTab() {
               <textarea value={m.message_body} onChange={e => modificaMsg(m.id, { message_body: e.target.value })} rows={7}
                 className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
             </div>
-            <div>
-              <label className="text-xs text-theme-text-muted block mb-1">Giorni di invio</label>
-              <div className="flex flex-wrap gap-1.5">
-                {ORDINE_GIORNI.map(g => {
-                  const on = giorniDi(m).includes(g)
-                  return (
-                    <button key={g} onClick={() => toggleGiorno(m, g)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium border ${on ? 'bg-dr7-gold text-black border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}>
-                      {GIORNI[g]}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            {/* 26/10/2026: la frequenza e' del MESSAGGIO. Quella di "Aggiungi ritiro"
-                serve solo al promemoria serale e non cambiava questo invio. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-theme-text-muted block mb-1">Frequenza del messaggio</label>
-                <select value={Number(m.recurrence_every_weeks ?? 1) || 1} onChange={e => modificaMsg(m.id, { recurrence_every_weeks: Number(e.target.value) })}
-                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary">
-                  <option value={1}>Ogni settimana</option>
-                  <option value={2}>Ogni 2 settimane</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-theme-text-muted block mb-1">{(Number(m.recurrence_every_weeks ?? 1) || 1) > 1 ? 'Primo invio (si conta da questa settimana)' : 'Primo invio (opzionale)'}</label>
-                <EuropeanDateInput value={m.recurrence_start_date || ''} onChange={(__v: string) => modificaMsg(m.id, { recurrence_start_date: __v || null })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
-              </div>
-            </div>
+            {/* 23/11/2026 (direzione): il giorno lo decide SOLO il calendario dei
+                ritiri qui sotto (anche "ogni mese il giorno 30"). Giorni, ogni N
+                settimane e date del messaggio sono stati tolti: erano una seconda
+                programmazione e il messaggio partiva in giorni senza ritiro. */}
+            <p className="text-xs text-theme-text-secondary rounded-lg border border-theme-border bg-theme-bg-secondary px-3 py-2">
+              Il messaggio parte la mattina di ogni ritiro del calendario qui sotto, all'ora scelta. Nel testo puoi usare <code>{'{rifiuti}'}</code> per l'elenco dei rifiuti del giorno.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-theme-text-muted block mb-1">Ora di invio (Roma)</label>

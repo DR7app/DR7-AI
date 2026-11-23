@@ -44,6 +44,7 @@ import { accodaGiroMessaggiSistema } from './utils/codaInviiMassivi'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 import { settimanaDiTurno } from './utils/settimanaDiTurno';
+import { ritiriDelGiorno, isMessaggioSpazzatura } from './utils/immondiziaCalendario';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -364,7 +365,26 @@ async function processRecurringSchedule(
     tpl: SystemMessage,
     now: number
 ): Promise<{ sent: number; skipped: number; errors: number }> {
-    if (!recurringDueNow(tpl, now)) return { sent: 0, skipped: 0, errors: 0 };
+    // 23/11/2026 (direzione): il messaggio del ritiro spazzatura parte SOLO
+    // nei giorni di ritiro del calendario Immondizia, all'ora del messaggio.
+    // I suoi giorni / ogni N settimane / date non contano piu': il 23/11 e'
+    // partito di lunedi' mentre il calendario diceva il 30.
+    let tipiRitiro: string[] = [];
+    if (isMessaggioSpazzatura(tpl)) {
+        const rome = getRomeParts(now);
+        const targetMin = (tpl.send_hour == null ? 7 : Number(tpl.send_hour)) * 60 + (Number(tpl.send_minute ?? 0) || 0);
+        const nowMin = rome.hour * 60 + rome.minute;
+        if (!(nowMin >= targetMin && nowMin < targetMin + RECURRING_WINDOW_MIN)) return { sent: 0, skipped: 0, errors: 0 };
+        const { data: regole, error: errRegole } = await supabase
+            .from('immondizia_calendario')
+            .select('tipo_rifiuto, mode, day_of_week, pickup_date, note')
+            .eq('active', true)
+            .eq('reminder_enabled', true);
+        if (errRegole) { console.error('[scheduled-msgs] calendario immondizia non letto:', errRegole.message); return { sent: 0, skipped: 0, errors: 1 }; }
+        const oggi = ritiriDelGiorno((regole || []) as { tipo_rifiuto: string; mode: string; day_of_week: number | null; pickup_date: string | null; note: string | null }[], rome.date);
+        if (oggi.length === 0) return { sent: 0, skipped: 0, errors: 0 };
+        tipiRitiro = oggi.map(r => r.tipo_rifiuto + (r.note ? ` (${r.note})` : ''));
+    } else if (!recurringDueNow(tpl, now)) return { sent: 0, skipped: 0, errors: 0 };
 
     const recipients = await resolveConfiguredRecipients(tpl);
     if (recipients.length === 0) {
@@ -402,6 +422,8 @@ async function processRecurringSchedule(
             // Variabili disponibili nel testo anche senza prenotazione.
             targa: tpl.target_plate || '',
             vehicle_plate: tpl.target_plate || '',
+            // Ritiro spazzatura: {rifiuti} = cosa si ritira oggi (dal calendario).
+            ...(tipiRitiro.length > 0 ? { rifiuti: tipiRitiro.join(', ') } : {}),
         });
         if (res.sent) sent++;
         else if (res.skipped) skipped++;
@@ -1266,7 +1288,12 @@ async function loadAvvisoCauzioneConfig(): Promise<{
         return {
             modalita: data.avviso_modalita === 'manuale' ? 'manuale' : 'automatico',
             offsets: offsets.length > 0 ? offsets : [0],
-            whatsapp: split(data.avviso_whatsapp).map(x => x.replace(/\D/g, '')).filter(x => x.length >= 8),
+            // Stesso numero scritto in due modi (3331234567 / 393331234567)
+            // = un solo destinatario, non due messaggi.
+            whatsapp: [...new Set(split(data.avviso_whatsapp)
+                .map(x => x.replace(/\D/g, ''))
+                .map(x => (x.length === 10 && x.startsWith('3') ? '39' + x : x))
+                .filter(x => x.length >= 8))],
             email: split(data.avviso_email).filter(x => /\S+@\S+\.\S+/.test(x)),
         };
     } catch { return fallback; }
@@ -1428,7 +1455,7 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
         const fermaWa = await funzioneFerma('invio_whatsapp');
         const fermaEmail = await funzioneFerma('invio_email');
         if (fermaWa) console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWa);
-        if (fermaEmail) { console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaEmail); email.ferma = fermaEmail; }
+        if (fermaEmail) { console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaEmail); if (cfg.email.length > 0) email.ferma = fermaEmail; }
         let ok = false;
         for (const r of (fermaWa ? [] : recipients)) {
             try {

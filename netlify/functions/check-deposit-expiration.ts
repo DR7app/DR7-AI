@@ -96,6 +96,14 @@ const scheduledHandler: Handler = async (event) => {
     if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
     console.log('🔍 Checking for deposit expirations...')
 
+    // 23/11/2026 (direzione): l'avviso di scadenza cauzione allo staff parte
+    // SOLO da Centralina Pro > Cauzioni > Avviso di scadenza (numeri, email,
+    // momenti, automatico/manuale). Questa email a ADMIN_EMAIL/info@ era un
+    // secondo avviso parallelo che il pannello non controllava: spenta.
+    if (process.env.CHECK_DEPOSIT_EXPIRATION_LEGACY !== 'true') {
+        return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'sostituito da Centralina Pro > Cauzioni > Avviso di scadenza' }) }
+    }
+
     try {
         const today = new Date().toISOString().split('T')[0]
 

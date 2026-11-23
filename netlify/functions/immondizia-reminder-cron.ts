@@ -11,29 +11,28 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 
-// 23/10/2026: ogni 2 settimane = ogni 14 giorni dal primo ritiro (pickup_date);
-// ogni mese = stesso giorno del primo ritiro, o l'ultimo del mese se piu' corto.
-// Date YYYY-MM-DD confrontate in UTC: nessun fuso orario in mezzo.
-export function ritiroRicorrente(mode: string, primo: string | null, giorno: string): boolean {
-    if (!primo || giorno < primo) return false
-    const [ay, am, ad] = primo.split('-').map(Number)
-    const [gy, gm, gd] = giorno.split('-').map(Number)
-    if (mode === 'biweekly') {
-        const diff = Math.round((Date.UTC(gy, gm - 1, gd) - Date.UTC(ay, am - 1, ad)) / 86400000)
-        return diff % 14 === 0
-    }
-    if (mode === 'monthly') {
-        const ultimo = new Date(Date.UTC(gy, gm, 0)).getUTCDate()
-        return gd === Math.min(ad, ultimo)
-    }
-    return false
-}
+// Regola dei giorni di ritiro condivisa col cron dei messaggi (stesso calendario).
+export { ritiroRicorrente } from './utils/immondiziaCalendario'
+import { ritiriDelGiorno, isMessaggioSpazzatura } from './utils/immondiziaCalendario'
 
 const cronHandler = async () => {
     // Interruttore System Control: messaggi automatici spenti = il giro salta
     // (il battito resta registrato: il cron e' vivo, ha solo saltato).
     const fermaMessaggi = await funzioneFerma('messaggi_automatici')
     if (fermaMessaggi) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: fermaMessaggi }) }
+    // 23/11/2026 (direzione): un solo invio per ritiro. Se c'e' il messaggio
+    // "Ritiro spazzatura" acceso in Messaggi di Sistema Pro, parte lui la
+    // mattina del ritiro (stesso calendario): questo promemoria serale tace.
+    {
+        const { data: msgs } = await supabase
+            .from('system_messages')
+            .select('label, message_key, trigger_event, is_enabled, is_automatic, cron_approved')
+            .eq('trigger_event', 'on_schedule')
+            .eq('is_enabled', true)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const attivo = (msgs || []).some((m: any) => isMessaggioSpazzatura(m) && m.is_automatic !== false && m.cron_approved !== false)
+        if (attivo) return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'inviato dal messaggio Ritiro spazzatura la mattina del ritiro' }) }
+    }
     // "Domani" in Europe/Rome.
     const now = new Date()
     const romeNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
@@ -53,11 +52,7 @@ const cronHandler = async () => {
     if (error) { console.error('[immondizia-reminder] fetch error', error.message); return { statusCode: 500, body: error.message } }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tomorrows = (rules || []).filter((r: any) =>
-        (r.mode === 'weekly' && r.day_of_week === tomorrowDow) ||
-        (r.mode === 'date' && r.pickup_date === tomorrowDate) ||
-        ((r.mode === 'biweekly' || r.mode === 'monthly') && ritiroRicorrente(r.mode, r.pickup_date, tomorrowDate))
-    )
+    const tomorrows = ritiriDelGiorno((rules || []) as any[], tomorrowDate)
     if (tomorrows.length === 0) {
         console.log(`[immondizia-reminder] nessun ritiro per domani (${tomorrowDate})`)
         return { statusCode: 200, body: JSON.stringify({ ok: true, tomorrow: tomorrowDate, count: 0 }) }
