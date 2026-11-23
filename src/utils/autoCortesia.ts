@@ -131,11 +131,35 @@ export interface PrenotazioneFlotta {
   vehicle_plate?: string | null
   service_type?: string | null
   status?: string | null
+  payment_status?: string | null
+  payment_method?: string | null
   pickup_date?: string | null
   dropoff_date?: string | null
+  /** booking_details.vehicle_id (prenotazioni che lo salvano solo li') */
+  bd_vehicle_id?: string | null
+  /** booking_details.vehicle.plate */
+  bd_plate?: string | null
+  /** booking_details.payment_link_expires_at / payment_link_created_at */
+  bd_link_scade?: string | null
 }
 
-const STATI_CHIUSI = new Set(['cancelled', 'annullata', 'completed', 'completata', 'expired', 'rejected'])
+/**
+ * Stessa regola del Calendario Noleggio (CalendarTab, processedRows): sono
+ * fuori dal calendario SOLO annullate, scadute, pending_payment scadute e i
+ * Pay by Link non pagati col link scaduto. Le completate restano occupate.
+ * Il 23/11/2026 qui si scartavano anche le completate: l'auto risultava
+ * libera mentre il calendario la mostrava occupata.
+ */
+function fuoriDalCalendario(b: PrenotazioneFlotta, adesso: number): boolean {
+  const st = String(b.status || '').toLowerCase()
+  if (st === 'cancelled' || st === 'annullata' || st === 'expired') return true
+  if (st === 'pending_payment' && b.payment_status === 'expired') return true
+  if (b.payment_status === 'pending' && b.payment_method === 'Nexi Pay by Link' && b.bd_link_scade) {
+    const t = new Date(b.bd_link_scade).getTime()
+    if (!isNaN(t) && adesso > t) return true
+  }
+  return false
+}
 
 function targa(t: string | null | undefined): string {
   return (t || '').replace(/[^a-z0-9]/gi, '').toUpperCase()
@@ -151,14 +175,21 @@ export function intervalliOccupati(
   veicolo: VeicoloCortesia,
   prenotazioni: PrenotazioneFlotta[],
   escludiIds: string[] = [],
+  adesso: number = Date.now(),
 ): Intervallo[] {
   const t = targa(veicolo.plate)
   const out: Intervallo[] = []
   for (const b of prenotazioni) {
     if (b.id && escludiIds.includes(b.id)) continue
     if (b.service_type === 'car_wash') continue
-    if (STATI_CHIUSI.has(String(b.status || '').toLowerCase())) continue
-    const stessa = (b.vehicle_id && b.vehicle_id === veicolo.id) || (!!t && targa(b.vehicle_plate) === t)
+    if (fuoriDalCalendario(b, adesso)) continue
+    // Aggancio come il calendario: prima l'id (anche dentro booking_details),
+    // poi la targa (anche booking_details.vehicle.plate). Un id che punta a
+    // un ALTRO veicolo vince sulla targa (targhe segnaposto "000000").
+    const vid = b.vehicle_id || b.bd_vehicle_id
+    const stessa = vid
+      ? vid === veicolo.id
+      : !!t && targa(b.vehicle_plate || b.bd_plate) === t
     if (!stessa) continue
     const inizio = b.pickup_date ? new Date(b.pickup_date).getTime() : NaN
     const fine = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
@@ -188,6 +219,12 @@ export function disponibilitaCortesia(opts: {
   occupati: Intervallo[]
   bufferMin: number
   oreMassime?: number
+  /**
+   * Finestre di RITIRO del giorno (Centralina Pro > Orari Noleggio, es.
+   * 10:00-18:30). Come un noleggio: l'auto parte solo dentro una finestra.
+   * Assenti = nessun vincolo sull'uscita.
+   */
+  finestreRitiro?: Intervallo[]
 }): Disponibilita {
   const { inizioLavaggio, chiusura, occupati } = opts
   const buffer = Math.max(0, opts.bufferMin) * 60 * 1000
@@ -197,12 +234,24 @@ export function disponibilitaCortesia(opts: {
   // possono accavallarsi: si ripete finche' t non cade in un buco.
   for (let giro = 0; giro < 50; giro++) {
     const copre = occupati.find(i => i.inizio <= t && t < i.fine + buffer)
-    if (!copre) break
-    t = copre.fine + buffer
+    if (copre) { t = copre.fine + buffer; continue }
+    // Uscita fuori dagli orari di ritiro: si parte all'apertura successiva
+    // (es. lavaggio alle 09:00, ritiro dalle 10:00 = auto dalle 10:00).
+    const fr = opts.finestreRitiro
+    if (fr && fr.length > 0 && !fr.some(w => w.inizio <= t && t <= w.fine)) {
+      const prossima = fr.filter(w => w.inizio > t).sort((a, b) => a.inizio - b.inizio)[0]
+      if (!prossima) return { liberaDa: null, oreMax: 0 }
+      t = prossima.inizio
+      continue
+    }
+    break
   }
   // Se l'auto si libera dopo l'ora del lavaggio, si parte dal quarto d'ora
   // successivo (gli orari del noleggio vanno a quarti d'ora).
   if (t > inizioLavaggio) t = Math.ceil(t / QUARTO) * QUARTO
+  if (opts.finestreRitiro && opts.finestreRitiro.length > 0 && !opts.finestreRitiro.some(w => w.inizio <= t && t <= w.fine)) {
+    return { liberaDa: null, oreMax: 0 }
+  }
   if (t >= chiusura) return { liberaDa: null, oreMax: 0 }
   const prossima = occupati.filter(i => i.inizio >= t).reduce((m, i) => Math.min(m, i.inizio), Infinity)
   const limite = Math.min(prossima, chiusura)
@@ -237,6 +286,7 @@ export function autoProposte<S extends SchedaEsperienza & { price_options?: { la
   inizioLavaggio: number
   chiusura: number
   bufferMin: number
+  finestreRitiro?: Intervallo[]
   escludiPrenotazioni?: string[]
   adesso?: Date
 }): (AutoProposta & { scheda: S })[] {
@@ -256,6 +306,7 @@ export function autoProposte<S extends SchedaEsperienza & { price_options?: { la
       chiusura: opts.chiusura,
       occupati: intervalliOccupati(v, opts.prenotazioni, opts.escludiPrenotazioni),
       bufferMin: opts.bufferMin,
+      finestreRitiro: opts.finestreRitiro,
     })
     out.push({ veicolo: v, scheda: abb.scheda, categoria: abb.categoria, disponibilita })
   }

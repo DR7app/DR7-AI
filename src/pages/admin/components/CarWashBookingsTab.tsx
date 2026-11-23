@@ -48,6 +48,7 @@ import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
 import SceltaAutoCortesia, { type SceltaCortesia } from './SceltaAutoCortesia'
 import { intervalliOccupati, type PrenotazioneFlotta } from '../../../utils/autoCortesia'
+import { caricaPrenotazioniCalendario, perAutoCortesia } from '../../../utils/prenotazioniCalendarioNoleggio'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -2205,14 +2206,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const ini = new Date(cortesiaScelta.inizio).getTime()
         const fin = new Date(cortesiaScelta.fine).getTime()
         const buffer = getRentalBufferMinutes() * 60_000
-        const { data: righe, error: errRighe } = await supabase
-          .from('bookings')
-          .select('id, vehicle_id, vehicle_plate, service_type, status, pickup_date, dropoff_date')
-          .neq('service_type', 'car_wash')
-          .lt('pickup_date', new Date(fin).toISOString())
-          .gt('dropoff_date', new Date(ini - 24 * 3600_000).toISOString())
-        if (errRighe) throw errRighe
-        const conflitto = intervalliOccupati(cortesiaScelta.veicolo, (righe || []) as PrenotazioneFlotta[])
+        // Stessa sorgente del Calendario Noleggio, riletta adesso.
+        const righe = (await caricaPrenotazioniCalendario(
+          new Date(ini - 24 * 3600_000).toISOString(),
+          new Date(fin + 3600_000).toISOString(),
+        )).map(perAutoCortesia)
+        const conflitto = intervalliOccupati(cortesiaScelta.veicolo, righe as PrenotazioneFlotta[])
           .some(i => i.inizio < fin && i.fine + buffer > ini)
         if (conflitto) {
           toast.error(`${cortesiaScelta.veicolo.display_name} non e' piu' libera in quell'orario: scegli di nuovo l'auto di cortesia.`, { duration: 8000 })

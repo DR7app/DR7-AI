@@ -38,6 +38,18 @@ describe('disponibilitaCortesia', () => {
   })
 })
 
+describe('orari di ritiro (Centralina)', () => {
+  const fr = [{ inizio: h('10:00'), fine: h('18:30') }]
+  it('lavaggio prima dell apertura: l auto parte alle 10:00', () => {
+    expect(disponibilitaCortesia({ inizioLavaggio: h('09:00'), chiusura: h('17:30'), occupati: [], bufferMin: 90, finestreRitiro: fr }))
+      .toEqual({ liberaDa: h('10:00'), oreMax: 7 })
+  })
+  it('auto libera dopo le 18:30: non disponibile', () => {
+    expect(disponibilitaCortesia({ inizioLavaggio: h('09:00'), chiusura: h('20:00'), occupati: [{ inizio: h('08:00'), fine: h('17:30') }], bufferMin: 90, finestreRitiro: fr }))
+      .toEqual({ liberaDa: null, oreMax: 0 })
+  })
+})
+
 describe('intervalliOccupati', () => {
   const v = { id: 'v1', display_name: 'Yaris', plate: 'AB 123 CD', category: 'urban', status: 'available' }
   it('match per id o targa, ignora lavaggi e annullate', () => {
