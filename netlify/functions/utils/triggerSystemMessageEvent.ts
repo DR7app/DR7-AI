@@ -66,6 +66,11 @@ interface TriggerArgs {
      *  con certezza a chi va il messaggio (es. acconto -> il collaboratore
      *  intestatario), cosi' nessun altro evento cambia comportamento. */
     recipientPhone?: string
+    /** 23/11/2026: template GIA' mandati dal chiamante per lo stesso evento
+     *  (es. auguri di compleanno): esclusi qui per non mandarli due volte.
+     *  Chiavi esatte, oppure "gestisce:<evento legacy>" per escludere chi ha
+     *  quell'evento in handled_events. */
+    escludi?: string[]
 }
 
 /**
@@ -625,7 +630,7 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
     return true
 }
 
-export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking, recipientPhone }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
+export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking, recipientPhone, escludi: escludiArg }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
     // Interruttore System Control: messaggi di sistema spenti = anche quelli
     // legati a un evento (pagamento, prenotazione...) non partono. Nessuna riga
     // di log: il dedup resta libero.
@@ -671,7 +676,10 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
 
     let sent = 0, skipped = 0, errors = 0
 
+    const escludi = escludiArg || []
     for (const tpl of templates) {
+        if (escludi.includes(tpl.message_key)) continue
+        if (escludi.some(e => e.startsWith('gestisce:') && Array.isArray(tpl.handled_events) && tpl.handled_events.includes(e.slice(9)))) continue
         if (!matchesAdvancedFilters(tpl, booking)) continue
         if (!await passesCustomerFilters(tpl, booking, supabase)) continue
 

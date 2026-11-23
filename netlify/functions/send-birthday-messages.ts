@@ -341,6 +341,11 @@ const birthdayHandler: Handler = async (event) => {
           await triggerSystemMessageEvent({
             bookingId: customer.id,
             event: 'before_birthday',
+            // 23/11/2026: gli auguri di base sono gia' partiti qui sopra
+            // (birthday_message -> pro_marketing_compleanno o il custom che
+            // lo gestisce): se lo stesso template ha anche l'evento
+            // before_birthday non deve ripartire una seconda volta.
+            escludi: ['pro_marketing_compleanno', 'gestisce:birthday_message'],
             syntheticBooking: {
               id: customer.id,
               customer_name: fullName,

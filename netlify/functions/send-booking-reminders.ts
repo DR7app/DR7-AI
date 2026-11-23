@@ -2,6 +2,7 @@ import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { conSystemControl, funzioneFerma, businessDaServiceType } from './utils/systemControl'
+import { inviaRichiestaIbanCauzione } from './utils/richiestaIbanCauzione'
 import { nellaLinguaDelTelefono } from './utils/i18n'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -186,14 +187,23 @@ export const reminderHandler: Handler = async () => {
 
   // Load message templates from system_messages table (only enabled ones)
   const messageTemplates: Record<string, string> = {};
+  // 23/11/2026: le offerte di prolungamento di questo cron rispettano anche
+  // "Cron ON" (cron_approved) di Messaggi di Sistema Pro, e la supercar tace
+  // se e' attivo il messaggio Pro "richiesta prolungamento supercar" (che la
+  // manda gia' il giorno prima alle 09:00): prima il cliente ne riceveva due.
+  const cronOn = new Set<string>();
+  let proProlungamentoSupercarAttivo = false;
   try {
     const { data: templates } = await supabase
       .from('system_messages')
-      .select('message_key, message_body, is_enabled');
+      .select('message_key, message_body, is_enabled, is_automatic, cron_approved');
 
     if (templates) {
       templates.forEach((t: any) => {
         if (t.is_enabled !== false) messageTemplates[t.message_key] = t.message_body;
+        if (t.is_enabled !== false && t.cron_approved === true) cronOn.add(t.message_key);
+        if (String(t.message_key || '').startsWith('pro_custom_richiesta_prolungamento_supercar')
+          && t.is_enabled !== false && t.is_automatic !== false && t.cron_approved === true) proProlungamentoSupercarAttivo = true;
       });
       console.log(`Loaded ${Object.keys(messageTemplates).length} enabled message template(s) from database`);
     }
@@ -254,6 +264,8 @@ export const reminderHandler: Handler = async () => {
 
   function buildExtensionMessage(category: string, firstName: string): string | null {
     const key = category === 'exotic' ? 'supercar_day_before' : 'utilitaria_day_before';
+    if (!cronOn.has(key)) return null;
+    if (category === 'exotic' && proProlungamentoSupercarAttivo) return null;
     const template = getTemplate(key, null);
     if (!template) return null;
     return template.replace(/\{nome\}/g, firstName);
@@ -470,7 +482,7 @@ export const reminderHandler: Handler = async () => {
       const bookingIds = endedYesterday.map(b => b.id);
       const { data: cauzioni } = await supabase
         .from('cauzioni')
-        .select('riferimento_contratto_id, importo, stato')
+        .select('id, riferimento_contratto_id, importo, stato')
         .in('riferimento_contratto_id', bookingIds)
         .in('stato', ['Attiva', 'In scadenza']);
       const cauzioneMap = new Map(
@@ -504,38 +516,21 @@ export const reminderHandler: Handler = async () => {
             continue;
           }
 
-          const phone = await resolvePhone(booking, supabase);
-          if (!phone) { console.log(`[IBAN Deposit] Skipping ${booking.id} — no phone`); continue; }
+          // 23/11/2026: UNA sola strada per la richiesta IBAN (utils/
+          // richiestaIbanCauzione): prenota sulla cauzione prima di inviare,
+          // non chiede se l'IBAN c'e' gia'. Prima qui partiva un secondo invio
+          // dello stesso messaggio con un controllo anti-doppio diverso.
           if (await isBlacklisted(booking, supabase)) { console.log(`[IBAN Deposit] Skipping ${booking.id} — blacklisted`); continue; }
-
-          const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
-          const fullName = booking.customer_name
-            || [booking.booking_details?.customer?.firstName, booking.booking_details?.customer?.lastName].filter(Boolean).join(' ').trim()
-            || firstName;
-          const vehicleName = getVehicleDisplayName(booking);
-
-          // Routing via resolver: passiamo l'evento legacy `deposit_return_iban`
-          // e il service_type del booking — il resolver sceglie il template
-          // che ha questo evento in handled_events (o cade su pro_richiesta_iban
-          // via OLD_TO_PRO se nessun custom lo claima).
-          const vars: Record<string, string> = {
-            'nome cliente': fullName,
-            nome: firstName,
-            customer_name: fullName,
-            vehicle_name: vehicleName,
-          };
-          const bookingSvc = (booking as { service_type?: string })?.service_type || 'rental';
-          const message = await renderTemplate('deposit_return_iban', vars, undefined, {
-            booking: { service_type: bookingSvc },
-          });
-          if (!message) {
-            console.log(`[IBAN Deposit] Skipping ${booking.id} — nessun template per deposit_return_iban (service_type=${bookingSvc})`);
+          const cauz = cauzioneMap.get(booking.id) as { id?: string } | undefined;
+          if (!cauz?.id) {
+            console.log(`[IBAN Deposit] Skipping ${booking.id} — nessuna cauzione attiva collegata`);
             continue;
           }
+          const esito = await inviaRichiestaIbanCauzione(supabase, cauz.id);
+          const success = esito === 'inviata';
+          const message = `Richiesta IBAN (${esito})`;
 
-          const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message, businessDaServiceType(bookingSvc));
-
-          if (success) {
+          if (success || esito === 'gia_inviata' || esito === 'iban_presente') {
             await supabase.from('bookings').update({
               booking_details: {
                 ...(booking.booking_details || {}),
@@ -544,23 +539,14 @@ export const reminderHandler: Handler = async () => {
                 iban_request_sent: true,
               }
             }).eq('id', booking.id);
+          }
+          if (success) {
             console.log(`[IBAN Deposit] Sent for ${booking.id}`);
             sent++;
-
-            // Log to sent_messages_log
-            try {
-              const fullMessage = message;
-              await supabase.from('sent_messages_log').insert({
-                customer_name: firstName,
-                customer_phone: phone,
-                message_text: fullMessage,
-                template_label: 'IBAN Deposit Request',
-                status: 'sent',
-              });
-            } catch (logErr) {
-              console.error('Failed to log message:', logErr);
-            }
-          } else { failed++; }
+          } else if (esito === 'errore' || esito === 'template_mancante' || esito === 'senza_telefono') {
+            console.log(`[IBAN Deposit] ${booking.id}: ${message}`);
+            failed++;
+          }
 
           await new Promise(r => setTimeout(r, 2000));
         } catch (err: any) {
