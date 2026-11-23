@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useStatoTab, statoPronto } from '../../../utils/statoTab'
-import { ScheletroPagina, ScheletroTesto } from '../../../components/Scheletro'
+import { ScheletroPagina } from '../../../components/Scheletro'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -16,7 +16,6 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
-import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface Cauzione {
     id: string
@@ -1932,52 +1931,15 @@ export default function CauzioniTab() {
  * Il sistema NON esegue bonifici automatici: solo riepilogo dati.
  */
 /**
- * NUMERI AMMINISTRAZIONE — chi riceve il promemoria WhatsApp giornaliero delle
- * cauzioni da restituire (template pro_cauzioni_rimborso_staff). I numeri qui
- * vengono salvati in centralina_pro_config.config.notifications.cauzioni_staff_phones,
- * la stessa chiave letta dal cron. Senza numeri il promemoria non parte: e' la
- * causa del "non arriva il messaggio". Puoi aggiungere piu' numeri e testare
- * l'invio subito con "Invia promemoria ora".
+ * NUMERI AMMINISTRAZIONE — 23/11/2026 (direzione): i numeri e le email dello
+ * staff per le cauzioni si impostano in UN SOLO posto, Centralina Pro >
+ * Cauzioni > Avviso di scadenza (cauzioni_config.avviso_whatsapp/avviso_email).
+ * Qui c'era una seconda lista (notifications.cauzioni_staff_phones) usata dal
+ * promemoria giornaliero: si cambiavano i numeri in Centralina e il promemoria
+ * continuava ad arrivare ai vecchi, solo su WhatsApp. Resta il test di invio.
  */
 function NumeriAmministrazione() {
-    const [open, setOpen] = useState(false)
-    const [numbers, setNumbers] = useState<string[]>([''])
-    const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
     const [sending, setSending] = useState(false)
-
-    async function load() {
-        setLoading(true)
-        const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const c = ((data?.config as any) || {})
-        const raw = String(c?.notifications?.cauzioni_staff_phones || '')
-        const list = raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
-        setNumbers(list.length ? list : [''])
-        setLoading(false)
-    }
-    function openModal() { setOpen(true); load() }
-
-    const setAt = (i: number, v: string) => setNumbers(a => a.map((x, idx) => idx === i ? v : x))
-    const addRow = () => setNumbers(a => [...a, ''])
-    const removeAt = (i: number) => setNumbers(a => a.length > 1 ? a.filter((_, idx) => idx !== i) : [''])
-
-    async function save() {
-        const clean = numbers.map(n => n.trim()).filter(n => n.replace(/\D/g, '').length >= 8)
-        setSaving(true)
-        // Read-modify-write sulla config FRESCA: rileggiamo la config completa
-        // subito prima di scrivere cosi' non si sovrascrive il resto della
-        // Centralina anche se lo stato locale fosse vecchio o non ancora caricato.
-        const { data: fresh, error: readErr } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-        if (readErr) { setSaving(false); toast.error('Lettura config fallita: ' + readErr.message); return }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const base = ((fresh?.config as any) || {})
-        const newCfg = { ...base, notifications: { ...(base.notifications || {}), cauzioni_staff_phones: clean.join('\n') } }
-        const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: newCfg }, { onConflict: 'id' })
-        setSaving(false)
-        if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
-        toast.success(clean.length ? `${clean.length} numero/i salvati` : 'Nessun numero valido — nessuno riceverà il promemoria')
-    }
 
     async function inviaOra() {
         setSending(true)
@@ -1994,65 +1956,14 @@ function NumeriAmministrazione() {
     }
 
     return (
-        <>
-            <button
-                onClick={openModal}
-                className="px-3 py-2 rounded-full bg-theme-bg-tertiary border border-theme-border hover:bg-theme-bg-hover text-theme-text-secondary text-xs font-medium flex items-center gap-1.5 transition-colors"
-                title="Numeri che ricevono il promemoria rimborso cauzioni"
-            >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11 11 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                Numeri Amministrazione
-            </button>
-
-            {open && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && !sending && setOpen(false)}>
-                    <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <div>
-                            <h3 className="text-lg font-bold text-theme-text-primary">Numeri Amministrazione</h3>
-                            <p className="text-xs text-theme-text-muted mt-1">
-                                Questi numeri WhatsApp ricevono il <b>promemoria giornaliero</b> delle cauzioni da restituire. Se è vuoto, il promemoria non parte.
-                            </p>
-                        </div>
-
-                        {loading ? (
-                            <ScheletroTesto righe={3} />
-                        ) : (
-                            <div className="space-y-2">
-                                {numbers.map((n, i) => (
-                                    <div key={i} className="flex items-center gap-2">
-                                        <div className="flex-1 min-w-0">
-                                            <TelefonoConPrefisso value={n} onChange={v => setAt(i, v)} mostraAnteprima={false} />
-                                        </div>
-                                        <button
-                                            onClick={() => removeAt(i)}
-                                            className="px-2.5 py-2 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10"
-                                            title="Rimuovi numero"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                ))}
-                                <button onClick={addRow} className="text-xs font-medium text-dr7-gold hover:underline">+ Aggiungi numero</button>
-                            </div>
-                        )}
-
-                        <div className="flex items-center justify-between gap-2 pt-1">
-                            <button
-                                onClick={inviaOra}
-                                disabled={sending}
-                                className="px-3 py-2 rounded-lg text-xs font-semibold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                            >
-                                {sending ? 'Invio…' : 'Invia promemoria ora'}
-                            </button>
-                            <div className="flex gap-2">
-                                <button onClick={() => setOpen(false)} disabled={saving} className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Chiudi</button>
-                                <button onClick={save} disabled={saving || loading} className="px-4 py-2 rounded-lg text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50">{saving ? 'Salvataggio…' : 'Salva'}</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
+        <button
+            onClick={inviaOra}
+            disabled={sending}
+            title="Invia ora il promemoria giornaliero delle cauzioni da restituire. Numeri ed email: Centralina Pro > Cauzioni > Avviso di scadenza."
+            className="px-3 py-2 rounded-full bg-theme-bg-tertiary border border-theme-border hover:bg-theme-bg-hover text-theme-text-secondary text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+        >
+            {sending ? 'Invio...' : 'Invia promemoria ora'}
+        </button>
     )
 }
 

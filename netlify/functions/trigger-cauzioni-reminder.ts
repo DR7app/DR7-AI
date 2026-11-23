@@ -12,9 +12,9 @@ export const handler: Handler = async (event) => {
         const res = await processCauzioniRimborsoStaffReminder(Date.now(), { force: true });
         const ok = res.sent > 0;
         let message: string;
-        if (ok) message = `Inviato a ${res.sent} destinatario/i.`;
+        if (ok) message = `Inviato a ${res.sent} destinatario/i (WhatsApp ed email).${res.reason ? ' ' + res.reason : ''}`;
         else if (res.reason) message = res.reason;
-        else if (res.errors > 0) message = `Invio fallito (${res.errors} errori) — controlla il numero WhatsApp dei destinatari.`;
+        else if (res.errors > 0) message = `Invio fallito (${res.errors} errori) — controlla numeri WhatsApp ed email in Centralina Pro > Cauzioni.`;
         else message = 'Niente da inviare.';
         return { statusCode: 200, headers, body: JSON.stringify({ ok, ...res, message }) };
     } catch (e) {

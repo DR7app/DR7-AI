@@ -1229,30 +1229,13 @@ async function processUscitaTemplates(tpl: SystemMessage, now: number): Promise<
 // (config.notifications.cauzioni_staff_phones, separati da virgola/riga/;) +
 // fallback ad admins.contatto_interno di valerio@/ilenia@dr7.app. Dedup.
 async function resolveCauzioniStaffRecipients(): Promise<{ nome: string; phone: string }[]> {
-    const out = new Map<string, { nome: string; phone: string }>();
-    // 1) numeri configurati
-    try {
-        const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const notif = (data?.config as any)?.notifications || {};
-        const raw = String(notif.cauzioni_staff_phones || '');
-        for (const part of raw.split(/[\n,;]+/)) {
-            const phone = part.replace(/\D/g, '');
-            if (phone.length >= 8) out.set(phone, { nome: 'Staff', phone });
-        }
-    } catch { /* config opzionale */ }
-    // 2) fallback admins.contatto_interno
-    try {
-        const { data: admins } = await supabase
-            .from('admins').select('email, nome, contatto_interno')
-            .in('email', ['valerio@dr7.app', 'ilenia@dr7.app']);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const a of (admins || []) as any[]) {
-            const phone = String(a.contatto_interno || '').replace(/\D/g, '');
-            if (phone.length >= 8 && !out.has(phone)) out.set(phone, { nome: a.nome || 'Staff', phone });
-        }
-    } catch { /* ignore */ }
-    return [...out.values()];
+    // 23/11/2026 (direzione): UNA sola lista, quella di Centralina Pro >
+    // Cauzioni > Avviso di scadenza. Prima qui si leggevano
+    // notifications.cauzioni_staff_phones (finestra "Numeri Amministrazione")
+    // + admins.contatto_interno di valerio@/ilenia@: cambiando i numeri in
+    // Centralina il promemoria arrivava ancora ai vecchi.
+    const cfg = await loadAvvisoCauzioneConfig();
+    return cfg.whatsapp.map(phone => ({ nome: 'Staff', phone }));
 }
 
 /**
@@ -1589,23 +1572,29 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
     //    cauzioni_staff_phones) + fallback ad admins.contatto_interno di
     //    valerio@/ilenia@. Cosi' non dipende dal fatto che gli admin abbiano
     //    il contatto interno valorizzato.
+    // 23/11/2026: numeri ED email da Centralina Pro > Cauzioni > Avviso di
+    // scadenza (lista unica). Prima solo WhatsApp, verso un'altra lista.
     const recipients = await resolveCauzioniStaffRecipients();
+    const emailStaff = (await loadAvvisoCauzioneConfig()).email;
 
-    if (recipients.length === 0) {
-        console.warn('[cauzioni-rimborso-staff] nessun destinatario con telefono valido (admins.contatto_interno)');
-        return { sent, skipped: skipped + due.length, errors, reason: 'Nessun destinatario: valerio@/ilenia@dr7.app senza "contatto interno" (numero WhatsApp)' };
+    if (recipients.length === 0 && emailStaff.length === 0) {
+        console.warn('[cauzioni-rimborso-staff] nessun destinatario in Centralina Pro > Cauzioni');
+        return { sent, skipped: skipped + due.length, errors, reason: 'Nessun destinatario: imposta numeri WhatsApp o email in Centralina Pro > Cauzioni > Avviso di scadenza' };
     }
 
-    // Interruttore System Control: WhatsApp spento = promemoria non inviato e
-    // cauzioni NON marcate, cosi' partono al giro dopo la riaccensione.
+    // Interruttore System Control: canale spento = saltato. Se non parte
+    // niente le cauzioni NON vengono marcate e ripartono al giro dopo.
     const fermaWaRimborso = await funzioneFerma('invio_whatsapp');
-    if (fermaWaRimborso) {
-        console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWaRimborso);
-        return { sent, skipped: skipped + due.length, errors, reason: fermaWaRimborso };
+    const fermaEmailRimborso = await funzioneFerma('invio_email');
+    if (fermaWaRimborso) console.warn('[process-scheduled-system-messages-cron] invio saltato: ' + fermaWaRimborso);
+    if (fermaEmailRimborso) console.warn('[process-scheduled-system-messages-cron] invio email saltato: ' + fermaEmailRimborso);
+    if ((fermaWaRimborso || recipients.length === 0) && (fermaEmailRimborso || emailStaff.length === 0)) {
+        return { sent, skipped: skipped + due.length, errors, reason: fermaWaRimborso || fermaEmailRimborso || 'Nessun canale disponibile' };
     }
+    const erroriEmail: string[] = [];
 
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
-    for (const r of recipients) {
+    for (const r of (fermaWaRimborso ? [] : recipients)) {
         try {
             const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                 method: 'POST',
@@ -1617,6 +1606,28 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
             if (res.ok) sent++; else errors++;
         } catch { errors++; }
     }
+    // Email: stesso testo, via Resend come l'avviso di scadenza.
+    for (const to of (fermaEmailRimborso ? [] : emailStaff)) {
+        try {
+            if (!avvisoResend) throw new Error('RESEND_API_KEY non configurata su Netlify');
+            const { error: resendErr } = await avvisoResend.emails.send({
+                from: await getEmailFrom('DR7 Cauzioni <info@dr7.app>'),
+                to,
+                subject: `Cauzioni da restituire — ${new Date(todayRome + 'T00:00:00').toLocaleDateString('it-IT')}`,
+                text: finalBody,
+                html: `<pre style="font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:14px;white-space:pre-wrap">${
+                    finalBody.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                }</pre>`,
+            });
+            if (resendErr) throw new Error(resendErr.message || 'Resend: invio rifiutato');
+            sent++;
+        } catch (e) {
+            errors++;
+            const msg = `${to}: ${(e as Error)?.message || String(e)}`.slice(0, 200);
+            console.error('[cauzioni-rimborso-staff] email non inviata', msg);
+            erroriEmail.push(msg);
+        }
+    }
 
     // 7) Marca le cauzioni incluse (anti doppio invio) — solo se abbiamo inviato.
     if (sent > 0) {
@@ -1627,7 +1638,7 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
             .in('id', due.map((c: any) => c.id));
     }
 
-    return { sent, skipped, errors };
+    return { sent, skipped, errors, ...(erroriEmail.length > 0 ? { reason: `Email NON inviate: ${erroriEmail.join(' | ')}` } : {}) };
 }
 
 const cronHandler = async () => {

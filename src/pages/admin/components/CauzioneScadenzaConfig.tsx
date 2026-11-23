@@ -512,8 +512,8 @@ const CauzioneScadenzaConfig = forwardRef<CauzioneScadenzaHandle, Props>(functio
         </div>
 
         <p className="mt-2 text-[11px] text-theme-text-muted">
-          Lasciando vuoto il numero WhatsApp si usano quelli staff gia' impostati in Centralina.
-          Gli avvisi non partono mai tra le 22:00 e le 07:00, tranne con "Invia ora".
+          Questi numeri ed email sono gli unici usati per le cauzioni: ricevono questo avviso e il promemoria
+          giornaliero delle cauzioni da restituire. Gli avvisi non partono mai tra le 22:00 e le 07:00, tranne con "Invia ora".
         </p>
       </div>
     </div>

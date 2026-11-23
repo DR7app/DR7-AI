@@ -3807,25 +3807,8 @@ export default function MessaggiSistemaProTab() {
         } catch (e) { toast.error('Errore: ' + (e as Error).message) } finally { setSendingCauzioni(false) }
     }
 
-    // Imposta i numeri WhatsApp dello staff che ricevono i promemoria cauzioni
-    // (salvati in centralina_pro_config.notifications.cauzioni_staff_phones).
-    async function handleEditCauzioniContacts() {
-        try {
-            const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const cfg: any = data?.config || {}
-            const notif = cfg.notifications || {}
-            const input = window.prompt(
-                'Numeri WhatsApp staff che ricevono i promemoria cauzioni (separati da virgola).\nEs: 393401234567, 393407654321',
-                String(notif.cauzioni_staff_phones || '')
-            )
-            if (input === null) return
-            const nextCfg = { ...cfg, notifications: { ...notif, cauzioni_staff_phones: input.trim() } }
-            const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
-            if (error) throw error
-            toast.success('Contatti staff cauzioni salvati')
-        } catch (e) { toast.error('Errore: ' + (e as Error).message) }
-    }
+    // 23/11/2026: niente piu' "Contatti" qui. Numeri ed email dello staff
+    // cauzioni stanno solo in Centralina Pro > Cauzioni > Avviso di scadenza.
 
     async function handleDeleteTemplate(template: SystemMessage) {
         if (!confirm(`Eliminare definitivamente il messaggio "${template.label}"?\n\nQuesta operazione non è reversibile.`)) return
@@ -5101,11 +5084,6 @@ export default function MessaggiSistemaProTab() {
                                                         </button>
                                                         {template.message_key === 'pro_cauzioni_rimborso_staff' && (
                                                             <>
-                                                                <button
-                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditCauzioniContacts() }}
-                                                                    title="Imposta i numeri WhatsApp dello staff che riceve i promemoria cauzioni"
-                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 transition-colors"
-                                                                >Contatti</button>
                                                                 <button
                                                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSendCauzioniNow() }}
                                                                     disabled={sendingCauzioni}
