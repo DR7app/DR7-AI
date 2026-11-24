@@ -232,6 +232,14 @@ export async function sendToCargos(
     // e nessuna coda (non e' un guasto). CARGOS riguarda solo il noleggio auto.
     const ferma = await funzioneFerma('cargos', 'terra')
     if (ferma) return { success: false, skipped: true, reason: 'cargos_off', error: ferma }
+    // 24/11/2026 (Valerio): Centralina Pro > Cargos, interruttore per veicolo.
+    // Veicolo spento = i suoi contratti non vanno a CARGOS (ne' dopo la firma
+    // ne' dal recupero ogni 30 minuti). Non e' un errore: nessun avviso.
+    const escluso = await veicoloEsclusoCargos(bookingId)
+    if (escluso) {
+        console.log(`[cargos-auto-send] ${bookingId}: veicolo ${escluso} disattivato per CARGOS in Centralina Pro — non inviato`)
+        return { success: false, skipped: true, reason: 'veicolo_escluso', error: `Veicolo ${escluso} disattivato per CARGOS` }
+    }
     const t0 = Date.now()
     const esito = await inviaCargos(bookingId, opts)
     try {
@@ -258,6 +266,43 @@ export async function sendToCargos(
         console.warn('[cargos-auto-send] System Control non raggiungibile:', e)
     }
     return esito
+}
+
+function targaNorm(t: unknown): string {
+    return String(t || '').replace(/[^a-z0-9]/gi, '').toUpperCase()
+}
+
+/**
+ * Il veicolo della prenotazione e' spento per CARGOS in Centralina Pro
+ * (config.cargos.veicoli_esclusi = id dei veicoli)? Torna il nome/targa del
+ * veicolo escluso, o null. Aggancio come il calendario: id (anche in
+ * booking_details), poi targa. Se la lettura fallisce si invia (null).
+ */
+export async function veicoloEsclusoCargos(bookingId: string): Promise<string | null> {
+    try {
+        const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+        const esclusi: string[] = Array.isArray((cfgRow?.config as any)?.cargos?.veicoli_esclusi)
+            ? (cfgRow!.config as any).cargos.veicoli_esclusi.map(String)
+            : []
+        if (esclusi.length === 0) return null
+        const { data: b } = await supabase
+            .from('bookings')
+            .select('vehicle_id, vehicle_plate, vehicle_name, booking_details')
+            .eq('id', bookingId)
+            .maybeSingle()
+        if (!b) return null
+        const bd = (b.booking_details || {}) as any
+        const vid = b.vehicle_id || bd.vehicle_id
+        if (vid) return esclusi.includes(String(vid)) ? (b.vehicle_plate || b.vehicle_name || String(vid)) : null
+        const targa = targaNorm(b.vehicle_plate || bd.vehicle_plate || bd.vehicle?.plate)
+        if (!targa) return null
+        const { data: veicoli } = await supabase.from('vehicles').select('id, plate').in('id', esclusi)
+        const hit = (veicoli || []).find((v: any) => targaNorm(v.plate) === targa)
+        return hit ? (b.vehicle_plate || b.vehicle_name || targa) : null
+    } catch (e) {
+        console.warn('[cargos-auto-send] controllo veicoli esclusi non riuscito, si invia:', e)
+        return null
+    }
 }
 
 /**

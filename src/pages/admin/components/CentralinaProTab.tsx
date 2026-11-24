@@ -25,6 +25,7 @@ import MoneyInput from '../../../components/MoneyInput'
 import AlarmInventoryModal from '../../../components/admin/AlarmInventoryModal'
 import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
+import CargosVeicoliSection from './CargosVeicoliSection'
 import CauzioneScadenzaConfig, { type CauzioneScadenzaHandle } from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import FidelityLavaggioSection from './FidelityLavaggioSection'
@@ -75,7 +76,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp' | 'fidelity-lavaggio' | 'emtn'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo' | 'sito' | 'gestione-otp' | 'fidelity-lavaggio' | 'emtn' | 'cargos'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -124,6 +125,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p11', title: 'Automazioni' },
   { id: 'fidelity-lavaggio', title: 'Fidelity Lavaggio' },
   { id: 'emtn', title: 'EMTN' },
+  { id: 'cargos', title: 'Cargos' },
   { id: 'meteo', title: 'Allerta Meteo' },
   { id: 'p12', title: 'Orari' },
   { id: 'calendario-giornaliero', title: 'Calendario Giornaliero' },
@@ -2778,6 +2780,12 @@ export default function CentralinaProTab() {
             {/* 07/11/2026: soglie EMTN (allarme e blocco prenotazioni dal sito).
                 Globali (riga 'main'), salvataggio proprio come la Fidelity:
                 fuori dalle sync useEffect e dallo snapshot della SaveBar. */}
+            {section === 'cargos' && (
+              <>
+                <GlobaleBadge cosa="I veicoli comunicati a CARGOS" />
+                <CargosVeicoliSection readOnly={isCauzioniViewOnly} />
+              </>
+            )}
             {section === 'emtn' && (
               <>
                 <GlobaleBadge cosa="Le soglie EMTN" />
