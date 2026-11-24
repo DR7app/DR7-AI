@@ -431,9 +431,52 @@ const handler: Handler = async (event) => {
           .maybeSingle();
 
         const currentBalance = creditBalance?.balance ? parseFloat(creditBalance.balance) : 0;
+
+        // 24/11/2026 (video di Valerio): cliente con €60 (€10 liberi + €50
+        // vincolati), addebito di €50 = "Saldo insufficiente, -€40". Il
+        // credito vincolato non entrava nel conto. Ora l'addebito manuale
+        // prende PRIMA dai lotti vincolati validi (non scaduti; quello che
+        // scade prima per primo, come dr7_wallet_consuma_vincolato) e solo il
+        // resto dal saldo libero. Senza servizio (addebito manuale) vale ogni
+        // lotto non scaduto.
+        type Lotto = { id: string; residuo: number; scadenza: string | null; servizi: string[] | null; created_at: string }
+        let lottiDaUsare: { id: string; quota: number }[] = [];
+        let daVincolati = 0;
+        if (!isCredit) {
+          const oggi = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+          const { data: lotti, error: lottiErr } = await serviceSupabase
+            .from('wallet_crediti_vincolati')
+            .select('id, residuo, scadenza, servizi, created_at')
+            .eq('user_id', userId)
+            .gt('residuo', 0);
+          if (lottiErr) console.warn('[customer-wallet-admin] lotti vincolati non letti:', lottiErr.message);
+          const validi = ((lotti || []) as Lotto[])
+            .map(l => ({ ...l, residuo: Number(l.residuo) || 0 }))
+            .filter(l => !l.scadenza || l.scadenza >= oggi)
+            .sort((a, b) => {
+              const sa = a.scadenza || '9999-12-31';
+              const sb = b.scadenza || '9999-12-31';
+              if (sa !== sb) return sa < sb ? -1 : 1;
+              const na = a.servizi && a.servizi.length > 0 ? 0 : 1;
+              const nb = b.servizi && b.servizi.length > 0 ? 0 : 1;
+              if (na !== nb) return na - nb;
+              return a.created_at < b.created_at ? -1 : 1;
+            });
+          let resta = Math.round(amountEur * 100) / 100;
+          for (const l of validi) {
+            if (resta <= 0) break;
+            const quota = Math.round(Math.min(l.residuo, resta) * 100) / 100;
+            if (quota <= 0) continue;
+            lottiDaUsare.push({ id: l.id, quota });
+            resta = Math.round((resta - quota) * 100) / 100;
+          }
+          daVincolati = Math.round((amountEur - resta) * 100) / 100;
+        }
+        const daLibero = Math.round((amountEur - daVincolati) * 100) / 100;
+
         const newBalance = isCredit
           ? Math.round((currentBalance + amountEur) * 100) / 100
-          : Math.round((currentBalance - amountEur) * 100) / 100;
+          : Math.round((currentBalance - daLibero) * 100) / 100;
 
         // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): portare il
         // wallet in negativo era vietato in assoluto. Serve pero' quando la
@@ -479,6 +522,26 @@ const handler: Handler = async (event) => {
           }
         }
 
+        // Consumo dei lotti vincolati (solo dopo le autorizzazioni). Ogni
+        // quota va a registro nei movimenti, senza prenotazione.
+        for (const u of lottiDaUsare) {
+          const { data: riga } = await serviceSupabase
+            .from('wallet_crediti_vincolati')
+            .select('residuo')
+            .eq('id', u.id)
+            .maybeSingle();
+          const residuo = Number(riga?.residuo) || 0;
+          const quota = Math.min(residuo, u.quota);
+          if (quota <= 0) continue;
+          await serviceSupabase
+            .from('wallet_crediti_vincolati')
+            .update({ residuo: Math.round((residuo - quota) * 100) / 100, updated_at: new Date().toISOString() })
+            .eq('id', u.id);
+          await serviceSupabase
+            .from('wallet_crediti_vincolati_movimenti')
+            .insert({ lotto_id: u.id, user_id: userId, booking_id: null, importo: quota });
+        }
+
         if (!creditBalance) {
           await serviceSupabase.from('user_credit_balance').insert({
             user_id: userId,
@@ -512,7 +575,8 @@ const handler: Handler = async (event) => {
           transaction_type: isCredit ? 'credit' : 'debit',
           amount: amountEur,
           balance_after: newBalance,
-          description: description || (isCredit ? 'Credito manuale admin' : 'Addebito manuale admin'),
+          description: (description || (isCredit ? 'Credito manuale admin' : 'Addebito manuale admin'))
+            + (!isCredit && daVincolati > 0 ? ` (di cui €${daVincolati.toFixed(2)} dal credito vincolato)` : ''),
           reference_type: isCredit ? creditReferenceType : 'admin_manual'
         });
 
