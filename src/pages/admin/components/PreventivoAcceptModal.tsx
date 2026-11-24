@@ -204,6 +204,8 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
         // 17/09/2026: senza autorizzazione del cliente niente prelievo dal wallet.
         const esitoWallet = await autWallet.chiediSeWallet(paymentMethod, richiestaWallet(customerId))
         if (esitoWallet === null) return
+        // Credit Wallet = si paga ora dal wallet (vedi la scelta del metodo).
+        const statoPagamento: 'pending' | 'paid' = isCreditWallet(paymentMethod) ? 'paid' : paymentStatus
         setSubmitting(true)
         setError(null)
         try {
@@ -212,10 +214,10 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                 preventivo,
                 customer_id: customerId,
                 payment_method: paymentMethod,
-                payment_status: paymentStatus,
-                amount_paid_eur: paymentStatus === 'paid' ? (preventivo.total_final ?? 0) : amt,
+                payment_status: statoPagamento,
+                amount_paid_eur: statoPagamento === 'paid' ? (preventivo.total_final ?? 0) : amt,
                 // Paid → sempre confermata. Da saldare → solo se la red box è spuntata.
-                confirm_booking: paymentStatus === 'paid' ? true : confirmBooking,
+                confirm_booking: statoPagamento === 'paid' ? true : confirmBooking,
                 second_driver: conSecondoGuidatore && (secondoGuidatore.name.trim() || secondoGuidatore.surname.trim())
                     ? secondoGuidatore
                     : null,
@@ -290,6 +292,11 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                         onChange={(e) => {
                             const metodo = e.target.value
                             setPaymentMethod(metodo)
+                            // 24/11/2026 (video di Valerio): col Credit Wallet il preventivo
+                            // accettato restava "Da saldare" e il wallet non veniva scalato
+                            // (il trigger addebita solo se pagato). Come nella prenotazione:
+                            // wallet = pagato subito.
+                            if (isCreditWallet(metodo)) setPaymentStatus('paid')
                             // 17/09/2026: scelto il Credit Wallet parte subito la richiesta al cliente.
                             if (isCreditWallet(metodo) && customerId) autWallet.chiediSeWallet(metodo, richiestaWallet(customerId))
                         }}
