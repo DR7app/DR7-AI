@@ -112,6 +112,20 @@ export default function RicaricaWalletTab() {
   // La riga non esiste finche' non si salva la prima volta: la si crea col
   // testo scritto qui, cosi' compare anche in Messaggi di Sistema Pro.
   async function salvaMessaggio(m: MessaggioWallet = messaggio): Promise<boolean> {
+    // 24/11/2026: dal 23/10 il testo salvato aveva {50}, {NOLEGGIO} e
+    // {26 Novembre} al posto di {importo}, {servizi}, {scadenza}: ogni cliente
+    // riceveva "€{50}" qualunque fosse il regalo. Prima di salvare si avvisa.
+    const ammessi = new Set(['nome', 'importo', 'servizi', 'scadenza'])
+    const estranei = [...new Set((m.message_body.match(/\{[^{}]*\}/g) || []).filter(x => !ammessi.has(x.slice(1, -1).trim())))]
+    const mancanti = ['importo', 'servizi', 'scadenza'].filter(k => !m.message_body.includes(`{${k}}`))
+    if (estranei.length > 0 || mancanti.length > 0) {
+      const righe = [
+        estranei.length > 0 ? `Queste parti non verranno sostituite e il cliente le leggera' cosi': ${estranei.join(', ')}` : '',
+        mancanti.length > 0 ? `Mancano: ${mancanti.map(k => `{${k}}`).join(', ')} (importo, servizi e scadenza veri di ogni invio)` : '',
+        'Salvare comunque?',
+      ].filter(Boolean)
+      if (!window.confirm(righe.join('\n\n'))) return false
+    }
     setSalvataggioMsg(true)
     const campi = { message_body: m.message_body, is_enabled: m.is_enabled }
     const { data, error } = m.id
