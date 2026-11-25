@@ -42,12 +42,22 @@ export interface CategoriaVeicolo { id: string; label: string }
 let etichetteCategorie: Record<string, string> = {}
 
 export async function caricaCategorieVeicoli(): Promise<CategoriaVeicolo[]> {
-    const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+    const { data, error } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
     const lista = ((data?.config as { categories?: { id?: string; label?: string }[] } | null)?.categories || [])
         .filter(c => c && c.id)
         .map(c => ({ id: String(c.id), label: String(c.label || c.id) }))
+    // Una lettura fallita non cancella i nomi gia' caricati: altrimenti il
+    // messaggio al cliente diceva "urban" invece di "Hypercar".
+    if (error || lista.length === 0) {
+        return Object.entries(etichetteCategorie).map(([id, label]) => ({ id, label }))
+    }
     etichetteCategorie = Object.fromEntries(lista.map(c => [c.id.toLowerCase(), c.label]))
     return lista
+}
+
+/** Nomi delle categorie pronti prima di comporre un messaggio al cliente. */
+export async function assicuraEtichetteCategorie(): Promise<void> {
+    if (Object.keys(etichetteCategorie).length === 0) await caricaCategorieVeicoli().catch(() => {})
 }
 
 function etichettaScope(s: string): string {

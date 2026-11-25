@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, numeroWhatsapp, caricaCategorieVeicoli, type CategoriaVeicolo } from '../../../utils/messaggioCodiceSconto'
+import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, numeroWhatsapp, caricaCategorieVeicoli, assicuraEtichetteCategorie, type CategoriaVeicolo } from '../../../utils/messaggioCodiceSconto'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -293,6 +293,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
         if (!numero) return
         const body = await caricaTemplateCodiceSconto('discount_code_created')
         if (!body) return // nessun template assegnato all'evento: non si invia
+        await assicuraEtichetteCategorie()
 
         const nomeCompleto = (selectedCustomerLabel.split('·')[0] || '').trim()
         const nome = nomeCompleto.split(/\s+/)[0] || ''
