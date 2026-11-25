@@ -60,12 +60,27 @@ async function resolveStaff(sb: ReturnType<typeof createClient>): Promise<Recipi
     try {
         const { data } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const notif = ((data?.config as any) || {}).notifications || {}
-        for (const part of String(notif.cauzioni_staff_phones || '').split(/[\n,;]+/)) {
-            const phone = part.replace(/\D/g, '')
-            if (phone.length >= 8) out.set(phone, { nome: 'Staff', phone })
+        const cfg = ((data?.config as any) || {})
+        // 25/11/2026: prima i numeri scelti in Centralina Pro > Automazioni
+        // (config.scadenze_veicoli.whatsapp); vuoti = gli stessi dell'avviso
+        // Cauzioni (cauzioni_config.avviso_whatsapp). La vecchia lista
+        // notifications.cauzioni_staff_phones, tolta dalle Cauzioni il 23/11,
+        // resta solo come ultima riserva.
+        const aggiungi = (v: unknown) => {
+            for (const part of String(v || '').split(/[\n,;]+/)) {
+                let phone = part.replace(/\D/g, '')
+                if (phone.length === 10 && phone.startsWith('3')) phone = '39' + phone
+                if (phone.length >= 8) out.set(phone, { nome: 'Staff', phone })
+            }
         }
+        aggiungi(cfg.scadenze_veicoli?.whatsapp)
+        if (out.size === 0) {
+            const { data: cz } = await sb.from('cauzioni_config').select('avviso_whatsapp').eq('id', 'main').maybeSingle()
+            aggiungi((cz as any)?.avviso_whatsapp)
+        }
+        if (out.size === 0) aggiungi((cfg.notifications || {}).cauzioni_staff_phones)
     } catch { /* config opzionale */ }
+    if (out.size > 0) return [...out.values()]
     try {
         const { data: admins } = await sb.from('admins').select('email, nome, contatto_interno')
             .in('email', ['valerio@dr7.app', 'ilenia@dr7.app'])

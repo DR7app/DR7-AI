@@ -27,6 +27,7 @@ import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 import CargosVeicoliSection from './CargosVeicoliSection'
 import NumeroNoCauzioneSection from './NumeroNoCauzioneSection'
+import NumeriScadenzeVeicoliSection from './NumeriScadenzeVeicoliSection'
 import CauzioneScadenzaConfig, { type CauzioneScadenzaHandle } from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import FidelityLavaggioSection from './FidelityLavaggioSection'
@@ -2767,10 +2768,14 @@ export default function CentralinaProTab() {
               />
             )}
             {section === 'p11' && (
+              <>
+              {/* 2026-11-25: destinatari degli avvisi di scadenza dei veicoli. */}
+              <NumeriScadenzeVeicoliSection readOnly={isCauzioniViewOnly} />
               <AutomazioniSection
                 automations={automations}
                 setAutomations={setAutomations}
               />
+              </>
             )}
             {/* 06/11/2026: regole della Fidelity Card lavaggio. Una sola per
                 tutti (riga 'main'), salvataggio proprio: il calcolo lo fa il
