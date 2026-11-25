@@ -1151,11 +1151,11 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                                     <select
                                                         value={qty}
                                                         onChange={e => setMinuti(penalty, parseInt(e.target.value, 10) || 0)}
-                                                        className="shrink-0 px-2 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[13px] tabular-nums focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                                        className="shrink-0 px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-[13px] tabular-nums focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                                                     >
-                                                        <option value={0}>0 min</option>
-                                                        {qty > 0 && !MINUTI_OPZIONI.includes(qty) && <option value={qty}>{qty} min</option>}
-                                                        {MINUTI_OPZIONI.map(m => <option key={m} value={m}>{m} min</option>)}
+                                                        <option value={0} className="bg-theme-bg-secondary text-theme-text-primary">0 min</option>
+                                                        {qty > 0 && !MINUTI_OPZIONI.includes(qty) && <option value={qty} className="bg-theme-bg-secondary text-theme-text-primary">{qty} min</option>}
+                                                        {MINUTI_OPZIONI.map(m => <option key={m} value={m} className="bg-theme-bg-secondary text-theme-text-primary">{m} min</option>)}
                                                     </select>
                                                 </>
                                             ) : (
@@ -1346,11 +1346,11 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                     className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                                 >
                                     {paymentMethods.map(pm => (
-                                        <option key={pm.key} value={pm.label}>{pm.label}</option>
+                                        <option key={pm.key} value={pm.label} className="bg-theme-bg-secondary text-theme-text-primary">{pm.label}</option>
                                     ))}
                                     {/* Keep legacy value visible if it's not in the curated list */}
                                     {paymentMethod && !paymentMethods.some(pm => pm.label === paymentMethod) && (
-                                        <option value={paymentMethod}>{paymentMethod}</option>
+                                        <option value={paymentMethod} className="bg-theme-bg-secondary text-theme-text-primary">{paymentMethod}</option>
                                     )}
                                 </select>
                             </div>
