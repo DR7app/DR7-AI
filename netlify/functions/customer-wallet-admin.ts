@@ -24,7 +24,18 @@ async function avvisaClientiCredito(
   userIds: string[],
   dati: { importo: number; scadenza: string | null; servizi: string[] },
 ): Promise<{ messaggi: number; motivo?: string }> {
-  const servizi = dati.servizi.length > 0 ? dati.servizi.map(s => ETICHETTE_SERVIZI[s] || s).join(', ') : 'tutti i servizi';
+  // 25/11/2026: le voci 'cat:<id>' sono categorie di Centralina Pro; al
+  // cliente si scrive il loro nome (es. "Hypercar"), non l'id interno.
+  const nomiCategorie: Record<string, string> = {};
+  if (dati.servizi.some(s => s.startsWith('cat:'))) {
+    const { data: cfg } = await db.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
+    for (const c of ((cfg?.config?.categories || []) as Array<{ id?: string; label?: string }>)) {
+      if (c && c.id) nomiCategorie[String(c.id).toLowerCase()] = String(c.label || c.id);
+    }
+  }
+  const servizi = dati.servizi.length > 0
+    ? dati.servizi.map(s => s.startsWith('cat:') ? (nomiCategorie[s.slice(4).toLowerCase()] || s.slice(4)) : (ETICHETTE_SERVIZI[s] || s)).join(', ')
+    : 'tutti i servizi';
   const scadenza = dati.scadenza
     ? new Date(dati.scadenza + 'T12:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : 'nessuna scadenza';

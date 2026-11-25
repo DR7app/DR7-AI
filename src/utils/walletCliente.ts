@@ -48,6 +48,9 @@ function businessDi(servizio: string | null | undefined): string {
 export async function leggiSaldoWallet(
   customerId: string | null | undefined,
   servizio?: string | null,
+  // 25/11/2026: veicolo della prenotazione, per i lotti vincolati a una
+  // categoria di Centralina Pro ('cat:<id>'), come in dr7_wallet_lotto_vale.
+  vehicleId?: string | null,
 ): Promise<SaldoWallet> {
   if (!customerId) return VUOTO
   try {
@@ -80,10 +83,19 @@ export async function leggiSaldoWallet(
       .gt('residuo', 0)
 
     const business = businessDi(servizio)
+    let categoria = ''
+    if (vehicleId && business === 'rental') {
+      const { data: v } = await supabase.from('vehicles').select('category').eq('id', vehicleId).maybeSingle()
+      categoria = String((v as { category?: string | null } | null)?.category || '').trim().toLowerCase()
+    }
+    const alias = (x: string) => (x === 'exotic' ? 'supercars' : x)
     let vincolato = 0
     for (const l of (lotti || []) as Array<{ residuo: number | string; scadenza: string | null; servizi: string[] | null }>) {
       if (l.scadenza && l.scadenza < oggi) continue
-      const vale = !l.servizi || l.servizi.length === 0 || l.servizi.some(x => businessDi(x) === business)
+      const voci = (l.servizi || []).map(x => String(x || '').trim().toLowerCase())
+      const vale = voci.length === 0
+        || voci.some(x => !x.startsWith('cat:') && businessDi(x) === business)
+        || (business === 'rental' && !!categoria && voci.some(x => x.startsWith('cat:') && alias(x.slice(4)) === alias(categoria)))
       if (vale) vincolato += Number(l.residuo) || 0
     }
 

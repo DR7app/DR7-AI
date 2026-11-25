@@ -1367,13 +1367,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setSaldoWalletInCaricamento(true)
     // Il servizio conta: un credito vincolato al Lavaggio non paga un
     // noleggio Terra, e viceversa.
-    leggiSaldoWallet(formData.customer_id, serviceType).then(r => {
+    leggiSaldoWallet(formData.customer_id, serviceType, formData.vehicle_id).then(r => {
       if (annullato) return
       setSaldoWallet(r)
       setSaldoWalletInCaricamento(false)
     })
     return () => { annullato = true }
-  }, [metodoEWallet, formData.customer_id, serviceType])
+  }, [metodoEWallet, formData.customer_id, serviceType, formData.vehicle_id])
 
   // 16/09/2026: la ricerca cliente propone SOLO i clienti presenti in Lead.
   // `customers` contiene anche quelli ricavati dalle prenotazioni passate
@@ -6829,7 +6829,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         if (dovutoWallet > 0) {
           // Il saldo mostrato nel form puo' essere vecchio di qualche minuto:
           // prima di decidere lo si rilegge.
-          const saldoAggiornato = await leggiSaldoWallet(formData.customer_id, serviceType)
+          const saldoAggiornato = await leggiSaldoWallet(formData.customer_id, serviceType, formData.vehicle_id)
           setSaldoWallet(saldoAggiornato)
           const residuoWallet = Math.round(((saldoAggiornato.saldo ?? 0) - dovutoWallet) * 100) / 100
           // 16/09/2026 (direzione): anche senza account (= nessun wallet,
@@ -8172,7 +8172,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // cliente: € 0,00" a chi aveva ancora 171 EUR. Si mostra il totale
           // spendibile, libero + vincolato, come nel modulo.
           if (movimento.addebitato !== 0) {
-            const saldoDopo = await leggiSaldoWallet(formData.customer_id, serviceType)
+            const saldoDopo = await leggiSaldoWallet(formData.customer_id, serviceType, formData.vehicle_id)
             setSaldoWallet(saldoDopo)
             const saldoTot = saldoDopo.saldo ?? movimento.saldo ?? 0
             const dettaglio = saldoDopo.vincolato > 0

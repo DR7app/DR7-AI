@@ -6,6 +6,7 @@ import { ScheletroTabella } from '../../../components/Scheletro'
 import toast from 'react-hot-toast'
 import BarraRicerca from '../../../components/admin/BarraRicerca'
 import { corrispondeRicerca } from '../../../utils/ricerca'
+import { caricaCategorieVeicoli, type CategoriaVeicolo } from '../../../utils/messaggioCodiceSconto'
 
 /**
  * RICARICA WALLET — Marketing > Wallet (16/09/2026)
@@ -53,6 +54,19 @@ const SERVIZI_WALLET: { id: string; label: string }[] = [
   { id: 'car_wash', label: 'Lavaggio & Meccanica' },
 ]
 
+// 25/11/2026 (direzione, vocale di Valerio): gli stessi vincoli del codice
+// sconto. Oltre ai servizi, il credito puo' valere solo per certe CATEGORIE di
+// veicoli di Centralina Pro (voce 'cat:<id>', es. 'cat:urban' = Hypercar),
+// solo sul noleggio Terra. La regola vera sta nel database
+// (dr7_wallet_lotto_vale): qui si sceglie e si mostra.
+function etichettaVoce(x: string, categorie: CategoriaVeicolo[]): string {
+  if (x.startsWith('cat:')) {
+    const id = x.slice(4).toLowerCase()
+    return categorie.find(c => c.id.toLowerCase() === id)?.label || id
+  }
+  return SERVIZI_WALLET.find(s => s.id === x)?.label || x
+}
+
 // 23/10/2026 (direzione): il WhatsApp al cliente quando riceve il credito.
 // Template Pro pro_marketing_wallet_credito: si modifica qui (come il
 // messaggio dell'Immondizia) e in Messaggi di Sistema Pro, e' la stessa riga.
@@ -90,6 +104,12 @@ export default function RicaricaWalletTab() {
   const [importo, setImporto] = useState('')
   const [scadenza, setScadenza] = useState('')
   const [servizi, setServizi] = useState<Set<string>>(new Set())
+  const [categorie, setCategorie] = useState<CategoriaVeicolo[]>([])
+  useEffect(() => {
+    let vivo = true
+    caricaCategorieVeicoli().then(l => { if (vivo) setCategorie(l) }).catch(() => {})
+    return () => { vivo = false }
+  }, [])
   const [descrizione, setDescrizione] = useState('')
   const [natura, setNatura] = useState<'bonus' | 'real'>('bonus')
   const [invio, setInvio] = useState(false)
@@ -243,7 +263,7 @@ export default function RicaricaWalletTab() {
     // Scrittura su molte persone: si dice prima quante sono e quanto costa.
     const dove = servizi.size === 0
       ? 'tutti i servizi'
-      : SERVIZI_WALLET.filter(s => servizi.has(s.id)).map(s => s.label).join(', ')
+      : [...servizi].map(x => etichettaVoce(x, categorie)).join(', ')
     const quando = scadenza ? new Date(scadenza).toLocaleDateString('it-IT') : 'nessuna scadenza'
     const conferma = window.confirm(
       `Caricare EUR ${valore.toFixed(2)} a ${quanti} cliente/i?\n\n`
@@ -514,10 +534,39 @@ export default function RicaricaWalletTab() {
               </button>
             ))}
           </div>
+          {categorie.length > 0 && (
+            <>
+              <div className="text-xs text-theme-text-secondary mt-4 mb-2">Oppure solo per queste categorie (Noleggio Terra)</div>
+              <div className="flex flex-wrap gap-2">
+                {categorie.map(c => {
+                  const id = `cat:${c.id}`
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setServizi(prev => {
+                        const next = new Set(prev)
+                        if (next.has(id)) next.delete(id); else next.add(id)
+                        return next
+                      })}
+                      className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                        servizi.has(id)
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-300'
+                          : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
           <p className="text-[11px] text-theme-text-muted mt-2">
             {servizi.size === 0
               ? 'Nessun servizio scelto = vale su tutto.'
-              : 'Su qualsiasi altro servizio questo credito non e spendibile.'}
+              : servizi.has('rental') && [...servizi].some(x => x.startsWith('cat:'))
+                ? 'Attenzione: con "Noleggio Terra" vale su tutte le auto, le categorie scelte non restringono nulla.'
+                : 'Su qualsiasi altro servizio o categoria questo credito non e spendibile.'}
           </p>
         </div>
 
@@ -634,7 +683,7 @@ export default function RicaricaWalletTab() {
               const cliente = clienti.find(c => c.user_id === l.user_id)
               const dove = !l.servizi || l.servizi.length === 0
                 ? 'Tutti i servizi'
-                : l.servizi.map(x => SERVIZI_WALLET.find(s2 => s2.id === x)?.label || x).join(', ')
+                : l.servizi.map(x => etichettaVoce(x, categorie)).join(', ')
               const scaduto = l.scadenza ? new Date(l.scadenza) < new Date(new Date().toDateString()) : false
               return (
                 <div key={l.id} className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1.5fr_1.5fr_auto] gap-2 lg:gap-4 px-5 py-3 items-center text-sm">
