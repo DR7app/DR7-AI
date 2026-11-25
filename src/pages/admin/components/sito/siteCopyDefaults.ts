@@ -1081,6 +1081,12 @@ export interface HeaderCopy {
   // Investitori: pagina Investor Relations (/investitori).
   menu_investitori_title_it?: string; menu_investitori_title_en?: string;
   menu_investitori_sub_it?: string; menu_investitori_sub_en?: string;
+  menu_dr7ai_title_it?: string; menu_dr7ai_title_en?: string;
+  menu_dr7ai_sub_it?: string; menu_dr7ai_sub_en?: string;
+  menu_dr7trust_title_it?: string; menu_dr7trust_title_en?: string;
+  menu_dr7trust_sub_it?: string; menu_dr7trust_sub_en?: string;
+  menu_dr7ai_img?: string;
+  menu_dr7trust_img?: string;
   menu_digital_title_it?: string; menu_digital_title_en?: string;
   menu_digital_sub_it?: string; menu_digital_sub_en?: string;
   menu_contatti_title_it?: string; menu_contatti_title_en?: string;
