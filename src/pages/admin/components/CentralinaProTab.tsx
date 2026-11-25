@@ -26,6 +26,7 @@ import AlarmInventoryModal from '../../../components/admin/AlarmInventoryModal'
 import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 import CargosVeicoliSection from './CargosVeicoliSection'
+import NumeroNoCauzioneSection from './NumeroNoCauzioneSection'
 import CauzioneScadenzaConfig, { type CauzioneScadenzaHandle } from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import FidelityLavaggioSection from './FidelityLavaggioSection'
@@ -2657,6 +2658,7 @@ export default function CentralinaProTab() {
                       Sola lettura
                     </span>
                   </div>
+                  <NumeroNoCauzioneSection readOnly />
                   <GlobaleBadge cosa="La scadenza di restituzione della cauzione" />
                   <CauzioneScadenzaConfig readOnly />
                   <CauzioniSection
@@ -2671,6 +2673,8 @@ export default function CentralinaProTab() {
                   {/* 2026-08-24: la scadenza di restituzione si cambia da qui.
                       Prima era scritta in due posti in disaccordo (trigger DB a
                       giorni di calendario, Netlify a 14 lavorativi in duro). */}
+                  {/* 2026-11-25: numero WhatsApp delle richieste No Cauzione (video di Valerio). */}
+                  <NumeroNoCauzioneSection />
                   <GlobaleBadge cosa="La scadenza di restituzione della cauzione" />
                   <CauzioneScadenzaConfig ref={cauzioneScadenzaRef} onChangesChange={setCauzioneChanges} />
                   <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
