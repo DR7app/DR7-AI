@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import crypto from 'crypto'
 import { funzioneFerma } from './utils/systemControl'
+import { veicoloEsclusoCargos } from './cargos-auto-send'
 
 /**
  * CARGOS API Proxy — Polizia di Stato
@@ -412,6 +413,19 @@ const handler: Handler = async (event) => {
                 // Interruttore System Control: invio manuale bloccato se CARGOS e' spento.
                 const ferma = await funzioneFerma('cargos', 'terra')
                 if (ferma) return { statusCode: 503, headers: corsHeaders, body: JSON.stringify({ error: ferma }) }
+                // 25/11/2026: anche l'invio manuale rispetta l'interruttore per
+                // veicolo di Centralina Pro > Cargos. Il primo campo del record
+                // (50 caratteri) e' l'id della prenotazione.
+                const spenti: string[] = []
+                for (const r of req.records) {
+                    const id = String(r || '').slice(0, 50).trim()
+                    if (!/^[0-9a-f-]{36}$/i.test(id)) continue
+                    const escluso = await veicoloEsclusoCargos(id)
+                    if (escluso) spenti.push(escluso)
+                }
+                if (spenti.length > 0) {
+                    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: `Veicolo spento per CARGOS in Centralina Pro: ${[...new Set(spenti)].join(', ')}. Nessun record inviato.` }) }
+                }
                 const tokenResult = await getToken(password)
                 if (tokenResult.error) {
                     return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: tokenResult.error }) }

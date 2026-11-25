@@ -956,6 +956,27 @@ export default function CargosTab() {
 
         console.log('[CARGOS] Selected bookings:', selected.length)
 
+        // 25/11/2026: veicoli spenti in Centralina Pro > Cargos. I loro
+        // contratti non partono nemmeno dall'invio manuale: si segnano in rosso
+        // e si saltano (il server rifiuta comunque l'invio).
+        const spentiCargos = new Set<string>()
+        const targheSpente = new Set<string>()
+        try {
+            const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+            const lista = (cfgRow?.config as { cargos?: { veicoli_esclusi?: unknown } } | null)?.cargos?.veicoli_esclusi
+            for (const id of (Array.isArray(lista) ? lista : [])) spentiCargos.add(String(id))
+            if (spentiCargos.size > 0) {
+                const { data: vs } = await supabase.from('vehicles').select('id, plate').in('id', [...spentiCargos])
+                for (const v of vs || []) if (v.plate) targheSpente.add(String(v.plate).replace(/[^a-z0-9]/gi, '').toUpperCase())
+            }
+        } catch { /* lettura fallita: decide il server */ }
+        const veicoloSpento = (b: typeof selected[number]) => {
+            const vid = b.vehicle_id || b.booking_details?.vehicle_id
+            if (vid) return spentiCargos.has(String(vid))
+            const t = String(b.vehicle_plate || '').replace(/[^a-z0-9]/gi, '').toUpperCase()
+            return !!t && targheSpente.has(t)
+        }
+
         // 2026-06-02: invio NON più all-or-nothing. Prima un singolo record con
         // dati mancanti bloccava l'INTERO batch (es. 350 prenotazioni → nessuna
         // partiva). Ora separiamo i record validi da quelli incompleti: inviamo
@@ -964,6 +985,12 @@ export default function CargosTab() {
         const localValid: typeof selected = []
         let localInvalidCount = 0
         for (const b of selected) {
+            if (veicoloSpento(b)) {
+                const idx = updatedBookings.findIndex(ub => ub.id === b.id)
+                if (idx >= 0) updatedBookings[idx] = { ...b, cargosStatus: 'error', cargosError: 'Veicolo spento per CARGOS in Centralina Pro > Cargos' }
+                localInvalidCount++
+                continue
+            }
             const issues = validateBookingForCargos(b)
             const errors = issues.filter(i => i.severity === 'error')
             if (errors.length > 0) {
