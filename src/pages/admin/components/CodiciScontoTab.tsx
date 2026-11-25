@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ScheletroTabella, ScheletroTesto } from '../../../components/Scheletro'
-import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, etichetteServizi } from '../../../utils/messaggioCodiceSconto'
+import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, etichetteServizi, caricaCategorieVeicoli } from '../../../utils/messaggioCodiceSconto'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import DiscountCodeGeneratorModal from './DiscountCodeGeneratorModal'
@@ -98,6 +98,12 @@ export default function CodiciScontoTab() {
     // Ultimo testo generato: serve a non sovrascrivere quello che l'admin ha
     // riscritto a mano quando poi sceglie il destinatario.
     const [ultimoGenerato, setUltimoGenerato] = useState('')
+    // 25/11/2026: nomi veri delle categorie per i codici 'cat:<id>' (badge e
+    // messaggio al cliente). Il numero serve solo a ridisegnare dopo il caricamento.
+    const [, setCategorieCaricate] = useState(0)
+    useEffect(() => {
+        caricaCategorieVeicoli().then(l => setCategorieCaricate(l.length)).catch(() => {})
+    }, [])
 
     useEffect(() => {
         loadDiscountCodes()

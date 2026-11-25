@@ -28,12 +28,36 @@ const ETICHETTE_SCOPE: Record<string, string> = {
     lavaggi: 'Lavaggi',
     supercar: 'Supercar',
     utilitarie: 'Utilitarie',
+    aziendali: 'Aziendali',
     tutti_i_servizi: 'Tutti',
+}
+
+/**
+ * 25/11/2026: un codice puo' valere per una categoria vera di Centralina Pro,
+ * scritta 'cat:<id>' (es. 'cat:urban' = Hypercar). Il nome si prende dalle
+ * categorie: id interni e nomi mostrati non coincidono piu' ('urban' si
+ * chiama Hypercar, 'aziendali' si chiama Supercar).
+ */
+export interface CategoriaVeicolo { id: string; label: string }
+let etichetteCategorie: Record<string, string> = {}
+
+export async function caricaCategorieVeicoli(): Promise<CategoriaVeicolo[]> {
+    const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+    const lista = ((data?.config as { categories?: { id?: string; label?: string }[] } | null)?.categories || [])
+        .filter(c => c && c.id)
+        .map(c => ({ id: String(c.id), label: String(c.label || c.id) }))
+    etichetteCategorie = Object.fromEntries(lista.map(c => [c.id.toLowerCase(), c.label]))
+    return lista
+}
+
+function etichettaScope(s: string): string {
+    if (s.startsWith('cat:')) return etichetteCategorie[s.slice(4).toLowerCase()] || s.slice(4)
+    return ETICHETTE_SCOPE[s] || s
 }
 
 /** "tutti_i_servizi" non si mostra mai al cliente: diventa "Tutti". */
 export function etichetteServizi(scope?: string[] | null): string {
-    const voci = (scope || []).map(s => ETICHETTE_SCOPE[s] || s)
+    const voci = (scope || []).map(etichettaScope)
     return voci.join(', ') || 'tutti i servizi'
 }
 

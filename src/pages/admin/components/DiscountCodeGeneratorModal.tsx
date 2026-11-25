@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, numeroWhatsapp } from '../../../utils/messaggioCodiceSconto'
+import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, numeroWhatsapp, caricaCategorieVeicoli, type CategoriaVeicolo } from '../../../utils/messaggioCodiceSconto'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -24,13 +24,21 @@ interface DiscountCodeGeneratorModalProps {
 }
 
 const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+// 25/11/2026 (Massimo Runchina, Macan): "Supercar / Utilitarie / Aziendali"
+// erano nomi vecchi che non corrispondono piu' alle categorie di Centralina Pro
+// ("Supercar" valeva solo per Exotic Cars, la Macan e' Hypercar). Ora le
+// categorie si scelgono per nome vero, dalla Centralina: valore 'cat:<id>'.
+// Le tre scelte vecchie si vedono solo sui codici che le hanno gia', per
+// poterle togliere; il sito continua a rispettarle come prima.
 const SCOPE_OPTIONS = [
-    { value: 'noleggio', label: 'Noleggio' },
+    { value: 'noleggio', label: 'Noleggio (tutte le auto)' },
     { value: 'lavaggi', label: 'Lavaggi' },
-    { value: 'supercar', label: 'Supercar' },
-    { value: 'utilitarie', label: 'Utilitarie' },
-    { value: 'aziendali', label: 'Aziendali' },
     { value: 'tutti_i_servizi', label: 'Tutti i servizi' },
+]
+const SCOPE_VECCHI = [
+    { value: 'supercar', label: 'Supercar (vecchia scelta = Exotic Cars)' },
+    { value: 'utilitarie', label: 'Utilitarie (vecchia scelta)' },
+    { value: 'aziendali', label: 'Aziendali (vecchia scelta)' },
 ]
 
 function generateCode(): string {
@@ -139,6 +147,13 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
             updateField('value_type', 'fixed')
         }
     }
+
+    const [categorie, setCategorie] = useState<CategoriaVeicolo[]>([])
+    useEffect(() => {
+        let vivo = true
+        caricaCategorieVeicoli().then(l => { if (vivo) setCategorie(l) }).catch(() => {})
+        return () => { vivo = false }
+    }, [])
 
     const handleScopeToggle = (scopeValue: string) => {
         if (scopeValue === 'tutti_i_servizi') {
@@ -364,7 +379,11 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                             Ambito di validità
                         </label>
                         <div className="flex flex-wrap gap-3">
-                            {SCOPE_OPTIONS.map((opt) => (
+                            {[
+                                ...SCOPE_OPTIONS,
+                                ...categorie.map(c => ({ value: `cat:${c.id}`, label: c.label })),
+                                ...SCOPE_VECCHI.filter(v => formData.scope.includes(v.value)),
+                            ].map((opt) => (
                                 <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
