@@ -108,10 +108,10 @@ const PAYMENT_METHOD_CACHE_TTL_MS = 5 * 60 * 1000 // 5 min
 /**
  * Cache delle province considerate "residente" per DR7. Lette da
  * centralina_pro_config.config.geography.resident_provinces. Se vuota o
- * il campo manca, fallback al canonico ['CA', 'SU'] (mirror di
+ * il campo manca, fallback a tutta la Sardegna (26/11/2026, mirror di
  * src/data/sardegnaProvince.ts RESIDENT_PROVINCE_CODES).
  */
-let __residentProvincesCache: string[] = ['CA', 'SU']
+let __residentProvincesCache: string[] = ['CA', 'NU', 'OR', 'SS', 'SU', 'OG', 'OT', 'CI', 'VS']
 let __residentProvincesLoadedAt = 0
 const RESIDENT_PROVINCES_CACHE_TTL_MS = 5 * 60 * 1000
 
@@ -134,7 +134,7 @@ export async function loadResidentProvinces(supabase: any): Promise<void> {
         }
         __residentProvincesLoadedAt = now
     } catch (e) {
-        console.error('[residentProvinces] cache load failed (using fallback CA+SU):', e instanceof Error ? e.message : String(e))
+        console.error('[residentProvinces] cache load failed (using fallback Sardegna):', e instanceof Error ? e.message : String(e))
     }
 }
 
@@ -512,7 +512,7 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
     }
 
     // Residenza secondo la definizione di Centralina Pro
-    // (config.geography.resident_provinces, default ['CA','SU']).
+    // (config.geography.resident_provinces, default tutta la Sardegna).
     // Cache 5 min in process; refreshata da loadResidentProvinces().
     if (residency && residency !== 'all') {
         const allowed = new Set(__residentProvincesCache)

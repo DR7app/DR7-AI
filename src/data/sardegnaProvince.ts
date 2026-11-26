@@ -123,15 +123,17 @@ export function getComuniByProvincia(code: string): string[] {
 // All province codes
 export const PROVINCE_CODES = SARDEGNA_PROVINCE.map(p => ({ code: p.code, name: p.name }))
 
-// Province codes considered "resident" for tax/reporting purposes
-export const RESIDENT_PROVINCE_CODES = ['CA', 'SU']
+// Province considerate "residente" da DR7.
+// 26/11/2026 (direzione): residente = TUTTA la Sardegna, come la cauzione
+// della scheda prenotazione (ReservationsTab) e del sito. Prima solo CA e SU.
+export const RESIDENT_PROVINCE_CODES = ['CA', 'NU', 'OR', 'SS', 'SU', 'OG', 'OT', 'CI', 'VS']
 
-// Check if a province code is resident (CA or SU)
+// Check if a province code is resident (any Sardinian province)
 export function isResidentByProvincia(provinciaCode: string): boolean {
   return RESIDENT_PROVINCE_CODES.includes(provinciaCode.toUpperCase())
 }
 
-// Check if a city name is in CA or SU (case-insensitive)
+// Check if a city name is in a resident province (case-insensitive)
 export function isResidentByCity(cityName: string): boolean {
   if (!cityName) return false
   const normalizedCity = cityName.trim().toLowerCase()
