@@ -45,7 +45,32 @@ interface Cauzione {
     veicolo_targa?: string
     nexi_transaction_id?: string | null
     nexi_order_id?: string | null
+    // 27/11/2026: riuso della cauzione dal sito (mig. 20261127_cauzione_riutilizzabile).
+    prenotazioni_coperte?: string[] | null
+    integra_cauzioni?: string[] | null
+    /** "Copre anche: Lamborghini (riconsegna 20/12/2026)" */
+    riuso_copre?: string[]
+    /** "Integra la cauzione di €2000.00 (Porsche Macan)" */
+    riuso_integra?: string[]
 }
+
+// 27/11/2026: riuso della cauzione (dal sito). Visibile in tabella, scheda e
+// "Da Restituire Oggi": una cauzione che copre un noleggio ancora in corso
+// non si restituisce.
+const righeRiuso = (c: Cauzione) => (
+    <>
+        {(c.riuso_copre || []).length > 0 && (
+            <div className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-400 truncate" title={`Copre anche: ${(c.riuso_copre || []).join(', ')}. Non restituire prima della riconsegna.`}>
+                Copre anche: {(c.riuso_copre || []).join(', ')}
+            </div>
+        )}
+        {(c.riuso_integra || []).length > 0 && (
+            <div className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-400 truncate" title={`Integrazione: si somma a ${(c.riuso_integra || []).join(', ')}`}>
+                Integra la cauzione di {(c.riuso_integra || []).join(', ')}
+            </div>
+        )}
+    </>
+)
 
 export default function CauzioniTab() {
     // 2026-08-18 (richiesta direzione): sbloccare una pre-autorizzazione libera
@@ -252,8 +277,37 @@ export default function CauzioniTab() {
             const today = new Date()
             today.setHours(0, 0, 0, 0)
 
+            // 27/11/2026: una cauzione versata puo' coprire anche noleggi
+            // successivi (area cliente del sito). Qui si legge quali, cosi'
+            // nessuno la restituisce prima della riconsegna dell'ultimo.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const idsCoperte = [...new Set((data || []).flatMap((c: any) => (c.prenotazioni_coperte || []) as string[]))]
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const prenCoperte: Record<string, any> = {}
+            if (idsCoperte.length > 0) {
+                const { data: rowsCoperte } = await supabase
+                    .from('bookings')
+                    .select('id, vehicle_name, dropoff_date')
+                    .in('id', idsCoperte)
+                ;(rowsCoperte || []).forEach(b => { prenCoperte[b.id] = b })
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const perIdCauzione: Record<string, any> = {}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(data || []).forEach((c: any) => { perIdCauzione[c.id] = c })
+            const dataBreve = (v: string | null | undefined) =>
+                v ? new Date(v).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '—'
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const formattedData = (data || []).map((c: any) => {
+                const riusoCopre: string[] = ((c.prenotazioni_coperte || []) as string[]).map(id => {
+                    const b = prenCoperte[id]
+                    return b ? `${b.vehicle_name || 'Noleggio'} (riconsegna ${dataBreve(b.dropoff_date)})` : 'Noleggio successivo'
+                })
+                const riusoIntegra: string[] = ((c.integra_cauzioni || []) as string[]).map(id => {
+                    const a = perIdCauzione[id]
+                    return a ? `€${Number(a.importo).toFixed(2)} (${a.vehicles?.display_name || 'cauzione precedente'})` : 'cauzione precedente'
+                })
                 const scadenzaDate = new Date(c.scadenza_cauzione)
                 scadenzaDate.setHours(0, 0, 0, 0)
 
@@ -277,7 +331,9 @@ export default function CauzioniTab() {
                     cliente_email: c.customers_extended?.email || '',
                     cliente_telefono: c.customers_extended?.telefono || '',
                     veicolo_modello: c.vehicles?.display_name || 'N/A',
-                    veicolo_targa: c.vehicles?.plate || 'N/A'
+                    veicolo_targa: c.vehicles?.plate || 'N/A',
+                    riuso_copre: riusoCopre,
+                    riuso_integra: riusoIntegra,
                 }
             })
 
@@ -1321,6 +1377,7 @@ export default function CauzioniTab() {
                 <div className="min-w-0">
                     <div className="text-sm font-semibold text-theme-text-primary truncate">{cauzione.cliente_nome}</div>
                     <div className="text-xs text-theme-text-secondary truncate">{cauzione.veicolo_modello} · {cauzione.veicolo_targa}</div>
+                    {righeRiuso(cauzione)}
                 </div>
                 <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase ${getStatoBadgeClass(cauzione)}`}>
                     {getStatoLabel(cauzione)}
@@ -1641,6 +1698,7 @@ export default function CauzioniTab() {
                                                         <div className="min-w-0">
                                                             <div className="text-[12px] font-semibold text-theme-text-primary truncate">{c.veicolo_modello || '—'}</div>
                                                             {c.veicolo_targa && <div className="text-[10px] font-mono text-theme-text-muted truncate">Targa {c.veicolo_targa}</div>}
+                                                            {righeRiuso(c)}
                                                         </div>
                                                     </div>
                                                     {/* Importo */}
@@ -1763,6 +1821,7 @@ export default function CauzioniTab() {
                                             <div>
                                                 <div className="font-semibold text-theme-text-primary">{cauzione.cliente_nome}</div>
                                                 <div className="text-sm text-theme-text-secondary">{cauzione.veicolo_modello} — {cauzione.veicolo_targa}</div>
+                                                {righeRiuso(cauzione)}
                                             </div>
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStoricoStatoBadge(cauzione.stato)}`}>
                                                 {cauzione.stato}
@@ -2018,6 +2077,7 @@ function DaRestituireOggi({ cauzioni, onRestituita }: {
                                 <div className="min-w-0">
                                     <div className="text-sm font-bold text-theme-text-primary">{c.cliente_nome}</div>
                                     <div className="text-xs text-theme-text-secondary">{c.veicolo_modello} · {c.veicolo_targa}</div>
+                                    {righeRiuso(c)}
                                     <span className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${c.days_until_deadline === 0 ? 'bg-amber-500 text-black' : 'bg-red-600 text-white'}`}>
                                         {dueLabel}
                                     </span>
