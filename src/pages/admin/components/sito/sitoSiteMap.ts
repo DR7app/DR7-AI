@@ -165,6 +165,7 @@ export const SITO_SCREENS: SitoScreen[] = [
     { id: 'account-club',      path: '/account/club',            label: 'Il mio DR7 Club',          area: 'account',   editor: 'testi',                file: 'pages/account/DR7Club.tsx' },
     { id: 'account-membership',path: '/account/membership',      label: 'Stato membership',         area: 'account',   editor: 'testi',                file: 'pages/account/MembershipStatus.tsx' },
     { id: 'account-prenotazioni',path: '/account/bookings',      label: 'Le mie prenotazioni',      area: 'account',   editor: 'testi',                file: 'pages/account/MyBookings.tsx' },
+    { id: 'account-cauzioni',  path: '/account/cauzioni',        label: 'Le mie cauzioni',          area: 'account',   editor: 'testi',                file: 'pages/account/MieCauzioni.tsx', note: 'Cauzioni versate, giorno di sblocco, integrazione per i prossimi noleggi.' },
     { id: 'account-preventivi',path: '/account/preventivi',      label: 'I miei preventivi',        area: 'account',   editor: 'testi',                file: 'pages/account/MyPreventivi.tsx' },
     { id: 'account-referral',  path: '/account/referral',        label: 'Programma referral',       area: 'account',   editor: 'testi',                file: 'pages/account/ReferralProgram.tsx' },
     { id: 'account-notifiche', path: '/account/notifications',   label: 'Notifiche',                area: 'account',   editor: 'testi',                file: 'pages/account/NotificationSettings.tsx' },
