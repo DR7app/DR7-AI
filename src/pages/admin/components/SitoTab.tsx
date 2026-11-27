@@ -1011,6 +1011,12 @@ export default function SitoTab({ incorporato = false }: { incorporato?: boolean
                     {/* Contenuto: intestazione della pagina + il suo editor */}
                     <main className="bg-theme-bg-primary rounded-2xl p-6 border border-theme-border shadow-sm min-h-[400px]">
                         <ScreenHeader screen={screen} />
+                        {/* 27/11/2026 (video di Valerio): il nome della pagina nel menu
+                            del sito si cambia anche dalla pagina stessa, non solo da
+                            Struttura > Menu ESPLORA. Stessi campi, stessa riga. */}
+                        {hydrated && screen.menu && (
+                            <VoceMenuDellaPagina chiave={screen.menu} copy={header} setCopy={setHeader} />
+                        )}
                         {!hydrated && (
                             <ScheletroTesto righe={6} />
                         )}
@@ -4825,6 +4831,12 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                         del cliente (testi della pagina), qui c'e' solo l'immagine. */}
                     <div className="border border-theme-border rounded-xl p-4 bg-theme-bg-secondary space-y-3">
                         <h4 className="text-[12px] font-semibold uppercase tracking-wide text-theme-text-primary">Area cliente / Accedi</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FieldText label="Titolo IT, cliente collegato (def: Il mio account)" value={menuVal('menu_account_title_it')} onChange={v => setMenu('menu_account_title_it', v)} />
+                            <FieldText label="Titolo EN, cliente collegato (def: My Account)" value={menuVal('menu_account_title_en')} onChange={v => setMenu('menu_account_title_en', v)} />
+                            <FieldText label="Titolo IT, non collegato (def: Accedi)" value={menuVal('menu_signin_title_it')} onChange={v => setMenu('menu_signin_title_it', v)} />
+                            <FieldText label="Titolo EN, non collegato (def: Sign In)" value={menuVal('menu_signin_title_en')} onChange={v => setMenu('menu_signin_title_en', v)} />
+                        </div>
                         <FieldText label="Immagine (def: /menu-club.jpeg)" value={menuVal('menu_account_img')} onChange={v => setMenu('menu_account_img', v)} media />
                     </div>
                 </div>
@@ -4854,6 +4866,31 @@ const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: s
     { key: 'digital', name: 'Innovazione Digitale', titleIt: 'Innovazione Digitale', titleEn: 'Digital Innovation', subIt: 'Creazione di asset digitali e token', subEn: 'Digital Asset & Token Creation', img: '/menu-digital.jpeg' },
     { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service', img: '/menu-contatti.jpeg' },
 ]
+
+// Il nome della pagina nel menu del sito, modificabile dalla pagina stessa.
+function VoceMenuDellaPagina({ chiave, copy, setCopy }: { chiave: string; copy: HeaderCopy; setCopy: (next: HeaderCopy) => void }) {
+    const f = MENU_ITEM_FIELDS.find(m => m.key === chiave)
+    if (!f) return null
+    const val = (k: string): string => (copy as unknown as Record<string, string | undefined>)[k] ?? ''
+    const set = (k: string, v: string) => setCopy({ ...copy, [k]: v } as HeaderCopy)
+    return (
+        <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-secondary space-y-3 mb-6">
+            <div>
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Nome nel menu del sito</h3>
+                <p className="text-[12px] text-theme-text-secondary mt-1">
+                    Come compare questa pagina nel menu di dr7.app. Lascia vuoto per il valore predefinito tra parentesi.
+                    Si salva con il resto della pagina.
+                </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FieldText label={`Titolo IT (def: ${f.titleIt})`} value={val(`menu_${f.key}_title_it`)} onChange={v => set(`menu_${f.key}_title_it`, v)} />
+                <FieldText label={`Titolo EN (def: ${f.titleEn})`} value={val(`menu_${f.key}_title_en`)} onChange={v => set(`menu_${f.key}_title_en`, v)} />
+                <FieldText label={`Sottotitolo IT (def: ${f.subIt})`} value={val(`menu_${f.key}_sub_it`)} onChange={v => set(`menu_${f.key}_sub_it`, v)} />
+                <FieldText label={`Sottotitolo EN (def: ${f.subEn})`} value={val(`menu_${f.key}_sub_en`)} onChange={v => set(`menu_${f.key}_sub_en`, v)} />
+            </div>
+        </section>
+    )
+}
 
 // ─── SignUp editor (registrazione cliente — Azienda / Persona Fisica / PA) ─
 function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: SignUpCopy) => void }) {

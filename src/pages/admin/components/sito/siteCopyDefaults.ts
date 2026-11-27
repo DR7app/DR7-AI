@@ -1091,6 +1091,9 @@ export interface HeaderCopy {
   menu_digital_sub_it?: string; menu_digital_sub_en?: string;
   menu_contatti_title_it?: string; menu_contatti_title_en?: string;
   menu_contatti_sub_it?: string; menu_contatti_sub_en?: string;
+  // 27/11/2026: ultima voce, l'area cliente (cliente collegato / non collegato).
+  menu_account_title_it?: string; menu_account_title_en?: string;
+  menu_signin_title_it?: string; menu_signin_title_en?: string;
   // Immagine di ogni voce. Nel menu a schermo intero e' il visual che compare
   // accanto alla voce sotto il puntatore: e' contenuto, non decorazione, e
   // deve poterla cambiare l'operatore. Se la chiave manca vale l'immagine di

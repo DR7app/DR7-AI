@@ -61,6 +61,11 @@ export interface SitoScreen {
     file: string
     /** Precisazione utile all'operatore. */
     note?: string
+    /**
+     * 27/11/2026: voce del menu del sito che porta a questa pagina (chiave
+     * menu_<menu>_*). L'editor della pagina mostra "Nome nel menu del sito".
+     */
+    menu?: string
 }
 
 export const SITO_AREAS: SitoArea[] = [
@@ -97,45 +102,45 @@ export const SITO_SCREENS: SitoScreen[] = [
     { id: 'reviews',           path: '/',                        label: 'Recensioni in home',       area: 'home',      editor: 'recensioni',        file: 'sections/ReviewsSection.tsx', note: 'Le recensioni di Google arrivano da sole; qui quelle scritte a mano, l\'interruttore "dopo quelle Google" e il link "Leggi tutte". Sotto, le frasi della fascia.' },
 
     // ─── Mobilita ────────────────────────────────────────────────────────
-    { id: 'flotta',            path: '/flotta',                  label: 'Flotta (indice categorie)',area: 'mobilita',  editor: 'flotta',            file: 'pages/FlottaIndexPage.tsx', note: 'L\'editor decide quali categorie sono visibili; i testi della pagina sono nel codice.' },
+    { id: 'flotta',            path: '/flotta',                  label: 'Flotta (indice categorie)',area: 'mobilita',  editor: 'flotta',            file: 'pages/FlottaIndexPage.tsx', note: 'L\'editor decide quali categorie sono visibili; i testi della pagina sono nel codice.', menu: 'mobilita' },
     { id: 'supercar-luxury',   path: '/supercar-luxury',         label: 'Supercar & Luxury',        area: 'mobilita',  editor: 'testi',                file: 'pages/RentalPage.tsx' },
     { id: 'corporate-fleet',   path: '/corporate-fleet',         label: 'Corporate Fleet',          area: 'mobilita',  editor: 'testi',                file: 'pages/RentalPage.tsx' },
     { id: 'categorie-dinamiche',path: '/<categoria>',            label: 'Categorie da Centralina',  area: 'mobilita',  editor: 'testi',                file: 'pages/RentalPage.tsx', note: 'Ogni categoria creata in Veicoli > Categorie apre una pagina propria.' },
 
     // ─── Mare ────────────────────────────────────────────────────────────
-    { id: 'noleggio-mare',     path: '/noleggio-mare',           label: 'Noleggio Mare',            area: 'mare',      editor: 'testi',                file: 'App.tsx', note: 'Titolo e sottotitolo sono scritti nella route, non ancora nel CMS.' },
+    { id: 'noleggio-mare',     path: '/noleggio-mare',           label: 'Noleggio Mare',            area: 'mare',      editor: 'testi',                file: 'App.tsx', note: 'Titolo e sottotitolo sono scritti nella route, non ancora nel CMS.', menu: 'mare' },
     { id: 'yachts',            path: '/yachts',                  label: 'Yacht',                    area: 'mare',      editor: 'yacht-jet-heli',    file: 'pages/RentalPage.tsx' },
 
     // ─── Aria ────────────────────────────────────────────────────────────
-    { id: 'noleggio-aria',     path: '/noleggio-aria',           label: 'Noleggio Aria',            area: 'aria',      editor: 'testi',                file: 'App.tsx', note: 'Titolo e sottotitolo sono scritti nella route, non ancora nel CMS.' },
+    { id: 'noleggio-aria',     path: '/noleggio-aria',           label: 'Noleggio Aria',            area: 'aria',      editor: 'testi',                file: 'App.tsx', note: 'Titolo e sottotitolo sono scritti nella route, non ancora nel CMS.', menu: 'aria' },
     { id: 'jets',              path: '/jets',                    label: 'Jet privati',              area: 'aria',      editor: 'yacht-jet-heli',    file: 'pages/RentalPage.tsx' },
     { id: 'jet-search',        path: '/jets/search',             label: 'Risultati ricerca jet',    area: 'aria',      editor: 'jet-search',        file: 'pages/JetSearchResultsPage.tsx' },
     { id: 'aviation',          path: '/aviation-quote',          label: 'Richiesta preventivo volo',area: 'aria',      editor: 'aviation',          file: 'pages/AviationQuoteRequestPage.tsx', note: 'Stessa pagina anche su /jets/quote e /helicopters/quote.' },
 
     // ─── Proprieta ───────────────────────────────────────────────────────
-    { id: 'soggiorni',         path: '/soggiorni',               label: 'Soggiorni & Ospitalita',   area: 'proprieta', editor: 'testi',                file: 'App.tsx', note: 'Titolo e sottotitolo sono scritti nella route, non ancora nel CMS.' },
+    { id: 'soggiorni',         path: '/soggiorni',               label: 'Soggiorni & Ospitalita',   area: 'proprieta', editor: 'testi',                file: 'App.tsx', note: 'Titolo e sottotitolo sono scritti nella route, non ancora nel CMS.', menu: 'property' },
 
     // ─── Lavaggio & Meccanica ────────────────────────────────────────────
-    { id: 'lavaggio',          path: '/prime-wash',              label: 'Vetrina Lavaggio',         area: 'servizi',   editor: 'lavaggio',          file: 'pages/CarWashServicesPage.tsx', note: 'Il listino servizi si modifica in Catalogo Lavaggio & Meccanica.' },
+    { id: 'lavaggio',          path: '/prime-wash',              label: 'Vetrina Lavaggio',         area: 'servizi',   editor: 'lavaggio',          file: 'pages/CarWashServicesPage.tsx', note: 'Il listino servizi si modifica in Catalogo Lavaggio & Meccanica.', menu: 'servizi' },
     { id: 'car-wash-booking',  path: '/car-wash-booking',        label: 'Prenotazione lavaggio',    area: 'servizi',   editor: 'testi',                file: 'pages/CarWashBookingPage.tsx' },
     { id: 'meccanica',         path: '/mechanical-services',     label: 'Vetrina Meccanica',        area: 'servizi',   editor: 'meccanica',         file: 'pages/MechanicalServicesPage.tsx' },
     { id: 'mechanical-booking',path: '/mechanical-booking',      label: 'Prenotazione meccanica',   area: 'servizi',   editor: 'testi',                file: 'pages/MechanicalBookingPage.tsx' },
 
     // ─── Credit Wallet ───────────────────────────────────────────────────
-    { id: 'credit-wallet',     path: '/credit-wallet',           label: 'Credit Wallet',            area: 'wallet',    editor: 'credit-wallet',     file: 'pages/CreditWalletPage.tsx' },
+    { id: 'credit-wallet',     path: '/credit-wallet',           label: 'Credit Wallet',            area: 'wallet',    editor: 'credit-wallet',     file: 'pages/CreditWalletPage.tsx', menu: 'wallet' },
 
     // ─── DR7 Club ────────────────────────────────────────────────────────
     { id: 'membership',        path: '/membership',              label: 'DR7 Club',                 area: 'club',      editor: 'membership',        file: 'pages/MembershipPage.tsx' },
     { id: 'dr7-club-plan',     path: '/membership',              label: 'Piano e benefit del Club', area: 'club',      editor: 'dr7-club-plan',     file: 'utils/getMembershipTiers.ts' },
-    { id: 'membership-privilege', path: '/membership#privilege', label: 'DR7 Club Privilege',     area: 'club',      editor: 'membership',        file: 'pages/MembershipPage.tsx' },
+    { id: 'membership-privilege', path: '/membership#privilege', label: 'DR7 Club Privilege',     area: 'club',      editor: 'membership',        file: 'pages/MembershipPage.tsx', menu: 'privilege' },
     { id: 'membership-enroll', path: '/membership/enroll/:tier', label: 'Iscrizione al Club',       area: 'club',      editor: 'testi',                file: 'pages/MembershipEnrollmentPage.tsx' },
 
     // ─── Business ────────────────────────────────────────────────────────
-    { id: 'franchising',       path: '/franchising',             label: 'Franchising',              area: 'business',  editor: 'franchising',       file: 'pages/FranchisingPage.tsx' },
-    { id: 'investitori',       path: '/investitori',             label: 'Investitori',              area: 'business',  editor: 'investitori',       file: 'pages/InvestitoriPage.tsx' },
+    { id: 'franchising',       path: '/franchising',             label: 'Franchising',              area: 'business',  editor: 'franchising',       file: 'pages/FranchisingPage.tsx', menu: 'business' },
+    { id: 'investitori',       path: '/investitori',             label: 'Investitori',              area: 'business',  editor: 'investitori',       file: 'pages/InvestitoriPage.tsx', menu: 'investitori' },
 
     // ─── Innovazione Digitale ────────────────────────────────────────────
-    { id: 'token',             path: '/token',                   label: 'DR7 Token',                area: 'digitale',  editor: 'token',             file: 'pages/TokenPage.tsx' },
+    { id: 'token',             path: '/token',                   label: 'DR7 Token',                area: 'digitale',  editor: 'token',             file: 'pages/TokenPage.tsx', menu: 'digital' },
 
     // ─── Azienda ─────────────────────────────────────────────────────────
     { id: 'chi-siamo',         path: '/about',                   label: 'Chi Siamo',                area: 'azienda',   editor: 'chi-siamo',         file: 'pages/AboutPage.tsx' },
@@ -143,7 +148,7 @@ export const SITO_SCREENS: SitoScreen[] = [
     { id: 'post',              path: '/post/:id',                label: 'Articolo stampa',          area: 'azienda',   editor: 'testi',                file: 'pages/PostPage.tsx' },
     { id: 'careers',           path: '/careers',                 label: 'Lavora con Noi',           area: 'azienda',   editor: 'careers',           file: 'pages/CareersPage.tsx' },
     { id: 'faq',               path: '/faq',                     label: 'FAQ',                      area: 'azienda',   editor: 'faq',               file: 'pages/FAQPage.tsx' },
-    { id: 'contatti',          path: '/contact',                 label: 'Contatti',                 area: 'azienda',   editor: 'contatti',          file: 'pages/ContactPage.tsx' },
+    { id: 'contatti',          path: '/contact',                 label: 'Contatti',                 area: 'azienda',   editor: 'contatti',          file: 'pages/ContactPage.tsx', menu: 'contatti' },
 
     // ─── Prenotazione & Pagamento ────────────────────────────────────────
     { id: 'booking',           path: '/book/:categoria/:id',     label: 'Form di prenotazione',     area: 'prenotazione', editor: 'booking',        file: 'pages/BookingPage.tsx' },
